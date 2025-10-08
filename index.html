@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pool 2D - Tournament Grade Billiards</title>
+    <link rel="stylesheet" href="/styles/main.css" />
+  </head>
+  <body>
+    <div id="app">
+      <div id="hud">
+        <div id="top-bar">
+          <div id="game-info">
+            <div id="mode-indicator">Practice Mode</div>
+            <div id="turn-indicator"></div>
+          </div>
+          <div id="controls">
+            <button id="pause-btn">Pause</button>
+            <button id="restart-btn">Restart</button>
+            <button id="settings-btn">Settings</button>
+            <button id="debug-toggle">Debug</button>
+            <button id="capture-btn">Capture</button>
+          </div>
+        </div>
+        <div id="player-info">
+          <div id="player1-info" class="player-panel">
+            <h3>Player 1</h3>
+            <div class="balls-remaining"></div>
+          </div>
+          <div id="player2-info" class="player-panel">
+            <h3>Player 2</h3>
+            <div class="balls-remaining"></div>
+          </div>
+        </div>
+        <div id="foul-banner" class="hidden"></div>
+        <div id="stats">
+          <span id="fps">FPS: 0</span>
+          <span id="ups">UPS: 0</span>
+        </div>
+      </div>
+      <div id="canvas-container">
+        <canvas id="game-canvas"></canvas>
+        <canvas id="debug-canvas"></canvas>
+      </div>
+      <div id="settings-modal" class="modal hidden">
+        <div class="modal-content">
+          <h2>Settings</h2>
+          <label>
+            <input type="checkbox" id="aim-assist-toggle" checked />
+            Aim Assist
+          </label>
+          <label>
+            <input type="checkbox" id="call-8-toggle" />
+            Call 8-Ball
+          </label>
+          <label>
+            <input type="checkbox" id="show-fps-toggle" checked />
+            Show FPS/UPS
+          </label>
+          <div class="modal-actions">
+            <button id="settings-close">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

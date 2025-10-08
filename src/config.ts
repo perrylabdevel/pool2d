@@ -1,0 +1,113 @@
+// All game configuration and tunables
+// Coordinate system: Origin (0,0) at table center, +X=East, +Y=North (up)
+// See geometry.md for authoritative geometry contract
+
+export const CONFIG = {
+  // Physics
+  PHYSICS_DT: 1 / 120, // Fixed timestep (120 Hz)
+  MAX_SUBSTEPS: 10,
+  SOLVER_ITERATIONS: 15,
+  
+  // Table dimensions (9-ft table: 100" x 50" play area)
+  // NOTE: Actual geometry defined in src/geometry/Geometry.ts
+  TABLE_WIDTH: 100, // inches (full width, for legacy compat)
+  TABLE_HEIGHT: 50,  // inches (full height, for legacy compat)
+  RAIL_THICKNESS: 2,
+  
+  // Ball properties
+  BALL_RADIUS: 2.25 / 2, // 2.25" diameter
+  BALL_MASS: 1.0,
+  BALL_RESTITUTION: 0.93, // Ball-ball
+  CUSHION_RESTITUTION: 0.88, // Ball-cushion
+  
+  // Friction - balanced for 10x velocity multiplier
+  ROLLING_FRICTION: 0.50, // High friction to counteract 10x velocity multiplier
+  SLIDING_FRICTION: 0.65, // High sliding friction
+  VELOCITY_EPSILON: 0.2, // Sleep threshold adjusted for 10x velocity scale
+  
+  // Pockets (center-origin coordinates: see Geometry.ts for authoritative definitions)
+  POCKET_RADIUS: 2.5,
+  
+  // Cue
+  CUE_POWER_MIN: 0.5,
+  CUE_POWER_MAX: 25.0, // Power bar range
+  CUE_POWER_MULTIPLIER: 10.0, // Multiply power to get realistic velocity (25 * 10 = 250 in/s)
+  CUE_DRAG_SCALE: 0.08, // Power buildup rate
+  AIM_LINE_LENGTH: 20,
+  GHOST_LINE_LENGTH: 100, // Increased to predict across entire table
+  
+  // Rendering
+  CANVAS_SCALE: 8, // Pixels per game unit
+  TABLE_COLOR: '#0a5f0a',
+  RAIL_COLOR: '#2d1810',
+  POCKET_COLOR: '#000000',
+  CUE_BALL_COLOR: '#ffffff',
+  BALL_COLORS: [
+    '#ffff00', // 1 - yellow (solid)
+    '#0000ff', // 2 - blue (solid)
+    '#ff0000', // 3 - red (solid)
+    '#800080', // 4 - purple (solid)
+    '#ff8800', // 5 - orange (solid)
+    '#008000', // 6 - green (solid)
+    '#8b0000', // 7 - maroon (solid)
+    '#000000', // 8 - black
+    '#ffff00', // 9 - yellow (stripe)
+    '#0000ff', // 10 - blue (stripe)
+    '#ff0000', // 11 - red (stripe)
+    '#800080', // 12 - purple (stripe)
+    '#ff8800', // 13 - orange (stripe)
+    '#008000', // 14 - green (stripe)
+    '#8b0000', // 15 - maroon (stripe)
+  ],
+  
+  // Debug
+  DEBUG_DRAW_NORMALS: true,
+  DEBUG_DRAW_VELOCITIES: true,
+  DEBUG_DRAW_AABB: true,
+  DEBUG_DRAW_CONTACTS: true,
+  CAPTURE_DURATION: 15.0,
+  CAPTURE_STEP: 1 / 240,
+  
+  // Performance
+  TARGET_FPS: 60,
+  
+  // Game rules
+  BREAK_SPEED_THRESHOLD: 5.0, // Minimum speed for legal break
+  BALL_IN_HAND_ANYWHERE: false, // 8-ball: behind head string only on break
+};
+
+// Ball IDs
+export const BALL_CUE = 0;
+export const BALL_8 = 8;
+export const BALLS_SOLID = [1, 2, 3, 4, 5, 6, 7];
+export const BALLS_STRIPE = [9, 10, 11, 12, 13, 14, 15];
+
+// Initial rack positions (triangle at foot spot = East side, center-origin coords)
+// Tight rack: ball diameter = 2.25", arranged in equilateral triangle
+// Row spacing (X): 2.25 * cos(30°) = 1.9486"
+// Ball spacing (Y): 2.25"
+export const RACK_POSITIONS = [
+  // Row 1 (apex)
+  { id: 1, x: 25, y: 0 },
+  // Row 2
+  { id: 9, x: 26.95, y: 1.125 },
+  { id: 2, x: 26.95, y: -1.125 },
+  // Row 3
+  { id: 10, x: 28.90, y: 2.25 },
+  { id: 8, x: 28.90, y: 0 },          // 8-ball in center
+  { id: 3, x: 28.90, y: -2.25 },
+  // Row 4
+  { id: 11, x: 30.85, y: 3.375 },
+  { id: 4, x: 30.85, y: 1.125 },
+  { id: 5, x: 30.85, y: -1.125 },
+  { id: 12, x: 30.85, y: -3.375 },
+  // Row 5
+  { id: 13, x: 32.80, y: 4.5 },
+  { id: 6, x: 32.80, y: 2.25 },
+  { id: 14, x: 32.80, y: 0 },
+  { id: 7, x: 32.80, y: -2.25 },
+  { id: 15, x: 32.80, y: -4.5 },
+];
+
+// Cue ball starting position (head spot = West side, center-origin coords)
+export const CUE_BALL_POSITION = { x: -25, y: 0 };
