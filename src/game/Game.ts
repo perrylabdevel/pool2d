@@ -234,7 +234,8 @@ export class Game {
         y: Math.sin(angle),
       };
       
-      if (this.aimAssist && this.isAimMode) {
+      // Show prediction in both aim mode and power mode when aim assist is enabled
+      if (this.aimAssist) {
         prediction = this.predictor.predictFirstContact(
           { x: this.cueBall.x, y: this.cueBall.y },
           direction,
