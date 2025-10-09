@@ -9,8 +9,6 @@ import { HUD } from '../ui/HUD';
 import { CONFIG, CUE_BALL_POSITION, RACK_POSITIONS } from '../config';
 import { EightBallRules } from '../rules/EightBall';
 import { physicsRecorder } from '../debug/PhysicsRecorder';
-import { Predictor } from '../physics/Prediction';
-import { cloneWorld } from '../physics/PredictorCapture';
 
 export enum GameMode {
   PRACTICE,
@@ -42,7 +40,6 @@ export class Game {
   isDraggingPower: boolean = false;
   isAimMode: boolean = true; // true = aim, false = power
   lockedAngle: number = 0; // Locked angle when in power mode
-  captureCounter: number = 0;
   
   constructor(gameCanvas: HTMLCanvasElement, debugCanvas: HTMLCanvasElement) {
     this.world = new PhysicsWorld();
@@ -99,8 +96,6 @@ export class Game {
         this.restart();
       }
     });
-    
-    window.addEventListener('game:capture', () => this.captureShotDiagnostics());
   }
   
   initializeGame() {
@@ -196,16 +191,7 @@ export class Game {
     if (this.canShoot && this.cueBall && !this.cueBall.pocketed) {
       // Use locked angle in power mode, live angle in aim mode
       const angle = this.isAimMode ? this.input.getAimAngle(this.cueBall) : this.lockedAngle;
-      this.renderer.drawCueAndPowerBar(
-        this.cueBall, 
-        angle, 
-        this.currentPower, 
-        this.aimAssist, 
-        true, 
-        this.isAimMode,
-        this.world.balls,
-        this.world.rails
-      );
+      this.renderer.drawCueAndPowerBar(this.cueBall, angle, this.currentPower, this.aimAssist, true, this.isAimMode);
     }
     
     this.debug.draw(this.world);
@@ -264,7 +250,7 @@ export class Game {
       this.isDraggingPower = true;
       // Reverse: pulling down increases power (mouseY closer to bottom = higher power)
       this.currentPower = ((mouseY - bounds.y) / bounds.height) * CONFIG.CUE_POWER_MAX;
-      this.currentPower = Math.max(0, Math.min(CONFIG.CUE_POWER_MAX, this.currentPower));
+      this.currentPower = Math.max(CONFIG.CUE_POWER_MIN, Math.min(CONFIG.CUE_POWER_MAX, this.currentPower));
     }
   }
   
@@ -277,7 +263,7 @@ export class Game {
     
     // Reverse: pulling down increases power (mouseY closer to bottom = higher power)
     this.currentPower = ((mouseY - bounds.y) / bounds.height) * CONFIG.CUE_POWER_MAX;
-    this.currentPower = Math.max(0, Math.min(CONFIG.CUE_POWER_MAX, this.currentPower));
+    this.currentPower = Math.max(CONFIG.CUE_POWER_MIN, Math.min(CONFIG.CUE_POWER_MAX, this.currentPower));
   }
   
   handlePowerBarMouseUp(_e: MouseEvent) {
@@ -290,181 +276,6 @@ export class Game {
       this.shoot(this.lockedAngle, this.currentPower);
       this.currentPower = 0;
       this.isAimMode = true; // Reset to aim mode after shooting
-    } else {
-      this.cancelShotPreview();
-    }
-  }
-
-  cancelShotPreview() {
-    this.currentPower = 0;
-    this.isDraggingPower = false;
-    this.isAimMode = true;
-  }
-
-  captureShotDiagnostics() {
-    if (!this.cueBall) {
-      console.warn('⚠️ Cannot capture diagnostics: cue ball missing.');
-      return;
-    }
-    
-    const angle = this.isAimMode ? this.input.getAimAngle(this.cueBall) : this.lockedAngle;
-    const previewPower = Math.max(this.currentPower, CONFIG.CUE_POWER_MIN);
-    const prediction = Predictor.predictFullPath(
-      this.cueBall,
-      angle,
-      previewPower,
-      this.world.balls,
-      this.world.rails
-    );
-    
-    const firstContact = prediction.firstContact;
-    const captureId = `capture-${++this.captureCounter}`;
-    if (physicsRecorder.isRecording()) {
-      physicsRecorder.addMarker(`🔖 ${captureId}`);
-    }
-
-    // Simplified capture: just show velocities before/after rail collision
-    const simWorld = cloneWorld(this.world);
-    const simCue = simWorld.balls.find((ball: Ball) => ball.id === this.cueBall!.id);
-    if (!simCue) return;
-    
-    const shotSpeed = previewPower * CONFIG.CUE_POWER_MULTIPLIER;
-    simCue.setVelocity(Math.cos(angle) * shotSpeed, Math.sin(angle) * shotSpeed);
-    
-    let preRailVelocity = null;
-    let postRailVelocity = null;
-    let railHitTime = -1;
-    
-    // Simulate until rail hit - detect by checking distance to rail
-    const railPoint = firstContact.hitRail && firstContact.hitPoint ? firstContact.hitPoint : null;
-    let minDistToRail = Infinity;
-    let foundCollision = false;
-    
-    for (let t = 0; t < 5.0; t += CONFIG.PHYSICS_DT) {
-      const prevVx = simCue.vx;
-      const prevVy = simCue.vy;
-      
-      simWorld.step(CONFIG.PHYSICS_DT);
-      
-      // Detect rail collision by distance to rail point
-      if (railPoint && !foundCollision) {
-        const distToRail = Math.sqrt(
-          Math.pow(simCue.x - railPoint.x, 2) + 
-          Math.pow(simCue.y - railPoint.y, 2)
-        );
-        
-        if (distToRail < minDistToRail) {
-          minDistToRail = distToRail;
-        } else if (minDistToRail < 2.0 && distToRail > minDistToRail + 0.5) {
-          // Ball was close to rail and is now moving away - collision happened
-          foundCollision = true;
-          railHitTime = t;
-          preRailVelocity = { vx: prevVx, vy: prevVy };
-          postRailVelocity = { vx: simCue.vx, vy: simCue.vy };
-          break;
-        }
-      }
-    }
-    
-    const formattedCapture = {
-      captureId,
-      prediction: {
-        preRailVelocity: { vx: Math.cos(angle) * shotSpeed, vy: Math.sin(angle) * shotSpeed },
-        postRailVelocity: prediction.segments[1] ? {
-          vx: (prediction.segments[1].end.x - prediction.segments[1].start.x) / 10,
-          vy: (prediction.segments[1].end.y - prediction.segments[1].start.y) / 10
-        } : null
-      },
-      actual: {
-        preRailVelocity,
-        postRailVelocity,
-        railHitTime
-      }
-    };
-    
-    const summarizeContact = () => {
-      if (!firstContact) return null;
-      const hitType = firstContact.hitBall
-        ? 'ball'
-        : firstContact.hitRail
-        ? 'rail'
-        : 'none';
-      return {
-        hitType,
-        hitBallId: firstContact.hitBall?.id ?? null,
-        hitRailNormal: firstContact.hitRail
-          ? { nx: Number(firstContact.hitRail.nx.toFixed(3)), ny: Number(firstContact.hitRail.ny.toFixed(3)) }
-          : null,
-        hitPoint: firstContact.hitPoint
-          ? {
-              x: Number(firstContact.hitPoint.x.toFixed(3)),
-              y: Number(firstContact.hitPoint.y.toFixed(3)),
-            }
-          : null,
-        surfacePoint: firstContact.surfacePoint
-          ? {
-              x: Number(firstContact.surfacePoint.x.toFixed(3)),
-              y: Number(firstContact.surfacePoint.y.toFixed(3)),
-            }
-          : null,
-        distance: Number(firstContact.distance.toFixed(3)),
-      };
-    };
-    
-    const segments = prediction.segments.map((segment, idx) => ({
-      index: idx,
-      type: segment.type,
-      start: {
-        x: Number(segment.start.x.toFixed(3)),
-        y: Number(segment.start.y.toFixed(3)),
-      },
-      end: {
-        x: Number(segment.end.x.toFixed(3)),
-        y: Number(segment.end.y.toFixed(3)),
-      },
-    }));
-    
-    const balls = this.world.balls.map((ball) => ({
-      id: ball.id,
-      x: Number(ball.x.toFixed(3)),
-      y: Number(ball.y.toFixed(3)),
-      vx: Number(ball.vx.toFixed(3)),
-      vy: Number(ball.vy.toFixed(3)),
-      speed: Number(ball.getSpeed().toFixed(3)),
-      pocketed: ball.pocketed,
-      sleeping: ball.sleeping,
-    }));
-    
-    const cueVelocity = {
-      vx: Number(this.cueBall.vx.toFixed(3)),
-      vy: Number(this.cueBall.vy.toFixed(3)),
-      speed: Number(this.cueBall.getSpeed().toFixed(3)),
-    };
-    
-    const payload = {
-      captureId,
-      timestamp: new Date().toISOString(),
-      mode: this.mode === GameMode.PRACTICE ? 'practice' : 'eight-ball',
-      canShoot: this.canShoot,
-      isAimMode: this.isAimMode,
-      angle,
-      currentPower: this.currentPower,
-      previewPower,
-      cueVelocity,
-      firstContact: summarizeContact(),
-      segments,
-      balls,
-      capture: formattedCapture,
-    };
-    
-    console.log('🎯 Shot diagnostics capture', payload);
-    const json = JSON.stringify(payload, null, 2);
-    if (navigator?.clipboard) {
-      navigator.clipboard.writeText(json).then(() => {
-        console.log('📋 Capture copied to clipboard');
-      }).catch(() => {
-        console.log('ℹ️ Capture ready. Copy JSON from console if needed.');
-      });
     }
   }
 }

@@ -86,9 +86,6 @@ export class PhysicsWorld {
       ball.y += ball.vy * dt;
     });
     
-    // Enforce table boundaries (safety net to prevent escapes)
-    this.enforceBoundaries();
-    
     // Collision detection and resolution (multiple iterations)
     for (let iter = 0; iter < CONFIG.SOLVER_ITERATIONS; iter++) {
       const contacts: Contact[] = [];
@@ -144,39 +141,6 @@ export class PhysicsWorld {
       
       ball.vx *= factor;
       ball.vy *= factor;
-    });
-  }
-  
-  enforceBoundaries() {
-    // Hard boundary enforcement: prevent balls from escaping table
-    const maxX = TABLE_GEOMETRY.playWidthIn / 2;
-    const maxY = TABLE_GEOMETRY.playHeightIn / 2;
-    const margin = CONFIG.BALL_RADIUS;
-    
-    this.balls.forEach((ball) => {
-      if (ball.pocketed) return;
-      
-      // Clamp position to table bounds
-      const minX = -maxX + margin;
-      const maxXBound = maxX - margin;
-      const minY = -maxY + margin;
-      const maxYBound = maxY - margin;
-      
-      if (ball.x < minX) {
-        ball.x = minX;
-        ball.vx = Math.abs(ball.vx) * 0.5; // Bounce with energy loss
-      } else if (ball.x > maxXBound) {
-        ball.x = maxXBound;
-        ball.vx = -Math.abs(ball.vx) * 0.5;
-      }
-      
-      if (ball.y < minY) {
-        ball.y = minY;
-        ball.vy = Math.abs(ball.vy) * 0.5;
-      } else if (ball.y > maxYBound) {
-        ball.y = maxYBound;
-        ball.vy = -Math.abs(ball.vy) * 0.5;
-      }
     });
   }
   

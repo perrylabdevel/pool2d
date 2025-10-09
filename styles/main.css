@@ -48,26 +48,28 @@ body {
   font-size: 16px;
   color: #FFC107;
 }
+
 #controls {
   display: flex;
   gap: 10px;
 }
 
-#controls button {
+button {
   background: #333;
-  color: #fff;
-  border: none;
-  padding: 8px 14px;
+  color: white;
+  border: 1px solid #555;
+  padding: 8px 16px;
   border-radius: 4px;
   cursor: pointer;
+  font-size: 14px;
   transition: background 0.2s;
 }
 
-#controls button:hover {
+button:hover {
   background: #444;
 }
 
-#controls button:active {
+button:active {
   background: #222;
 }
 

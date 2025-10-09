@@ -34,7 +34,7 @@ export const CONFIG = {
   CUE_POWER_MULTIPLIER: 10.0, // Multiply power to get realistic velocity (25 * 10 = 250 in/s)
   CUE_DRAG_SCALE: 0.08, // Power buildup rate
   AIM_LINE_LENGTH: 20,
-  GHOST_LINE_LENGTH: 100, // Increased to predict across entire table
+  GHOST_LINE_LENGTH: 30,
   
   // Rendering
   CANVAS_SCALE: 8, // Pixels per game unit
@@ -65,8 +65,6 @@ export const CONFIG = {
   DEBUG_DRAW_VELOCITIES: true,
   DEBUG_DRAW_AABB: true,
   DEBUG_DRAW_CONTACTS: true,
-  CAPTURE_DURATION: 15.0,
-  CAPTURE_STEP: 1 / 240,
   
   // Performance
   TARGET_FPS: 60,

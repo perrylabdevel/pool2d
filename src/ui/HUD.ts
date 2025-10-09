@@ -30,7 +30,6 @@ export class HUD {
     const restartBtn = document.getElementById('restart-btn')!;
     const settingsBtn = document.getElementById('settings-btn')!;
     const debugToggle = document.getElementById('debug-toggle')!;
-    const captureBtn = document.getElementById('capture-btn');
     const settingsModal = document.getElementById('settings-modal')!;
     const settingsClose = document.getElementById('settings-close')!;
     
@@ -53,10 +52,6 @@ export class HUD {
     
     debugToggle.addEventListener('click', () => {
       window.dispatchEvent(new CustomEvent('game:debug-toggle'));
-    });
-    
-    captureBtn?.addEventListener('click', () => {
-      window.dispatchEvent(new CustomEvent('game:capture'));
     });
     
     // Settings toggles

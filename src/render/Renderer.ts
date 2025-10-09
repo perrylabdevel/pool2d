@@ -6,7 +6,6 @@ import { Ball, Rail, Pocket } from '../physics/Shapes';
 import { PhysicsWorld } from '../physics/Physics';
 import { CONFIG, BALL_CUE } from '../config';
 import { TABLE_GEOMETRY } from '../geometry/Geometry';
-import { Predictor } from '../physics/Prediction';
 
 export class Renderer {
   canvas: HTMLCanvasElement;
@@ -235,7 +234,7 @@ export class Renderer {
     this.ctx.fill();
   }
   
-  drawCueAndPowerBar(ball: Ball, angle: number, power: number, showGhost: boolean, showPowerBar: boolean, isAimMode: boolean, balls: Ball[] = [], rails: Rail[] = []) {
+  drawCueAndPowerBar(ball: Ball, angle: number, power: number, showGhost: boolean, showPowerBar: boolean, isAimMode: boolean) {
     this.ctx.save();
     
     // Use same transform as main render
@@ -272,40 +271,14 @@ export class Renderer {
     this.ctx.stroke();
     this.ctx.setLineDash([]);
     
-    // Enhanced ghost prediction with multi-bounce
-    if (showGhost && balls.length > 0 && rails.length > 0) {
-      const previewPower = Math.max(power, CONFIG.CUE_POWER_MIN);
-      const fullPath = Predictor.predictFullPath(ball, angle, previewPower, balls, rails);
-      
-      // Draw all path segments
-      fullPath.segments.forEach((segment, idx) => {
-        if (segment.type === 'cue') {
-          // Cue ball path - yellow
-          this.ctx.strokeStyle = idx === 0 ? 'rgba(255, 255, 0, 0.5)' : 'rgba(255, 255, 0, 0.3)';
-          this.ctx.lineWidth = 0.3;
-          this.ctx.setLineDash(idx === 0 ? [] : [1, 1]);
-        } else {
-          // Object ball path - orange/red
-          this.ctx.strokeStyle = 'rgba(255, 128, 0, 0.4)';
-          this.ctx.lineWidth = 0.25;
-          this.ctx.setLineDash([1, 1]);
-        }
-        
-        this.ctx.beginPath();
-        this.ctx.moveTo(segment.start.x, segment.start.y);
-        this.ctx.lineTo(segment.end.x, segment.end.y);
-        this.ctx.stroke();
-      });
-      
-      this.ctx.setLineDash([]);
-      
-      // Draw contact point
-      if (fullPath.firstContact.hitPoint) {
-        this.ctx.fillStyle = 'rgba(255, 255, 0, 0.6)';
-        this.ctx.beginPath();
-        this.ctx.arc(fullPath.firstContact.hitPoint.x, fullPath.firstContact.hitPoint.y, 0.5, 0, Math.PI * 2);
-        this.ctx.fill();
-      }
+    // Ghost prediction (simplified - just show trajectory)
+    if (showGhost) {
+      this.ctx.strokeStyle = 'rgba(255, 255, 0, 0.3)';
+      this.ctx.lineWidth = 0.3;
+      this.ctx.beginPath();
+      this.ctx.moveTo(x, y);
+      this.ctx.lineTo(x + dx * CONFIG.GHOST_LINE_LENGTH, y + dy * CONFIG.GHOST_LINE_LENGTH);
+      this.ctx.stroke();
     }
     
     // Power bar (vertical bar to the right of the table)
