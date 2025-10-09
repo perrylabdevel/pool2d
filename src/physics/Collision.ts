@@ -3,6 +3,7 @@
 import { Ball, Rail } from './Shapes';
 import { CONFIG } from '../config';
 import { physicsRecorder } from '../debug/PhysicsRecorder';
+import { shotCapture } from '../debug/ShotCapture';
 
 export interface Contact {
   ballA: Ball;
@@ -17,17 +18,48 @@ export interface Contact {
 export function detectBallBall(a: Ball, b: Ball): Contact | null {
   if (a.pocketed || b.pocketed) return null;
   
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const distSq = dx * dx + dy * dy;
+  let dx = b.x - a.x;
+  let dy = b.y - a.y;
+  let distSq = dx * dx + dy * dy;
   const minDist = a.radius + b.radius;
   
   if (distSq >= minDist * minDist) return null;
   
-  const dist = Math.sqrt(distSq);
-  const depth = minDist - dist;
+  let dist = Math.sqrt(distSq);
+  let depth = minDist - dist;
   
-  // Normal from A to B
+  // Fix discrete collision detection: separate balls to true contact point
+  // This prevents collision normal errors on sharp angle cuts
+  const originalDepth = depth;
+  if (depth > 0.001) {
+    // Simple approach: just push balls apart along the collision normal
+    // This is more reliable than trying to back up in time
+    const nx_temp = dist > 1e-8 ? dx / dist : 1;
+    const ny_temp = dist > 1e-8 ? dy / dist : 0;
+    
+    // Push balls apart by the overlap amount
+    // Split the correction between both balls based on their masses (equal for pool balls)
+    const correction = depth * 0.5;
+    
+    a.x -= nx_temp * correction;
+    a.y -= ny_temp * correction;
+    b.x += nx_temp * correction;
+    b.y += ny_temp * correction;
+    
+    // Recalculate collision geometry with corrected positions
+    dx = b.x - a.x;
+    dy = b.y - a.y;
+    distSq = dx * dx + dy * dy;
+    dist = Math.sqrt(distSq);
+    depth = minDist - dist;
+    
+    // Debug: log if correction didn't work
+    if (originalDepth > 0.05 && Math.abs(depth) > 0.01) {
+      console.warn(`⚠️ Position correction: ${originalDepth.toFixed(3)}" → ${depth.toFixed(3)}" (${a.id} vs ${b.id})`);
+    }
+  }
+  
+  // Normal from A to B (now calculated at true contact point)
   const nx = dist > 1e-8 ? dx / dist : 1;
   const ny = dist > 1e-8 ? dy / dist : 0;
   
@@ -101,6 +133,21 @@ export function resolveBallBall(contact: Contact) {
     ballB.y += correctionY * ballB.invMass;
   }
   
+  // Record for shot capture BEFORE any impulses (to get pre-collision state)
+  if (shotCapture.isCapturing()) {
+    const cueBall = ballA.id === 0 ? ballA : ballB;
+    const otherBall = ballA.id === 0 ? ballB : ballA;
+    
+    // Calculate normal from cue ball to other ball (for shot capture)
+    const dx_capture = otherBall.x - cueBall.x;
+    const dy_capture = otherBall.y - cueBall.y;
+    const dist_capture = Math.sqrt(dx_capture * dx_capture + dy_capture * dy_capture);
+    const nx_capture = dist_capture > 1e-8 ? dx_capture / dist_capture : 1;
+    const ny_capture = dist_capture > 1e-8 ? dy_capture / dist_capture : 0;
+    
+    shotCapture.recordCollision(cueBall, otherBall, { x: nx_capture, y: ny_capture }, depth);
+  }
+  
   // Relative velocity
   const dvx = ballB.vx - ballA.vx;
   const dvy = ballB.vy - ballA.vy;
@@ -140,6 +187,13 @@ export function resolveBallBall(contact: Contact) {
   ballA.vy -= jty * ballA.invMass;
   ballB.vx += jtx * ballB.invMass;
   ballB.vy += jty * ballB.invMass;
+  
+  // Record velocities AFTER all impulses are applied
+  if (shotCapture.isCapturing()) {
+    const cueBall = ballA.id === 0 ? ballA : ballB;
+    const otherBall = ballA.id === 0 ? ballB : ballA;
+    shotCapture.recordCollisionAfter(cueBall, otherBall);
+  }
 }
 
 // Resolve ball-rail collision

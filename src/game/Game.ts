@@ -9,6 +9,8 @@ import { HUD } from '../ui/HUD';
 import { CONFIG, CUE_BALL_POSITION, RACK_POSITIONS } from '../config';
 import { EightBallRules } from '../rules/EightBall';
 import { physicsRecorder } from '../debug/PhysicsRecorder';
+import { Predictor } from '../physics/Prediction';
+import { shotCapture } from '../debug/ShotCapture';
 
 export enum GameMode {
   PRACTICE,
@@ -22,6 +24,7 @@ export class Game {
   hud: HUD;
   debug: DebugDraw;
   rules: EightBallRules;
+  predictor: Predictor;
   mode: GameMode;
   
   // Game loop
@@ -48,6 +51,7 @@ export class Game {
     this.hud = new HUD();
     this.debug = new DebugDraw(debugCanvas);
     this.rules = new EightBallRules();
+    this.predictor = new Predictor();
     this.mode = GameMode.PRACTICE;
     
     this.setupCallbacks();
@@ -96,6 +100,30 @@ export class Game {
         this.restart();
       }
     });
+    
+    // Wire up debug toggle button
+    const debugBtn = document.getElementById('debug-toggle');
+    if (debugBtn) {
+      debugBtn.addEventListener('click', () => this.debug.toggle());
+    }
+    
+    // Wire up restart button
+    const restartBtn = document.getElementById('restart-btn');
+    if (restartBtn) {
+      restartBtn.addEventListener('click', () => this.restart());
+    }
+    
+    // Wire up shot capture button
+    const captureShotBtn = document.getElementById('capture-shot-btn');
+    if (captureShotBtn) {
+      captureShotBtn.addEventListener('click', () => {
+        shotCapture.startCapture();
+        captureShotBtn.style.background = '#4CAF50'; // Highlight when active
+        setTimeout(() => {
+          captureShotBtn.style.background = '';
+        }, 300);
+      });
+    }
   }
   
   initializeGame() {
@@ -137,6 +165,18 @@ export class Game {
   shoot(angle: number, power: number) {
     if (!this.cueBall || this.cueBall.pocketed) return;
     
+    // Record shot for capture system if active
+    if (shotCapture.isCapturing()) {
+      const direction = { x: Math.cos(angle), y: Math.sin(angle) };
+      const prediction = this.predictor.predictFirstContact(
+        { x: this.cueBall.x, y: this.cueBall.y },
+        direction,
+        this.world,
+        this.cueBall
+      );
+      shotCapture.recordShotStart(this.cueBall, angle, power, prediction);
+    }
+    
     // Apply power multiplier for realistic velocity
     const velocity = power * CONFIG.CUE_POWER_MULTIPLIER;
     const vx = Math.cos(angle) * velocity;
@@ -145,39 +185,34 @@ export class Game {
     this.cueBall.setVelocity(vx, vy);
     physicsRecorder.recordShot(angle, power);
     this.canShoot = false;
-    
     if (this.mode === GameMode.EIGHT_BALL) {
       this.rules.startShot();
     }
   }
   
-  update(deltaTime: number) {
-    this.accumulator += deltaTime;
+  update(dt: number) {
+    this.accumulator += dt;
     
-    let steps = 0;
-    while (this.accumulator >= CONFIG.PHYSICS_DT && steps < CONFIG.MAX_SUBSTEPS) {
+    while (this.accumulator >= CONFIG.PHYSICS_DT) {
       this.world.step(CONFIG.PHYSICS_DT);
       physicsRecorder.recordFrame(this.world);
       this.accumulator -= CONFIG.PHYSICS_DT;
-      steps++;
       this.upsSteps++;
     }
     
-    // Check if can shoot again
-    if (!this.canShoot && this.world.isAtRest()) {
+    // Check if all balls are sleeping
+    const allSleeping = this.world.balls.every(b => b.pocketed || b.sleeping);
+    if (allSleeping && !this.canShoot) {
       this.canShoot = true;
+      
+      // Check for shot capture completion
+      if (shotCapture.isCapturing() && this.cueBall) {
+        const targetBall = this.world.balls.find(b => b.id !== 0 && !b.pocketed);
+        shotCapture.checkForRest(this.cueBall, targetBall || null);
+      }
       
       if (this.mode === GameMode.EIGHT_BALL) {
         this.rules.endShot(this.world.balls);
-      }
-      
-      // Handle cue ball pocketed
-      if (this.cueBall && this.cueBall.pocketed) {
-        this.cueBall.pocketed = false;
-        this.cueBall.x = CUE_BALL_POSITION.x;
-        this.cueBall.y = CUE_BALL_POSITION.y;
-        this.cueBall.vx = 0;
-        this.cueBall.vy = 0;
       }
     }
   }
@@ -191,7 +226,34 @@ export class Game {
     if (this.canShoot && this.cueBall && !this.cueBall.pocketed) {
       // Use locked angle in power mode, live angle in aim mode
       const angle = this.isAimMode ? this.input.getAimAngle(this.cueBall) : this.lockedAngle;
-      this.renderer.drawCueAndPowerBar(this.cueBall, angle, this.currentPower, this.aimAssist, true, this.isAimMode);
+      
+      // Predict first contact for aim assist
+      let prediction = undefined;
+      const direction = {
+        x: Math.cos(angle),
+        y: Math.sin(angle),
+      };
+      
+      if (this.aimAssist && this.isAimMode) {
+        prediction = this.predictor.predictFirstContact(
+          { x: this.cueBall.x, y: this.cueBall.y },
+          direction,
+          this.world,
+          this.cueBall
+        );
+        
+        // Draw trajectory lines
+        if (prediction) {
+          this.renderer.drawTrajectoryLines(
+            prediction,
+            { x: this.cueBall.x, y: this.cueBall.y },
+            direction,
+            this.predictor
+          );
+        }
+      }
+      
+      this.renderer.drawCueAndPowerBar(this.cueBall, angle, this.currentPower, this.aimAssist, true, this.isAimMode, prediction);
     }
     
     this.debug.draw(this.world);

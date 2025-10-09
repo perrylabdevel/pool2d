@@ -1,0 +1,275 @@
+// Aim assist prediction system
+// Lightweight raycast for first contact prediction
+
+import { Ball, Rail } from './Shapes';
+import { PhysicsWorld } from './Physics';
+
+export interface Vec2 {
+  x: number;
+  y: number;
+}
+
+export interface PredictionResult {
+  type: 'ball' | 'rail' | 'none';
+  contactPoint: Vec2;
+  contactNormal: Vec2;
+  hitBall?: Ball;
+  hitRail?: Rail;
+  distance: number;
+}
+
+export class Predictor {
+  /**
+   * Cast a ray from origin in direction and find first collision
+   * @param origin Starting point (cue ball center)
+   * @param direction Unit vector of shot direction
+   * @param world Physics world with balls and rails
+   * @param excludeBall Ball to exclude from checks (the cue ball itself)
+   * @param maxDistance Maximum ray distance to check
+   */
+  predictFirstContact(
+    origin: Vec2,
+    direction: Vec2,
+    world: PhysicsWorld,
+    excludeBall: Ball,
+    maxDistance: number = 200
+  ): PredictionResult {
+    let closestHit: PredictionResult = {
+      type: 'none',
+      contactPoint: { x: origin.x + direction.x * maxDistance, y: origin.y + direction.y * maxDistance },
+      contactNormal: { x: 0, y: 0 },
+      distance: maxDistance,
+    };
+
+    // Check ball-ball intersections
+    for (const ball of world.balls) {
+      if (ball === excludeBall || ball.pocketed) continue;
+
+      const hit = this.rayCircleIntersect(origin, direction, ball, maxDistance);
+      if (hit && hit.distance < closestHit.distance) {
+        closestHit = {
+          type: 'ball',
+          contactPoint: hit.point,
+          contactNormal: hit.normal,
+          hitBall: ball,
+          distance: hit.distance,
+        };
+      }
+    }
+
+    // Check rail intersections
+    for (const rail of world.rails) {
+      const hit = this.rayLineIntersect(origin, direction, rail, maxDistance);
+      if (hit && hit.distance < closestHit.distance) {
+        closestHit = {
+          type: 'rail',
+          contactPoint: hit.point,
+          contactNormal: { x: rail.nx, y: rail.ny },
+          hitRail: rail,
+          distance: hit.distance,
+        };
+      }
+    }
+
+    return closestHit;
+  }
+
+  /**
+   * Sphere-sphere sweep (for ball collisions)
+   * Treats cue ball as a moving sphere, not a point
+   * Returns the point where cue ball surface first touches object ball surface
+   */
+  private rayCircleIntersect(
+    origin: Vec2,
+    direction: Vec2,
+    ball: Ball,
+    maxDistance: number
+  ): { point: Vec2; normal: Vec2; distance: number } | null {
+    // For sphere-sphere collision, we need to account for both radii
+    // Treat it as a ray hitting a circle with combined radius
+    const cueBallRadius = 1.125; // CONFIG.BALL_RADIUS
+    const combinedRadius = ball.radius + cueBallRadius;
+    
+    // Vector from ray origin to circle center
+    const toCenter = {
+      x: ball.x - origin.x,
+      y: ball.y - origin.y,
+    };
+
+    // Project toCenter onto ray direction
+    const projection = toCenter.x * direction.x + toCenter.y * direction.y;
+
+    // If projection is negative, circle is behind ray
+    if (projection < 0) return null;
+
+    // Find closest point on ray to circle center
+    const closestPoint = {
+      x: origin.x + direction.x * projection,
+      y: origin.y + direction.y * projection,
+    };
+
+    // Distance from closest point to circle center
+    const dx = ball.x - closestPoint.x;
+    const dy = ball.y - closestPoint.y;
+    const distToCenter = Math.sqrt(dx * dx + dy * dy);
+
+    // Check if ray misses the circle (using combined radius for sphere-sphere)
+    if (distToCenter > combinedRadius) return null;
+
+    // Calculate distance along ray to contact point (sphere-sphere)
+    const distToClosest = projection;
+    const distInsideCircle = Math.sqrt(combinedRadius * combinedRadius - distToCenter * distToCenter);
+    const contactDistance = distToClosest - distInsideCircle;
+
+    // Check if contact is within max distance
+    if (contactDistance < 0 || contactDistance > maxDistance) return null;
+
+    // Calculate cue ball center position at contact
+    const cueBallCenterAtContact = {
+      x: origin.x + direction.x * contactDistance,
+      y: origin.y + direction.y * contactDistance,
+    };
+
+    // Contact point is on the line between the two ball centers
+    // at distance cueBallRadius from cue ball center
+    const dx_centers = ball.x - cueBallCenterAtContact.x;
+    const dy_centers = ball.y - cueBallCenterAtContact.y;
+    const dist_centers = Math.sqrt(dx_centers * dx_centers + dy_centers * dy_centers);
+    
+    const nx = dx_centers / dist_centers;
+    const ny = dy_centers / dist_centers;
+    
+    const contactPoint = {
+      x: cueBallCenterAtContact.x + nx * cueBallRadius,
+      y: cueBallCenterAtContact.y + ny * cueBallRadius,
+    };
+
+    // Normal points from cue ball center to object ball center
+    return {
+      point: contactPoint,
+      normal: { x: nx, y: ny },
+      distance: contactDistance,
+    };
+  }
+
+  /**
+   * Ray-line segment intersection (for rail collisions)
+   */
+  private rayLineIntersect(
+    origin: Vec2,
+    direction: Vec2,
+    rail: Rail,
+    maxDistance: number
+  ): { point: Vec2; distance: number } | null {
+    // Rail segment vector
+    const segX = rail.x2 - rail.x1;
+    const segY = rail.y2 - rail.y1;
+
+    // Solve: origin + t * direction = rail.p1 + s * segment
+    // Using cross product to find intersection
+    const cross = direction.x * segY - direction.y * segX;
+
+    // Parallel lines (no intersection)
+    if (Math.abs(cross) < 0.0001) return null;
+
+    const toRail = {
+      x: rail.x1 - origin.x,
+      y: rail.y1 - origin.y,
+    };
+
+    const t = (toRail.x * segY - toRail.y * segX) / cross;
+    const s = (toRail.x * direction.y - toRail.y * direction.x) / cross;
+
+    // Check if intersection is valid
+    if (t < 0 || t > maxDistance) return null; // Outside ray range
+    if (s < 0 || s > 1) return null; // Outside segment range
+
+    const contactPoint = {
+      x: origin.x + direction.x * t,
+      y: origin.y + direction.y * t,
+    };
+
+    return {
+      point: contactPoint,
+      distance: t,
+    };
+  }
+
+  /**
+   * Calculate simple trajectory predictions after first contact
+   * Returns short line segments showing likely ball paths
+   */
+  predictTrajectories(
+    result: PredictionResult,
+    _cueBallPos: Vec2, // Not used - kept for API consistency
+    shotDirection: Vec2,
+    lineLength: number = 10
+  ): {
+    objectBallPath?: { start: Vec2; end: Vec2 };
+    cueBallPath?: { start: Vec2; end: Vec2 };
+  } {
+    if (result.type === 'none') return {};
+
+    if (result.type === 'ball' && result.hitBall) {
+      // Object ball moves in the direction of the collision normal
+      // The contactNormal from raycast already points from cue ball center to object ball center
+      const objDirNormX = result.contactNormal.x;
+      const objDirNormY = result.contactNormal.y;
+
+      // Cue ball deflects based on cut angle
+      // For a cut shot, the cue ball continues in a direction perpendicular to the object ball path
+      // Calculate the component of shot direction perpendicular to collision normal
+      const dot = shotDirection.x * objDirNormX + shotDirection.y * objDirNormY;
+      const perpX = shotDirection.x - dot * objDirNormX;
+      const perpY = shotDirection.y - dot * objDirNormY;
+      const perpLen = Math.sqrt(perpX * perpX + perpY * perpY);
+      
+      let cueDirNormX = 0;
+      let cueDirNormY = 0;
+      if (perpLen > 0.01) {
+        // Normalize the perpendicular component
+        cueDirNormX = perpX / perpLen;
+        cueDirNormY = perpY / perpLen;
+      }
+
+      const objPathStart = { x: result.hitBall.x, y: result.hitBall.y };
+      const objPathEnd = {
+        x: result.hitBall.x + objDirNormX * lineLength,
+        y: result.hitBall.y + objDirNormY * lineLength,
+      };
+      
+      return {
+        objectBallPath: {
+          start: objPathStart,
+          end: objPathEnd,
+        },
+        cueBallPath: perpLen > 0.01 ? {
+          start: result.contactPoint,
+          end: {
+            x: result.contactPoint.x + cueDirNormX * lineLength,
+            y: result.contactPoint.y + cueDirNormY * lineLength,
+          },
+        } : undefined,
+      };
+    }
+
+    if (result.type === 'rail') {
+      // Reflect shot direction around rail normal
+      const dot = shotDirection.x * result.contactNormal.x + shotDirection.y * result.contactNormal.y;
+      const reflectX = shotDirection.x - 2 * dot * result.contactNormal.x;
+      const reflectY = shotDirection.y - 2 * dot * result.contactNormal.y;
+
+      return {
+        cueBallPath: {
+          start: result.contactPoint,
+          end: {
+            x: result.contactPoint.x + reflectX * lineLength,
+            y: result.contactPoint.y + reflectY * lineLength,
+          },
+        },
+      };
+    }
+
+    return {};
+  }
+}

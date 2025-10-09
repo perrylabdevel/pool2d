@@ -6,6 +6,7 @@ import { Ball, Rail, Pocket } from '../physics/Shapes';
 import { PhysicsWorld } from '../physics/Physics';
 import { CONFIG, BALL_CUE } from '../config';
 import { TABLE_GEOMETRY } from '../geometry/Geometry';
+import { PredictionResult } from '../physics/Prediction';
 
 export class Renderer {
   canvas: HTMLCanvasElement;
@@ -234,7 +235,7 @@ export class Renderer {
     this.ctx.fill();
   }
   
-  drawCueAndPowerBar(ball: Ball, angle: number, power: number, showGhost: boolean, showPowerBar: boolean, isAimMode: boolean) {
+  drawCueAndPowerBar(ball: Ball, angle: number, power: number, showGhost: boolean, showPowerBar: boolean, isAimMode: boolean, prediction?: PredictionResult) {
     this.ctx.save();
     
     // Use same transform as main render
@@ -261,29 +262,143 @@ export class Renderer {
     this.ctx.lineTo(x - dx * (cueStart + cueLength + cueOffset), y - dy * (cueStart + cueLength + cueOffset));
     this.ctx.stroke();
     
-    // Aim line
+    // Aim line - extends to contact point if prediction exists, otherwise fixed length
+    const aimEndX = (showGhost && prediction && prediction.type === 'ball') 
+      ? prediction.contactPoint.x 
+      : x + dx * CONFIG.AIM_LINE_LENGTH;
+    const aimEndY = (showGhost && prediction && prediction.type === 'ball') 
+      ? prediction.contactPoint.y 
+      : y + dy * CONFIG.AIM_LINE_LENGTH;
+    
     this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
     this.ctx.lineWidth = 0.2;
     this.ctx.setLineDash([0.5, 0.5]);
     this.ctx.beginPath();
     this.ctx.moveTo(x, y);
-    this.ctx.lineTo(x + dx * CONFIG.AIM_LINE_LENGTH, y + dy * CONFIG.AIM_LINE_LENGTH);
+    this.ctx.lineTo(aimEndX, aimEndY);
     this.ctx.stroke();
     this.ctx.setLineDash([]);
     
-    // Ghost prediction (simplified - just show trajectory)
-    if (showGhost) {
-      this.ctx.strokeStyle = 'rgba(255, 255, 0, 0.3)';
-      this.ctx.lineWidth = 0.3;
+    // Ghost ball at predicted contact point
+    if (showGhost && prediction && prediction.type === 'ball') {
+      const ghostX = prediction.contactPoint.x;
+      const ghostY = prediction.contactPoint.y;
+      
+      // Draw semi-transparent ghost ball
+      this.ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+      this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+      this.ctx.lineWidth = 0.1;
       this.ctx.beginPath();
-      this.ctx.moveTo(x, y);
-      this.ctx.lineTo(x + dx * CONFIG.GHOST_LINE_LENGTH, y + dy * CONFIG.GHOST_LINE_LENGTH);
+      this.ctx.arc(ghostX, ghostY, ball.radius, 0, Math.PI * 2);
+      this.ctx.fill();
       this.ctx.stroke();
+      
+      // Line to ghost ball removed - trajectory arrows show direction instead
     }
     
     // Power bar (vertical bar to the right of the table)
     if (showPowerBar) {
       this.drawPowerBar(power, isAimMode);
+    }
+    
+    this.ctx.restore();
+  }
+  
+  drawTrajectoryLines(prediction: PredictionResult, cueBallPos: { x: number; y: number }, shotDirection: { x: number; y: number }, predictor: any) {
+    if (prediction.type === 'none') return;
+    
+    this.ctx.save();
+    
+    // Use same transform as main render
+    const canvasCenterX = this.canvas.width / 2;
+    const canvasCenterY = this.canvas.height / 2;
+    this.ctx.translate(canvasCenterX, canvasCenterY);
+    this.ctx.scale(this.scale, -this.scale); // Y-up for world coords
+    
+    // Get trajectory predictions
+    const trajectories = predictor.predictTrajectories(
+      prediction,
+      cueBallPos,
+      shotDirection,
+      15 // Line length in inches
+    );
+    
+    // Draw object ball trajectory (yellow dashed line with arrowhead)
+    if (trajectories.objectBallPath) {
+      const start = trajectories.objectBallPath.start;
+      const end = trajectories.objectBallPath.end;
+      
+      // Draw line
+      this.ctx.strokeStyle = 'rgba(255, 255, 0, 0.6)';
+      this.ctx.lineWidth = 0.25;
+      this.ctx.setLineDash([1, 1]);
+      this.ctx.beginPath();
+      this.ctx.moveTo(start.x, start.y);
+      this.ctx.lineTo(end.x, end.y);
+      this.ctx.stroke();
+      this.ctx.setLineDash([]);
+      
+      // Draw arrowhead at end
+      const dx = end.x - start.x;
+      const dy = end.y - start.y;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      if (len > 0) {
+        const arrowSize = 1.5;
+        const angle = Math.atan2(dy, dx);
+        
+        this.ctx.fillStyle = 'rgba(255, 255, 0, 0.8)';
+        this.ctx.beginPath();
+        this.ctx.moveTo(end.x, end.y);
+        this.ctx.lineTo(
+          end.x - arrowSize * Math.cos(angle - Math.PI / 6),
+          end.y - arrowSize * Math.sin(angle - Math.PI / 6)
+        );
+        this.ctx.lineTo(
+          end.x - arrowSize * Math.cos(angle + Math.PI / 6),
+          end.y - arrowSize * Math.sin(angle + Math.PI / 6)
+        );
+        this.ctx.closePath();
+        this.ctx.fill();
+      }
+    }
+    
+    // Draw cue ball trajectory (white dashed line with arrowhead)
+    if (trajectories.cueBallPath) {
+      const start = trajectories.cueBallPath.start;
+      const end = trajectories.cueBallPath.end;
+      
+      // Draw line
+      this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+      this.ctx.lineWidth = 0.25;
+      this.ctx.setLineDash([1, 1]);
+      this.ctx.beginPath();
+      this.ctx.moveTo(start.x, start.y);
+      this.ctx.lineTo(end.x, end.y);
+      this.ctx.stroke();
+      this.ctx.setLineDash([]);
+      
+      // Draw arrowhead at end
+      const dx = end.x - start.x;
+      const dy = end.y - start.y;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      if (len > 0) {
+        const arrowSize = 1.5;
+        const angle = Math.atan2(dy, dx);
+        
+        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        this.ctx.beginPath();
+        this.ctx.moveTo(end.x, end.y);
+        this.ctx.lineTo(
+          end.x - arrowSize * Math.cos(angle - Math.PI / 6),
+          end.y - arrowSize * Math.sin(angle - Math.PI / 6)
+        );
+        this.ctx.lineTo(
+          end.x - arrowSize * Math.cos(angle + Math.PI / 6),
+          end.y - arrowSize * Math.sin(angle + Math.PI / 6)
+        );
+        this.ctx.closePath();
+        this.ctx.fill();
+      }
     }
     
     this.ctx.restore();
