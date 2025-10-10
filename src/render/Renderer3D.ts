@@ -100,8 +100,23 @@ export class Renderer3D {
     this.loadBallModels();
   }
 
+  updateLoadingText(text: string) {
+    const loadingText = document.getElementById('loading-text');
+    if (loadingText) {
+      loadingText.textContent = text;
+    }
+  }
+
   async loadBallModels() {
+    const startTime = performance.now();
+    console.log('⏳ Loading ball models...');
+    this.updateLoadingText('Loading ball models...');
+    
     const loader = new FBXLoader();
+    const textureLoader = new THREE.TextureLoader();
+    
+    // Enable texture compression for faster loading
+    textureLoader.setCrossOrigin('anonymous');
     const textureMap: Record<number, string> = {
       1: '/textures/poolballTx01.jpg',
       2: '/textures/poolballTx02.jpg',
@@ -139,7 +154,44 @@ export class Renderer3D {
     };
     
     try {
-      const fbx = await loader.loadAsync('/poolballs.fbx');
+      // Preload all textures in parallel with progress tracking
+      let texturesLoaded = 0;
+      const totalTextures = Object.keys(textureMap).length;
+      
+      const texturePromises = Object.entries(textureMap).map(([ballId, path]) => {
+        return new Promise<[number, THREE.Texture]>((resolve) => {
+          const texture = textureLoader.load(
+            path,
+            () => {
+              texture.colorSpace = THREE.SRGBColorSpace;
+              texture.anisotropy = Math.min(4, this.renderer.capabilities.getMaxAnisotropy()); // Limit anisotropy for performance
+              texture.generateMipmaps = true;
+              texture.minFilter = THREE.LinearMipmapLinearFilter;
+              texture.magFilter = THREE.LinearFilter;
+              texturesLoaded++;
+              console.log(`  Texture ${texturesLoaded}/${totalTextures} loaded`);
+              this.updateLoadingText(`Loading textures... ${texturesLoaded}/${totalTextures}`);
+              resolve([Number(ballId), texture]);
+            },
+            undefined,
+            (err) => {
+              console.warn(`Failed to load texture for ball ${ballId}:`, err);
+              resolve([Number(ballId), undefined as any]);
+            }
+          );
+        });
+      });
+
+      console.log('  Loading FBX file (16MB, may take a moment)...');
+      this.updateLoadingText('Loading 3D models (16MB)...');
+      const [fbx, loadedTextures] = await Promise.all([
+        loader.loadAsync('/poolballs.fbx'),
+        Promise.all(texturePromises)
+      ]);
+      console.log('  FBX loaded, processing geometry...');
+      this.updateLoadingText('Processing geometry...');
+
+      const textureCache = new Map<number, THREE.Texture>(loadedTextures);
       const source = fbx.getObjectByName('pooballl_grp') ?? fbx;
       const handled = new Set<number>();
       
@@ -161,15 +213,8 @@ export class Renderer3D {
         const targetRadius = CONFIG.BALL_RADIUS * this.ballVisualScale;
         const scale = targetRadius / currentRadius;
         geometry.scale(scale, scale, scale);
-        geometry.computeBoundingSphere();
         
-        let texture: THREE.Texture | undefined;
-        if (ballId !== 0) {
-          const texPath = textureMap[ballId];
-          texture = textureLoader.load(texPath);
-          texture.colorSpace = THREE.SRGBColorSpace;
-          texture.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
-        }
+        const texture = textureCache.get(ballId);
         
         const material = new THREE.MeshStandardMaterial({
           map: texture,
@@ -178,20 +223,20 @@ export class Renderer3D {
           metalness: 0.12
         });
         
-        const templateMesh = new THREE.Mesh(geometry, material);
-        templateMesh.castShadow = true;
-        templateMesh.receiveShadow = true;
-        templateMesh.name = `ball-template-${ballId}`;
-        
-        this.ballModels.set(ballId, templateMesh);
+        this.ballModels.set(ballId, { geometry, material });
       });
       
       this.ballModelsLoaded = this.ballModels.size > 0;
       if (this.ballModelsLoaded) {
+        const elapsed = performance.now() - startTime;
+        const seconds = (elapsed / 1000).toFixed(1);
+        console.info(`✓ Loaded ${this.ballModels.size} FBX ball models in ${seconds}s (${elapsed.toFixed(0)}ms)`);
+        console.info(`  💡 Tip: For faster loading, consider optimizing the FBX file size (currently 16MB)`);
         this.replaceBallsWithModels();
+        this.hideLoadingScreen();
       }
     } catch (error) {
-      console.error('Error loading FBX:', error);
+      console.error('✗ Error loading FBX:', error);
       this.ballModelsLoaded = false;
     }
   }
@@ -201,6 +246,16 @@ export class Renderer3D {
       this.scene.remove(mesh);
     });
     this.ballMeshes.clear();
+  }
+  
+  hideLoadingScreen() {
+    const loadingScreen = document.getElementById('loading-screen');
+    if (loadingScreen) {
+      loadingScreen.classList.add('fade-out');
+      setTimeout(() => {
+        loadingScreen.style.display = 'none';
+      }, 500);
+    }
   }
   
   resize() {
