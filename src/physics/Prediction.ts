@@ -213,29 +213,69 @@ export class Predictor {
     if (result.type === 'ball' && result.hitBall) {
       // Object ball moves in the direction of the collision normal
       // The contactNormal from raycast already points from cue ball center to object ball center
-      const objDirNormX = result.contactNormal.x;
-      const objDirNormY = result.contactNormal.y;
+      const nx = result.contactNormal.x;
+      const ny = result.contactNormal.y;
 
-      // Cue ball deflects based on cut angle
-      // For a cut shot, the cue ball continues in a direction perpendicular to the object ball path
-      // Calculate the component of shot direction perpendicular to collision normal
-      const dot = shotDirection.x * objDirNormX + shotDirection.y * objDirNormY;
-      const perpX = shotDirection.x - dot * objDirNormX;
-      const perpY = shotDirection.y - dot * objDirNormY;
-      const perpLen = Math.sqrt(perpX * perpX + perpY * perpY);
+      // Use impulse-based physics to predict deflection (matches actual collision)
+      // Assume equal mass (invMass = 1 for both balls)
+      const ballMass = 1.0;
+      const invMass = 1.0 / ballMass;
+      const totalInvMass = invMass + invMass;
+      
+      // Assume object ball is stationary (relative velocity = cue ball velocity)
+      // Shot direction is normalized, so we need to use a representative velocity magnitude
+      const vMag = 100; // Representative velocity for direction calculation
+      const cueBallVx = shotDirection.x * vMag;
+      const cueBallVy = shotDirection.y * vMag;
+      
+      // Relative velocity (cue ball - object ball, where object ball is at rest)
+      const dvx = 0 - cueBallVx; // ballB.vx - ballA.vx
+      const dvy = 0 - cueBallVy;
+      const vRel = dvx * nx + dvy * ny;
+      
+      // Normal impulse
+      const e = 0.93; // CONFIG.BALL_RESTITUTION
+      const j = -(1 + e) * vRel / totalInvMass;
+      
+      // Apply normal impulse first
+      const jx = j * nx;
+      const jy = j * ny;
+      const cueBallVxAfterNormal = cueBallVx - jx * invMass;
+      const cueBallVyAfterNormal = cueBallVy - jy * invMass;
+      const objBallVxAfterNormal = 0 + jx * invMass;
+      const objBallVyAfterNormal = 0 + jy * invMass;
+      
+      // Friction impulse - calculate from post-normal-impulse velocities
+      const tx = -ny;
+      const ty = nx;
+      const dvx_post = objBallVxAfterNormal - cueBallVxAfterNormal;
+      const dvy_post = objBallVyAfterNormal - cueBallVyAfterNormal;
+      const vt = dvx_post * tx + dvy_post * ty;
+      const jt = -vt / totalInvMass;
+      const ballBallFriction = 0.05; // CONFIG.BALL_BALL_FRICTION
+      const maxFriction = Math.abs(j) * ballBallFriction;
+      const jtClamped = Math.max(-maxFriction, Math.min(maxFriction, jt));
+      
+      // Apply friction impulse
+      const jtx = jtClamped * tx;
+      const jty = jtClamped * ty;
+      
+      const cueBallVxAfter = cueBallVxAfterNormal - jtx * invMass;
+      const cueBallVyAfter = cueBallVyAfterNormal - jty * invMass;
+      
+      const cueBallSpeed = Math.sqrt(cueBallVxAfter * cueBallVxAfter + cueBallVyAfter * cueBallVyAfter);
       
       let cueDirNormX = 0;
       let cueDirNormY = 0;
-      if (perpLen > 0.01) {
-        // Normalize the perpendicular component
-        cueDirNormX = perpX / perpLen;
-        cueDirNormY = perpY / perpLen;
+      if (cueBallSpeed > 0.01) {
+        cueDirNormX = cueBallVxAfter / cueBallSpeed;
+        cueDirNormY = cueBallVyAfter / cueBallSpeed;
       }
 
       const objPathStart = { x: result.hitBall.x, y: result.hitBall.y };
       const objPathEnd = {
-        x: result.hitBall.x + objDirNormX * lineLength,
-        y: result.hitBall.y + objDirNormY * lineLength,
+        x: result.hitBall.x + nx * lineLength,
+        y: result.hitBall.y + ny * lineLength,
       };
       
       return {
@@ -243,7 +283,7 @@ export class Predictor {
           start: objPathStart,
           end: objPathEnd,
         },
-        cueBallPath: perpLen > 0.01 ? {
+        cueBallPath: cueBallSpeed > 0.01 ? {
           start: result.contactPoint,
           end: {
             x: result.contactPoint.x + cueDirNormX * lineLength,

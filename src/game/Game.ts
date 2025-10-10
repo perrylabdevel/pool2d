@@ -11,6 +11,7 @@ import { EightBallRules } from '../rules/EightBall';
 import { physicsRecorder } from '../debug/PhysicsRecorder';
 import { Predictor } from '../physics/Prediction';
 import { shotCapture } from '../debug/ShotCapture';
+import { SettingsPanel } from '../ui/SettingsPanel';
 
 export enum GameMode {
   PRACTICE,
@@ -23,6 +24,7 @@ export class Game {
   input: InputManager;
   hud: HUD;
   debug: DebugDraw;
+  settings: SettingsPanel;
   rules: EightBallRules;
   predictor: Predictor;
   mode: GameMode;
@@ -44,12 +46,16 @@ export class Game {
   isAimMode: boolean = true; // true = aim, false = power
   lockedAngle: number = 0; // Locked angle when in power mode
   
+  // Ball dragging (practice mode only)
+  isDraggingBall: boolean = false;
+  
   constructor(gameCanvas: HTMLCanvasElement, debugCanvas: HTMLCanvasElement) {
     this.world = new PhysicsWorld();
     this.renderer = new Renderer(gameCanvas);
     this.input = new InputManager(gameCanvas);
     this.hud = new HUD();
     this.debug = new DebugDraw(debugCanvas);
+    this.settings = new SettingsPanel();
     this.rules = new EightBallRules();
     this.predictor = new Predictor();
     this.mode = GameMode.PRACTICE;
@@ -57,13 +63,30 @@ export class Game {
     this.setupCallbacks();
     this.setupEventListeners();
     this.initializeGame();
+    
+    // Log helpful tips
+    if (this.mode === GameMode.PRACTICE) {
+      console.log('💡 Tips:');
+      console.log('  - Hold SHIFT and drag the cue ball to reposition it');
+      console.log('  - Press S to open Physics Settings panel');
+      console.log('  - Press D for Debug view');
+    }
   }
   
   setupCallbacks() {
-    // Handle power bar dragging
-    this.input.canvas.addEventListener('mousedown', (e) => this.handlePowerBarMouseDown(e));
-    this.input.canvas.addEventListener('mousemove', (e) => this.handlePowerBarMouseMove(e));
-    this.input.canvas.addEventListener('mouseup', (e) => this.handlePowerBarMouseUp(e));
+    // Handle mouse events (power bar, ball dragging)
+    this.input.canvas.addEventListener('mousedown', (e) => {
+      this.handleBallDragStart(e);
+      this.handlePowerBarMouseDown(e);
+    });
+    this.input.canvas.addEventListener('mousemove', (e) => {
+      this.handleBallDrag(e);
+      this.handlePowerBarMouseMove(e);
+    });
+    this.input.canvas.addEventListener('mouseup', (e) => {
+      this.handleBallDragEnd(e);
+      this.handlePowerBarMouseUp(e);
+    });
     
     // Handle A key to toggle aim/power mode
     window.addEventListener('keydown', (e) => {
@@ -99,6 +122,9 @@ export class Game {
       if (e.key === 'r' || e.key === 'R') {
         this.restart();
       }
+      if (e.key === 's' || e.key === 'S') {
+        this.settings.toggle();
+      }
     });
     
     // Wire up debug toggle button
@@ -123,6 +149,12 @@ export class Game {
           captureShotBtn.style.background = '';
         }, 300);
       });
+    }
+    
+    // Wire up physics settings button
+    const physicsSettingsBtn = document.getElementById('physics-settings-btn');
+    if (physicsSettingsBtn) {
+      physicsSettingsBtn.addEventListener('click', () => this.settings.toggle());
     }
   }
   
@@ -227,31 +259,27 @@ export class Game {
       // Use locked angle in power mode, live angle in aim mode
       const angle = this.isAimMode ? this.input.getAimAngle(this.cueBall) : this.lockedAngle;
       
-      // Predict first contact for aim assist
-      let prediction = undefined;
+      // Predict first contact (always run to clip aim line at rails/balls)
       const direction = {
         x: Math.cos(angle),
         y: Math.sin(angle),
       };
       
-      // Show prediction in both aim mode and power mode when aim assist is enabled
-      if (this.aimAssist) {
-        prediction = this.predictor.predictFirstContact(
+      const prediction = this.predictor.predictFirstContact(
+        { x: this.cueBall.x, y: this.cueBall.y },
+        direction,
+        this.world,
+        this.cueBall
+      );
+      
+      // Draw trajectory lines only if aim assist is enabled
+      if (this.aimAssist && prediction) {
+        this.renderer.drawTrajectoryLines(
+          prediction,
           { x: this.cueBall.x, y: this.cueBall.y },
           direction,
-          this.world,
-          this.cueBall
+          this.predictor
         );
-        
-        // Draw trajectory lines
-        if (prediction) {
-          this.renderer.drawTrajectoryLines(
-            prediction,
-            { x: this.cueBall.x, y: this.cueBall.y },
-            direction,
-            this.predictor
-          );
-        }
       }
       
       this.renderer.drawCueAndPowerBar(this.cueBall, angle, this.currentPower, this.aimAssist, true, this.isAimMode, prediction);
@@ -339,6 +367,66 @@ export class Game {
       this.shoot(this.lockedAngle, this.currentPower);
       this.currentPower = 0;
       this.isAimMode = true; // Reset to aim mode after shooting
+    }
+  }
+  
+  handleBallDragStart(e: MouseEvent) {
+    // Only in practice mode, when balls are at rest, and Shift is held
+    if (this.mode !== GameMode.PRACTICE) return;
+    if (!this.canShoot) return;
+    if (!e.shiftKey) return;
+    if (!this.cueBall || this.cueBall.pocketed) return;
+    
+    // Convert screen coords to game coords (same transform as renderer)
+    const rect = this.input.canvas.getBoundingClientRect();
+    const canvasCenterX = this.renderer.canvas.width / 2;
+    const canvasCenterY = this.renderer.canvas.height / 2;
+    
+    const screenX = e.clientX - rect.left;
+    const screenY = e.clientY - rect.top;
+    
+    const mouseX = (screenX - canvasCenterX) / this.renderer.scale;
+    const mouseY = -(screenY - canvasCenterY) / this.renderer.scale; // Flip Y
+    
+    // Check if clicking on cue ball
+    const dx = mouseX - this.cueBall.x;
+    const dy = mouseY - this.cueBall.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    
+    if (dist <= this.cueBall.radius * 1.5) {
+      this.isDraggingBall = true;
+      this.input.canvas.style.cursor = 'move';
+    }
+  }
+  
+  handleBallDrag(e: MouseEvent) {
+    if (!this.isDraggingBall || !this.cueBall) return;
+    
+    // Convert screen coords to game coords (same transform as renderer)
+    const rect = this.input.canvas.getBoundingClientRect();
+    const canvasCenterX = this.renderer.canvas.width / 2;
+    const canvasCenterY = this.renderer.canvas.height / 2;
+    
+    const screenX = e.clientX - rect.left;
+    const screenY = e.clientY - rect.top;
+    
+    const mouseX = (screenX - canvasCenterX) / this.renderer.scale;
+    const mouseY = -(screenY - canvasCenterY) / this.renderer.scale; // Flip Y
+    
+    // Move cue ball to mouse position
+    this.cueBall.x = mouseX;
+    this.cueBall.y = mouseY;
+    
+    // Ensure it stays within table bounds (with margin for ball radius)
+    const margin = this.cueBall.radius;
+    this.cueBall.x = Math.max(-50 + margin, Math.min(50 - margin, this.cueBall.x));
+    this.cueBall.y = Math.max(-25 + margin, Math.min(25 - margin, this.cueBall.y));
+  }
+  
+  handleBallDragEnd(_e: MouseEvent) {
+    if (this.isDraggingBall) {
+      this.isDraggingBall = false;
+      this.input.canvas.style.cursor = 'default';
     }
   }
 }

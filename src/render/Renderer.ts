@@ -262,16 +262,16 @@ export class Renderer {
     this.ctx.lineTo(x - dx * (cueStart + cueLength + cueOffset), y - dy * (cueStart + cueLength + cueOffset));
     this.ctx.stroke();
     
-    // Aim line - extends to contact point if prediction exists, otherwise fixed length
-    const aimEndX = (showGhost && prediction && prediction.type === 'ball') 
+    // Aim line - always stop at contact point (ball or rail) if prediction exists
+    const aimEndX = (prediction && (prediction.type === 'ball' || prediction.type === 'rail')) 
       ? prediction.contactPoint.x 
       : x + dx * CONFIG.AIM_LINE_LENGTH;
-    const aimEndY = (showGhost && prediction && prediction.type === 'ball') 
+    const aimEndY = (prediction && (prediction.type === 'ball' || prediction.type === 'rail')) 
       ? prediction.contactPoint.y 
       : y + dy * CONFIG.AIM_LINE_LENGTH;
     
     this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-    this.ctx.lineWidth = 0.2;
+    this.ctx.lineWidth = 0.1;
     this.ctx.setLineDash([0.5, 0.5]);
     this.ctx.beginPath();
     this.ctx.moveTo(x, y);
@@ -330,7 +330,7 @@ export class Renderer {
       
       // Draw line
       this.ctx.strokeStyle = 'rgba(255, 255, 0, 0.6)';
-      this.ctx.lineWidth = 0.25;
+      this.ctx.lineWidth = 0.1;
       this.ctx.setLineDash([1, 1]);
       this.ctx.beginPath();
       this.ctx.moveTo(start.x, start.y);
@@ -369,7 +369,7 @@ export class Renderer {
       
       // Draw line
       this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-      this.ctx.lineWidth = 0.25;
+      this.ctx.lineWidth = 0.1;
       this.ctx.setLineDash([1, 1]);
       this.ctx.beginPath();
       this.ctx.moveTo(start.x, start.y);

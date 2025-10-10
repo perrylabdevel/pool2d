@@ -30,6 +30,8 @@ export function detectBallBall(a: Ball, b: Ball): Contact | null {
   
   // Fix discrete collision detection: separate balls to true contact point
   // This prevents collision normal errors on sharp angle cuts
+  // NOTE: At very high speeds (>200 in/s), balls can deeply overlap (>0.5")
+  // causing collision normal errors. This is a limitation of discrete timesteps.
   const originalDepth = depth;
   if (depth > 0.001) {
     // Simple approach: just push balls apart along the collision normal
@@ -53,9 +55,10 @@ export function detectBallBall(a: Ball, b: Ball): Contact | null {
     dist = Math.sqrt(distSq);
     depth = minDist - dist;
     
-    // Debug: log if correction didn't work
-    if (originalDepth > 0.05 && Math.abs(depth) > 0.01) {
-      console.warn(`⚠️ Position correction: ${originalDepth.toFixed(3)}" → ${depth.toFixed(3)}" (${a.id} vs ${b.id})`);
+    // Log severe overlaps that may indicate physics instability
+    // With adaptive substepping, overlaps should be < 0.5" even at high speeds
+    if (originalDepth > 0.5 || (originalDepth > 0.2 && Math.abs(depth) > 0.02)) {
+      console.warn(`⚠️ Collision overlap: ${originalDepth.toFixed(3)}" → ${depth.toFixed(3)}" (ball ${a.id} vs ${b.id})`);
     }
   }
   
@@ -133,25 +136,28 @@ export function resolveBallBall(contact: Contact) {
     ballB.y += correctionY * ballB.invMass;
   }
   
+  // Recalculate normal after positional correction
+  // This ensures we use the correct geometry for impulse calculation
+  const dx_corrected = ballB.x - ballA.x;
+  const dy_corrected = ballB.y - ballA.y;
+  const dist_corrected = Math.sqrt(dx_corrected * dx_corrected + dy_corrected * dy_corrected);
+  const nx_corrected = dist_corrected > 1e-8 ? dx_corrected / dist_corrected : nx;
+  const ny_corrected = dist_corrected > 1e-8 ? dy_corrected / dist_corrected : ny;
+  
   // Record for shot capture BEFORE any impulses (to get pre-collision state)
   if (shotCapture.isCapturing()) {
     const cueBall = ballA.id === 0 ? ballA : ballB;
     const otherBall = ballA.id === 0 ? ballB : ballA;
     
-    // Calculate normal from cue ball to other ball (for shot capture)
-    const dx_capture = otherBall.x - cueBall.x;
-    const dy_capture = otherBall.y - cueBall.y;
-    const dist_capture = Math.sqrt(dx_capture * dx_capture + dy_capture * dy_capture);
-    const nx_capture = dist_capture > 1e-8 ? dx_capture / dist_capture : 1;
-    const ny_capture = dist_capture > 1e-8 ? dy_capture / dist_capture : 0;
-    
-    shotCapture.recordCollision(cueBall, otherBall, { x: nx_capture, y: ny_capture }, depth);
+    // Use corrected normal (points from A to B)
+    const normalSign = ballA.id === 0 ? 1 : -1;
+    shotCapture.recordCollision(cueBall, otherBall, { x: nx_corrected * normalSign, y: ny_corrected * normalSign }, depth);
   }
   
   // Relative velocity
   const dvx = ballB.vx - ballA.vx;
   const dvy = ballB.vy - ballA.vy;
-  const vRel = dvx * nx + dvy * ny;
+  const vRel = dvx * nx_corrected + dvy * ny_corrected;
   
   // Separating already?
   if (vRel > 0) return;
@@ -160,9 +166,9 @@ export function resolveBallBall(contact: Contact) {
   const e = CONFIG.BALL_RESTITUTION;
   const j = -(1 + e) * vRel / totalInvMass;
   
-  // Apply impulse
-  const jx = j * nx;
-  const jy = j * ny;
+  // Apply impulse (using corrected normal)
+  const jx = j * nx_corrected;
+  const jy = j * ny_corrected;
   
   ballA.vx -= jx * ballA.invMass;
   ballA.vy -= jy * ballA.invMass;
@@ -172,12 +178,15 @@ export function resolveBallBall(contact: Contact) {
   // Record collision
   physicsRecorder.recordCollision(ballA, ballB);
   
-  // Friction (tangent impulse)
-  const tx = -ny;
-  const ty = nx;
-  const vt = dvx * tx + dvy * ty;
+  // Friction (tangent impulse) - use corrected normal
+  // IMPORTANT: Calculate friction based on relative velocity AFTER normal impulse
+  const tx = -ny_corrected;
+  const ty = nx_corrected;
+  const dvx_post = ballB.vx - ballA.vx;
+  const dvy_post = ballB.vy - ballA.vy;
+  const vt = dvx_post * tx + dvy_post * ty;
   const jt = -vt / totalInvMass;
-  const maxFriction = Math.abs(j) * CONFIG.SLIDING_FRICTION;
+  const maxFriction = Math.abs(j) * CONFIG.BALL_BALL_FRICTION; // Use ball-ball friction, not table friction
   const jtClamped = Math.max(-maxFriction, Math.min(maxFriction, jt));
   
   const jtx = jtClamped * tx;
@@ -205,11 +214,20 @@ export function resolveBallRail(contact: Contact) {
   ballA.x += nx * depth;
   ballA.y += ny * depth;
   
+  // Calculate contact point
+  const contactPoint = {
+    x: ballA.x - nx * ballA.radius,
+    y: ballA.y - ny * ballA.radius,
+  };
+  
   // Velocity reflection
   const vn = ballA.vx * nx + ballA.vy * ny;
   
   // Already separating?
   if (vn > 0) return;
+  
+  // Record pre-collision velocity for shot capture
+  const velBefore = { x: ballA.vx, y: ballA.vy };
   
   // Reflect with restitution
   const e = CONFIG.CUSHION_RESTITUTION;
@@ -228,4 +246,10 @@ export function resolveBallRail(contact: Contact) {
   
   ballA.vx += jt * tx;
   ballA.vy += jt * ty;
+  
+  // Record rail collision for shot capture (only for cue ball)
+  if (shotCapture.isCapturing() && ballA.id === 0) {
+    const velAfter = { x: ballA.vx, y: ballA.vy };
+    shotCapture.recordRailCollision(contactPoint, { x: nx, y: ny }, velBefore, velAfter);
+  }
 }

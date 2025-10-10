@@ -72,52 +72,76 @@ export class PhysicsWorld {
   }
   
   step(dt: number) {
-    // Save previous state for interpolation
-    this.balls.forEach((ball) => ball.saveState());
-    
-    // Apply friction
-    this.applyFriction(dt);
-    
-    // Integrate velocity
-    this.balls.forEach((ball) => {
-      if (ball.pocketed || ball.sleeping) return;
-      
-      ball.x += ball.vx * dt;
-      ball.y += ball.vy * dt;
-    });
-    
-    // Collision detection and resolution (multiple iterations)
-    for (let iter = 0; iter < CONFIG.SOLVER_ITERATIONS; iter++) {
-      const contacts: Contact[] = [];
-      
-      // Ball-ball collisions
-      for (let i = 0; i < this.balls.length; i++) {
-        for (let j = i + 1; j < this.balls.length; j++) {
-          const contact = detectBallBall(this.balls[i], this.balls[j]);
-          if (contact) contacts.push(contact);
-        }
+    // Adaptive substepping for high-speed collisions
+    // Calculate max ball speed to determine substeps needed
+    let maxSpeed = 0;
+    for (const ball of this.balls) {
+      if (!ball.pocketed && !ball.sleeping) {
+        const speed = ball.getSpeed();
+        if (speed > maxSpeed) maxSpeed = speed;
       }
-      
-      // Ball-rail collisions
-      for (const ball of this.balls) {
-        for (const rail of this.rails) {
-          const contact = detectBallRail(ball, rail);
-          if (contact) contacts.push(contact);
-        }
-      }
-      
-      // Resolve contacts
-      contacts.forEach((contact) => {
-        if (contact.ballB) {
-          resolveBallBall(contact);
-        } else if (contact.rail) {
-          resolveBallRail(contact);
-        }
-      });
     }
     
-    // Check pockets
-    this.checkPockets();
+    // Calculate substeps: keep travel distance per substep < ball radius (1.125")
+    // This prevents balls from tunneling through each other
+    const maxTravelPerSubstep = CONFIG.BALL_RADIUS; // 1.125"
+    const maxTravelThisStep = maxSpeed * dt;
+    const substeps = Math.max(1, Math.ceil(maxTravelThisStep / maxTravelPerSubstep));
+    const subDt = dt / substeps;
+    
+    // Run physics in substeps
+    for (let substep = 0; substep < substeps; substep++) {
+      // Save previous state for interpolation (only on first substep)
+      if (substep === 0) {
+        this.balls.forEach((ball) => ball.saveState());
+      }
+      
+      // Apply friction
+      this.applyFriction(subDt);
+      
+      // Integrate velocity
+      this.balls.forEach((ball) => {
+        if (ball.pocketed || ball.sleeping) return;
+        
+        ball.x += ball.vx * subDt;
+        ball.y += ball.vy * subDt;
+      });
+      
+      // Collision detection and resolution (multiple iterations)
+      for (let iter = 0; iter < CONFIG.SOLVER_ITERATIONS; iter++) {
+        const contacts: Contact[] = [];
+        
+        // Ball-ball collisions
+        for (let i = 0; i < this.balls.length; i++) {
+          for (let j = i + 1; j < this.balls.length; j++) {
+            const contact = detectBallBall(this.balls[i], this.balls[j]);
+            if (contact) contacts.push(contact);
+          }
+        }
+        
+        // Ball-rail collisions
+        for (const ball of this.balls) {
+          for (const rail of this.rails) {
+            const contact = detectBallRail(ball, rail);
+            if (contact) contacts.push(contact);
+          }
+        }
+        
+        // Resolve contacts
+        contacts.forEach((contact) => {
+          if (contact.ballB) {
+            resolveBallBall(contact);
+          } else if (contact.rail) {
+            resolveBallRail(contact);
+          }
+        });
+      }
+      
+      // Check pockets (only on last substep)
+      if (substep === substeps - 1) {
+        this.checkPockets();
+      }
+    }
     
     // Check sleeping
     this.checkSleeping();
