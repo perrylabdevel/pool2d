@@ -2,7 +2,7 @@
 
 import { PhysicsWorld } from '../physics/Physics';
 import { Ball } from '../physics/Shapes';
-import { Renderer } from '../render/Renderer';
+import { Renderer3D } from '../render/Renderer3D';
 import { InputManager } from '../input/Input';
 import { DebugDraw } from '../debug/DebugDraw';
 import { HUD } from '../ui/HUD';
@@ -20,7 +20,7 @@ export enum GameMode {
 
 export class Game {
   world: PhysicsWorld;
-  renderer: Renderer;
+  renderer: Renderer3D;
   input: InputManager;
   hud: HUD;
   debug: DebugDraw;
@@ -51,7 +51,7 @@ export class Game {
   
   constructor(gameCanvas: HTMLCanvasElement, debugCanvas: HTMLCanvasElement) {
     this.world = new PhysicsWorld();
-    this.renderer = new Renderer(gameCanvas);
+    this.renderer = new Renderer3D(gameCanvas);
     this.input = new InputManager(gameCanvas);
     this.hud = new HUD();
     this.debug = new DebugDraw(debugCanvas);
@@ -125,6 +125,9 @@ export class Game {
       if (e.key === 's' || e.key === 'S') {
         this.settings.toggle();
       }
+      if (e.key === 'm' || e.key === 'M') {
+        this.renderer.toggleMeasurementOverlay();
+      }
     });
     
     // Wire up debug toggle button
@@ -176,6 +179,11 @@ export class Game {
       const ball = new Ball(pos.id, pos.x, pos.y, CONFIG.BALL_RADIUS, CONFIG.BALL_MASS);
       this.world.addBall(ball);
     });
+    
+    // Initialize 3D scene
+    this.renderer.initializeTable();
+    this.renderer.initializeRails(this.world.rails);
+    this.renderer.initializePockets(this.world.pockets);
     
     this.resize();
     this.rules.startGame();

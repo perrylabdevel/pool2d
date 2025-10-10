@@ -1,0 +1,945 @@
+// 3D rendering system using Three.js
+import * as THREE from 'three';
+import { FBXLoader } from 'three-stdlib';
+import { Ball, Rail, Pocket } from '../physics/Shapes';
+import { PhysicsWorld } from '../physics/Physics';
+import { CONFIG, BALL_CUE } from '../config';
+import { TABLE_GEOMETRY } from '../geometry/Geometry';
+import { PredictionResult } from '../physics/Prediction';
+
+export class Renderer3D {
+  canvas: HTMLCanvasElement;
+  uiCanvas: HTMLCanvasElement;
+  uiCtx: CanvasRenderingContext2D;
+  scene: THREE.Scene;
+  camera: THREE.OrthographicCamera;
+  renderer: THREE.WebGLRenderer;
+  scale: number;
+  
+  // 3D objects
+  ballMeshes: Map<number, THREE.Object3D> = new Map();
+  ballModels: Map<number, { geometry: THREE.BufferGeometry; material: THREE.MeshStandardMaterial }> = new Map();
+  ballModelsLoaded: boolean = false;
+  ballVisualScale = 1.0; // Visual radius matches physics radius to avoid overlap
+  tableMesh: THREE.Mesh | null = null;
+  railMeshes: THREE.Mesh[] = [];
+  pocketMeshes: THREE.Mesh[] = [];
+  showMeasurementOverlay = false;
+  
+  // UI elements
+  cueStick: THREE.Mesh | null = null;
+  aimLine: THREE.Line | null = null;
+  ghostBall: THREE.Mesh | null = null;
+  trajectoryLines: THREE.Line[] = [];
+  powerBarGroup: THREE.Group | null = null;
+  
+  // Lighting
+  ambientLight: THREE.AmbientLight;
+  directionalLight: THREE.DirectionalLight;
+  fillLight: THREE.HemisphereLight;
+  
+  constructor(canvas: HTMLCanvasElement) {
+    this.canvas = canvas;
+    this.scale = CONFIG.CANVAS_SCALE;
+    
+    // Get UI canvas for 2D overlays
+    this.uiCanvas = document.getElementById('ui-canvas') as HTMLCanvasElement;
+    this.uiCtx = this.uiCanvas.getContext('2d')!;
+    
+    // Create Three.js scene
+    this.scene = new THREE.Scene();
+    this.scene.background = new THREE.Color(0x0a0a0a);
+    
+    // Create orthographic camera (top-down view)
+    const aspect = 1;
+    const frustumSize = 100;
+    this.camera = new THREE.OrthographicCamera(
+      -frustumSize * aspect / 2,
+      frustumSize * aspect / 2,
+      frustumSize / 2,
+      -frustumSize / 2,
+      0.1,
+      1000
+    );
+    // Position camera directly above looking down
+    this.camera.position.set(0, 0, 50);
+    this.camera.lookAt(0, 0, 0);
+    
+    // Create WebGL renderer
+    this.renderer = new THREE.WebGLRenderer({ 
+      canvas,
+      antialias: true,
+    });
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    
+    // Lighting
+    this.ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
+    this.scene.add(this.ambientLight);
+
+    this.directionalLight = new THREE.DirectionalLight(0xffffff, 1.35);
+    this.directionalLight.position.set(-35, -45, 80);
+    this.directionalLight.castShadow = true;
+    this.directionalLight.shadow.mapSize.width = 2048;
+    this.directionalLight.shadow.mapSize.height = 2048;
+    this.directionalLight.shadow.camera.near = 0.5;
+    this.directionalLight.shadow.camera.far = 100;
+    this.directionalLight.shadow.camera.left = -60;
+    this.directionalLight.shadow.camera.right = 60;
+    this.directionalLight.shadow.camera.top = 60;
+    this.directionalLight.shadow.camera.bottom = -60;
+    this.directionalLight.shadow.bias = -0.0001; // Reduce shadow acne
+    this.scene.add(this.directionalLight);
+    this.directionalLight.target.position.set(0, 0, 0);
+    this.scene.add(this.directionalLight.target);
+
+    this.fillLight = new THREE.HemisphereLight(0xffffff, 0x1a1a1a, 0.55);
+    this.scene.add(this.fillLight);
+
+    // Load FBX ball models (async)
+    this.loadBallModels();
+  }
+
+  async loadBallModels() {
+    const loader = new FBXLoader();
+    const textureMap: Record<number, string> = {
+      1: '/textures/poolballTx01.jpg',
+      2: '/textures/poolballTx02.jpg',
+      3: '/textures/poolballTx03.jpg',
+      4: '/textures/poolballTx5.jpg',
+      5: '/textures/poolballTx7.jpg',
+      6: '/textures/poolballTx6.jpg',
+      7: '/textures/poolballTx04.jpg',
+      8: '/textures/poolballTx9.jpg',
+      9: '/textures/poolballTx11.jpg',
+      10: '/textures/poolballTx10.jpg',
+      11: '/textures/poolballTx8.jpg',
+      12: '/textures/poolballTx13.jpg',
+      13: '/textures/poolballTx15.jpg',
+      14: '/textures/poolballTx14.jpg',
+      15: '/textures/poolballTx12.jpg'
+    };
+    const ballNameMap: Record<string, number> = {
+      poolball16: 0,
+      poolball1: 1,
+      poolball2: 2,
+      poolball3: 3,
+      poolball17: 4,
+      poolball18: 5,
+      poolball19: 6,
+      poolball20: 7,
+      poolball21: 8,
+      poolball22: 9,
+      poolball23: 10,
+      poolball24: 11,
+      poolball25: 12,
+      poolball26: 13,
+      poolball27: 14,
+      poolball28: 15
+    };
+    
+    try {
+      const fbx = await loader.loadAsync('/poolballs.fbx');
+      const source = fbx.getObjectByName('pooballl_grp') ?? fbx;
+      const handled = new Set<number>();
+      
+      source.traverse((child) => {
+        if (!(child instanceof THREE.Mesh)) return;
+        if (!child.name.startsWith('poolball')) return;
+        const ballId = ballNameMap[child.name];
+        if (ballId === undefined || handled.has(ballId)) return;
+        handled.add(ballId);
+        
+        const geometry = child.geometry.clone();
+        geometry.computeBoundingBox();
+        geometry.computeBoundingSphere();
+        const bbox = geometry.boundingBox!;
+        const center = bbox.getCenter(new THREE.Vector3());
+        geometry.translate(-center.x, -center.y, -center.z);
+        geometry.computeBoundingSphere();
+        const currentRadius = geometry.boundingSphere!.radius;
+        const targetRadius = CONFIG.BALL_RADIUS * this.ballVisualScale;
+        const scale = targetRadius / currentRadius;
+        geometry.scale(scale, scale, scale);
+        geometry.computeBoundingSphere();
+        
+        let texture: THREE.Texture | undefined;
+        if (ballId !== 0) {
+          const texPath = textureMap[ballId];
+          texture = textureLoader.load(texPath);
+          texture.colorSpace = THREE.SRGBColorSpace;
+          texture.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
+        }
+        
+        const material = new THREE.MeshStandardMaterial({
+          map: texture,
+          color: ballId === 0 ? 0xffffff : 0xffffff,
+          roughness: 0.18,
+          metalness: 0.12
+        });
+        
+        const templateMesh = new THREE.Mesh(geometry, material);
+        templateMesh.castShadow = true;
+        templateMesh.receiveShadow = true;
+        templateMesh.name = `ball-template-${ballId}`;
+        
+        this.ballModels.set(ballId, templateMesh);
+      });
+      
+      this.ballModelsLoaded = this.ballModels.size > 0;
+      if (this.ballModelsLoaded) {
+        this.replaceBallsWithModels();
+      }
+    } catch (error) {
+      console.error('Error loading FBX:', error);
+      this.ballModelsLoaded = false;
+    }
+  }
+  
+  replaceBallsWithModels() {
+    this.ballMeshes.forEach((mesh) => {
+      this.scene.remove(mesh);
+    });
+    this.ballMeshes.clear();
+  }
+  
+  resize() {
+    const container = this.canvas.parentElement!;
+    const containerWidth = container.clientWidth;
+    const containerHeight = container.clientHeight;
+    
+    // External margin around canvas
+    const externalMargin = 40;
+    
+    // Internal padding within canvas (around table)
+    const internalPadding = 40;
+    
+    // Calculate available space for canvas after external margins
+    const availableWidth = containerWidth - externalMargin * 2;
+    const availableHeight = containerHeight - externalMargin * 2;
+    
+    // Calculate scale to fit table with internal padding
+    const scaleX = (availableWidth - internalPadding * 2) / CONFIG.TABLE_WIDTH;
+    const scaleY = (availableHeight - internalPadding * 2) / CONFIG.TABLE_HEIGHT;
+    this.scale = Math.min(scaleX, scaleY);
+    
+    // Set canvas size
+    const width = CONFIG.TABLE_WIDTH * this.scale + internalPadding * 2;
+    const height = CONFIG.TABLE_HEIGHT * this.scale + internalPadding * 2;
+    
+    this.renderer.setSize(width, height);
+    this.canvas.style.width = `${width}px`;
+    this.canvas.style.height = `${height}px`;
+    
+    // Resize UI canvas to match
+    this.uiCanvas.width = width;
+    this.uiCanvas.height = height;
+    this.uiCanvas.style.width = `${width}px`;
+    this.uiCanvas.style.height = `${height}px`;
+    
+    // Update camera aspect ratio
+    const aspect = width / height;
+    const frustumSize = CONFIG.TABLE_HEIGHT * 1.2;
+    this.camera.left = -frustumSize * aspect / 2;
+    this.camera.right = frustumSize * aspect / 2;
+    this.camera.top = frustumSize / 2;
+    this.camera.bottom = -frustumSize / 2;
+    this.camera.updateProjectionMatrix();
+  }
+  
+  initializeTable() {
+    // Create table felt
+    const tableGeometry = new THREE.PlaneGeometry(
+      TABLE_GEOMETRY.playWidthIn,
+      TABLE_GEOMETRY.playHeightIn
+    );
+    const tableMaterial = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(CONFIG.TABLE_COLOR),
+      roughness: 0.8,
+      metalness: 0.1
+    });
+    this.tableMesh = new THREE.Mesh(tableGeometry, tableMaterial);
+    this.tableMesh.receiveShadow = true;
+    this.scene.add(this.tableMesh);
+    
+    // Create wooden frame
+    const frameWidth = 4;
+    const frameHeight = 2;
+    const frameMaterial = new THREE.MeshStandardMaterial({
+      color: 0x3d2413,
+      roughness: 0.6,
+      metalness: 0.2
+    });
+    
+    const halfW = TABLE_GEOMETRY.playWidthIn / 2;
+    const halfH = TABLE_GEOMETRY.playHeightIn / 2;
+    
+    // Top frame
+    const topFrame = new THREE.Mesh(
+      new THREE.BoxGeometry(TABLE_GEOMETRY.playWidthIn + frameWidth * 2, frameWidth, frameHeight),
+      frameMaterial
+    );
+    topFrame.position.set(0, halfH + frameWidth / 2, frameHeight / 2);
+    this.scene.add(topFrame);
+    
+    // Bottom frame
+    const bottomFrame = new THREE.Mesh(
+      new THREE.BoxGeometry(TABLE_GEOMETRY.playWidthIn + frameWidth * 2, frameWidth, frameHeight),
+      frameMaterial
+    );
+    bottomFrame.position.set(0, -halfH - frameWidth / 2, frameHeight / 2);
+    this.scene.add(bottomFrame);
+    
+    // Left frame
+    const leftFrame = new THREE.Mesh(
+      new THREE.BoxGeometry(frameWidth, TABLE_GEOMETRY.playHeightIn, frameHeight),
+      frameMaterial
+    );
+    leftFrame.position.set(-halfW - frameWidth / 2, 0, frameHeight / 2);
+    this.scene.add(leftFrame);
+    
+    // Right frame
+    const rightFrame = new THREE.Mesh(
+      new THREE.BoxGeometry(frameWidth, TABLE_GEOMETRY.playHeightIn, frameHeight),
+      frameMaterial
+    );
+    rightFrame.position.set(halfW + frameWidth / 2, 0, frameHeight / 2);
+    this.scene.add(rightFrame);
+  }
+  
+  initializeRails(rails: Rail[]) {
+    const railMaterial = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(CONFIG.RAIL_COLOR),
+      roughness: 0.5,
+      metalness: 0.3
+    });
+    
+    rails.forEach((rail) => {
+      const dx = rail.x2 - rail.x1;
+      const dy = rail.y2 - rail.y1;
+      const length = Math.sqrt(dx * dx + dy * dy);
+      const angle = Math.atan2(dy, dx);
+      
+      const railGeometry = new THREE.BoxGeometry(length, CONFIG.RAIL_THICKNESS * 2, 1.5);
+      const railMesh = new THREE.Mesh(railGeometry, railMaterial);
+      
+      railMesh.position.set(
+        (rail.x1 + rail.x2) / 2,
+        (rail.y1 + rail.y2) / 2,
+        0.75
+      );
+      railMesh.rotation.z = angle;
+      
+      this.scene.add(railMesh);
+      this.railMeshes.push(railMesh);
+    });
+  }
+  
+  initializePockets(pockets: Pocket[]) {
+    const pocketMaterial = new THREE.MeshBasicMaterial({
+      color: 0x000000,
+      depthTest: false // This forces it to render on top
+    });
+    
+    pockets.forEach((pocket) => {
+      const pocketGeometry = new THREE.CylinderGeometry(
+        pocket.radius,
+        pocket.radius * 0.8,
+        2,
+        32
+      );
+      const pocketMesh = new THREE.Mesh(pocketGeometry, pocketMaterial);
+      
+      // Position pockets at table level
+      pocketMesh.position.set(pocket.x, pocket.y, 0);
+      pocketMesh.rotation.x = Math.PI / 2;
+      
+      // Set high render order to ensure pockets draw last
+      pocketMesh.renderOrder = 999;
+      
+      this.scene.add(pocketMesh);
+      this.pocketMeshes.push(pocketMesh);
+    });
+  }
+  
+  rotationAxis = new THREE.Vector3();
+  rotationQuat = new THREE.Quaternion();
+
+  createBall(ball: Ball): THREE.Object3D {
+    const visualRadius = CONFIG.BALL_RADIUS * this.ballVisualScale;
+    if (this.ballModelsLoaded) {
+      const template = this.ballModels.get(ball.id);
+      if (template) {
+        const ballMesh = new THREE.Mesh(template.geometry, template.material);
+        ballMesh.castShadow = true;
+        ballMesh.receiveShadow = true;
+        this.scene.add(ballMesh);
+        this.ballMeshes.set(ball.id, ballMesh);
+        return ballMesh;
+      }
+    }
+
+    // Fallback to procedural balls if FBX not loaded or template missing
+    const geometry = new THREE.SphereGeometry(visualRadius, 32, 32);
+    
+    // Create ball material
+    const color = ball.id === BALL_CUE 
+      ? new THREE.Color(CONFIG.CUE_BALL_COLOR)
+      : new THREE.Color(CONFIG.BALL_COLORS[ball.id - 1]);
+    
+    const material = new THREE.MeshStandardMaterial({
+      color,
+      roughness: 0.3,
+      metalness: 0.4
+    });
+    
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    
+    // Add number texture for numbered balls
+    if (ball.id !== BALL_CUE) {
+      this.addBallNumber(mesh, ball.id);
+    }
+    
+    // Add stripe for striped balls
+    if (ball.id >= 9 && ball.id <= 15) {
+      this.addBallStripe(mesh, visualRadius);
+    }
+    
+    this.scene.add(mesh);
+    this.ballMeshes.set(ball.id, mesh);
+    
+    return mesh;
+  }
+  
+  addBallNumber(mesh: THREE.Mesh, ballId: number) {
+    // Create canvas for number texture
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d')!;
+    
+    // Draw white circle background for striped balls
+    if (ballId >= 9 && ballId <= 15) {
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(128, 128, 80, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Add subtle shadow/border
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+    
+    // Draw number with better styling
+    ctx.fillStyle = ballId >= 9 && ballId <= 15 ? '#000000' : '#ffffff';
+    ctx.font = 'bold 120px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    
+    // Add text shadow for depth
+    ctx.shadowColor = ballId >= 9 && ballId <= 15 ? 'rgba(0, 0, 0, 0.3)' : 'rgba(0, 0, 0, 0.8)';
+    ctx.shadowBlur = 4;
+    ctx.shadowOffsetX = 2;
+    ctx.shadowOffsetY = 2;
+    
+    ctx.fillText(ballId.toString(), 128, 128);
+    
+    // Create texture from canvas
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true;
+    
+    // Create sprite for the number (always faces camera)
+    const spriteMaterial = new THREE.SpriteMaterial({ 
+      map: texture,
+      transparent: true
+    });
+    const sprite = new THREE.Sprite(spriteMaterial);
+    sprite.scale.set(2, 2, 1); // Larger number
+    sprite.position.set(0, 0, 0.01); // Slightly above ball surface
+    
+    mesh.add(sprite);
+  }
+  
+  addBallStripe(mesh: THREE.Mesh, radius: number) {
+    // Create white stripe band around the ball (flat horizontal band)
+    // Use a thin cylinder that wraps around the equator
+    const stripeHeight = radius * 0.6; // Width of the stripe band
+    const stripeGeometry = new THREE.CylinderGeometry(
+      radius * 1.01, // Slightly larger than ball to sit on surface
+      radius * 1.01,
+      stripeHeight,
+      32,
+      1,
+      true // Open ended
+    );
+    const stripeMaterial = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      roughness: 0.3,
+      metalness: 0.4,
+      side: THREE.DoubleSide
+    });
+    const stripe = new THREE.Mesh(stripeGeometry, stripeMaterial);
+    stripe.rotation.x = Math.PI / 2; // Rotate to be horizontal
+    
+    mesh.add(stripe);
+  }
+  
+  render(world: PhysicsWorld, alpha: number) {
+    // Clear UI canvas
+    this.uiCtx.clearRect(0, 0, this.uiCanvas.width, this.uiCanvas.height);
+
+    if (this.showMeasurementOverlay) {
+      this.drawMeasurementOverlay();
+    }
+    
+    // Update ball positions and rotations
+    world.balls.forEach((ball) => {
+      if (ball.pocketed) {
+        const mesh = this.ballMeshes.get(ball.id);
+        if (mesh) {
+          mesh.visible = false;
+        }
+        return;
+      }
+      
+      let mesh = this.ballMeshes.get(ball.id);
+      if (!mesh) {
+        mesh = this.createBall(ball);
+      }
+      
+      mesh.visible = true;
+      
+      // Interpolate position
+      const x = ball.prevX + (ball.x - ball.prevX) * alpha;
+      const y = ball.prevY + (ball.y - ball.prevY) * alpha;
+      
+      mesh.position.set(x, y, CONFIG.BALL_RADIUS * this.ballVisualScale);
+      
+      // Update rotation based on velocity
+      if (ball.angularVelocity > 0.001) {
+        const vx = ball.vx;
+        const vy = ball.vy;
+        const speed = Math.sqrt(vx * vx + vy * vy);
+        if (speed > 0.001) {
+          this.rotationAxis.set(-vy, vx, 0).normalize();
+          this.rotationQuat.setFromAxisAngle(this.rotationAxis, ball.angle);
+          mesh.setRotationFromQuaternion(this.rotationQuat);
+        }
+      } else {
+        mesh.rotation.set(0, 0, 0);
+      }
+    });
+    
+    // Render the scene
+    this.renderer.render(this.scene, this.camera);
+  }
+
+  toggleMeasurementOverlay(force?: boolean) {
+    if (typeof force === 'boolean') {
+      this.showMeasurementOverlay = force;
+    } else {
+      this.showMeasurementOverlay = !this.showMeasurementOverlay;
+    }
+    console.log(`Measurement overlay ${this.showMeasurementOverlay ? 'enabled' : 'disabled'}`);
+  }
+
+  drawMeasurementOverlay() {
+    const ctx = this.uiCtx;
+    const halfW = TABLE_GEOMETRY.playWidthIn / 2;
+    const halfH = TABLE_GEOMETRY.playHeightIn / 2;
+    const tickSpacing = 10;
+    const labelSpacing = 20;
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+    ctx.lineWidth = 1;
+    ctx.font = '12px "Segoe UI", sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+
+    // Table outline
+    const topLeft = this.worldToScreen(-halfW, halfH);
+    const topRight = this.worldToScreen(halfW, halfH);
+    const bottomLeft = this.worldToScreen(-halfW, -halfH);
+    const bottomRight = this.worldToScreen(halfW, -halfH);
+
+    ctx.beginPath();
+    ctx.moveTo(topLeft.x, topLeft.y);
+    ctx.lineTo(topRight.x, topRight.y);
+    ctx.lineTo(bottomRight.x, bottomRight.y);
+    ctx.lineTo(bottomLeft.x, bottomLeft.y);
+    ctx.closePath();
+    ctx.stroke();
+
+    // Vertical ticks and labels
+    for (let x = -halfW; x <= halfW + 0.01; x += tickSpacing) {
+      const top = this.worldToScreen(x, halfH);
+      const bottom = this.worldToScreen(x, -halfH);
+
+      ctx.beginPath();
+      ctx.moveTo(top.x, top.y);
+      ctx.lineTo(top.x, top.y - 6);
+      ctx.moveTo(bottom.x, bottom.y);
+      ctx.lineTo(bottom.x, bottom.y + 6);
+      ctx.stroke();
+
+      const distanceFromWest = Math.round(x + halfW);
+      if (distanceFromWest % labelSpacing === 0) {
+        ctx.fillText(`${distanceFromWest}"`, top.x + 2, top.y - 10);
+        ctx.fillText(`${distanceFromWest}"`, bottom.x + 2, bottom.y + 12);
+      }
+    }
+
+    // Horizontal ticks and labels
+    ctx.textAlign = 'right';
+    for (let y = -halfH; y <= halfH + 0.01; y += tickSpacing) {
+      const left = this.worldToScreen(-halfW, y);
+      const right = this.worldToScreen(halfW, y);
+
+      ctx.beginPath();
+      ctx.moveTo(left.x, left.y);
+      ctx.lineTo(left.x - 6, left.y);
+      ctx.moveTo(right.x, right.y);
+      ctx.lineTo(right.x + 6, right.y);
+      ctx.stroke();
+
+      const distanceFromSouth = Math.round(y + halfH);
+      if (distanceFromSouth % labelSpacing === 0) {
+        ctx.fillText(`${distanceFromSouth}"`, left.x - 8, left.y);
+        ctx.textAlign = 'left';
+        ctx.fillText(`${distanceFromSouth}"`, right.x + 8, right.y);
+        ctx.textAlign = 'right';
+      }
+    }
+
+    // Center lines
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+    const midLeft = this.worldToScreen(-halfW, 0);
+    const midRight = this.worldToScreen(halfW, 0);
+    ctx.beginPath();
+    ctx.moveTo(midLeft.x, midLeft.y);
+    ctx.lineTo(midRight.x, midRight.y);
+    ctx.stroke();
+
+    const midTop = this.worldToScreen(0, halfH);
+    const midBottom = this.worldToScreen(0, -halfH);
+    ctx.beginPath();
+    ctx.moveTo(midTop.x, midTop.y);
+    ctx.lineTo(midBottom.x, midBottom.y);
+    ctx.stroke();
+
+    // Ball size reference (top-right corner)
+    const ballRadiusPx = CONFIG.BALL_RADIUS * this.scale;
+    const sampleX = this.uiCanvas.width - ballRadiusPx * 3;
+    const sampleY = ballRadiusPx * 3;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+    ctx.beginPath();
+    ctx.arc(sampleX, sampleY, ballRadiusPx, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+    ctx.textAlign = 'center';
+    ctx.fillText('Ball 2.25"', sampleX, sampleY + ballRadiusPx + 14);
+
+    ctx.restore();
+  }
+  
+  // Helper to convert world coordinates to screen coordinates
+  worldToScreen(worldX: number, worldY: number): { x: number; y: number } {
+    // Project world coordinates through the camera
+    const vector = new THREE.Vector3(worldX, worldY, 0);
+    vector.project(this.camera);
+    
+    // Convert from NDC (-1 to 1) to screen coordinates
+    const screenX = (vector.x + 1) * this.uiCanvas.width / 2;
+    const screenY = (-vector.y + 1) * this.uiCanvas.height / 2;
+    
+    return { x: screenX, y: screenY };
+  }
+  
+  // Helper to clip a line at table boundaries (inside the rails)
+  clipLineAtRails(start: { x: number; y: number }, end: { x: number; y: number }): { x: number; y: number } {
+    // Use the actual rail boundaries from geometry
+    const halfWidth = TABLE_GEOMETRY.playWidthIn / 2;
+    const halfHeight = TABLE_GEOMETRY.playHeightIn / 2;
+    
+    // Add a small margin to keep lines inside the play area
+    const margin = CONFIG.BALL_RADIUS;
+    const maxX = halfWidth - margin;
+    const maxY = halfHeight - margin;
+    const minX = -maxX;
+    const minY = -maxY;
+    
+    // Calculate direction
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    
+    if (len < 0.001) return end;
+    
+    const dirX = dx / len;
+    const dirY = dy / len;
+    
+    // Find intersection with table boundaries
+    let minT = len; // Start with full length
+    
+    // Check each boundary
+    if (dirX > 0.001) {
+      const t = (maxX - start.x) / dirX;
+      if (t > 0 && t < minT) minT = t;
+    } else if (dirX < -0.001) {
+      const t = (minX - start.x) / dirX;
+      if (t > 0 && t < minT) minT = t;
+    }
+    
+    if (dirY > 0.001) {
+      const t = (maxY - start.y) / dirY;
+      if (t > 0 && t < minT) minT = t;
+    } else if (dirY < -0.001) {
+      const t = (minY - start.y) / dirY;
+      if (t > 0 && t < minT) minT = t;
+    }
+    
+    // Return clipped endpoint
+    return {
+      x: start.x + dirX * minT,
+      y: start.y + dirY * minT
+    };
+  }
+  
+  // Compatibility methods for existing code
+  drawCueAndPowerBar(ball: Ball, angle: number, power: number, showGhost: boolean, showPowerBar: boolean, _isAimMode: boolean, prediction?: PredictionResult) {
+    // Remove old 3D elements if they exist
+    if (this.cueStick) {
+      this.scene.remove(this.cueStick);
+      this.cueStick = null;
+    }
+    if (this.aimLine) {
+      this.scene.remove(this.aimLine);
+      this.aimLine = null;
+    }
+    if (this.ghostBall) {
+      this.scene.remove(this.ghostBall);
+      this.ghostBall = null;
+    }
+    
+    // Draw cue stick in 2D
+    const cueLength = 20;
+    const cueDistance = ball.radius + 2 + (1 - power / CONFIG.CUE_POWER_MAX) * 3;
+    
+    const ballScreen = this.worldToScreen(ball.x, ball.y);
+    const cueStartX = ball.x - Math.cos(angle) * cueDistance;
+    const cueStartY = ball.y - Math.sin(angle) * cueDistance;
+    const cueEndX = ball.x - Math.cos(angle) * (cueDistance + cueLength);
+    const cueEndY = ball.y - Math.sin(angle) * (cueDistance + cueLength);
+    
+    const cueStart = this.worldToScreen(cueStartX, cueStartY);
+    const cueEnd = this.worldToScreen(cueEndX, cueEndY);
+    
+    this.uiCtx.strokeStyle = '#8B4513';
+    this.uiCtx.lineWidth = 4;
+    this.uiCtx.lineCap = 'round';
+    this.uiCtx.beginPath();
+    this.uiCtx.moveTo(cueStart.x, cueStart.y);
+    this.uiCtx.lineTo(cueEnd.x, cueEnd.y);
+    this.uiCtx.stroke();
+    
+    // Draw aim line in 2D
+    const aimLineLength = CONFIG.AIM_LINE_LENGTH;
+    const aimEndX = ball.x + Math.cos(angle) * aimLineLength;
+    const aimEndY = ball.y + Math.sin(angle) * aimLineLength;
+    const aimEnd = this.worldToScreen(aimEndX, aimEndY);
+    
+    this.uiCtx.strokeStyle = 'rgba(255, 255, 0, 0.6)';
+    this.uiCtx.lineWidth = 2;
+    this.uiCtx.setLineDash([5, 5]);
+    this.uiCtx.beginPath();
+    this.uiCtx.moveTo(ballScreen.x, ballScreen.y);
+    this.uiCtx.lineTo(aimEnd.x, aimEnd.y);
+    this.uiCtx.stroke();
+    this.uiCtx.setLineDash([]);
+    
+    // Draw ghost ball in 2D if prediction exists
+    if (showGhost && prediction && prediction.type === 'ball' && prediction.hitBall) {
+      // Ghost ball should be positioned where the cue ball will be at contact
+      // That's one ball radius away from the contact point, in the opposite direction of the normal
+      const ghostX = prediction.contactPoint.x - prediction.contactNormal.x * ball.radius;
+      const ghostY = prediction.contactPoint.y - prediction.contactNormal.y * ball.radius;
+      const ghostScreen = this.worldToScreen(ghostX, ghostY);
+      
+      this.uiCtx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+      this.uiCtx.lineWidth = 2;
+      this.uiCtx.beginPath();
+      this.uiCtx.arc(ghostScreen.x, ghostScreen.y, ball.radius * this.scale, 0, Math.PI * 2);
+      this.uiCtx.stroke();
+    }
+    
+    // Draw power bar in 2D
+    if (showPowerBar) {
+      this.drawPowerBar2D(power);
+    }
+  }
+  
+  drawPowerBar2D(power: number) {
+    const barWidth = 30;
+    const barHeight = 200;
+    const barX = this.uiCanvas.width - 60;
+    const barY = (this.uiCanvas.height - barHeight) / 2;
+    
+    // Background
+    this.uiCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    this.uiCtx.fillRect(barX, barY, barWidth, barHeight);
+    
+    // Power fill with gradient (bottom to top)
+    const fillHeight = (power / CONFIG.CUE_POWER_MAX) * barHeight;
+    const gradient = this.uiCtx.createLinearGradient(barX, barY + barHeight - fillHeight, barX, barY + barHeight);
+    gradient.addColorStop(0, '#ff0000');
+    gradient.addColorStop(0.5, '#ffff00');
+    gradient.addColorStop(1, '#00ff00');
+    
+    this.uiCtx.fillStyle = gradient;
+    this.uiCtx.fillRect(barX, barY + barHeight - fillHeight, barWidth, fillHeight);
+    
+    // Border
+    this.uiCtx.strokeStyle = '#ffffff';
+    this.uiCtx.lineWidth = 2;
+    this.uiCtx.strokeRect(barX, barY, barWidth, barHeight);
+  }
+  
+  drawPrediction(_prediction: PredictionResult) {
+    // Prediction is drawn as part of drawTrajectoryLines
+  }
+  
+  drawTrajectoryLines(prediction: PredictionResult, cueBallPos: { x: number; y: number }, shotDirection: { x: number; y: number }, predictor: any) {
+    // Clear old 3D trajectory lines
+    this.trajectoryLines.forEach(line => this.scene.remove(line));
+    this.trajectoryLines = [];
+    
+    if (prediction.type === 'none') return;
+    
+    // Draw line from cue ball to contact point (for all collision types)
+    const cueBallScreen = this.worldToScreen(cueBallPos.x, cueBallPos.y);
+    const contactScreen = this.worldToScreen(prediction.contactPoint.x, prediction.contactPoint.y);
+    
+    this.uiCtx.strokeStyle = 'rgba(0, 255, 255, 0.4)';
+    this.uiCtx.lineWidth = 1;
+    this.uiCtx.setLineDash([5, 5]);
+    this.uiCtx.beginPath();
+    this.uiCtx.moveTo(cueBallScreen.x, cueBallScreen.y);
+    this.uiCtx.lineTo(contactScreen.x, contactScreen.y);
+    this.uiCtx.stroke();
+    this.uiCtx.setLineDash([]);
+    
+    // Get trajectory predictions
+    const trajectories = predictor.predictTrajectories(
+      prediction,
+      cueBallPos,
+      shotDirection,
+      50 // Line length in inches (much longer for visibility)
+    );
+    
+    // Draw object ball trajectory (yellow dashed line with arrowhead)
+    if (trajectories.objectBallPath) {
+      const start = trajectories.objectBallPath.start;
+      const endRaw = trajectories.objectBallPath.end;
+      
+      // Clip the line at table boundaries
+      const end = this.clipLineAtRails(start, endRaw);
+      
+      const startScreen = this.worldToScreen(start.x, start.y);
+      const endScreen = this.worldToScreen(end.x, end.y);
+      
+      // Draw line
+      this.uiCtx.strokeStyle = 'rgba(255, 255, 0, 0.6)';
+      this.uiCtx.lineWidth = 2;
+      this.uiCtx.setLineDash([10, 10]);
+      this.uiCtx.beginPath();
+      this.uiCtx.moveTo(startScreen.x, startScreen.y);
+      this.uiCtx.lineTo(endScreen.x, endScreen.y);
+      this.uiCtx.stroke();
+      this.uiCtx.setLineDash([]);
+      
+      // Draw arrowhead at end
+      const dx = endScreen.x - startScreen.x;
+      const dy = endScreen.y - startScreen.y;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      if (len > 0) {
+        const arrowSize = 10;
+        const angle = Math.atan2(dy, dx);
+        
+        this.uiCtx.fillStyle = 'rgba(255, 255, 0, 0.8)';
+        this.uiCtx.beginPath();
+        this.uiCtx.moveTo(endScreen.x, endScreen.y);
+        this.uiCtx.lineTo(
+          endScreen.x - arrowSize * Math.cos(angle - Math.PI / 6),
+          endScreen.y - arrowSize * Math.sin(angle - Math.PI / 6)
+        );
+        this.uiCtx.lineTo(
+          endScreen.x - arrowSize * Math.cos(angle + Math.PI / 6),
+          endScreen.y - arrowSize * Math.sin(angle + Math.PI / 6)
+        );
+        this.uiCtx.closePath();
+        this.uiCtx.fill();
+      }
+    }
+    
+    // Draw cue ball trajectory (white dashed line with arrowhead)
+    if (trajectories.cueBallPath) {
+      const start = trajectories.cueBallPath.start;
+      const endRaw = trajectories.cueBallPath.end;
+      
+      // Clip the line at table boundaries
+      const end = this.clipLineAtRails(start, endRaw);
+      
+      const startScreen = this.worldToScreen(start.x, start.y);
+      const endScreen = this.worldToScreen(end.x, end.y);
+      
+      // Draw line
+      this.uiCtx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+      this.uiCtx.lineWidth = 2;
+      this.uiCtx.setLineDash([10, 10]);
+      this.uiCtx.beginPath();
+      this.uiCtx.moveTo(startScreen.x, startScreen.y);
+      this.uiCtx.lineTo(endScreen.x, endScreen.y);
+      this.uiCtx.stroke();
+      this.uiCtx.setLineDash([]);
+      
+      // Draw arrowhead at end
+      const dx = endScreen.x - startScreen.x;
+      const dy = endScreen.y - startScreen.y;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      if (len > 0) {
+        const arrowSize = 10;
+        const angle = Math.atan2(dy, dx);
+        
+        this.uiCtx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        this.uiCtx.beginPath();
+        this.uiCtx.moveTo(endScreen.x, endScreen.y);
+        this.uiCtx.lineTo(
+          endScreen.x - arrowSize * Math.cos(angle - Math.PI / 6),
+          endScreen.y - arrowSize * Math.sin(angle - Math.PI / 6)
+        );
+        this.uiCtx.lineTo(
+          endScreen.x - arrowSize * Math.cos(angle + Math.PI / 6),
+          endScreen.y - arrowSize * Math.sin(angle + Math.PI / 6)
+        );
+        this.uiCtx.closePath();
+        this.uiCtx.fill();
+      }
+    }
+  }
+  
+  getPowerBarBounds() {
+    const canvas = this.renderer.domElement;
+    const barWidth = 30;
+    const barHeight = 200;
+    const barX = canvas.width - 60;
+    const barY = (canvas.height - barHeight) / 2;
+    return { x: barX, y: barY, width: barWidth, height: barHeight };
+  }
+}

@@ -193,6 +193,11 @@ button:active {
   image-rendering: crisp-edges;
 }
 
+#ui-canvas {
+  position: absolute;
+  pointer-events: none;
+}
+
 #debug-canvas {
   position: absolute;
   pointer-events: none;
