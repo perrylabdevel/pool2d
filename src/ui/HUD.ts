@@ -1,4 +1,5 @@
 // HUD and UI management
+import { SettingsManager } from './SettingsManager';
 
 export class HUD {
   fpsElement: HTMLElement;
@@ -9,6 +10,7 @@ export class HUD {
   player1Panel: HTMLElement;
   player2Panel: HTMLElement;
   statsElement: HTMLElement;
+  settingsManager: SettingsManager;
   
   showStats: boolean = true;
   
@@ -22,7 +24,9 @@ export class HUD {
     this.player2Panel = document.getElementById('player2-info')!;
     this.statsElement = document.getElementById('stats')!;
     
+    this.settingsManager = new SettingsManager();
     this.setupControls();
+    this.loadSettings();
   }
   
   setupControls() {
@@ -54,12 +58,91 @@ export class HUD {
       window.dispatchEvent(new CustomEvent('game:debug-toggle'));
     });
     
-    // Settings toggles
+    // Game settings toggles
+    const aimAssistToggle = document.getElementById('aim-assist-toggle') as HTMLInputElement;
+    aimAssistToggle.addEventListener('change', (e) => {
+      const checked = (e.target as HTMLInputElement).checked;
+      this.settingsManager.saveGameSettings({ aimAssist: checked });
+      window.dispatchEvent(new CustomEvent('game:aim-assist-toggle', { detail: { enabled: checked } }));
+    });
+
+    const call8Toggle = document.getElementById('call-8-toggle') as HTMLInputElement;
+    call8Toggle.addEventListener('change', (e) => {
+      const checked = (e.target as HTMLInputElement).checked;
+      this.settingsManager.saveGameSettings({ call8Ball: checked });
+    });
+
     const showFpsToggle = document.getElementById('show-fps-toggle') as HTMLInputElement;
     showFpsToggle.addEventListener('change', (e) => {
-      this.showStats = (e.target as HTMLInputElement).checked;
+      const checked = (e.target as HTMLInputElement).checked;
+      this.showStats = checked;
       this.statsElement.style.display = this.showStats ? 'flex' : 'none';
+      this.settingsManager.saveGameSettings({ showFPS: checked });
     });
+
+    // UI Color inputs
+    const tableColorInput = document.getElementById('table-color') as HTMLInputElement;
+    tableColorInput.addEventListener('input', (e) => {
+      const color = (e.target as HTMLInputElement).value;
+      this.settingsManager.saveUIColors({ tableColor: color });
+    });
+
+    const railColorInput = document.getElementById('rail-color') as HTMLInputElement;
+    railColorInput.addEventListener('input', (e) => {
+      const color = (e.target as HTMLInputElement).value;
+      this.settingsManager.saveUIColors({ railColor: color });
+    });
+
+    const activePlayerColorInput = document.getElementById('active-player-color') as HTMLInputElement;
+    activePlayerColorInput.addEventListener('input', (e) => {
+      const color = (e.target as HTMLInputElement).value;
+      this.settingsManager.saveUIColors({ activePlayerColor: color });
+    });
+
+    const turnIndicatorColorInput = document.getElementById('turn-indicator-color') as HTMLInputElement;
+    turnIndicatorColorInput.addEventListener('input', (e) => {
+      const color = (e.target as HTMLInputElement).value;
+      this.settingsManager.saveUIColors({ turnIndicatorColor: color });
+    });
+
+    // Reset UI colors button
+    const resetUIBtn = document.getElementById('settings-reset-ui')!;
+    resetUIBtn.addEventListener('click', () => {
+      this.settingsManager.resetUIColors();
+      this.loadSettings(); // Reload UI to reflect reset
+    });
+  }
+
+  loadSettings() {
+    const gameSettings = this.settingsManager.getGameSettings();
+    const uiColors = this.settingsManager.getUIColors();
+
+    // Apply game settings to UI
+    const aimAssistToggle = document.getElementById('aim-assist-toggle') as HTMLInputElement;
+    if (aimAssistToggle) aimAssistToggle.checked = gameSettings.aimAssist;
+
+    const call8Toggle = document.getElementById('call-8-toggle') as HTMLInputElement;
+    if (call8Toggle) call8Toggle.checked = gameSettings.call8Ball;
+
+    const showFpsToggle = document.getElementById('show-fps-toggle') as HTMLInputElement;
+    if (showFpsToggle) {
+      showFpsToggle.checked = gameSettings.showFPS;
+      this.showStats = gameSettings.showFPS;
+      this.statsElement.style.display = this.showStats ? 'flex' : 'none';
+    }
+
+    // Apply UI colors to inputs
+    const tableColorInput = document.getElementById('table-color') as HTMLInputElement;
+    if (tableColorInput) tableColorInput.value = uiColors.tableColor;
+
+    const railColorInput = document.getElementById('rail-color') as HTMLInputElement;
+    if (railColorInput) railColorInput.value = uiColors.railColor;
+
+    const activePlayerColorInput = document.getElementById('active-player-color') as HTMLInputElement;
+    if (activePlayerColorInput) activePlayerColorInput.value = uiColors.activePlayerColor;
+
+    const turnIndicatorColorInput = document.getElementById('turn-indicator-color') as HTMLInputElement;
+    if (turnIndicatorColorInput) turnIndicatorColorInput.value = uiColors.turnIndicatorColor;
   }
   
   updateFPS(fps: number) {

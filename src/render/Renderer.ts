@@ -24,17 +24,26 @@ export class Renderer {
     const containerWidth = container.clientWidth;
     const containerHeight = container.clientHeight;
     
-    // Calculate scale to fit table with padding
-    const padding = 40;
-    const scaleX = (containerWidth - padding * 2) / CONFIG.TABLE_WIDTH;
-    const scaleY = (containerHeight - padding * 2) / CONFIG.TABLE_HEIGHT;
+    // External margin around canvas
+    const externalMargin = 40;
+    
+    // Internal padding within canvas (around table)
+    const internalPadding = 40;
+    
+    // Calculate available space for canvas after external margins
+    const availableWidth = containerWidth - externalMargin * 2;
+    const availableHeight = containerHeight - externalMargin * 2;
+    
+    // Calculate scale to fit table with internal padding
+    const scaleX = (availableWidth - internalPadding * 2) / CONFIG.TABLE_WIDTH;
+    const scaleY = (availableHeight - internalPadding * 2) / CONFIG.TABLE_HEIGHT;
     this.scale = Math.min(scaleX, scaleY);
     
-    // Set canvas size
-    this.canvas.width = CONFIG.TABLE_WIDTH * this.scale + padding * 2;
-    this.canvas.height = CONFIG.TABLE_HEIGHT * this.scale + padding * 2;
+    // Set canvas size (table + internal padding only)
+    this.canvas.width = CONFIG.TABLE_WIDTH * this.scale + internalPadding * 2;
+    this.canvas.height = CONFIG.TABLE_HEIGHT * this.scale + internalPadding * 2;
     
-    // Center the canvas
+    // Set canvas display size
     this.canvas.style.width = `${this.canvas.width}px`;
     this.canvas.style.height = `${this.canvas.height}px`;
   }
@@ -207,28 +216,36 @@ export class Renderer {
     this.ctx.arc(x, y, ball.radius, 0, Math.PI * 2);
     this.ctx.fill();
     
-    // Stripe for striped balls (9-15)
+    // Save context for rotation
+    this.ctx.save();
+    this.ctx.translate(x, y);
+    
+    // Calculate rotation angle based on velocity direction
+    // The ball rotates perpendicular to its direction of travel
+    const rotationAngle = ball.angle;
+    this.ctx.rotate(rotationAngle);
+    
+    // Stripe for striped balls (9-15) - now rotates with ball
     if (ball.id >= 9 && ball.id <= 15) {
       this.ctx.fillStyle = '#ffffff';
       this.ctx.beginPath();
-      this.ctx.arc(x, y, ball.radius * 0.6, 0, Math.PI * 2);
+      this.ctx.arc(0, 0, ball.radius * 0.6, 0, Math.PI * 2);
       this.ctx.fill();
     }
     
     // Ball number (need to flip Y back for text to be readable)
     if (ball.id !== BALL_CUE) {
-      this.ctx.save();
-      this.ctx.translate(x, y);
       this.ctx.scale(1, -1); // Flip Y back to normal for text
       this.ctx.fillStyle = ball.id >= 9 && ball.id <= 15 ? '#000000' : '#ffffff';
       this.ctx.font = `bold ${ball.radius * 0.8}px Arial`;
       this.ctx.textAlign = 'center';
       this.ctx.textBaseline = 'middle';
       this.ctx.fillText(ball.id.toString(), 0, 0);
-      this.ctx.restore();
     }
     
-    // Highlight
+    this.ctx.restore();
+    
+    // Highlight (doesn't rotate - stays at light source position)
     this.ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
     this.ctx.beginPath();
     this.ctx.arc(x - ball.radius * 0.3, y - ball.radius * 0.3, ball.radius * 0.3, 0, Math.PI * 2);

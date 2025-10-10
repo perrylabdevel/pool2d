@@ -17,6 +17,10 @@ export class Ball {
   pocketed: boolean;
   sleeping: boolean;
   
+  // Rotation (for visual spinning)
+  angle: number; // Rotation angle in radians
+  angularVelocity: number; // Radians per second
+  
   // For interpolation
   prevX: number;
   prevY: number;
@@ -32,6 +36,8 @@ export class Ball {
     this.invMass = mass > 0 ? 1 / mass : 0;
     this.pocketed = false;
     this.sleeping = false;
+    this.angle = 0;
+    this.angularVelocity = 0;
     this.prevX = x;
     this.prevY = y;
   }

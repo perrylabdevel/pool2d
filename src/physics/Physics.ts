@@ -99,12 +99,21 @@ export class PhysicsWorld {
       // Apply friction
       this.applyFriction(subDt);
       
-      // Integrate velocity
+      // Integrate velocity and rotation
       this.balls.forEach((ball) => {
         if (ball.pocketed || ball.sleeping) return;
         
         ball.x += ball.vx * subDt;
         ball.y += ball.vy * subDt;
+        
+        // Update rotation based on rolling (v = ω × r, so ω = v / r)
+        const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
+        if (speed > 0.01) {
+          ball.angularVelocity = speed / ball.radius;
+          ball.angle += ball.angularVelocity * subDt;
+        } else {
+          ball.angularVelocity = 0;
+        }
       });
       
       // Collision detection and resolution (multiple iterations)

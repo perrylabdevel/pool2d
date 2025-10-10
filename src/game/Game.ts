@@ -55,7 +55,7 @@ export class Game {
     this.input = new InputManager(gameCanvas);
     this.hud = new HUD();
     this.debug = new DebugDraw(debugCanvas);
-    this.settings = new SettingsPanel();
+    this.settings = new SettingsPanel(this.hud.settingsManager);
     this.rules = new EightBallRules();
     this.predictor = new Predictor();
     this.mode = GameMode.PRACTICE;

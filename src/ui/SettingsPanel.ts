@@ -1,14 +1,18 @@
 // Settings panel for live physics tuning
 import { CONFIG } from '../config';
+import { SettingsManager } from './SettingsManager';
 
 export class SettingsPanel {
   private panel: HTMLElement;
   private isVisible: boolean = false;
+  private settingsManager: SettingsManager;
 
-  constructor() {
+  constructor(settingsManager: SettingsManager) {
+    this.settingsManager = settingsManager;
     this.panel = this.createPanel();
     document.body.appendChild(this.panel);
     this.setupEventListeners();
+    this.loadSettings();
   }
 
   private createPanel(): HTMLElement {
@@ -123,33 +127,33 @@ export class SettingsPanel {
           valueDisplay.textContent = value.toString();
         }
         
+        // Save to local storage
+        this.settingsManager.savePhysicsSettings({ [key]: value } as any);
+        
         console.log(`⚙️ ${key} = ${value}`);
       });
     });
   }
 
-  private resetDefaults() {
-    const defaults = {
-      BALL_RESTITUTION: 0.93,
-      BALL_BALL_FRICTION: 0.05,
-      CUSHION_RESTITUTION: 0.88,
-      CUE_POWER_MAX: 25.0,
-      CUE_POWER_MULTIPLIER: 10.0,
-      ROLLING_FRICTION: 0.50,
-      SLIDING_FRICTION: 0.65,
-      SOLVER_ITERATIONS: 15,
-      VELOCITY_EPSILON: 0.2,
-    };
-
-    Object.entries(defaults).forEach(([key, value]) => {
-      (CONFIG as any)[key] = value;
-      
+  private loadSettings() {
+    const physicsSettings = this.settingsManager.getPhysicsSettings();
+    
+    // Update all sliders and displays with saved values
+    Object.entries(physicsSettings).forEach(([key, value]) => {
       const slider = this.panel.querySelector(`#${key}`) as HTMLInputElement;
       if (slider) slider.value = value.toString();
       
       const valueDisplay = this.panel.querySelector(`#${key}-value`);
       if (valueDisplay) valueDisplay.textContent = value.toString();
     });
+  }
+
+  private resetDefaults() {
+    // Reset via settings manager (saves to local storage)
+    this.settingsManager.resetPhysicsSettings();
+    
+    // Reload UI to reflect reset values
+    this.loadSettings();
 
     console.log('⚙️ Settings reset to defaults');
   }
