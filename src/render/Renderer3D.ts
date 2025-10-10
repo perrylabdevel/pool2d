@@ -1,11 +1,10 @@
 // 3D rendering system using Three.js
 import * as THREE from 'three';
-import { FBXLoader } from 'three-stdlib';
 import { Ball, Rail, Pocket } from '../physics/Shapes';
 import { PhysicsWorld } from '../physics/Physics';
 import { CONFIG, BALL_CUE } from '../config';
 import { TABLE_GEOMETRY } from '../geometry/Geometry';
-import { PredictionResult } from '../physics/Prediction';
+import { PredictionResult, Predictor } from '../physics/Prediction';
 
 export class Renderer3D {
   canvas: HTMLCanvasElement;
@@ -18,7 +17,7 @@ export class Renderer3D {
   
   // 3D objects
   ballMeshes: Map<number, THREE.Object3D> = new Map();
-  ballModels: Map<number, { geometry: THREE.BufferGeometry; material: THREE.MeshStandardMaterial }> = new Map();
+  ballModels: Map<number, THREE.Mesh> = new Map();
   ballModelsLoaded: boolean = false;
   ballVisualScale = 1.0; // Visual radius matches physics radius to avoid overlap
   tableMesh: THREE.Mesh | null = null;
@@ -61,8 +60,9 @@ export class Renderer3D {
       0.1,
       1000
     );
-    // Position camera directly above looking down
-    this.camera.position.set(0, 0, 50);
+    // Position camera at a slight angle to see 3D rolling motion
+    // (0, 0, 50) = straight down, (0, -10, 45) = tilted view
+    this.camera.position.set(0, -15, 45);
     this.camera.lookAt(0, 0, 0);
     
     // Create WebGL renderer
@@ -95,30 +95,9 @@ export class Renderer3D {
 
     this.fillLight = new THREE.HemisphereLight(0xffffff, 0x1a1a1a, 0.55);
     this.scene.add(this.fillLight);
-
-    // Load FBX ball models (async)
-    this.loadBallModels();
   }
 
-  async loadBallModels() {
-    const loader = new FBXLoader();
-    const textureMap: Record<number, string> = {
-      1: '/textures/poolballTx01.jpg',
-      2: '/textures/poolballTx02.jpg',
-      3: '/textures/poolballTx03.jpg',
-      4: '/textures/poolballTx5.jpg',
-      5: '/textures/poolballTx7.jpg',
-      6: '/textures/poolballTx6.jpg',
-      7: '/textures/poolballTx04.jpg',
-      8: '/textures/poolballTx9.jpg',
-      9: '/textures/poolballTx11.jpg',
-      10: '/textures/poolballTx10.jpg',
-      11: '/textures/poolballTx8.jpg',
-      12: '/textures/poolballTx13.jpg',
-      13: '/textures/poolballTx15.jpg',
-      14: '/textures/poolballTx14.jpg',
-      15: '/textures/poolballTx12.jpg'
-    };
+  setBallAssets(fbx: THREE.Group, textures: Map<number, THREE.Texture>) {
     const ballNameMap: Record<string, number> = {
       poolball16: 0,
       poolball1: 1,
@@ -139,17 +118,26 @@ export class Renderer3D {
     };
     
     try {
-      const fbx = await loader.loadAsync('/poolballs.fbx');
       const source = fbx.getObjectByName('pooballl_grp') ?? fbx;
       const handled = new Set<number>();
       
-      source.traverse((child) => {
-        if (!(child instanceof THREE.Mesh)) return;
+      console.log('🔍 FBX Structure:');
+      console.log('  Root children:', fbx.children.length);
+      fbx.children.forEach((c, i) => console.log(`    ${i}: ${c.name} (${c.type}), children: ${c.children.length}`));
+      
+      source.traverse((child: THREE.Object3D) => {
+        if (!(child instanceof THREE.Mesh)) {
+          console.log(`  Skipping non-mesh: ${child.name} (${child.type})`);
+          return;
+        }
         if (!child.name.startsWith('poolball')) return;
         const ballId = ballNameMap[child.name];
         if (ballId === undefined || handled.has(ballId)) return;
         handled.add(ballId);
         
+        console.log(`📦 Processing mesh: ${child.name}, children: ${child.children.length}`);
+        
+        // Use the ORIGINAL mesh with its material, just clone and scale it
         const geometry = child.geometry.clone();
         geometry.computeBoundingBox();
         geometry.computeBoundingSphere();
@@ -163,20 +151,43 @@ export class Renderer3D {
         geometry.scale(scale, scale, scale);
         geometry.computeBoundingSphere();
         
+        // Clone the original material and upgrade to StandardMaterial
+        const originalMaterial = Array.isArray(child.material) ? child.material[0] : child.material;
+        const originalMap = (originalMaterial as any).map; // Get original texture if it exists
+        
+        console.log(`   Original has embedded texture:`, originalMap !== null && originalMap !== undefined);
+        
+        // Get our loaded texture
         let texture: THREE.Texture | undefined;
         if (ballId !== 0) {
-          const texPath = textureMap[ballId];
-          texture = textureLoader.load(texPath);
-          texture.colorSpace = THREE.SRGBColorSpace;
-          texture.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
+          texture = textures.get(ballId);
+          if (texture) {
+            texture.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
+            // CRITICAL: Ensure texture uses UV mapping (rotates with mesh)
+            texture.mapping = THREE.UVMapping;
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            console.log(`   Texture mapping mode: ${texture.mapping} (should be ${THREE.UVMapping})`);
+          }
         }
         
+        // Use our texture if we have it, otherwise use original
+        const finalTexture = texture || originalMap;
+        
+        if (finalTexture) {
+          console.log(`   Final texture mapping: ${finalTexture.mapping}`);
+          console.log(`   Final texture wrap: ${finalTexture.wrapS}, ${finalTexture.wrapT}`);
+        }
+        
+        // Create upgraded material
         const material = new THREE.MeshStandardMaterial({
-          map: texture,
-          color: ballId === 0 ? 0xffffff : 0xffffff,
+          ...(finalTexture && { map: finalTexture }),
+          color: 0xffffff,
           roughness: 0.18,
           metalness: 0.12
         });
+        
+        console.log(`   Using texture:`, finalTexture !== null && finalTexture !== undefined);
         
         const templateMesh = new THREE.Mesh(geometry, material);
         templateMesh.castShadow = true;
@@ -184,9 +195,26 @@ export class Renderer3D {
         templateMesh.name = `ball-template-${ballId}`;
         
         this.ballModels.set(ballId, templateMesh);
+        
+        // Debug: Check mesh structure
+        console.log(`🔍 Ball ${ballId} mesh structure:`);
+        console.log(`   Geometry type: ${geometry.type}`);
+        console.log(`   Has UVs: ${geometry.attributes.uv !== undefined}`);
+        console.log(`   Material type: ${material.type}`);
+        console.log(`   Texture: ${texture ? 'yes' : 'no'}`);
+        if (texture) {
+          console.log(`   Texture size: ${texture.image?.width}x${texture.image?.height}`);
+        }
+        
+        // Test manual rotation
+        const testMesh = templateMesh.clone();
+        testMesh.rotation.y = Math.PI / 4; // 45 degrees
+        console.log(`   Test rotation applied: ${testMesh.rotation.y} rad`);
       });
       
       this.ballModelsLoaded = this.ballModels.size > 0;
+      console.log(`🎱 Ball models loaded: ${this.ballModels.size} templates created`);
+      
       if (this.ballModelsLoaded) {
         this.replaceBallsWithModels();
       }
@@ -370,7 +398,12 @@ export class Renderer3D {
     if (this.ballModelsLoaded) {
       const template = this.ballModels.get(ball.id);
       if (template) {
-        const ballMesh = new THREE.Mesh(template.geometry, template.material);
+        // Clone mesh - need to clone both geometry and material for proper texture application
+        const material = template.material as THREE.MeshStandardMaterial;
+        const ballMesh = new THREE.Mesh(
+          template.geometry.clone(),
+          material.clone()
+        );
         ballMesh.castShadow = true;
         ballMesh.receiveShadow = true;
         this.scene.add(ballMesh);
@@ -518,18 +551,51 @@ export class Renderer3D {
       
       mesh.position.set(x, y, CONFIG.BALL_RADIUS * this.ballVisualScale);
       
-      // Update rotation based on velocity
-      if (ball.angularVelocity > 0.001) {
-        const vx = ball.vx;
-        const vy = ball.vy;
-        const speed = Math.sqrt(vx * vx + vy * vy);
-        if (speed > 0.001) {
-          this.rotationAxis.set(-vy, vx, 0).normalize();
-          this.rotationQuat.setFromAxisAngle(this.rotationAxis, ball.angle);
-          mesh.setRotationFromQuaternion(this.rotationQuat);
+      // Start from the stored orientation
+      mesh.rotation.set(ball.rotationX, ball.rotationY, ball.rotationZ);
+
+      // Update rotation based on actual distance traveled (true rolling motion)
+      const dx = ball.x - ball.prevX;
+      const dy = ball.y - ball.prevY;
+      const distanceTraveled = Math.sqrt(dx * dx + dy * dy);
+      
+      if (distanceTraveled > 0.001 && ball.angularVelocity > 0.001) {
+        // Calculate rotation amount based on distance: angle = distance / radius
+        // This ensures the ball rotates exactly the right amount for rolling motion
+        const rotationAmount = (distanceTraveled / ball.radius) * CONFIG.BALL_ROTATION_MULTIPLIER;
+        
+        // Calculate rotation axis perpendicular to direction of travel
+        // For a ball moving in direction (dx, dy), it should rotate around axis perpendicular to that
+        // The axis should be (-dy, dx, 0) normalized
+        const length = Math.sqrt(dx * dx + dy * dy);
+        if (length > 0.001) {
+          this.rotationAxis.set(
+            -dy / length,  // X component (perpendicular to travel)
+            dx / length,   // Y component (perpendicular to travel)
+            0              // Z component (no rotation around vertical)
+          );
+        }
+        
+        // Rotate the mesh around the world axis (perpendicular to travel direction)
+        mesh.rotateOnWorldAxis(this.rotationAxis, rotationAmount);
+        mesh.updateMatrixWorld(true);
+        
+        // Persist the new orientation so future frames start from the correct pose
+        const updatedEuler = mesh.rotation;
+        ball.rotationX = updatedEuler.x;
+        ball.rotationY = updatedEuler.y;
+        ball.rotationZ = updatedEuler.z;
+        
+        // Debug occasionally
+        if (ball.id === 0 && Math.random() < 0.01) {
+          console.log(`🔄 Ball ${ball.id} rolling:`);
+          console.log(`  Travel: (${dx.toFixed(3)}, ${dy.toFixed(3)}) = ${distanceTraveled.toFixed(3)}`);
+          console.log(`  Rotation amount: ${rotationAmount.toFixed(4)} rad`);
+          console.log(`  Axis: (${this.rotationAxis.x.toFixed(3)}, ${this.rotationAxis.y.toFixed(3)}, ${this.rotationAxis.z.toFixed(3)})`);
+          console.log(`  Updated Euler: (${ball.rotationX.toFixed(3)}, ${ball.rotationY.toFixed(3)}, ${ball.rotationZ.toFixed(3)})`);
         }
       } else {
-        mesh.rotation.set(0, 0, 0);
+        // Ball at rest - stored orientation already applied above
       }
     });
     
@@ -544,6 +610,121 @@ export class Renderer3D {
       this.showMeasurementOverlay = !this.showMeasurementOverlay;
     }
     console.log(`Measurement overlay ${this.showMeasurementOverlay ? 'enabled' : 'disabled'}`);
+  }
+  
+  debugRotation() {
+    console.log('\n═══════════════════════════════════════');
+    console.log('🔍 BALL ROTATION DEBUG SNAPSHOT');
+    console.log('═══════════════════════════════════════');
+    console.log(`Ball Models Loaded: ${this.ballModelsLoaded}`);
+    console.log(`Number of Templates: ${this.ballModels.size}`);
+    console.log(`Number of Active Balls: ${this.ballMeshes.size}`);
+    console.log(`Rotation Multiplier: ${CONFIG.BALL_ROTATION_MULTIPLIER}`);
+    console.log('\nActive Balls:');
+    this.ballMeshes.forEach((mesh, ballId) => {
+      console.log(`  Ball ${ballId}:`);
+      console.log(`    Position: (${mesh.position.x.toFixed(2)}, ${mesh.position.y.toFixed(2)}, ${mesh.position.z.toFixed(2)})`);
+      console.log(`    Rotation: (${mesh.rotation.x.toFixed(3)}, ${mesh.rotation.y.toFixed(3)}, ${mesh.rotation.z.toFixed(3)}) rad`);
+      console.log(`    Mesh Type: ${mesh.type}`);
+      console.log(`    Is THREE.Mesh: ${mesh instanceof THREE.Mesh}`);
+      if (mesh instanceof THREE.Mesh) {
+        console.log(`    Has Material: ${mesh.material !== null}`);
+        const mat = mesh.material as THREE.MeshStandardMaterial;
+        console.log(`    Has Texture: ${mat.map !== null && mat.map !== undefined}`);
+        console.log(`    Children: ${mesh.children.length}`);
+      }
+    });
+    console.log('═══════════════════════════════════════\n');
+  }
+  
+  testRotation(ballId: number, angle: number = 1.0) {
+    const mesh = this.ballMeshes.get(ballId);
+    if (!mesh) {
+      console.error(`❌ Ball ${ballId} not found!`);
+      return;
+    }
+    console.log(`🔄 Manually rotating ball ${ballId} by ${angle} radians around Y axis...`);
+    console.log(`   BEFORE: (${mesh.rotation.x.toFixed(3)}, ${mesh.rotation.y.toFixed(3)}, ${mesh.rotation.z.toFixed(3)})`);
+    mesh.rotation.y += angle;
+    console.log(`   AFTER:  (${mesh.rotation.x.toFixed(3)}, ${mesh.rotation.y.toFixed(3)}, ${mesh.rotation.z.toFixed(3)})`);
+    
+    // Force material update
+    if (mesh instanceof THREE.Mesh) {
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      mat.needsUpdate = true;
+      if (mat.map) {
+        mat.map.needsUpdate = true;
+        console.log(`   Texture matrix:`, mat.map.matrix);
+      }
+    }
+    
+    console.log('✅ Rotation applied! Watch the ball - does the NUMBER/PATTERN rotate with it?');
+  }
+  
+  replaceWithTestBall(ballId: number) {
+    const oldMesh = this.ballMeshes.get(ballId);
+    if (!oldMesh) {
+      console.error(`❌ Ball ${ballId} not found!`);
+      return;
+    }
+    
+    // Create a simple test ball with a stripe pattern
+    const geometry = new THREE.SphereGeometry(CONFIG.BALL_RADIUS * this.ballVisualScale, 32, 32);
+    
+    // Create a canvas texture with stripes
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 512;
+    const ctx = canvas.getContext('2d')!;
+    
+    // Red background
+    ctx.fillStyle = '#ff0000';
+    ctx.fillRect(0, 0, 512, 512);
+    
+    // White stripes
+    ctx.fillStyle = '#ffffff';
+    for (let i = 0; i < 512; i += 64) {
+      ctx.fillRect(i, 0, 32, 512);
+    }
+    
+    // Add text
+    ctx.fillStyle = '#000000';
+    ctx.font = 'bold 200px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(ballId.toString(), 256, 256);
+    
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.mapping = THREE.UVMapping;
+    
+    const material = new THREE.MeshStandardMaterial({
+      map: texture,
+      roughness: 0.3,
+      metalness: 0.1
+    });
+    
+    const testMesh = new THREE.Mesh(geometry, material);
+    testMesh.position.copy(oldMesh.position);
+    testMesh.rotation.copy(oldMesh.rotation);
+    testMesh.castShadow = true;
+    testMesh.receiveShadow = true;
+    
+    this.scene.remove(oldMesh);
+    this.scene.add(testMesh);
+    this.ballMeshes.set(ballId, testMesh);
+    
+    console.log(`✅ Replaced ball ${ballId} with striped test ball. Try testRotation(${ballId}) now!`);
+  }
+  
+  testRotationX(ballId: number, angle: number = 1.0) {
+    const mesh = this.ballMeshes.get(ballId);
+    if (!mesh) {
+      console.error(`❌ Ball ${ballId} not found!`);
+      return;
+    }
+    console.log(`🔄 Rotating ball ${ballId} by ${angle} rad around X axis (horizontal rolling)`);
+    mesh.rotation.x += angle;
+    console.log('✅ Watch - does it look like the ball is rolling forward/back?');
   }
 
   drawMeasurementOverlay() {
@@ -815,7 +996,7 @@ export class Renderer3D {
     // Prediction is drawn as part of drawTrajectoryLines
   }
   
-  drawTrajectoryLines(prediction: PredictionResult, cueBallPos: { x: number; y: number }, shotDirection: { x: number; y: number }, predictor: any) {
+  drawTrajectoryLines(prediction: PredictionResult, cueBallPos: { x: number; y: number }, shotDirection: { x: number; y: number }, predictor: Predictor) {
     // Clear old 3D trajectory lines
     this.trajectoryLines.forEach(line => this.scene.remove(line));
     this.trajectoryLines = [];

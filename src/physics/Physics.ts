@@ -107,9 +107,10 @@ export class PhysicsWorld {
         ball.y += ball.vy * subDt;
         
         // Update rotation based on rolling (v = ω × r, so ω = v / r)
+        // Multiplier reduces visual rotation speed for better appearance
         const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
         if (speed > 0.01) {
-          ball.angularVelocity = speed / ball.radius;
+          ball.angularVelocity = (speed / ball.radius) * CONFIG.BALL_ROTATION_MULTIPLIER;
           ball.angle += ball.angularVelocity * subDt;
         } else {
           ball.angularVelocity = 0;

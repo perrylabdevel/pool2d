@@ -48,6 +48,7 @@ export class SettingsPanel {
         ${this.createSlider('BALL_RESTITUTION', 'Ball-Ball Restitution', 0.5, 1.0, 0.01, CONFIG.BALL_RESTITUTION)}
         ${this.createSlider('BALL_BALL_FRICTION', 'Ball-Ball Friction', 0.0, 0.3, 0.01, CONFIG.BALL_BALL_FRICTION)}
         ${this.createSlider('CUSHION_RESTITUTION', 'Cushion Restitution', 0.5, 1.0, 0.01, CONFIG.CUSHION_RESTITUTION)}
+        ${this.createSlider('BALL_ROTATION_MULTIPLIER', 'Rotation Speed', 0.0, 1.0, 0.01, CONFIG.BALL_ROTATION_MULTIPLIER)}
       </div>
 
       <div style="margin-bottom: 20px;">
@@ -78,11 +79,12 @@ export class SettingsPanel {
   }
 
   private createSlider(key: string, label: string, min: number, max: number, step: number, value: number): string {
+    const displayValue = value < 0.01 ? value.toFixed(4) : value.toString();
     return `
       <div style="margin-bottom: 12px;">
         <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
           <label style="font-size: 12px; color: #b0b0b0;">${label}</label>
-          <span id="${key}-value" style="font-weight: bold; color: #4CAF50;">${value}</span>
+          <span id="${key}-value" style="font-weight: bold; color: #4CAF50;">${displayValue}</span>
         </div>
         <input 
           type="range" 
@@ -121,10 +123,12 @@ export class SettingsPanel {
         // Update CONFIG
         (CONFIG as any)[key] = value;
         
-        // Update display value
+        // Update display value with appropriate precision
         const valueDisplay = this.panel.querySelector(`#${key}-value`);
         if (valueDisplay) {
-          valueDisplay.textContent = value.toString();
+          // Use 4 decimals for very small values, otherwise use standard formatting
+          const displayValue = value < 0.01 ? value.toFixed(4) : value.toString();
+          valueDisplay.textContent = displayValue;
         }
         
         // Save to local storage
@@ -162,6 +166,7 @@ export class SettingsPanel {
     const config = {
       BALL_RESTITUTION: CONFIG.BALL_RESTITUTION,
       BALL_BALL_FRICTION: CONFIG.BALL_BALL_FRICTION,
+      BALL_ROTATION_MULTIPLIER: CONFIG.BALL_ROTATION_MULTIPLIER,
       CUSHION_RESTITUTION: CONFIG.CUSHION_RESTITUTION,
       CUE_POWER_MAX: CONFIG.CUE_POWER_MAX,
       CUE_POWER_MULTIPLIER: CONFIG.CUE_POWER_MULTIPLIER,

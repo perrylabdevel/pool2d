@@ -220,9 +220,9 @@ export class Renderer {
     this.ctx.save();
     this.ctx.translate(x, y);
     
-    // Calculate rotation angle based on velocity direction
-    // The ball rotates perpendicular to its direction of travel
-    const rotationAngle = ball.angle;
+    // Calculate rotation angle: rolling rotation + initial random orientation
+    // When ball is moving, use accumulated angle; when at rest, use rotationZ for variety
+    const rotationAngle = ball.angularVelocity > 0.001 ? ball.angle : ball.rotationZ;
     this.ctx.rotate(rotationAngle);
     
     // Stripe for striped balls (9-15) - now rotates with ball

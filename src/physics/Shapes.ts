@@ -18,8 +18,13 @@ export class Ball {
   sleeping: boolean;
   
   // Rotation (for visual spinning)
-  angle: number; // Rotation angle in radians
+  angle: number; // Rotation angle in radians (2D)
   angularVelocity: number; // Radians per second
+  
+  // 3D rotation for realistic ball appearance
+  rotationX: number;
+  rotationY: number;
+  rotationZ: number;
   
   // For interpolation
   prevX: number;
@@ -38,6 +43,12 @@ export class Ball {
     this.sleeping = false;
     this.angle = 0;
     this.angularVelocity = 0;
+    
+    // Random initial rotation for visual variety (each ball oriented differently)
+    this.rotationX = Math.random() * Math.PI * 2;
+    this.rotationY = Math.random() * Math.PI * 2;
+    this.rotationZ = Math.random() * Math.PI * 2;
+    
     this.prevX = x;
     this.prevY = y;
   }

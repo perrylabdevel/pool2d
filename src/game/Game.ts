@@ -70,7 +70,14 @@ export class Game {
       console.log('  - Hold SHIFT and drag the cue ball to reposition it');
       console.log('  - Press S to open Physics Settings panel');
       console.log('  - Press D for Debug view');
+      console.log('  - Type debugRotation() in console for rotation diagnostics');
     }
+    
+    // Expose debug functions globally
+    (window as any).debugRotation = () => this.renderer.debugRotation();
+    (window as any).testRotation = (ballId: number, angle: number = 1.0) => this.renderer.testRotation(ballId, angle);
+    (window as any).testRotationX = (ballId: number, angle: number = 1.0) => this.renderer.testRotationX(ballId, angle);
+    (window as any).replaceWithTestBall = (ballId: number) => this.renderer.replaceWithTestBall(ballId);
   }
   
   setupCallbacks() {

@@ -1,8 +1,10 @@
 // Main entry point
 
 import { Game } from './game/Game';
+import { AssetLoader } from './assets/AssetLoader';
+import { LoadingScreen } from './ui/LoadingScreen';
 
-function main() {
+async function main() {
   const gameCanvas = document.getElementById('game-canvas') as HTMLCanvasElement;
   const debugCanvas = document.getElementById('debug-canvas') as HTMLCanvasElement;
   
@@ -11,10 +13,40 @@ function main() {
     return;
   }
   
-  const game = new Game(gameCanvas, debugCanvas);
-  game.start();
+  // Show loading screen
+  const loadingScreen = new LoadingScreen();
   
-  console.log('Pool 2D initialized');
+  try {
+    // Load all assets
+    const assetLoader = new AssetLoader();
+    
+    assetLoader.onProgress((progress) => {
+      loadingScreen.updateProgress(
+        progress.loaded, 
+        progress.total, 
+        `Loading ${progress.item}...`
+      );
+    });
+    
+    console.log('Loading assets...');
+    const assets = await assetLoader.loadAllAssets();
+    console.log('Assets loaded successfully!');
+    
+    // Create game
+    const game = new Game(gameCanvas, debugCanvas);
+    
+    // Pass assets to renderer
+    game.renderer.setBallAssets(assets.fbx, assets.textures);
+    
+    // Hide loading screen and start game
+    loadingScreen.hide();
+    game.start();
+    
+    console.log('Pool 2D initialized');
+  } catch (error) {
+    console.error('Failed to initialize game:', error);
+    loadingScreen.updateProgress(0, 100, 'Error loading assets. Please refresh.');
+  }
 }
 
 // Start when DOM is ready

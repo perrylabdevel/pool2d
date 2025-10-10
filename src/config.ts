@@ -19,6 +19,7 @@ export const CONFIG = {
   BALL_MASS: 1.0,
   BALL_RESTITUTION: 0.93, // Ball-ball
   CUSHION_RESTITUTION: 0.88, // Ball-cushion
+  BALL_ROTATION_MULTIPLIER: 0.15, // Visual rotation multiplier (1.0 = physically accurate rolling)
   
   // Friction - balanced for 10x velocity multiplier
   ROLLING_FRICTION: 0.50, // High friction to counteract 10x velocity multiplier (ball-table)
