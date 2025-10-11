@@ -17,6 +17,7 @@ export class Renderer3D {
   
   // 3D objects
   ballMeshes: Map<number, THREE.Object3D> = new Map();
+  ballRotations: Map<number, THREE.Quaternion> = new Map();
   ballModels: Map<number, THREE.Mesh> = new Map();
   ballModelsLoaded: boolean = false;
   ballVisualScale = 1.0; // Visual radius matches physics radius to avoid overlap
@@ -62,7 +63,7 @@ export class Renderer3D {
     );
     // Position camera at a slight angle to see 3D rolling motion
     // (0, 0, 50) = straight down, (0, -10, 45) = tilted view
-    this.camera.position.set(0, -15, 45);
+    this.camera.position.set(0, 0, 50);
     this.camera.lookAt(0, 0, 0);
     
     // Create WebGL renderer
@@ -408,6 +409,8 @@ export class Renderer3D {
         ballMesh.receiveShadow = true;
         this.scene.add(ballMesh);
         this.ballMeshes.set(ball.id, ballMesh);
+        const initialQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(ball.rotationX, ball.rotationY, ball.rotationZ));
+        this.ballRotations.set(ball.id, initialQuat);
         return ballMesh;
       }
     }
@@ -442,6 +445,7 @@ export class Renderer3D {
     
     this.scene.add(mesh);
     this.ballMeshes.set(ball.id, mesh);
+    this.ballRotations.set(ball.id, new THREE.Quaternion().setFromEuler(new THREE.Euler(ball.rotationX, ball.rotationY, ball.rotationZ)));
     
     return mesh;
   }
@@ -551,8 +555,15 @@ export class Renderer3D {
       
       mesh.position.set(x, y, CONFIG.BALL_RADIUS * this.ballVisualScale);
       
-      // Start from the stored orientation
-      mesh.rotation.set(ball.rotationX, ball.rotationY, ball.rotationZ);
+      // Apply stored orientation quaternion
+      const storedQuat = this.ballRotations.get(ball.id);
+      if (storedQuat) {
+        mesh.quaternion.copy(storedQuat);
+      } else {
+        const fallbackQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(ball.rotationX, ball.rotationY, ball.rotationZ));
+        mesh.quaternion.copy(fallbackQuat);
+        this.ballRotations.set(ball.id, fallbackQuat);
+      }
 
       // Update rotation based on actual distance traveled (true rolling motion)
       const dx = ball.x - ball.prevX;
@@ -562,7 +573,8 @@ export class Renderer3D {
       if (distanceTraveled > 0.001 && ball.angularVelocity > 0.001) {
         // Calculate rotation amount based on distance: angle = distance / radius
         // This ensures the ball rotates exactly the right amount for rolling motion
-        const rotationAmount = (distanceTraveled / ball.radius) * CONFIG.BALL_ROTATION_MULTIPLIER;
+        const rotationMultiplier3D = CONFIG.BALL_ROTATION_MULTIPLIER_3D ?? CONFIG.BALL_ROTATION_MULTIPLIER ?? 1;
+        const rotationAmount = (distanceTraveled / ball.radius) * rotationMultiplier3D;
         
         // Calculate rotation axis perpendicular to direction of travel
         // For a ball moving in direction (dx, dy), it should rotate around axis perpendicular to that
@@ -585,6 +597,7 @@ export class Renderer3D {
         ball.rotationX = updatedEuler.x;
         ball.rotationY = updatedEuler.y;
         ball.rotationZ = updatedEuler.z;
+        this.ballRotations.set(ball.id, mesh.quaternion.clone());
         
         // Debug occasionally
         if (ball.id === 0 && Math.random() < 0.01) {
