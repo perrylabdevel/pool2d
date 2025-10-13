@@ -35,31 +35,79 @@ export const TABLE_GEOMETRY: TableGeometry = {
   cushionProfileIn: 1.75,
   pocketCaptureRadiusIn: 2.5,
   
-  // Rails on inner cushion line, normals point inward
+  // Rails approximating WPA throat geometry, normals point inward
   rails: [
-    { 
-      id: 'N_rail', 
-      from: { x: -50.0, y: 25.0 }, 
-      to: { x: 50.0, y: 25.0 }, 
-      normal: { x: 0, y: -1 } 
+    {
+      id: 'N_west_taper',
+      from: { x: -50.0, y: 25.0 },
+      to: { x: -46.0, y: 23.5 },
+      normal: { x: 0.447214, y: -0.894427 }
     },
-    { 
-      id: 'S_rail', 
-      from: { x: -50.0, y: -25.0 }, 
-      to: { x: 50.0, y: -25.0 }, 
-      normal: { x: 0, y: 1 } 
+    {
+      id: 'N_center',
+      from: { x: -46.0, y: 23.5 },
+      to: { x: 46.0, y: 23.5 },
+      normal: { x: 0, y: -1 }
     },
-    { 
-      id: 'W_rail', 
-      from: { x: -50.0, y: -25.0 }, 
-      to: { x: -50.0, y: 25.0 }, 
-      normal: { x: 1, y: 0 } 
+    {
+      id: 'N_east_taper',
+      from: { x: 46.0, y: 23.5 },
+      to: { x: 50.0, y: 25.0 },
+      normal: { x: -0.447214, y: -0.894427 }
     },
-    { 
-      id: 'E_rail', 
-      from: { x: 50.0, y: -25.0 }, 
-      to: { x: 50.0, y: 25.0 }, 
-      normal: { x: -1, y: 0 } 
+    {
+      id: 'E_north_taper',
+      from: { x: 50.0, y: 25.0 },
+      to: { x: 48.5, y: 21.0 },
+      normal: { x: -0.894427, y: -0.447214 }
+    },
+    {
+      id: 'E_center',
+      from: { x: 48.5, y: 21.0 },
+      to: { x: 48.5, y: -21.0 },
+      normal: { x: -1, y: 0 }
+    },
+    {
+      id: 'E_south_taper',
+      from: { x: 48.5, y: -21.0 },
+      to: { x: 50.0, y: -25.0 },
+      normal: { x: -0.894427, y: 0.447214 }
+    },
+    {
+      id: 'S_east_taper',
+      from: { x: 50.0, y: -25.0 },
+      to: { x: 46.0, y: -23.5 },
+      normal: { x: -0.447214, y: 0.894427 }
+    },
+    {
+      id: 'S_center',
+      from: { x: 46.0, y: -23.5 },
+      to: { x: -46.0, y: -23.5 },
+      normal: { x: 0, y: 1 }
+    },
+    {
+      id: 'S_west_taper',
+      from: { x: -46.0, y: -23.5 },
+      to: { x: -50.0, y: -25.0 },
+      normal: { x: 0.447214, y: 0.894427 }
+    },
+    {
+      id: 'W_south_taper',
+      from: { x: -50.0, y: -25.0 },
+      to: { x: -48.5, y: -21.0 },
+      normal: { x: 0.894427, y: 0.447214 }
+    },
+    {
+      id: 'W_center',
+      from: { x: -48.5, y: -21.0 },
+      to: { x: -48.5, y: 21.0 },
+      normal: { x: 1, y: 0 }
+    },
+    {
+      id: 'W_north_taper',
+      from: { x: -48.5, y: 21.0 },
+      to: { x: -50.0, y: 25.0 },
+      normal: { x: 0.894427, y: -0.447214 }
     }
   ],
   

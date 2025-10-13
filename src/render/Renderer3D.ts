@@ -22,6 +22,7 @@ export class Renderer3D {
   ballModelsLoaded: boolean = false;
   ballVisualScale = 1.0; // Visual radius matches physics radius to avoid overlap
   tableMesh: THREE.Mesh | null = null;
+  frameMesh: THREE.Mesh | null = null;
   railMeshes: THREE.Mesh[] = [];
   pocketMeshes: THREE.Mesh[] = [];
   showMeasurementOverlay = false;
@@ -303,63 +304,75 @@ export class Renderer3D {
   }
   
   initializeTable() {
-    // Create table felt
-    const tableGeometry = new THREE.PlaneGeometry(
-      TABLE_GEOMETRY.playWidthIn,
-      TABLE_GEOMETRY.playHeightIn
-    );
-    const tableMaterial = new THREE.MeshStandardMaterial({
+    const playShape = this.createPlayShape();
+
+    // Felt surface following cushion outline
+    const feltGeometry = new THREE.ShapeGeometry(playShape);
+    const feltMaterial = new THREE.MeshStandardMaterial({
       color: new THREE.Color(CONFIG.TABLE_COLOR),
       roughness: 0.8,
-      metalness: 0.1
+      metalness: 0.1,
+      side: THREE.DoubleSide
     });
-    this.tableMesh = new THREE.Mesh(tableGeometry, tableMaterial);
+    this.tableMesh = new THREE.Mesh(feltGeometry, feltMaterial);
     this.tableMesh.receiveShadow = true;
     this.scene.add(this.tableMesh);
-    
-    // Create wooden frame
+
+    // Wooden frame as shape with hole matching play surface
     const frameWidth = 4;
-    const frameHeight = 2;
     const frameMaterial = new THREE.MeshStandardMaterial({
       color: 0x3d2413,
       roughness: 0.6,
-      metalness: 0.2
+      metalness: 0.2,
+      side: THREE.DoubleSide
     });
-    
+
+    const frameShape = this.createFrameShape(frameWidth, playShape);
+    const frameGeometry = new THREE.ShapeGeometry(frameShape);
+    this.frameMesh = new THREE.Mesh(frameGeometry, frameMaterial);
+    this.frameMesh.position.z = -0.5; // Slightly below felt
+    this.frameMesh.receiveShadow = true;
+    this.scene.add(this.frameMesh);
+  }
+
+  private createPlayShape(): THREE.Shape {
+    const rails = TABLE_GEOMETRY.rails;
+    const shape = new THREE.Shape();
+    if (!rails.length) {
+      return shape;
+    }
+
+    shape.moveTo(rails[0].from.x, rails[0].from.y);
+    rails.forEach((rail) => {
+      shape.lineTo(rail.to.x, rail.to.y);
+    });
+    shape.autoClose = true;
+    return shape;
+  }
+
+  private createFrameShape(frameWidth: number, playShape: THREE.Shape): THREE.Shape {
     const halfW = TABLE_GEOMETRY.playWidthIn / 2;
     const halfH = TABLE_GEOMETRY.playHeightIn / 2;
-    
-    // Top frame
-    const topFrame = new THREE.Mesh(
-      new THREE.BoxGeometry(TABLE_GEOMETRY.playWidthIn + frameWidth * 2, frameWidth, frameHeight),
-      frameMaterial
-    );
-    topFrame.position.set(0, halfH + frameWidth / 2, frameHeight / 2);
-    this.scene.add(topFrame);
-    
-    // Bottom frame
-    const bottomFrame = new THREE.Mesh(
-      new THREE.BoxGeometry(TABLE_GEOMETRY.playWidthIn + frameWidth * 2, frameWidth, frameHeight),
-      frameMaterial
-    );
-    bottomFrame.position.set(0, -halfH - frameWidth / 2, frameHeight / 2);
-    this.scene.add(bottomFrame);
-    
-    // Left frame
-    const leftFrame = new THREE.Mesh(
-      new THREE.BoxGeometry(frameWidth, TABLE_GEOMETRY.playHeightIn, frameHeight),
-      frameMaterial
-    );
-    leftFrame.position.set(-halfW - frameWidth / 2, 0, frameHeight / 2);
-    this.scene.add(leftFrame);
-    
-    // Right frame
-    const rightFrame = new THREE.Mesh(
-      new THREE.BoxGeometry(frameWidth, TABLE_GEOMETRY.playHeightIn, frameHeight),
-      frameMaterial
-    );
-    rightFrame.position.set(halfW + frameWidth / 2, 0, frameHeight / 2);
-    this.scene.add(rightFrame);
+
+    const outer = new THREE.Shape();
+    outer.moveTo(-halfW - frameWidth, -halfH - frameWidth);
+    outer.lineTo(halfW + frameWidth, -halfH - frameWidth);
+    outer.lineTo(halfW + frameWidth, halfH + frameWidth);
+    outer.lineTo(-halfW - frameWidth, halfH + frameWidth);
+    outer.lineTo(-halfW - frameWidth, -halfH - frameWidth);
+
+    const hole = new THREE.Path();
+    const holePoints = playShape.getPoints();
+    if (holePoints.length) {
+      hole.moveTo(holePoints[0].x, holePoints[0].y);
+      for (let i = 1; i < holePoints.length; i++) {
+        hole.lineTo(holePoints[i].x, holePoints[i].y);
+      }
+      hole.closePath();
+      outer.holes.push(hole);
+    }
+
+    return outer;
   }
   
   initializeRails(rails: Rail[]) {

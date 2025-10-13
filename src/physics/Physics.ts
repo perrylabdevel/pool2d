@@ -18,39 +18,13 @@ export class PhysicsWorld {
   }
   
   initializeRails() {
-    const pocketGap = 4; // Gap for pockets (inches)
-    
-    // Create rail segments with gaps for pockets
-    // N_rail (North/top): split at center pocket
-    this.rails.push(new Rail(-50 + pocketGap, 25, -pocketGap, 25));  // NW corner to N middle
-    this.rails.push(new Rail(pocketGap, 25, 50 - pocketGap, 25));     // N middle to NE corner
-    
-    // S_rail (South/bottom): split at center pocket  
-    this.rails.push(new Rail(-50 + pocketGap, -25, -pocketGap, -25)); // SW corner to S middle
-    this.rails.push(new Rail(pocketGap, -25, 50 - pocketGap, -25));   // S middle to SE corner
-    
-    // W_rail (West/left): solid rail between corners (no middle pocket)
-    this.rails.push(new Rail(-50, -25 + pocketGap, -50, 25 - pocketGap));
-    
-    // E_rail (East/right): solid rail between corners (no middle pocket)
-    this.rails.push(new Rail(50, -25 + pocketGap, 50, 25 - pocketGap));
-    
-    // Set normals to point inward (toward center)
-    this.rails.forEach((rail) => {
-      const midX = (rail.x1 + rail.x2) / 2;
-      const midY = (rail.y1 + rail.y2) / 2;
-      
-      // Vector from midpoint to center (0,0)
-      const toCenter = {
-        x: -midX,
-        y: -midY,
-      };
-      
-      // If normal points away from center, flip it
-      const dot = rail.nx * toCenter.x + rail.ny * toCenter.y;
+    TABLE_GEOMETRY.rails.forEach((railDef) => {
+      const rail = new Rail(railDef.from.x, railDef.from.y, railDef.to.x, railDef.to.y);
+      const dot = rail.nx * railDef.normal.x + rail.ny * railDef.normal.y;
       if (dot < 0) {
         rail.flipNormal();
       }
+      this.rails.push(rail);
     });
   }
   

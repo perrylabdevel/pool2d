@@ -68,9 +68,9 @@ export class Renderer {
     this.ctx.scale(this.scale, -this.scale); // Negative Y to flip vertical axis
     
     // Draw in correct order: bottom to top
+    this.drawFrame();
     this.drawPlayingSurface();
     this.drawRails(world.rails);
-    this.drawFrame();
     this.drawPockets(world.pockets);
     this.drawBalls(world.balls, alpha);
     
@@ -78,49 +78,59 @@ export class Renderer {
   }
   
   drawPlayingSurface() {
-    // Draw felt surface (center-origin coordinates)
-    const halfW = TABLE_GEOMETRY.playWidthIn / 2;
-    const halfH = TABLE_GEOMETRY.playHeightIn / 2;
-    
+    if (!this.tracePlayBoundary()) return;
+
     this.ctx.fillStyle = CONFIG.TABLE_COLOR;
-    this.ctx.fillRect(-halfW, -halfH, TABLE_GEOMETRY.playWidthIn, TABLE_GEOMETRY.playHeightIn);
-    
-    // Add subtle felt texture
+    this.ctx.fill();
+
+    // Felt texture inside play area
+    this.ctx.save();
+    this.ctx.clip();
     this.ctx.fillStyle = 'rgba(0, 0, 0, 0.02)';
-    for (let i = 0; i < 100; i++) {
+    for (let i = 0; i < 120; i++) {
       const x = (Math.random() - 0.5) * TABLE_GEOMETRY.playWidthIn;
       const y = (Math.random() - 0.5) * TABLE_GEOMETRY.playHeightIn;
-      this.ctx.fillRect(x, y, 0.5, 0.5);
+      this.ctx.fillRect(x, y, 0.4, 0.4);
     }
+    this.ctx.restore();
   }
-  
+
   drawFrame() {
     const frameWidth = 6;
     const halfW = TABLE_GEOMETRY.playWidthIn / 2;
     const halfH = TABLE_GEOMETRY.playHeightIn / 2;
-    
-    // Draw wood frame around the outside (center-origin)
-    this.ctx.strokeStyle = '#3d2413';
-    this.ctx.lineWidth = frameWidth;
-    this.ctx.lineJoin = 'miter';
-    
-    // Outer edge of frame
-    this.ctx.strokeRect(
-      -halfW - frameWidth/2, 
-      -halfH - frameWidth/2, 
-      TABLE_GEOMETRY.playWidthIn + frameWidth, 
-      TABLE_GEOMETRY.playHeightIn + frameWidth
+
+    // Base wood background encompassing play area
+    this.ctx.fillStyle = '#3d2413';
+    this.ctx.fillRect(
+      -halfW - frameWidth,
+      -halfH - frameWidth,
+      TABLE_GEOMETRY.playWidthIn + frameWidth * 2,
+      TABLE_GEOMETRY.playHeightIn + frameWidth * 2
     );
-    
-    // Inner edge highlight
-    this.ctx.strokeStyle = '#2d1810';
-    this.ctx.lineWidth = frameWidth - 1;
-    this.ctx.strokeRect(
-      -halfW - frameWidth/2, 
-      -halfH - frameWidth/2, 
-      TABLE_GEOMETRY.playWidthIn + frameWidth, 
-      TABLE_GEOMETRY.playHeightIn + frameWidth
-    );
+
+    // Inner lip following rail outline
+    if (this.tracePlayBoundary()) {
+      this.ctx.strokeStyle = '#2d1810';
+      this.ctx.lineWidth = frameWidth;
+      this.ctx.lineJoin = 'round';
+      this.ctx.stroke();
+    }
+  }
+
+  private tracePlayBoundary(): boolean {
+    const rails = TABLE_GEOMETRY.rails;
+    if (!rails.length) {
+      return false;
+    }
+
+    this.ctx.beginPath();
+    this.ctx.moveTo(rails[0].from.x, rails[0].from.y);
+    rails.forEach((rail) => {
+      this.ctx.lineTo(rail.to.x, rail.to.y);
+    });
+    this.ctx.closePath();
+    return true;
   }
   
   drawPockets(pockets: Pocket[]) {

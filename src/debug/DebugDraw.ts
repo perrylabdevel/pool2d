@@ -4,6 +4,21 @@
 import { PhysicsWorld } from '../physics/Physics';
 import { CONFIG } from '../config';
 
+const RAIL_DEBUG_COLORS = [
+  '#ff4444',
+  '#ff8844',
+  '#ffcc44',
+  '#44ff44',
+  '#44ffcc',
+  '#44ccff',
+  '#4444ff',
+  '#8844ff',
+  '#cc44ff',
+  '#ff44cc',
+  '#ff4499',
+  '#ff4477',
+];
+
 export class DebugDraw {
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
@@ -45,27 +60,33 @@ export class DebugDraw {
     const canvasCenterY = this.canvas.height / 2;
     this.ctx.translate(canvasCenterX, canvasCenterY);
     this.ctx.scale(this.scale, -this.scale); // Y-up for world coords
-    
-    // Draw rail normals
-    if (CONFIG.DEBUG_DRAW_NORMALS) {
-      world.rails.forEach((rail) => {
+
+    // Draw rails with unique colors
+    world.rails.forEach((rail, index) => {
+      const color = RAIL_DEBUG_COLORS[index % RAIL_DEBUG_COLORS.length];
+      this.ctx.strokeStyle = color;
+      this.ctx.lineWidth = 0.4;
+      this.ctx.beginPath();
+      this.ctx.moveTo(rail.x1, rail.y1);
+      this.ctx.lineTo(rail.x2, rail.y2);
+      this.ctx.stroke();
+
+      if (CONFIG.DEBUG_DRAW_NORMALS) {
         const midX = (rail.x1 + rail.x2) / 2;
         const midY = (rail.y1 + rail.y2) / 2;
-        
-        this.ctx.strokeStyle = '#00ff00';
+        this.ctx.strokeStyle = color;
         this.ctx.lineWidth = 0.2;
         this.ctx.beginPath();
         this.ctx.moveTo(midX, midY);
         this.ctx.lineTo(midX + rail.nx * 3, midY + rail.ny * 3);
         this.ctx.stroke();
-      });
-    }
-    
+      }
+    });
+
     // Draw ball velocities
     if (CONFIG.DEBUG_DRAW_VELOCITIES) {
       world.balls.forEach((ball) => {
         if (ball.pocketed || ball.sleeping) return;
-        
         this.ctx.strokeStyle = '#ff00ff';
         this.ctx.lineWidth = 0.2;
         this.ctx.beginPath();
@@ -74,8 +95,8 @@ export class DebugDraw {
         this.ctx.stroke();
       });
     }
-    
-    // Draw pocket radii
+
+    // Draw pocket capture radii
     world.pockets.forEach((pocket) => {
       this.ctx.strokeStyle = '#ffff00';
       this.ctx.lineWidth = 0.1;
@@ -83,7 +104,7 @@ export class DebugDraw {
       this.ctx.arc(pocket.x, pocket.y, pocket.radius, 0, Math.PI * 2);
       this.ctx.stroke();
     });
-    
+
     this.ctx.restore();
   }
 }
