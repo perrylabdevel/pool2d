@@ -76,6 +76,10 @@ export const CONFIG = {
   // Game rules
   BREAK_SPEED_THRESHOLD: 5.0, // Minimum speed for legal break
   BALL_IN_HAND_ANYWHERE: false, // 8-ball: behind head string only on break
+  
+  // Geometry tuning
+  FRAME_OFFSET_IN: 4.0, // Outer frame offset from play area (in)
+  JAW_REF_RADIUS_IN: 4.0, // Reference radius for jaw angle derivation (in)
 };
 
 // Ball IDs

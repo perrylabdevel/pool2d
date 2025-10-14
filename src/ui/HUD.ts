@@ -163,6 +163,40 @@ export class HUD {
 
     const turnIndicatorColorInput = document.getElementById('turn-indicator-color') as HTMLInputElement;
     if (turnIndicatorColorInput) turnIndicatorColorInput.value = uiColors.turnIndicatorColor;
+
+    // Geometry settings
+    const geom = this.settingsManager.getGeometrySettings();
+    const jawRadiusInput = document.getElementById('jaw-radius-in') as HTMLInputElement;
+    if (jawRadiusInput) jawRadiusInput.value = String(geom.JAW_REF_RADIUS_IN);
+    const frameOffsetInput = document.getElementById('frame-offset-in') as HTMLInputElement;
+    if (frameOffsetInput) frameOffsetInput.value = String(geom.FRAME_OFFSET_IN);
+
+    if (jawRadiusInput) {
+      jawRadiusInput.addEventListener('input', (e) => {
+        const v = parseFloat((e.target as HTMLInputElement).value);
+        if (!isNaN(v)) this.settingsManager.saveGeometrySettings({ JAW_REF_RADIUS_IN: v });
+      });
+    }
+    if (frameOffsetInput) {
+      frameOffsetInput.addEventListener('input', (e) => {
+        const v = parseFloat((e.target as HTMLInputElement).value);
+        if (!isNaN(v)) this.settingsManager.saveGeometrySettings({ FRAME_OFFSET_IN: v });
+      });
+    }
+
+    const applyGeomBtn = document.getElementById('settings-apply-geometry');
+    if (applyGeomBtn) {
+      applyGeomBtn.addEventListener('click', () => {
+        window.location.reload();
+      });
+    }
+    const resetGeomBtn = document.getElementById('settings-reset-geometry');
+    if (resetGeomBtn) {
+      resetGeomBtn.addEventListener('click', () => {
+        this.settingsManager.resetGeometrySettings();
+        this.loadSettings();
+      });
+    }
   }
   
   updateFPS(fps: number) {

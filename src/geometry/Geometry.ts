@@ -1,6 +1,8 @@
 // Geometry Contract: Authoritative coordinate system and table layout
 // Origin (0,0) at play-area center; +X right (East), +Y up (North/head)
 
+import { CONFIG } from '../config';
+
 export interface Vec2 {
   x: number;
   y: number;
@@ -81,10 +83,10 @@ const PLAY_HALF_W_IN = 100.0 / 2;
 const PLAY_HALF_H_IN = 50.0 / 2;
 
 // Reference outer-rectangle offset (matches renderer frame width)
-const FRAME_OFFSET_IN = 4.0;
+const FRAME_OFFSET_IN = CONFIG.FRAME_OFFSET_IN;
 // Jaw reference radius used to derive jaw angle vs the outer rectangle
 // Larger radius widens the jaw opening; must be >= FRAME_OFFSET_IN to intersect
-const JAW_REF_RADIUS_IN = 4.0;
+const JAW_REF_RADIUS_IN = CONFIG.JAW_REF_RADIUS_IN;
 
 // Existing felt straight and inner throat Y-levels for north/south
 const Y_N_PLAY = PLAY_HALF_H_IN;        // 25.0

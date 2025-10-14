@@ -28,10 +28,16 @@ export interface PhysicsSettings {
   VELOCITY_EPSILON: number;
 }
 
+export interface GeometrySettings {
+  FRAME_OFFSET_IN: number;
+  JAW_REF_RADIUS_IN: number;
+}
+
 const STORAGE_KEYS = {
   GAME_SETTINGS: 'pool2d_game_settings',
   UI_COLORS: 'pool2d_ui_colors',
   PHYSICS_SETTINGS: 'pool2d_physics_settings',
+  GEOMETRY_SETTINGS: 'pool2d_geometry_settings',
 };
 
 const DEFAULT_GAME_SETTINGS: GameSettings = {
@@ -65,15 +71,18 @@ export class SettingsManager {
   private gameSettings: GameSettings;
   private uiColors: UIColors;
   private physicsSettings: PhysicsSettings;
+  private geometrySettings: GeometrySettings;
 
   constructor() {
     this.gameSettings = this.loadGameSettings();
     this.uiColors = this.loadUIColors();
     this.physicsSettings = this.loadPhysicsSettings();
+    this.geometrySettings = this.loadGeometrySettings();
     
     // Apply loaded settings
     this.applyPhysicsSettings();
     this.applyUIColors();
+    this.applyGeometrySettings();
   }
 
   // Game Settings
@@ -202,6 +211,57 @@ export class SettingsManager {
     } catch (e) {
       console.warn('Failed to reset physics settings:', e);
     }
+  }
+
+  // Geometry Settings
+  loadGeometrySettings(): GeometrySettings {
+    const defaults: GeometrySettings = {
+      FRAME_OFFSET_IN: CONFIG.FRAME_OFFSET_IN,
+      JAW_REF_RADIUS_IN: CONFIG.JAW_REF_RADIUS_IN,
+    };
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.GEOMETRY_SETTINGS);
+      if (stored) {
+        return { ...defaults, ...JSON.parse(stored) };
+      }
+    } catch (e) {
+      console.warn('Failed to load geometry settings:', e);
+    }
+    return { ...defaults };
+  }
+
+  saveGeometrySettings(settings: Partial<GeometrySettings>) {
+    this.geometrySettings = { ...this.geometrySettings, ...settings };
+    try {
+      localStorage.setItem(STORAGE_KEYS.GEOMETRY_SETTINGS, JSON.stringify(this.geometrySettings));
+      this.applyGeometrySettings();
+    } catch (e) {
+      console.warn('Failed to save geometry settings:', e);
+    }
+  }
+
+  getGeometrySettings(): GeometrySettings {
+    return { ...this.geometrySettings };
+  }
+
+  resetGeometrySettings() {
+    this.geometrySettings = {
+      FRAME_OFFSET_IN: 4.0,
+      JAW_REF_RADIUS_IN: 4.0,
+    };
+    try {
+      localStorage.setItem(STORAGE_KEYS.GEOMETRY_SETTINGS, JSON.stringify(this.geometrySettings));
+      this.applyGeometrySettings();
+    } catch (e) {
+      console.warn('Failed to reset geometry settings:', e);
+    }
+  }
+
+  private applyGeometrySettings() {
+    CONFIG.FRAME_OFFSET_IN = this.geometrySettings.FRAME_OFFSET_IN;
+    CONFIG.JAW_REF_RADIUS_IN = this.geometrySettings.JAW_REF_RADIUS_IN;
+    // Signal that geometry parameters changed (requires rebuild)
+    window.dispatchEvent(new CustomEvent('settings:geometry-changed'));
   }
 
   private applyPhysicsSettings() {
