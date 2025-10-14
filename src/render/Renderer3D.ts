@@ -4,7 +4,7 @@ import { FBXLoader } from 'three-stdlib';
 import { Ball, Rail, Pocket } from '../physics/Shapes';
 import { PhysicsWorld } from '../physics/Physics';
 import { CONFIG, BALL_CUE } from '../config';
-import { TABLE_GEOMETRY, computePlayBoundaryPoints, computeBoundaryBounds, type Vec2, type BoundaryBounds } from '../geometry/Geometry';
+import { getTableGeometry, computePlayBoundaryPoints, computeBoundaryBounds, type Vec2, type BoundaryBounds } from '../geometry/Geometry';
 import { PredictionResult } from '../physics/Prediction';
 
 export class Renderer3D {
@@ -131,6 +131,43 @@ export class Renderer3D {
         }
       }
     });
+  }
+
+  clearTableAndRails() {
+    if (this.tableMesh) {
+      this.scene.remove(this.tableMesh);
+      this.tableMesh.geometry.dispose();
+      if (Array.isArray(this.tableMesh.material)) {
+        this.tableMesh.material.forEach(m => m.dispose());
+      } else {
+        (this.tableMesh.material as THREE.Material).dispose();
+      }
+      this.tableMesh = null;
+    }
+    if (this.frameMesh) {
+      this.scene.remove(this.frameMesh);
+      this.frameMesh.geometry.dispose();
+      if (Array.isArray(this.frameMesh.material)) {
+        this.frameMesh.material.forEach(m => m.dispose());
+      } else {
+        (this.frameMesh.material as THREE.Material).dispose();
+      }
+      this.frameMesh = null;
+    }
+    this.railMeshes.forEach(m => {
+      this.scene.remove(m);
+      m.geometry.dispose();
+      const mat = m.material as THREE.Material | THREE.Material[];
+      if (Array.isArray(mat)) mat.forEach(mm => mm.dispose()); else mat.dispose();
+    });
+    this.railMeshes = [];
+    this.pocketMeshes.forEach(m => {
+      this.scene.remove(m);
+      m.geometry.dispose();
+      const mat = m.material as THREE.Material | THREE.Material[];
+      if (Array.isArray(mat)) mat.forEach(mm => mm.dispose()); else mat.dispose();
+    });
+    this.pocketMeshes = [];
   }
 
   updateLoadingText(text: string) {
@@ -369,7 +406,7 @@ export class Renderer3D {
   }
 
   private refreshDerivedGeometry() {
-    this.playBoundaryPoints = computePlayBoundaryPoints(TABLE_GEOMETRY.rails);
+    this.playBoundaryPoints = computePlayBoundaryPoints(getTableGeometry().rails);
     this.playBounds = computeBoundaryBounds(this.playBoundaryPoints);
   }
 
@@ -706,8 +743,9 @@ export class Renderer3D {
 
   drawMeasurementOverlay() {
     const ctx = this.uiCtx;
-    const halfW = TABLE_GEOMETRY.playWidthIn / 2;
-    const halfH = TABLE_GEOMETRY.playHeightIn / 2;
+    const geom = getTableGeometry();
+    const halfW = geom.playWidthIn / 2;
+    const halfH = geom.playHeightIn / 2;
     const tickSpacing = 10;
     const labelSpacing = 20;
 
@@ -823,8 +861,9 @@ export class Renderer3D {
   // Helper to clip a line at table boundaries (inside the rails)
   clipLineAtRails(start: { x: number; y: number }, end: { x: number; y: number }): { x: number; y: number } {
     // Use the actual rail boundaries from geometry
-    const halfWidth = TABLE_GEOMETRY.playWidthIn / 2;
-    const halfHeight = TABLE_GEOMETRY.playHeightIn / 2;
+    const geom2 = getTableGeometry();
+    const halfWidth = geom2.playWidthIn / 2;
+    const halfHeight = geom2.playHeightIn / 2;
     
     // Add a small margin to keep lines inside the play area
     const margin = CONFIG.BALL_RADIUS;

@@ -126,15 +126,18 @@ function deriveSideJawXMagnitudes(): { xOuter: number; xInner: number } {
 
 const { xOuter: JAW_X_OUTER, xInner: JAW_X_INNER } = deriveSideJawXMagnitudes();
 
-export const TABLE_GEOMETRY: TableGeometry = {
-  playWidthIn: 100.0,
-  playHeightIn: 50.0,
-  cushionProfileIn: 1.75,
-  pocketCaptureRadiusIn: 2.5,
-  
-  // Rails approximating WPA throat geometry, normals point inward
-  // Corner rails stop short of pocket centers to leave openings
-  rails: [
+export function getTableGeometry(): TableGeometry {
+  // Recompute on demand from current CONFIG values
+  const { xOuter: JAW_X_OUTER, xInner: JAW_X_INNER } = deriveSideJawXMagnitudes();
+  return {
+    playWidthIn: 100.0,
+    playHeightIn: 50.0,
+    cushionProfileIn: 1.75,
+    pocketCaptureRadiusIn: 2.5,
+    
+    // Rails approximating WPA throat geometry, normals point inward
+    // Corner rails stop short of pocket centers to leave openings
+    rails: [
     {
       id: 'N_west_taper',
       from: { x: -51.77, y: 26.77 },
@@ -267,10 +270,10 @@ export const TABLE_GEOMETRY: TableGeometry = {
       to: { x: -51.77, y: 26.77 },
       normal: { x: 0.894427, y: -0.447214 }
     }
-  ],
-  
-  // Pockets at corners and midpoints
-  pockets: [
+    ],
+    
+    // Pockets at corners and midpoints
+    pockets: [
     { 
       id: 'NW_corner', 
       center: { x: -50.0, y: 25.0 }, 
@@ -301,8 +304,9 @@ export const TABLE_GEOMETRY: TableGeometry = {
       center: { x: 0.0, y: -25.0 }, 
       cutNormalHint: { x: 0, y: 1 } 
     }
-  ]
-};
+    ]
+  };
+}
 
 // Coordinate transforms
 export interface CanvasPoint {

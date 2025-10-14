@@ -187,7 +187,7 @@ export class HUD {
     const applyGeomBtn = document.getElementById('settings-apply-geometry');
     if (applyGeomBtn) {
       applyGeomBtn.addEventListener('click', () => {
-        window.location.reload();
+        window.dispatchEvent(new CustomEvent('settings:geometry-apply'));
       });
     }
     const resetGeomBtn = document.getElementById('settings-reset-geometry');

@@ -157,6 +157,11 @@ export class Game {
   setupEventListeners() {
     window.addEventListener('resize', () => this.resize());
     
+    // Instant geometry apply: rebuild world and renderer without full reload
+    window.addEventListener('settings:geometry-apply', () => {
+      this.restart();
+    });
+    
     window.addEventListener('keydown', (e) => {
       if (e.key === 'd' || e.key === 'D') {
         this.debug.toggle();
@@ -237,7 +242,12 @@ export class Game {
   }
   
   restart() {
-    this.world.balls = [];
+    // Rebuild physics world (recomputes rails/pockets from current CONFIG)
+    this.world = new PhysicsWorld();
+    // Reset renderer table and rails to avoid duplicates
+    if (this.renderer && (this.renderer as any).clearTableAndRails) {
+      (this.renderer as any).clearTableAndRails();
+    }
     this.initializeGame();
   }
   

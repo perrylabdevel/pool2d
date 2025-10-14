@@ -5,7 +5,7 @@
 import { Ball, Rail, Pocket } from '../physics/Shapes';
 import { PhysicsWorld } from '../physics/Physics';
 import { CONFIG, BALL_CUE } from '../config';
-import { TABLE_GEOMETRY, computeBoundaryBounds, computePlayBoundaryPoints, type Vec2, type BoundaryBounds } from '../geometry/Geometry';
+import { getTableGeometry, computeBoundaryBounds, computePlayBoundaryPoints, type Vec2, type BoundaryBounds } from '../geometry/Geometry';
 import { PredictionResult } from '../physics/Prediction';
 
 export class Renderer {
@@ -95,16 +95,17 @@ export class Renderer {
     this.beginBoundaryPath(boundary);
     this.ctx.clip();
     this.ctx.fillStyle = 'rgba(0, 0, 0, 0.02)';
+    const geom = getTableGeometry();
     for (let i = 0; i < 120; i++) {
-      const x = (Math.random() - 0.5) * TABLE_GEOMETRY.playWidthIn;
-      const y = (Math.random() - 0.5) * TABLE_GEOMETRY.playHeightIn;
+      const x = (Math.random() - 0.5) * geom.playWidthIn;
+      const y = (Math.random() - 0.5) * geom.playHeightIn;
       this.ctx.fillRect(x, y, 0.4, 0.4);
     }
     this.ctx.restore();
   }
 
   private refreshDerivedGeometry() {
-    this.playBoundaryPoints = computePlayBoundaryPoints(TABLE_GEOMETRY.rails);
+    this.playBoundaryPoints = computePlayBoundaryPoints(getTableGeometry().rails);
     this.playBounds = computeBoundaryBounds(this.playBoundaryPoints);
   }
 
@@ -129,14 +130,15 @@ export class Renderer {
     const frameWidth = 6;
     const boundary = this.playBoundaryPoints;
     if (boundary.length < 3) {
-      const halfW = TABLE_GEOMETRY.playWidthIn / 2;
-      const halfH = TABLE_GEOMETRY.playHeightIn / 2;
+      const geom = getTableGeometry();
+      const halfW = geom.playWidthIn / 2;
+      const halfH = geom.playHeightIn / 2;
       this.ctx.fillStyle = '#3d2413';
       this.ctx.fillRect(
         -halfW - frameWidth,
         -halfH - frameWidth,
-        TABLE_GEOMETRY.playWidthIn + frameWidth * 2,
-        TABLE_GEOMETRY.playHeightIn + frameWidth * 2
+        geom.playWidthIn + frameWidth * 2,
+        geom.playHeightIn + frameWidth * 2
       );
       return;
     }

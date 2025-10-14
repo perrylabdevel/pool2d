@@ -3,7 +3,7 @@
 
 import { Ball, Rail, Pocket } from './Shapes';
 import { CONFIG } from '../config';
-import { TABLE_GEOMETRY } from '../geometry/Geometry';
+import { getTableGeometry } from '../geometry/Geometry';
 import { detectBallBall, detectBallRail, resolveBallBall, resolveBallRail, Contact } from './Collision';
 import { physicsRecorder } from '../debug/PhysicsRecorder';
 
@@ -18,7 +18,8 @@ export class PhysicsWorld {
   }
   
   initializeRails() {
-    TABLE_GEOMETRY.rails.forEach((railDef) => {
+    const GEOM = getTableGeometry();
+    GEOM.rails.forEach((railDef) => {
       const rail = new Rail(railDef.from.x, railDef.from.y, railDef.to.x, railDef.to.y);
       const dot = rail.nx * railDef.normal.x + rail.ny * railDef.normal.y;
       if (dot < 0) {
@@ -30,12 +31,13 @@ export class PhysicsWorld {
   
   initializePockets() {
     // Use authoritative geometry definitions
-    TABLE_GEOMETRY.pockets.forEach((pocketDef) => {
+    const GEOM = getTableGeometry();
+    GEOM.pockets.forEach((pocketDef) => {
       this.pockets.push(
         new Pocket(
           pocketDef.center.x,
           pocketDef.center.y,
-          TABLE_GEOMETRY.pocketCaptureRadiusIn
+          GEOM.pocketCaptureRadiusIn
         )
       );
     });
