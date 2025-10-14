@@ -33,6 +33,7 @@ export class Game {
   lastDirection: { x: number; y: number } = { x: 1, y: 0 };
   lockedPrediction: PredictionResult | null = null;
   lockedDirection: { x: number; y: number } | null = null;
+  previewPowerSnapshot: number | null = null;
   
   // Game loop
   accumulator: number = 0;
@@ -128,6 +129,7 @@ export class Game {
         // Snapshot prediction/direction for locked overlays
         this.lockedPrediction = this.lastPrediction;
         this.lockedDirection = { ...this.lastDirection };
+        this.previewPowerSnapshot = null;
 
         // Store current mouse Y position for power control
         const rect = this.input.canvas.getBoundingClientRect();
@@ -144,6 +146,7 @@ export class Game {
           this.lockedAngle = this.input.getAimAngle(this.cueBall);
           this.lockedPrediction = this.lastPrediction;
           this.lockedDirection = { ...this.lastDirection };
+          this.previewPowerSnapshot = null;
         } else {
           this.lockedPrediction = null;
           this.lockedDirection = null;
@@ -152,6 +155,7 @@ export class Game {
         if (this.isAimMode) {
           this.lockedPrediction = null;
           this.lockedDirection = null;
+          this.previewPowerSnapshot = null;
         }
       }
 
@@ -212,6 +216,7 @@ export class Game {
 
         this.lockedPrediction = null;
         this.lockedDirection = null;
+        this.previewPowerSnapshot = null;
 
         // Shoot if power is sufficient
         if (this.currentPower >= CONFIG.CUE_POWER_MIN && this.cueBall && !this.cueBall.pocketed) {
@@ -294,6 +299,7 @@ export class Game {
     this.lockedPrediction = null;
     this.lockedDirection = null;
     this.lastDirection = { x: 1, y: 0 };
+    this.previewPowerSnapshot = null;
     
     // Create cue ball
     this.cueBall = new Ball(
@@ -359,6 +365,7 @@ export class Game {
     this.trajectoryPreview = null;
     this.lockedPrediction = null;
     this.lockedDirection = null;
+    this.previewPowerSnapshot = null;
     if (this.mode === GameMode.EIGHT_BALL) {
       this.rules.startShot();
     }
@@ -445,20 +452,27 @@ export class Game {
                 this.lockedDirection = { ...direction };
               }
             }
-
-            if (!this.trajectoryPreview) {
-              this.trajectoryPreview = this.predictor.simulateShotPaths(
-                this.world,
-                this.cueBall,
-                angle,
-                this.currentPower
-              );
-            }
           }
 
           prediction = this.lockedPrediction;
           if (this.lockedDirection) {
             direction = { ...this.lockedDirection };
+          }
+
+          const needsPreviewUpdate =
+            !this.trajectoryPreview ||
+            this.previewPowerSnapshot === null ||
+            Math.abs(this.previewPowerSnapshot - this.currentPower) > 0.01;
+
+          if (needsPreviewUpdate) {
+            const lockedAngle = this.isSpacebarHeld ? this.spacebarLockedAngle : this.lockedAngle;
+            this.trajectoryPreview = this.predictor.simulateShotPaths(
+              this.world,
+              this.cueBall,
+              lockedAngle,
+              this.currentPower
+            );
+            this.previewPowerSnapshot = this.currentPower;
           }
         } else {
           const computed = this.predictor.predictFirstContact(
@@ -478,6 +492,7 @@ export class Game {
             angle,
             this.currentPower
           );
+          this.previewPowerSnapshot = this.currentPower;
         }
 
         if (prediction) {
@@ -489,9 +504,11 @@ export class Game {
           );
         } else {
           this.trajectoryPreview = null;
+          this.previewPowerSnapshot = null;
         }
       } else {
         this.trajectoryPreview = null;
+        this.previewPowerSnapshot = null;
         this.lockedPrediction = null;
         this.lockedDirection = null;
       }
