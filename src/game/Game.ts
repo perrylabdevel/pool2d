@@ -98,6 +98,10 @@ export class Game {
       this.handleBallDragEnd(e);
       this.handlePowerBarMouseUp(e);
     });
+
+    // Capture pointer release even if it happens off the canvas (e.g. trackpad drags)
+    window.addEventListener('mousemove', (e) => this.handlePowerBarMouseMove(e));
+    window.addEventListener('mouseup', (e) => this.handlePowerBarMouseUp(e));
     
     // Handle A key to toggle aim/power mode
     window.addEventListener('keydown', (e) => {
