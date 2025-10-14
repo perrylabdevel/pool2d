@@ -9,7 +9,7 @@ import { HUD } from '../ui/HUD';
 import { CONFIG, CUE_BALL_POSITION, RACK_POSITIONS } from '../config';
 import { EightBallRules } from '../rules/EightBall';
 import { physicsRecorder } from '../debug/PhysicsRecorder';
-import { Predictor } from '../physics/Prediction';
+import { Predictor, ShotPreviewPaths } from '../physics/Prediction';
 import { shotCapture } from '../debug/ShotCapture';
 import { SettingsPanel } from '../ui/SettingsPanel';
 
@@ -28,6 +28,7 @@ export class Game {
   rules: EightBallRules;
   predictor: Predictor;
   mode: GameMode;
+  trajectoryPreview: ShotPreviewPaths | null = null;
   
   // Game loop
   accumulator: number = 0;
@@ -328,6 +329,7 @@ export class Game {
     this.cueBall.setVelocity(vx, vy);
     physicsRecorder.recordShot(angle, power);
     this.canShoot = false;
+    this.trajectoryPreview = null;
     if (this.mode === GameMode.EIGHT_BALL) {
       this.rules.startShot();
     }
@@ -400,12 +402,24 @@ export class Game {
 
       // Draw trajectory lines only if aim assist is enabled
       if (this.aimAssist && prediction) {
-        const preview = this.predictor.simulateShotPaths(
-          this.world,
-          this.cueBall,
-          angle,
-          this.currentPower
-        );
+        const lockedMode = this.isSpacebarHeld || !this.isAimMode;
+        if (!lockedMode) {
+          this.trajectoryPreview = this.predictor.simulateShotPaths(
+            this.world,
+            this.cueBall,
+            angle,
+            this.currentPower
+          );
+        } else if (!this.trajectoryPreview) {
+          this.trajectoryPreview = this.predictor.simulateShotPaths(
+            this.world,
+            this.cueBall,
+            angle,
+            this.currentPower
+          );
+        }
+
+        const preview = this.trajectoryPreview;
 
         this.renderer.drawTrajectoryLines(
           prediction,
@@ -413,6 +427,8 @@ export class Game {
           direction,
           preview ?? undefined
         );
+      } else {
+        this.trajectoryPreview = null;
       }
 
       this.renderer.drawCueAndPowerBar(
