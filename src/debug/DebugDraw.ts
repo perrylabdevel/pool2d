@@ -3,6 +3,7 @@
 
 import { PhysicsWorld } from '../physics/Physics';
 import { CONFIG } from '../config';
+import type { Renderer3D } from '../render/Renderer3D';
 
 export class DebugDraw {
   canvas: HTMLCanvasElement;
@@ -16,9 +17,14 @@ export class DebugDraw {
     this.scale = CONFIG.CANVAS_SCALE;
   }
   
-  toggle() {
-    this.enabled = !this.enabled;
+  toggle(force?: boolean): boolean {
+    if (typeof force === 'boolean') {
+      this.enabled = force;
+    } else {
+      this.enabled = !this.enabled;
+    }
     this.canvas.classList.toggle('visible', this.enabled);
+    return this.enabled;
   }
   
   resize(width: number, height: number, scale: number) {
@@ -33,57 +39,69 @@ export class DebugDraw {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
   }
   
-  draw(world: PhysicsWorld) {
+  draw(world: PhysicsWorld, renderer: Renderer3D) {
     if (!this.enabled) return;
-    
+
     this.clear();
-    
-    this.ctx.save();
-    
-    // Use same transform as renderer: center origin, Y-up
-    const canvasCenterX = this.canvas.width / 2;
-    const canvasCenterY = this.canvas.height / 2;
-    this.ctx.translate(canvasCenterX, canvasCenterY);
-    this.ctx.scale(this.scale, -this.scale); // Y-up for world coords
-    
-    // Draw rail normals
+
+    const ctx = this.ctx;
+    const project = (x: number, y: number) => renderer.worldToScreen(x, y);
+
+    const origin = project(0, 0);
+    const unitX = project(1, 0);
+    const pixelsPerUnit = Math.hypot(unitX.x - origin.x, unitX.y - origin.y);
+
+    const toPixels = (worldValue: number) => Math.max(1, pixelsPerUnit * worldValue);
+
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
     if (CONFIG.DEBUG_DRAW_NORMALS) {
+      ctx.strokeStyle = '#00ff00';
+      ctx.lineWidth = toPixels(0.2);
       world.rails.forEach((rail) => {
         const midX = (rail.x1 + rail.x2) / 2;
         const midY = (rail.y1 + rail.y2) / 2;
-        
-        this.ctx.strokeStyle = '#00ff00';
-        this.ctx.lineWidth = 0.2;
-        this.ctx.beginPath();
-        this.ctx.moveTo(midX, midY);
-        this.ctx.lineTo(midX + rail.nx * 3, midY + rail.ny * 3);
-        this.ctx.stroke();
+
+        const start = project(midX, midY);
+        const end = project(midX + rail.nx * 3, midY + rail.ny * 3);
+
+        ctx.beginPath();
+        ctx.moveTo(start.x, start.y);
+        ctx.lineTo(end.x, end.y);
+        ctx.stroke();
       });
     }
-    
-    // Draw ball velocities
+
     if (CONFIG.DEBUG_DRAW_VELOCITIES) {
+      ctx.strokeStyle = '#ff00ff';
+      ctx.lineWidth = toPixels(0.2);
       world.balls.forEach((ball) => {
         if (ball.pocketed || ball.sleeping) return;
-        
-        this.ctx.strokeStyle = '#ff00ff';
-        this.ctx.lineWidth = 0.2;
-        this.ctx.beginPath();
-        this.ctx.moveTo(ball.x, ball.y);
-        this.ctx.lineTo(ball.x + ball.vx * 2, ball.y + ball.vy * 2);
-        this.ctx.stroke();
+
+        const start = project(ball.x, ball.y);
+        const end = project(ball.x + ball.vx * 2, ball.y + ball.vy * 2);
+
+        ctx.beginPath();
+        ctx.moveTo(start.x, start.y);
+        ctx.lineTo(end.x, end.y);
+        ctx.stroke();
       });
     }
-    
-    // Draw pocket radii
+
     world.pockets.forEach((pocket) => {
-      this.ctx.strokeStyle = '#ffff00';
-      this.ctx.lineWidth = 0.1;
-      this.ctx.beginPath();
-      this.ctx.arc(pocket.x, pocket.y, pocket.radius, 0, Math.PI * 2);
-      this.ctx.stroke();
+      const center = project(pocket.x, pocket.y);
+      const edge = project(pocket.x + pocket.radius, pocket.y);
+      const radius = Math.max(1, Math.hypot(edge.x - center.x, edge.y - center.y));
+
+      ctx.strokeStyle = '#ffff00';
+      ctx.lineWidth = toPixels(0.1);
+      ctx.beginPath();
+      ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
+      ctx.stroke();
     });
-    
-    this.ctx.restore();
+
+    ctx.restore();
   }
 }

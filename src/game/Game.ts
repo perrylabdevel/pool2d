@@ -45,6 +45,10 @@ export class Game {
   isDraggingPower: boolean = false;
   isAimMode: boolean = true; // true = aim, false = power
   lockedAngle: number = 0; // Locked angle when in power mode
+  isCtrlPressed: boolean = false; // Track Ctrl key state
+  isSpacebarHeld: boolean = false; // Spacebar for instant power mode
+  spacebarLockedAngle: number = 0; // Angle locked when spacebar is pressed
+  spacebarStartMouseY: number = 0; // Mouse Y position when spacebar was pressed
   
   // Ball dragging (practice mode only)
   isDraggingBall: boolean = false;
@@ -97,12 +101,97 @@ export class Game {
     
     // Handle A key to toggle aim/power mode
     window.addEventListener('keydown', (e) => {
+      // Track Ctrl state
+      if (e.key === 'Control') {
+        this.isCtrlPressed = true;
+      }
+
+      // Spacebar: Hold for instant power mode with frozen aim
+      if (e.key === ' ' && !this.isSpacebarHeld && this.canShoot && this.cueBall && !this.cueBall.pocketed) {
+        e.preventDefault();
+        this.isSpacebarHeld = true;
+        // Lock the current aim angle - get it directly and store it
+        this.spacebarLockedAngle = this.input.getAimAngle(this.cueBall);
+
+        // Also set it as manual angle to prevent mouse movements from changing it
+        this.input.setManualAngle(this.spacebarLockedAngle);
+
+        // Store current mouse Y position for power control
+        const rect = this.input.canvas.getBoundingClientRect();
+        this.spacebarStartMouseY = this.input.lastMouseY || (this.input.canvas.height / 2);
+
+        // Start at minimum power
+        this.currentPower = CONFIG.CUE_POWER_MIN;
+      }
+
       if (e.key === 'a' || e.key === 'A') {
         if (this.isAimMode && this.cueBall && !this.cueBall.pocketed) {
           // Switching from aim to power: lock the current angle
           this.lockedAngle = this.input.getAimAngle(this.cueBall);
         }
         this.isAimMode = !this.isAimMode;
+      }
+
+      // Arrow key micro-aim adjustments (only in aim mode and not holding spacebar)
+      if (this.isAimMode && !this.isSpacebarHeld && this.canShoot && this.cueBall && !this.cueBall.pocketed) {
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+          e.preventDefault();
+
+          // Initialize manual angle if not set
+          if (this.input.manualAngle === null) {
+            this.input.setManualAngle(this.input.getAimAngle(this.cueBall));
+          }
+
+          // Determine increment based on modifier keys
+          let increment: number;
+          if (e.shiftKey && e.ctrlKey) {
+            // Ultra-fine: Shift + Ctrl for pixel-perfect precision
+            increment = CONFIG.AIM_ARROW_KEY_INCREMENT_ULTRA;
+          } else if (e.shiftKey) {
+            // Fine: Shift for detailed adjustments
+            increment = CONFIG.AIM_ARROW_KEY_INCREMENT_FINE;
+          } else {
+            // Normal: Base increment for quick adjustments
+            increment = CONFIG.AIM_ARROW_KEY_INCREMENT_BASE;
+          }
+
+          // Apply adjustment
+          const direction = e.key === 'ArrowLeft' ? -1 : 1;
+          this.input.adjustAngle(direction * increment);
+        }
+      }
+
+      // Arrow keys to adjust power when spacebar is held
+      if (this.isSpacebarHeld && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        e.preventDefault();
+        const powerDelta = 0.5; // Power increment per key press
+        if (e.key === 'ArrowUp') {
+          this.currentPower = Math.min(CONFIG.CUE_POWER_MAX, this.currentPower + powerDelta);
+        } else {
+          this.currentPower = Math.max(CONFIG.CUE_POWER_MIN, this.currentPower - powerDelta);
+        }
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      // Track Ctrl state
+      if (e.key === 'Control') {
+        this.isCtrlPressed = false;
+      }
+
+      // Spacebar release: shoot with current power
+      if (e.key === ' ' && this.isSpacebarHeld) {
+        e.preventDefault();
+        this.isSpacebarHeld = false;
+
+        // Clear manual angle so mouse aim works again
+        this.input.clearManualAngle();
+
+        // Shoot if power is sufficient
+        if (this.currentPower >= CONFIG.CUE_POWER_MIN && this.cueBall && !this.cueBall.pocketed) {
+          this.shoot(this.spacebarLockedAngle, this.currentPower);
+          this.currentPower = 0;
+        }
       }
     });
     
@@ -121,28 +210,25 @@ export class Game {
   
   setupEventListeners() {
     window.addEventListener('resize', () => this.resize());
-    
+
     window.addEventListener('keydown', (e) => {
-      if (e.key === 'd' || e.key === 'D') {
-        this.debug.toggle();
+      if (e.key === 'd' || e.key === 'D' || e.key === 'm' || e.key === 'M') {
+        this.toggleDebugOverlays();
+        return;
       }
+
       if (e.key === 'r' || e.key === 'R') {
         this.restart();
       }
       if (e.key === 's' || e.key === 'S') {
         this.settings.toggle();
       }
-      if (e.key === 'm' || e.key === 'M') {
-        this.renderer.toggleMeasurementOverlay();
-      }
     });
-    
-    // Wire up debug toggle button
-    const debugBtn = document.getElementById('debug-toggle');
-    if (debugBtn) {
-      debugBtn.addEventListener('click', () => this.debug.toggle());
-    }
-    
+
+    window.addEventListener('game:debug-toggle', () => {
+      this.toggleDebugOverlays();
+    });
+
     // Wire up restart button
     const restartBtn = document.getElementById('restart-btn');
     if (restartBtn) {
@@ -167,7 +253,13 @@ export class Game {
       physicsSettingsBtn.addEventListener('click', () => this.settings.toggle());
     }
   }
-  
+
+  toggleDebugOverlays(force?: boolean) {
+    const enabled = this.debug.toggle(force);
+    this.renderer.toggleMeasurementOverlay(enabled);
+    return enabled;
+  }
+
   initializeGame() {
     this.world.balls = [];
     
@@ -271,22 +363,37 @@ export class Game {
     
     // Draw cue line and power bar if can shoot
     if (this.canShoot && this.cueBall && !this.cueBall.pocketed) {
-      // Use locked angle in power mode, live angle in aim mode
-      const angle = this.isAimMode ? this.input.getAimAngle(this.cueBall) : this.lockedAngle;
-      
+      // Determine angle and mode
+      let angle: number;
+      let effectiveAimMode: boolean;
+
+      if (this.isSpacebarHeld) {
+        // Spacebar mode: use frozen angle, show as power mode
+        angle = this.spacebarLockedAngle;
+        effectiveAimMode = false;
+      } else if (this.isAimMode) {
+        // Normal aim mode: use live angle
+        angle = this.input.getAimAngle(this.cueBall);
+        effectiveAimMode = true;
+      } else {
+        // Normal power mode: use locked angle
+        angle = this.lockedAngle;
+        effectiveAimMode = false;
+      }
+
       // Predict first contact (always run to clip aim line at rails/balls)
       const direction = {
         x: Math.cos(angle),
         y: Math.sin(angle),
       };
-      
+
       const prediction = this.predictor.predictFirstContact(
         { x: this.cueBall.x, y: this.cueBall.y },
         direction,
         this.world,
         this.cueBall
       );
-      
+
       // Draw trajectory lines only if aim assist is enabled
       if (this.aimAssist && prediction) {
         this.renderer.drawTrajectoryLines(
@@ -296,11 +403,22 @@ export class Game {
           this.predictor
         );
       }
-      
-      this.renderer.drawCueAndPowerBar(this.cueBall, angle, this.currentPower, this.aimAssist, true, this.isAimMode, prediction);
+
+      this.renderer.drawCueAndPowerBar(
+        this.cueBall,
+        angle,
+        this.currentPower,
+        this.aimAssist,
+        true,
+        effectiveAimMode,
+        prediction,
+        this.input.isFineAimMode,
+        this.input.isFineAimMode && this.isCtrlPressed,
+        this.isSpacebarHeld
+      );
     }
-    
-    this.debug.draw(this.world);
+
+    this.debug.draw(this.world, this.renderer);
     
     this.fpsFrames++;
   }
@@ -340,12 +458,12 @@ export class Game {
   
   handlePowerBarMouseDown(e: MouseEvent) {
     if (!this.canShoot || !this.cueBall || this.cueBall.pocketed) return;
-    
+
     const bounds = this.renderer.getPowerBarBounds();
     const rect = this.input.canvas.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
-    
+
     // Check if clicking on power bar
     if (
       mouseX >= bounds.x &&
@@ -354,6 +472,15 @@ export class Game {
       mouseY <= bounds.y + bounds.height
     ) {
       this.isDraggingPower = true;
+
+      // If spacebar mode is active, use that locked angle; otherwise lock current angle
+      if (this.isSpacebarHeld) {
+        // Already locked, just update power
+      } else {
+        // Not in spacebar mode - lock angle for normal power mode
+        this.lockedAngle = this.input.getAimAngle(this.cueBall);
+      }
+
       // Reverse: pulling down increases power (mouseY closer to bottom = higher power)
       this.currentPower = ((mouseY - bounds.y) / bounds.height) * CONFIG.CUE_POWER_MAX;
       this.currentPower = Math.max(CONFIG.CUE_POWER_MIN, Math.min(CONFIG.CUE_POWER_MAX, this.currentPower));
@@ -361,22 +488,43 @@ export class Game {
   }
   
   handlePowerBarMouseMove(e: MouseEvent) {
-    if (!this.isDraggingPower) return;
-    
-    const bounds = this.renderer.getPowerBarBounds();
+    // Allow power adjustment during spacebar mode OR regular dragging
+    if (!this.isDraggingPower && !this.isSpacebarHeld) return;
+    if (!this.canShoot || !this.cueBall || this.cueBall.pocketed) return;
+
     const rect = this.input.canvas.getBoundingClientRect();
     const mouseY = e.clientY - rect.top;
-    
-    // Reverse: pulling down increases power (mouseY closer to bottom = higher power)
-    this.currentPower = ((mouseY - bounds.y) / bounds.height) * CONFIG.CUE_POWER_MAX;
-    this.currentPower = Math.max(CONFIG.CUE_POWER_MIN, Math.min(CONFIG.CUE_POWER_MAX, this.currentPower));
+
+    // During spacebar mode, use vertical mouse movement anywhere on screen
+    if (this.isSpacebarHeld) {
+      // Calculate power based on vertical distance from start position
+      // Moving down = more power, moving up = less power
+      const deltaY = mouseY - this.spacebarStartMouseY;
+      const canvasHeight = this.input.canvas.height;
+
+      // Map mouse movement to power range
+      // Allow full screen height to cover full power range
+      const powerRange = CONFIG.CUE_POWER_MAX - CONFIG.CUE_POWER_MIN;
+      const powerDelta = (deltaY / canvasHeight) * powerRange * 2; // 2x multiplier for sensitivity
+
+      this.currentPower = CONFIG.CUE_POWER_MIN + powerRange / 2 + powerDelta; // Start at mid-range
+      this.currentPower = Math.max(CONFIG.CUE_POWER_MIN, Math.min(CONFIG.CUE_POWER_MAX, this.currentPower));
+    } else if (this.isDraggingPower) {
+      // Normal drag mode - only on power bar
+      const bounds = this.renderer.getPowerBarBounds();
+      this.currentPower = ((mouseY - bounds.y) / bounds.height) * CONFIG.CUE_POWER_MAX;
+      this.currentPower = Math.max(CONFIG.CUE_POWER_MIN, Math.min(CONFIG.CUE_POWER_MAX, this.currentPower));
+    }
   }
   
   handlePowerBarMouseUp(_e: MouseEvent) {
     if (!this.isDraggingPower) return;
-    
+
     this.isDraggingPower = false;
-    
+
+    // Don't shoot if spacebar is held - user will release spacebar to shoot
+    if (this.isSpacebarHeld) return;
+
     // Shoot with the current power using locked angle
     if (this.currentPower >= CONFIG.CUE_POWER_MIN && this.cueBall && !this.cueBall.pocketed) {
       this.shoot(this.lockedAngle, this.currentPower);
