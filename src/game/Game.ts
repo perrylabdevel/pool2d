@@ -45,6 +45,10 @@ export class Game {
   isDraggingPower: boolean = false;
   isAimMode: boolean = true; // true = aim, false = power
   lockedAngle: number = 0; // Locked angle when in power mode
+  isSpacePowerMode: boolean = false;
+  wasAimModeBeforeSpace: boolean = true;
+  powerDragStartY: number = 0;
+  spaceKeyHeld: boolean = false;
   
   // Ball dragging (practice mode only)
   isDraggingBall: boolean = false;
@@ -90,12 +94,50 @@ export class Game {
     
     // Handle A key to toggle aim/power mode
     window.addEventListener('keydown', (e) => {
+      if (e.key === 'Shift') {
+        this.input.setFineAimActive(true);
+      }
       if (e.key === 'a' || e.key === 'A') {
         if (this.isAimMode && this.cueBall && !this.cueBall.pocketed) {
-          // Switching from aim to power: lock the current angle
           this.lockedAngle = this.input.getAimAngle(this.cueBall);
         }
         this.isAimMode = !this.isAimMode;
+        return;
+      }
+      if (e.code === 'Space') {
+        if (e.repeat) return;
+        if (!this.canShoot || !this.cueBall || this.cueBall.pocketed) return;
+        e.preventDefault();
+        this.spaceKeyHeld = true;
+        this.wasAimModeBeforeSpace = this.isAimMode;
+        if (this.isAimMode) {
+          this.lockedAngle = this.input.getAimAngle(this.cueBall);
+        }
+        this.isAimMode = false;
+        this.isSpacePowerMode = true;
+        this.currentPower = 0;
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      if (e.key === 'Shift') {
+        this.input.setFineAimActive(false);
+      }
+      if (e.code === 'Space') {
+        if (!this.isSpacePowerMode) {
+          this.spaceKeyHeld = false;
+          return;
+        }
+        e.preventDefault();
+        this.spaceKeyHeld = false;
+        if (this.isDraggingPower) {
+          return;
+        }
+        this.isSpacePowerMode = false;
+        this.isAimMode = this.wasAimModeBeforeSpace;
+        if (this.wasAimModeBeforeSpace) {
+          this.currentPower = 0;
+        }
       }
     });
     
@@ -316,7 +358,7 @@ export class Game {
     
     this.update(dt);
     this.render();
-    
+                          
     // Update FPS
     if (now - this.fpsTime >= 1000) {
       this.hud.updateFPS(this.fpsFrames);
@@ -337,12 +379,18 @@ export class Game {
   handlePowerBarMouseDown(e: MouseEvent) {
     if (!this.canShoot || !this.cueBall || this.cueBall.pocketed) return;
     
+    if (this.isSpacePowerMode) {
+      this.isDraggingPower = true;
+      this.powerDragStartY = e.clientY;
+      this.currentPower = CONFIG.CUE_POWER_MIN;
+      return;
+    }
+
     const bounds = this.renderer.getPowerBarBounds();
     const rect = this.input.canvas.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
     
-    // Check if clicking on power bar
     if (
       mouseX >= bounds.x &&
       mouseX <= bounds.x + bounds.width &&
@@ -359,6 +407,15 @@ export class Game {
   handlePowerBarMouseMove(e: MouseEvent) {
     if (!this.isDraggingPower) return;
     
+    if (this.isSpacePowerMode) {
+      const dragDistance = Math.abs(this.powerDragStartY - e.clientY);
+      this.currentPower = Math.max(
+        CONFIG.CUE_POWER_MIN,
+        Math.min(CONFIG.CUE_POWER_MAX, dragDistance * CONFIG.CUE_DRAG_SCALE)
+      );
+      return;
+    }
+
     const bounds = this.renderer.getPowerBarBounds();
     const rect = this.input.canvas.getBoundingClientRect();
     const mouseY = e.clientY - rect.top;
@@ -370,20 +427,31 @@ export class Game {
   
   handlePowerBarMouseUp(_e: MouseEvent) {
     if (!this.isDraggingPower) return;
-    
+
     this.isDraggingPower = false;
-    
-    // Shoot with the current power using locked angle
-    if (this.currentPower >= CONFIG.CUE_POWER_MIN && this.cueBall && !this.cueBall.pocketed) {
+
+    const canShootNow =
+      this.currentPower >= CONFIG.CUE_POWER_MIN &&
+      this.cueBall &&
+      !this.cueBall.pocketed;
+
+    if (canShootNow) {
       this.shoot(this.lockedAngle, this.currentPower);
       this.currentPower = 0;
       this.isAimMode = true; // Reset to aim mode after shooting
+    }
+
+    if (this.isSpacePowerMode && !this.spaceKeyHeld) {
+      this.isSpacePowerMode = false;
+      this.isAimMode = this.wasAimModeBeforeSpace;
+      if (this.wasAimModeBeforeSpace) {
+        this.currentPower = 0;
+      }
     }
   }
   
   handleBallDragStart(e: MouseEvent) {
     // Only in practice mode, when balls are at rest, and Shift is held
-    if (this.mode !== GameMode.PRACTICE) return;
     if (!this.canShoot) return;
     if (!e.shiftKey) return;
     if (!this.cueBall || this.cueBall.pocketed) return;

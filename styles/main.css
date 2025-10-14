@@ -277,37 +277,41 @@ button:active {
 
 .modal-content {
   background: #222;
-  padding: 30px;
-  border-radius: 8px;
-  min-width: 300px;
+  padding: 24px;
+  border-radius: 12px;
+  width: min(520px, 90vw);
+  max-height: 85vh;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 18px;
 }
 
 .modal-content h2 {
-  margin-bottom: 20px;
-  font-size: 20px;
+  margin: 0 0 8px 0;
+  font-size: 22px;
+  grid-column: 1 / -1;
 }
 
 .modal-content h3 {
-  margin: 0 0 12px 0;
-  font-size: 14px;
+  margin: 0 0 10px 0;
+  font-size: 13px;
   color: var(--active-player-color);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .settings-section {
-  margin-bottom: 24px;
-  padding-bottom: 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.settings-section:last-of-type {
-  border-bottom: none;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .modal-content label {
   display: block;
-  margin-bottom: 15px;
+  margin-bottom: 10px;
   cursor: pointer;
   font-size: 14px;
 }
@@ -317,24 +321,31 @@ button:active {
   cursor: pointer;
 }
 
+.color-settings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
 .color-setting {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
-  padding: 8px;
+  padding: 10px 12px;
   background: rgba(255, 255, 255, 0.03);
-  border-radius: 4px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .color-setting label {
   margin: 0;
-  font-size: 13px;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .color-setting input[type="color"] {
-  width: 60px;
-  height: 32px;
+  width: 48px;
+  height: 28px;
   border: 1px solid #555;
   border-radius: 4px;
   cursor: pointer;
@@ -342,8 +353,9 @@ button:active {
 }
 
 .modal-actions {
-  margin-top: 20px;
+  grid-column: 1 / -1;
+  margin-top: 4px;
   display: flex;
-  gap: 10px;
+  gap: 12px;
   justify-content: flex-end;
 }

@@ -27,6 +27,7 @@ export class Renderer3D {
   frameMesh: THREE.Mesh | null = null;
   railMeshes: THREE.Mesh[] = [];
   pocketMeshes: THREE.Mesh[] = [];
+  cornerRectangleMesh: THREE.Mesh | null = null;
   showMeasurementOverlay = false;
   
   // UI elements
@@ -120,6 +121,15 @@ export class Renderer3D {
           mat.needsUpdate = true;
         }
       });
+      
+      // Update corner rectangle fill color
+      if (this.cornerRectangleMesh) {
+        const mat = this.cornerRectangleMesh.material as THREE.MeshBasicMaterial;
+        if (mat) {
+          mat.color = new THREE.Color(CONFIG.RAIL_FILL_COLOR);
+          mat.needsUpdate = true;
+        }
+      }
     });
   }
 
@@ -454,6 +464,36 @@ export class Renderer3D {
       this.scene.add(pocketMesh);
       this.pocketMeshes.push(pocketMesh);
     });
+    
+    // Create corner pocket rectangle (between rails and pockets)
+    this.initializeCornerRectangle();
+  }
+  
+  initializeCornerRectangle() {
+    // Create a plane connecting the four corner pockets
+    const shape = new THREE.Shape();
+    shape.moveTo(-50, 25);  // NW
+    shape.lineTo(50, 25);   // NE
+    shape.lineTo(50, -25);  // SE
+    shape.lineTo(-50, -25); // SW
+    shape.closePath();
+    
+    const geometry = new THREE.ShapeGeometry(shape);
+    const material = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(CONFIG.RAIL_FILL_COLOR),
+      side: THREE.DoubleSide,
+      depthTest: true,  // Enable depth testing so it respects Z-order
+      transparent: false
+    });
+    
+    this.cornerRectangleMesh = new THREE.Mesh(geometry, material);
+    // Position below table felt
+    this.cornerRectangleMesh.position.z = -0.1; // Below table, above rails, below pockets
+    
+    // Render order: after rails but before pockets
+    this.cornerRectangleMesh.renderOrder = 500;
+    
+    this.scene.add(this.cornerRectangleMesh);
   }
   
   rotationAxis = new THREE.Vector3();
@@ -465,8 +505,12 @@ export class Renderer3D {
       const template = this.ballModels.get(ball.id);
       if (template) {
         const ballMesh = new THREE.Mesh(template.geometry, template.material);
-        ballMesh.castShadow = true;
-        ballMesh.receiveShadow = true;
+        ballMesh.castShadow = false;
+        ballMesh.receiveShadow = false;
+        
+        // Add black glow outline
+        this.addBallGlow(ballMesh, visualRadius);
+        
         this.scene.add(ballMesh);
         this.ballMeshes.set(ball.id, ballMesh);
         return ballMesh;
@@ -488,8 +532,8 @@ export class Renderer3D {
     });
     
     const mesh = new THREE.Mesh(geometry, material);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
+    mesh.castShadow = false;
+    mesh.receiveShadow = false;
     
     // Add number texture for numbered balls
     if (ball.id !== BALL_CUE) {
@@ -501,10 +545,30 @@ export class Renderer3D {
       this.addBallStripe(mesh, visualRadius);
     }
     
+    // Add black glow outline
+    this.addBallGlow(mesh, visualRadius);
+    
     this.scene.add(mesh);
     this.ballMeshes.set(ball.id, mesh);
     
     return mesh;
+  }
+  
+  addBallGlow(mesh: THREE.Mesh | THREE.Object3D, radius: number) {
+    // Create a slightly larger sphere with black outline material
+    const glowGeometry = new THREE.SphereGeometry(radius * 1.12, 32, 32);
+    const glowMaterial = new THREE.MeshBasicMaterial({
+      color: 0x000000,
+      transparent: true,
+      opacity: 0.35,
+      side: THREE.BackSide, // Render from inside so it appears as an outline
+      depthTest: true,
+      depthWrite: false
+    });
+    
+    const glowMesh = new THREE.Mesh(glowGeometry, glowMaterial);
+    glowMesh.renderOrder = -1; // Render behind the ball
+    mesh.add(glowMesh);
   }
   
   addBallNumber(mesh: THREE.Mesh, ballId: number) {
@@ -843,14 +907,29 @@ export class Renderer3D {
     this.uiCtx.lineTo(cueEnd.x, cueEnd.y);
     this.uiCtx.stroke();
     
-    // Draw aim line in 2D
-    const aimLineLength = CONFIG.AIM_LINE_LENGTH;
-    const aimEndX = ball.x + Math.cos(angle) * aimLineLength;
-    const aimEndY = ball.y + Math.sin(angle) * aimLineLength;
+    // Draw aim line in 2D - clipped to contact point or rails
+    let aimEndX = ball.x + Math.cos(angle) * CONFIG.AIM_LINE_LENGTH;
+    let aimEndY = ball.y + Math.sin(angle) * CONFIG.AIM_LINE_LENGTH;
+    
+    // If we have a prediction, stop at the contact point
+    if (prediction && prediction.type === 'ball') {
+      aimEndX = prediction.contactPoint.x;
+      aimEndY = prediction.contactPoint.y;
+    } else if (prediction && prediction.type === 'rail') {
+      aimEndX = prediction.contactPoint.x;
+      aimEndY = prediction.contactPoint.y;
+    } else {
+      // Clip to rails if no prediction
+      const aimEndRaw = { x: aimEndX, y: aimEndY };
+      const clipped = this.clipLineAtRails({ x: ball.x, y: ball.y }, aimEndRaw);
+      aimEndX = clipped.x;
+      aimEndY = clipped.y;
+    }
+    
     const aimEnd = this.worldToScreen(aimEndX, aimEndY);
     
-    this.uiCtx.strokeStyle = 'rgba(255, 255, 0, 0.6)';
-    this.uiCtx.lineWidth = 2;
+    this.uiCtx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+    this.uiCtx.lineWidth = 1;
     this.uiCtx.setLineDash([5, 5]);
     this.uiCtx.beginPath();
     this.uiCtx.moveTo(ballScreen.x, ballScreen.y);
@@ -860,14 +939,14 @@ export class Renderer3D {
     
     // Draw ghost ball in 2D if prediction exists
     if (showGhost && prediction && prediction.type === 'ball' && prediction.hitBall) {
-      // Ghost ball should be positioned where the cue ball will be at contact
-      // That's one ball radius away from the contact point, in the opposite direction of the normal
-      const ghostX = prediction.contactPoint.x - prediction.contactNormal.x * ball.radius;
-      const ghostY = prediction.contactPoint.y - prediction.contactNormal.y * ball.radius;
+      // Ghost ball center is at the contact point (where the two ball surfaces touch)
+      const ghostX = prediction.contactPoint.x;
+      const ghostY = prediction.contactPoint.y;
       const ghostScreen = this.worldToScreen(ghostX, ghostY);
       
+      // Draw ghost ball outline only (no fill)
       this.uiCtx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-      this.uiCtx.lineWidth = 2;
+      this.uiCtx.lineWidth = 1;
       this.uiCtx.beginPath();
       this.uiCtx.arc(ghostScreen.x, ghostScreen.y, ball.radius * this.scale, 0, Math.PI * 2);
       this.uiCtx.stroke();
@@ -939,91 +1018,115 @@ export class Renderer3D {
     
     // Draw object ball trajectory (yellow dashed line with arrowhead)
     if (trajectories.objectBallPath) {
-      const start = trajectories.objectBallPath.start;
-      const endRaw = trajectories.objectBallPath.end;
+      // Start from contact point (ghost ball center), not object ball position
+      const start = { x: prediction.contactPoint.x, y: prediction.contactPoint.y };
       
-      // Clip the line at table boundaries
-      const end = this.clipLineAtRails(start, endRaw);
+      // Calculate direction from trajectory data
+      const dirX = trajectories.objectBallPath.end.x - trajectories.objectBallPath.start.x;
+      const dirY = trajectories.objectBallPath.end.y - trajectories.objectBallPath.start.y;
+      const length = Math.sqrt(dirX * dirX + dirY * dirY);
       
-      const startScreen = this.worldToScreen(start.x, start.y);
-      const endScreen = this.worldToScreen(end.x, end.y);
-      
-      // Draw line
-      this.uiCtx.strokeStyle = 'rgba(255, 255, 0, 0.6)';
-      this.uiCtx.lineWidth = 2;
-      this.uiCtx.setLineDash([10, 10]);
-      this.uiCtx.beginPath();
-      this.uiCtx.moveTo(startScreen.x, startScreen.y);
-      this.uiCtx.lineTo(endScreen.x, endScreen.y);
-      this.uiCtx.stroke();
-      this.uiCtx.setLineDash([]);
-      
-      // Draw arrowhead at end
-      const dx = endScreen.x - startScreen.x;
-      const dy = endScreen.y - startScreen.y;
-      const len = Math.sqrt(dx * dx + dy * dy);
-      if (len > 0) {
-        const arrowSize = 10;
-        const angle = Math.atan2(dy, dx);
+      if (length > 0.0001) {
+        const normX = dirX / length;
+        const normY = dirY / length;
+        const lineLength = 50; // Match the length passed to predictTrajectories
+        const endRaw = { x: start.x + normX * lineLength, y: start.y + normY * lineLength };
         
-        this.uiCtx.fillStyle = 'rgba(255, 255, 0, 0.8)';
+        // Clip the line at table boundaries
+        const end = this.clipLineAtRails(start, endRaw);
+        
+        const startScreen = this.worldToScreen(start.x, start.y);
+        const endScreen = this.worldToScreen(end.x, end.y);
+        
+        // Draw line
+        this.uiCtx.strokeStyle = 'rgba(255, 255, 0, 0.6)';
+        this.uiCtx.lineWidth = 1;
+        this.uiCtx.setLineDash([10, 10]);
         this.uiCtx.beginPath();
-        this.uiCtx.moveTo(endScreen.x, endScreen.y);
-        this.uiCtx.lineTo(
-          endScreen.x - arrowSize * Math.cos(angle - Math.PI / 6),
-          endScreen.y - arrowSize * Math.sin(angle - Math.PI / 6)
-        );
-        this.uiCtx.lineTo(
-          endScreen.x - arrowSize * Math.cos(angle + Math.PI / 6),
-          endScreen.y - arrowSize * Math.sin(angle + Math.PI / 6)
-        );
-        this.uiCtx.closePath();
-        this.uiCtx.fill();
+        this.uiCtx.moveTo(startScreen.x, startScreen.y);
+        this.uiCtx.lineTo(endScreen.x, endScreen.y);
+        this.uiCtx.stroke();
+        this.uiCtx.setLineDash([]);
+        
+        // Draw arrowhead at end
+        const dx = endScreen.x - startScreen.x;
+        const dy = endScreen.y - startScreen.y;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        if (len > 0) {
+          const arrowSize = 10;
+          const angle = Math.atan2(dy, dx);
+          
+          this.uiCtx.fillStyle = 'rgba(255, 255, 0, 0.8)';
+          this.uiCtx.beginPath();
+          this.uiCtx.moveTo(endScreen.x, endScreen.y);
+          this.uiCtx.lineTo(
+            endScreen.x - arrowSize * Math.cos(angle - Math.PI / 6),
+            endScreen.y - arrowSize * Math.sin(angle - Math.PI / 6)
+          );
+          this.uiCtx.lineTo(
+            endScreen.x - arrowSize * Math.cos(angle + Math.PI / 6),
+            endScreen.y - arrowSize * Math.sin(angle + Math.PI / 6)
+          );
+          this.uiCtx.closePath();
+          this.uiCtx.fill();
+        }
       }
     }
     
     // Draw cue ball trajectory (white dashed line with arrowhead)
     if (trajectories.cueBallPath) {
-      const start = trajectories.cueBallPath.start;
-      const endRaw = trajectories.cueBallPath.end;
+      // Start from contact point (ghost ball center)
+      const start = { x: prediction.contactPoint.x, y: prediction.contactPoint.y };
       
-      // Clip the line at table boundaries
-      const end = this.clipLineAtRails(start, endRaw);
+      // Calculate direction from trajectory data
+      const dirX = trajectories.cueBallPath.end.x - trajectories.cueBallPath.start.x;
+      const dirY = trajectories.cueBallPath.end.y - trajectories.cueBallPath.start.y;
+      const length = Math.sqrt(dirX * dirX + dirY * dirY);
       
-      const startScreen = this.worldToScreen(start.x, start.y);
-      const endScreen = this.worldToScreen(end.x, end.y);
-      
-      // Draw line
-      this.uiCtx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-      this.uiCtx.lineWidth = 2;
-      this.uiCtx.setLineDash([10, 10]);
-      this.uiCtx.beginPath();
-      this.uiCtx.moveTo(startScreen.x, startScreen.y);
-      this.uiCtx.lineTo(endScreen.x, endScreen.y);
-      this.uiCtx.stroke();
-      this.uiCtx.setLineDash([]);
-      
-      // Draw arrowhead at end
-      const dx = endScreen.x - startScreen.x;
-      const dy = endScreen.y - startScreen.y;
-      const len = Math.sqrt(dx * dx + dy * dy);
-      if (len > 0) {
-        const arrowSize = 10;
-        const angle = Math.atan2(dy, dx);
+      if (length > 0.0001) {
+        const normX = dirX / length;
+        const normY = dirY / length;
+        const lineLength = 50; // Match the length passed to predictTrajectories
+        const endRaw = { x: start.x + normX * lineLength, y: start.y + normY * lineLength };
         
-        this.uiCtx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        // Clip the line at table boundaries
+        const end = this.clipLineAtRails(start, endRaw);
+        
+        const startScreen = this.worldToScreen(start.x, start.y);
+        const endScreen = this.worldToScreen(end.x, end.y);
+        
+        // Draw line
+        this.uiCtx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        this.uiCtx.lineWidth = 1;
+        this.uiCtx.setLineDash([10, 10]);
         this.uiCtx.beginPath();
-        this.uiCtx.moveTo(endScreen.x, endScreen.y);
-        this.uiCtx.lineTo(
-          endScreen.x - arrowSize * Math.cos(angle - Math.PI / 6),
-          endScreen.y - arrowSize * Math.sin(angle - Math.PI / 6)
-        );
-        this.uiCtx.lineTo(
-          endScreen.x - arrowSize * Math.cos(angle + Math.PI / 6),
-          endScreen.y - arrowSize * Math.sin(angle + Math.PI / 6)
-        );
-        this.uiCtx.closePath();
-        this.uiCtx.fill();
+        this.uiCtx.moveTo(startScreen.x, startScreen.y);
+        this.uiCtx.lineTo(endScreen.x, endScreen.y);
+        this.uiCtx.stroke();
+        this.uiCtx.setLineDash([]);
+        
+        // Draw arrowhead at end
+        const dx = endScreen.x - startScreen.x;
+        const dy = endScreen.y - startScreen.y;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        if (len > 0) {
+          const arrowSize = 10;
+          const angle = Math.atan2(dy, dx);
+          
+          this.uiCtx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+          this.uiCtx.beginPath();
+          this.uiCtx.moveTo(endScreen.x, endScreen.y);
+          this.uiCtx.lineTo(
+            endScreen.x - arrowSize * Math.cos(angle - Math.PI / 6),
+            endScreen.y - arrowSize * Math.sin(angle - Math.PI / 6)
+          );
+          this.uiCtx.lineTo(
+            endScreen.x - arrowSize * Math.cos(angle + Math.PI / 6),
+            endScreen.y - arrowSize * Math.sin(angle + Math.PI / 6)
+          );
+          this.uiCtx.closePath();
+          this.uiCtx.fill();
+        }
       }
     }
   }

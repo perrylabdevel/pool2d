@@ -36,12 +36,14 @@ export const CONFIG = {
   CUE_DRAG_SCALE: 0.08, // Power buildup rate
   AIM_LINE_LENGTH: 20,
   GHOST_LINE_LENGTH: 30,
+  FINE_AIM_SENSITIVITY: 0.1,
   
   // Rendering
   CANVAS_SCALE: 8, // Pixels per game unit
   TABLE_COLOR: '#0a5f0a',
   FRAME_COLOR: '#3d2413',
   RAIL_COLOR: '#2d1810',
+  RAIL_FILL_COLOR: '#000000', // Fill color for area between corner pockets
   POCKET_COLOR: '#000000',
   CUE_BALL_COLOR: '#ffffff',
   BALL_COLORS: [

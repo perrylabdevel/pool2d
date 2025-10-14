@@ -11,6 +11,7 @@ export interface UIColors {
   tableColor: string;
   frameColor: string;
   railColor: string;
+  railFillColor: string;
   activePlayerColor: string;
   turnIndicatorColor: string;
 }
@@ -43,6 +44,7 @@ const DEFAULT_UI_COLORS: UIColors = {
   tableColor: '#0a5f0a',
   frameColor: '#3d2413',
   railColor: '#2d1810',
+  railFillColor: '#000000',
   activePlayerColor: '#4CAF50',
   turnIndicatorColor: '#FFC107',
 };
@@ -142,6 +144,7 @@ export class SettingsManager {
     CONFIG.TABLE_COLOR = this.uiColors.tableColor;
     CONFIG.FRAME_COLOR = this.uiColors.frameColor;
     CONFIG.RAIL_COLOR = this.uiColors.railColor;
+    CONFIG.RAIL_FILL_COLOR = this.uiColors.railFillColor;
 
     // Update CSS variables for UI elements
     const root = document.documentElement;

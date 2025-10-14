@@ -11,6 +11,9 @@ export class InputManager {
   // Mouse state
   mouseX: number = 0;
   mouseY: number = 0;
+  mouseTargetX: number = 0;
+  mouseTargetY: number = 0;
+  fineAimActive: boolean = false;
   
   // Power bar state
   isDraggingPowerBar: boolean = false;
@@ -63,8 +66,16 @@ export class InputManager {
   
   handleMouseMove(e: MouseEvent) {
     const pos = this.screenToGame(e.clientX, e.clientY);
-    this.mouseX = pos.x;
-    this.mouseY = pos.y;
+    this.mouseTargetX = pos.x;
+    this.mouseTargetY = pos.y;
+    if (this.fineAimActive) {
+      const factor = CONFIG.FINE_AIM_SENSITIVITY;
+      this.mouseX += (this.mouseTargetX - this.mouseX) * factor;
+      this.mouseY += (this.mouseTargetY - this.mouseY) * factor;
+    } else {
+      this.mouseX = this.mouseTargetX;
+      this.mouseY = this.mouseTargetY;
+    }
   }
   
   handleMouseUp(_e: MouseEvent) {
@@ -83,8 +94,10 @@ export class InputManager {
     if (e.touches.length > 0) {
       const touch = e.touches[0];
       const pos = this.screenToGame(touch.clientX, touch.clientY);
-      this.mouseX = pos.x;
-      this.mouseY = pos.y;
+      this.mouseTargetX = pos.x;
+      this.mouseTargetY = pos.y;
+      this.mouseX = this.mouseTargetX;
+      this.mouseY = this.mouseTargetY;
     }
   }
   
@@ -111,5 +124,13 @@ export class InputManager {
     
     const distance = Math.abs(this.powerBarDragStart - currentScreenY);
     return Math.min(CONFIG.CUE_POWER_MAX, distance * 0.1);
+  }
+
+  setFineAimActive(active: boolean) {
+    this.fineAimActive = active;
+    if (!active) {
+      this.mouseX = this.mouseTargetX;
+      this.mouseY = this.mouseTargetY;
+    }
   }
 }

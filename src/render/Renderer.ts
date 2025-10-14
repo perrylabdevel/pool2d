@@ -316,6 +316,11 @@ export class Renderer {
     const y = ball.y;
     const dx = Math.cos(angle);
     const dy = Math.sin(angle);
+    // Ghost ball center is the contact point for ball collisions
+    let ghostCenter: Vec2 | null = null;
+    if (prediction && prediction.type === 'ball') {
+      ghostCenter = { x: prediction.contactPoint.x, y: prediction.contactPoint.y };
+    }
     
     // Cue stick (behind the ball, opposite to shot direction)
     const cueStart = ball.radius + 1;
@@ -331,31 +336,37 @@ export class Renderer {
     this.ctx.stroke();
     
     // Aim line - always stop at contact point (ball or rail) if prediction exists
-    const aimEndX = (prediction && (prediction.type === 'ball' || prediction.type === 'rail')) 
-      ? prediction.contactPoint.x 
-      : x + dx * CONFIG.AIM_LINE_LENGTH;
-    const aimEndY = (prediction && (prediction.type === 'ball' || prediction.type === 'rail')) 
-      ? prediction.contactPoint.y 
-      : y + dy * CONFIG.AIM_LINE_LENGTH;
-    
+    const aimStart = { x, y };
+    let aimRawEnd = { x: x + dx * CONFIG.AIM_LINE_LENGTH, y: y + dy * CONFIG.AIM_LINE_LENGTH };
+    if (prediction) {
+      if (prediction.type === 'ball' && ghostCenter) {
+        aimRawEnd = ghostCenter;
+      } else if (prediction.type === 'rail') {
+        aimRawEnd = { x: prediction.contactPoint.x, y: prediction.contactPoint.y };
+      }
+    }
+    const aimEnd = this.clampSegmentToPlayArea(aimStart, aimRawEnd);
+    const aimStrokeWidth = 1 / this.scale;
+    const aimDash = 6 / this.scale;
     this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-    this.ctx.lineWidth = 0.1;
-    this.ctx.setLineDash([0.5, 0.5]);
+    this.ctx.lineWidth = aimStrokeWidth;
+    this.ctx.lineCap = 'round';
+    this.ctx.setLineDash([aimDash, aimDash]);
     this.ctx.beginPath();
-    this.ctx.moveTo(x, y);
-    this.ctx.lineTo(aimEndX, aimEndY);
+    this.ctx.moveTo(aimStart.x, aimStart.y);
+    this.ctx.lineTo(aimEnd.x, aimEnd.y);
     this.ctx.stroke();
     this.ctx.setLineDash([]);
     
     // Ghost ball at predicted contact point
-    if (showGhost && prediction && prediction.type === 'ball') {
-      const ghostX = prediction.contactPoint.x;
-      const ghostY = prediction.contactPoint.y;
+    if (showGhost && prediction && prediction.type === 'ball' && ghostCenter) {
+      const ghostX = ghostCenter.x;
+      const ghostY = ghostCenter.y;
       
       // Draw semi-transparent ghost ball
       this.ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
       this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-      this.ctx.lineWidth = 0.1;
+      this.ctx.lineWidth = aimStrokeWidth;
       this.ctx.beginPath();
       this.ctx.arc(ghostX, ghostY, ball.radius, 0, Math.PI * 2);
       this.ctx.fill();
@@ -391,85 +402,151 @@ export class Renderer {
       15 // Line length in inches
     );
     
-    // Draw object ball trajectory (yellow dashed line with arrowhead)
-    if (trajectories.objectBallPath) {
-      const start = trajectories.objectBallPath.start;
-      const end = trajectories.objectBallPath.end;
-      
-      // Draw line
-      this.ctx.strokeStyle = 'rgba(255, 255, 0, 0.6)';
-      this.ctx.lineWidth = 0.1;
-      this.ctx.setLineDash([1, 1]);
+    const strokeWidth = 1 / this.scale;
+    const dashLength = 6 / this.scale;
+    const arrowLength = 8 / this.scale;
+    
+    // Ghost center is where the cue ball contacts the object ball
+    // For ball collisions, this is the contact point (between the two ball surfaces)
+    const ghostCenter = { x: prediction.contactPoint.x, y: prediction.contactPoint.y };
+
+    const drawClampedLine = (start: Vec2, end: Vec2, color: string) => {
+      const clampedEnd = this.clampSegmentToPlayArea(start, end);
+      if (!clampedEnd) {
+        return { drew: false, end, length: 0, dirX: 0, dirY: 0 };
+      }
+      const dirX = clampedEnd.x - start.x;
+      const dirY = clampedEnd.y - start.y;
+      const length = Math.sqrt(dirX * dirX + dirY * dirY);
+      if (length <= 0.0001) {
+        return { drew: false, end: clampedEnd, length: 0, dirX: 0, dirY: 0 };
+      }
+      this.ctx.strokeStyle = color;
+      this.ctx.lineWidth = strokeWidth;
+      this.ctx.lineCap = 'round';
+      this.ctx.setLineDash([dashLength, dashLength]);
       this.ctx.beginPath();
       this.ctx.moveTo(start.x, start.y);
-      this.ctx.lineTo(end.x, end.y);
+      this.ctx.lineTo(clampedEnd.x, clampedEnd.y);
       this.ctx.stroke();
       this.ctx.setLineDash([]);
-      
-      // Draw arrowhead at end
-      const dx = end.x - start.x;
-      const dy = end.y - start.y;
-      const len = Math.sqrt(dx * dx + dy * dy);
-      if (len > 0) {
-        const arrowSize = 1.5;
-        const angle = Math.atan2(dy, dx);
-        
-        this.ctx.fillStyle = 'rgba(255, 255, 0, 0.8)';
-        this.ctx.beginPath();
-        this.ctx.moveTo(end.x, end.y);
-        this.ctx.lineTo(
-          end.x - arrowSize * Math.cos(angle - Math.PI / 6),
-          end.y - arrowSize * Math.sin(angle - Math.PI / 6)
-        );
-        this.ctx.lineTo(
-          end.x - arrowSize * Math.cos(angle + Math.PI / 6),
-          end.y - arrowSize * Math.sin(angle + Math.PI / 6)
-        );
-        this.ctx.closePath();
-        this.ctx.fill();
+      return { drew: true, end: clampedEnd, length, dirX, dirY };
+    };
+
+    const drawArrow = (end: Vec2, dirX: number, dirY: number, color: string) => {
+      const length = Math.sqrt(dirX * dirX + dirY * dirY);
+      if (length <= arrowLength * 1.5) return;
+      const normX = dirX / length;
+      const normY = dirY / length;
+      const baseX = end.x - normX * arrowLength;
+      const baseY = end.y - normY * arrowLength;
+      const leftX = baseX + (-normY) * (arrowLength * 0.5);
+      const leftY = baseY + normX * (arrowLength * 0.5);
+      const rightX = baseX - (-normY) * (arrowLength * 0.5);
+      const rightY = baseY - normX * (arrowLength * 0.5);
+      this.ctx.fillStyle = color;
+      this.ctx.beginPath();
+      this.ctx.moveTo(end.x, end.y);
+      this.ctx.lineTo(leftX, leftY);
+      this.ctx.lineTo(rightX, rightY);
+      this.ctx.closePath();
+      this.ctx.fill();
+    };
+
+    // Draw object ball trajectory (yellow dashed line with arrowhead)
+    // Direction: from contact point toward where object ball will travel
+    if (trajectories.objectBallPath) {
+      const dirX = trajectories.objectBallPath.end.x - trajectories.objectBallPath.start.x;
+      const dirY = trajectories.objectBallPath.end.y - trajectories.objectBallPath.start.y;
+      const length = Math.sqrt(dirX * dirX + dirY * dirY);
+      if (length > 0.0001) {
+        const normX = dirX / length;
+        const normY = dirY / length;
+        const lineLength = 15; // Match the length passed to predictTrajectories
+        const start = ghostCenter;
+        const end = { x: start.x + normX * lineLength, y: start.y + normY * lineLength };
+        const result = drawClampedLine(start, end, 'rgba(255, 255, 0, 0.6)');
+        if (result.drew && result.length > 0) {
+          drawArrow(result.end, result.dirX, result.dirY, 'rgba(255, 255, 0, 0.8)');
+        }
       }
     }
     
     // Draw cue ball trajectory (white dashed line with arrowhead)
+    // Direction: from contact point toward where cue ball will deflect
     if (trajectories.cueBallPath) {
-      const start = trajectories.cueBallPath.start;
-      const end = trajectories.cueBallPath.end;
-      
-      // Draw line
-      this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-      this.ctx.lineWidth = 0.1;
-      this.ctx.setLineDash([1, 1]);
-      this.ctx.beginPath();
-      this.ctx.moveTo(start.x, start.y);
-      this.ctx.lineTo(end.x, end.y);
-      this.ctx.stroke();
-      this.ctx.setLineDash([]);
-      
-      // Draw arrowhead at end
-      const dx = end.x - start.x;
-      const dy = end.y - start.y;
-      const len = Math.sqrt(dx * dx + dy * dy);
-      if (len > 0) {
-        const arrowSize = 1.5;
-        const angle = Math.atan2(dy, dx);
-        
-        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-        this.ctx.beginPath();
-        this.ctx.moveTo(end.x, end.y);
-        this.ctx.lineTo(
-          end.x - arrowSize * Math.cos(angle - Math.PI / 6),
-          end.y - arrowSize * Math.sin(angle - Math.PI / 6)
-        );
-        this.ctx.lineTo(
-          end.x - arrowSize * Math.cos(angle + Math.PI / 6),
-          end.y - arrowSize * Math.sin(angle + Math.PI / 6)
-        );
-        this.ctx.closePath();
-        this.ctx.fill();
+      const dirX = trajectories.cueBallPath.end.x - trajectories.cueBallPath.start.x;
+      const dirY = trajectories.cueBallPath.end.y - trajectories.cueBallPath.start.y;
+      const length = Math.sqrt(dirX * dirX + dirY * dirY);
+      if (length > 0.0001) {
+        const normX = dirX / length;
+        const normY = dirY / length;
+        const lineLength = 15; // Match the length passed to predictTrajectories
+        const start = ghostCenter;
+        const end = { x: start.x + normX * lineLength, y: start.y + normY * lineLength };
+        const result = drawClampedLine(start, end, 'rgba(255, 255, 255, 0.5)');
+        if (result.drew && result.length > 0) {
+          drawArrow(result.end, result.dirX, result.dirY, 'rgba(255, 255, 255, 0.7)');
+        }
       }
     }
     
     this.ctx.restore();
+  }
+
+  private clampSegmentToPlayArea(start: Vec2, end: Vec2): Vec2 {
+    if (this.isPointInsidePlayArea(end)) {
+      return end;
+    }
+    const intersection = this.intersectSegmentWithBoundary(start, end);
+    return intersection ?? end;
+  }
+
+  private isPointInsidePlayArea(point: Vec2): boolean {
+    const boundary = this.playBoundaryPoints;
+    if (boundary.length < 3) return true;
+    let inside = false;
+    for (let i = 0, j = boundary.length - 1; i < boundary.length; j = i++) {
+      const xi = boundary[i].x;
+      const yi = boundary[i].y;
+      const xj = boundary[j].x;
+      const yj = boundary[j].y;
+      const intersect = (yi > point.y) !== (yj > point.y) &&
+        point.x < ((xj - xi) * (point.y - yi)) / (yj - yi + 1e-9) + xi;
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+
+  private intersectSegmentWithBoundary(start: Vec2, end: Vec2): Vec2 | null {
+    const boundary = this.playBoundaryPoints;
+    if (boundary.length < 2) return null;
+    let closestT = Infinity;
+    let closestPoint: Vec2 | null = null;
+    const dirX = end.x - start.x;
+    const dirY = end.y - start.y;
+    for (let i = 0; i < boundary.length; i++) {
+      const a = boundary[i];
+      const b = boundary[(i + 1) % boundary.length];
+      const edgeX = b.x - a.x;
+      const edgeY = b.y - a.y;
+      const denom = dirX * (-edgeY) + dirY * edgeX;
+      if (Math.abs(denom) < 1e-9) continue;
+      const diffX = start.x - a.x;
+      const diffY = start.y - a.y;
+      const t = (diffX * (-edgeY) + diffY * edgeX) / denom;
+      const u = (diffX * dirY - diffY * dirX) / denom;
+      if (t > 0 && t <= 1 && u >= 0 && u <= 1) {
+        if (t < closestT) {
+          closestT = t;
+          closestPoint = {
+            x: start.x + dirX * t,
+            y: start.y + dirY * t,
+          };
+        }
+      }
+    }
+    return closestPoint;
   }
   
   lightenColor(color: string, amount: number): string {

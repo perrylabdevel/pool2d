@@ -76,54 +76,6 @@ export function computeBoundaryBounds(points: Vec2[]): BoundaryBounds {
 }
 
 // 9-ft table geometry (100" x 50" play area)
-// --- Derived jaw geometry helpers (side pockets) ---
-const PLAY_HALF_W_IN = 100.0 / 2;
-const PLAY_HALF_H_IN = 50.0 / 2;
-
-// Reference outer-rectangle offset (matches renderer frame width)
-const FRAME_OFFSET_IN = 4.0;
-// Jaw reference radius used to derive jaw angle vs the outer rectangle
-// Larger radius widens the jaw opening; must be >= FRAME_OFFSET_IN to intersect
-const JAW_REF_RADIUS_IN = 4.0;
-
-// Existing felt straight and inner throat Y-levels for north/south
-const Y_N_PLAY = PLAY_HALF_H_IN;        // 25.0
-const Y_S_PLAY = -PLAY_HALF_H_IN;       // -25.0
-const Y_N_STRAIGHT = 23.5;              // existing straight rail y (north)
-const Y_S_STRAIGHT = -23.5;             // existing straight rail y (south)
-const Y_N_INNER = 24.6;                 // inner throat y (north)
-const Y_S_INNER = -24.6;                // inner throat y (south)
-
-// Outer rectangle top/bottom used to derive jaw angle
-const Y_RECT_TOP = Y_N_PLAY + FRAME_OFFSET_IN;   // 29.0
-const Y_RECT_BOTTOM = Y_S_PLAY - FRAME_OFFSET_IN; // -29.0
-
-function deriveSideJawXMagnitudes(): { xOuter: number; xInner: number } {
-  const dTop = Y_RECT_TOP - Y_N_PLAY; // FRAME_OFFSET_IN
-  const r = JAW_REF_RADIUS_IN;
-  const under = Math.max(0, r * r - dTop * dTop);
-  const xi = Math.sqrt(under);
-
-  // Fallback to current geometry if no intersection
-  if (!(xi > 1e-6)) {
-    return { xOuter: 6.0, xInner: 2.5 };
-  }
-
-  // Line from pocket center C to (±xi, Y_RECT_TOP):
-  // Param L(s) = C + s * (dx, dy) with dx=±xi, dy=dTop
-  const sStraight = (Y_N_STRAIGHT - Y_N_PLAY) / dTop; // negative
-  const sInner = (Y_N_INNER - Y_N_PLAY) / dTop;       // negative
-
-  const xOuter = Math.abs(sStraight * xi);
-  const xInner = Math.abs(sInner * xi);
-  // Guard against degenerate values
-  const xOuterClamped = Number.isFinite(xOuter) && xOuter > 0.01 ? xOuter : 6.0;
-  const xInnerClamped = Number.isFinite(xInner) && xInner > 0.01 ? xInner : 2.5;
-  return { xOuter: xOuterClamped, xInner: xInnerClamped };
-}
-
-const { xOuter: JAW_X_OUTER, xInner: JAW_X_INNER } = deriveSideJawXMagnitudes();
-
 export const TABLE_GEOMETRY: TableGeometry = {
   playWidthIn: 100.0,
   playHeightIn: 50.0,
@@ -141,38 +93,38 @@ export const TABLE_GEOMETRY: TableGeometry = {
     },
     {
       id: 'N_west_straight',
-      from: { x: -46.0, y: Y_N_STRAIGHT },
-      to: { x: -JAW_X_OUTER, y: Y_N_STRAIGHT },
+      from: { x: -46.0, y: 23.5 },
+      to: { x: -6.0, y: 23.5 },
       normal: { x: 0, y: -1 }
     },
     {
       id: 'N_left_throat_outer',
-      from: { x: -JAW_X_OUTER, y: Y_N_STRAIGHT },
-      to: { x: -JAW_X_INNER, y: Y_N_INNER },
+      from: { x: -6.0, y: 23.5 },
+      to: { x: -2.5, y: 24.6 },
       normal: { x: 0, y: -1 }
     },
     {
       id: 'N_left_throat_inner',
-      from: { x: -JAW_X_INNER, y: Y_N_INNER },
-      to: { x: 0.0, y: Y_N_PLAY },
+      from: { x: -2.5, y: 24.6 },
+      to: { x: 0.0, y: 25.0 },
       normal: { x: 0, y: -1 }
     },
     {
       id: 'N_right_throat_inner',
-      from: { x: 0.0, y: Y_N_PLAY },
-      to: { x: JAW_X_INNER, y: Y_N_INNER },
+      from: { x: 0.0, y: 25.0 },
+      to: { x: 2.5, y: 24.6 },
       normal: { x: 0, y: -1 }
     },
     {
       id: 'N_right_throat_outer',
-      from: { x: JAW_X_INNER, y: Y_N_INNER },
-      to: { x: JAW_X_OUTER, y: Y_N_STRAIGHT },
+      from: { x: 2.5, y: 24.6 },
+      to: { x: 6.0, y: 23.5 },
       normal: { x: 0, y: -1 }
     },
     {
       id: 'N_east_straight',
-      from: { x: JAW_X_OUTER, y: Y_N_STRAIGHT },
-      to: { x: 46.0, y: Y_N_STRAIGHT },
+      from: { x: 6.0, y: 23.5 },
+      to: { x: 46.0, y: 23.5 },
       normal: { x: 0, y: -1 }
     },
     {
@@ -207,38 +159,38 @@ export const TABLE_GEOMETRY: TableGeometry = {
     },
     {
       id: 'S_east_straight',
-      from: { x: 46.0, y: Y_S_STRAIGHT },
-      to: { x: JAW_X_OUTER, y: Y_S_STRAIGHT },
+      from: { x: 46.0, y: -23.5 },
+      to: { x: 6.0, y: -23.5 },
       normal: { x: 0, y: 1 }
     },
     {
       id: 'S_right_throat_outer',
-      from: { x: JAW_X_OUTER, y: Y_S_STRAIGHT },
-      to: { x: JAW_X_INNER, y: Y_S_INNER },
+      from: { x: 6.0, y: -23.5 },
+      to: { x: 2.5, y: -24.6 },
       normal: { x: 0, y: 1 }
     },
     {
       id: 'S_right_throat_inner',
-      from: { x: JAW_X_INNER, y: Y_S_INNER },
-      to: { x: 0.0, y: Y_S_PLAY },
+      from: { x: 2.5, y: -24.6 },
+      to: { x: 0.0, y: -25.0 },
       normal: { x: 0, y: 1 }
     },
     {
       id: 'S_left_throat_inner',
-      from: { x: 0.0, y: Y_S_PLAY },
-      to: { x: -JAW_X_INNER, y: Y_S_INNER },
+      from: { x: 0.0, y: -25.0 },
+      to: { x: -2.5, y: -24.6 },
       normal: { x: 0, y: 1 }
     },
     {
       id: 'S_left_throat_outer',
-      from: { x: -JAW_X_INNER, y: Y_S_INNER },
-      to: { x: -JAW_X_OUTER, y: Y_S_STRAIGHT },
+      from: { x: -2.5, y: -24.6 },
+      to: { x: -6.0, y: -23.5 },
       normal: { x: 0, y: 1 }
     },
     {
       id: 'S_west_straight',
-      from: { x: -JAW_X_OUTER, y: Y_S_STRAIGHT },
-      to: { x: -46.0, y: Y_S_STRAIGHT },
+      from: { x: -6.0, y: -23.5 },
+      to: { x: -46.0, y: -23.5 },
       normal: { x: 0, y: 1 }
     },
     {
