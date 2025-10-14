@@ -1092,6 +1092,7 @@ export class Renderer3D {
   drawTrajectoryLines(
     prediction: PredictionResult,
     cueBallPos: { x: number; y: number },
+    shotDirection: { x: number; y: number },
     preview?: ShotPreviewPaths
   ) {
     // Clear old 3D trajectory lines
@@ -1117,7 +1118,17 @@ export class Renderer3D {
       const drawPath = (points: { x: number; y: number }[], strokeStyle: string, arrowFill: string) => {
         if (!points || points.length < 2) return;
 
-        const sampled = points.filter((_, index) => index === 0 || index % 2 === 0);
+        const sampled: { x: number; y: number }[] = [];
+        for (let i = 0; i < points.length; i++) {
+          if (i === 0 || i === points.length - 1 || i % 2 === 0) {
+            sampled.push(points[i]);
+          }
+        }
+
+        if (sampled.length === 1 && points.length >= 2) {
+          sampled.push(points[points.length - 1]);
+        }
+
         if (sampled.length < 2) return;
 
         this.uiCtx.strokeStyle = strokeStyle;
@@ -1184,7 +1195,17 @@ export class Renderer3D {
         return trimmed;
       };
 
-      const cuePath = trimPathFromContact(preview.cuePath, prediction.contactPoint);
+      let cuePath = trimPathFromContact(preview.cuePath, prediction.contactPoint);
+      if (cuePath.length < 2) {
+        const fallbackDistance = 6;
+        cuePath = [
+          { x: prediction.contactPoint.x, y: prediction.contactPoint.y },
+          {
+            x: prediction.contactPoint.x + shotDirection.x * fallbackDistance,
+            y: prediction.contactPoint.y + shotDirection.y * fallbackDistance,
+          },
+        ];
+      }
       if (cuePath.length > 1) {
         const cueStroke = prediction.type === 'rail' ? 'rgba(0, 255, 255, 0.4)' : 'rgba(255, 255, 255, 0.5)';
         const cueArrow = prediction.type === 'rail' ? 'rgba(0, 255, 255, 0.6)' : 'rgba(255, 255, 255, 0.7)';
@@ -1192,7 +1213,17 @@ export class Renderer3D {
       }
 
       if (prediction.type === 'ball' && prediction.hitBall) {
-        const objectPath = preview.objectPaths.get(prediction.hitBall.id);
+        let objectPath = preview.objectPaths.get(prediction.hitBall.id);
+        if (!objectPath || objectPath.length < 2) {
+          const fallbackDistance = 12;
+          objectPath = [
+            { x: prediction.hitBall.x, y: prediction.hitBall.y },
+            {
+              x: prediction.hitBall.x + prediction.contactNormal.x * fallbackDistance,
+              y: prediction.hitBall.y + prediction.contactNormal.y * fallbackDistance,
+            },
+          ];
+        }
         if (objectPath && objectPath.length > 0) {
           drawPath(objectPath, 'rgba(255, 255, 0, 0.6)', 'rgba(255, 255, 0, 0.8)');
         }

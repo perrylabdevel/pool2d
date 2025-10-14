@@ -410,6 +410,7 @@ export class Game {
         this.renderer.drawTrajectoryLines(
           prediction,
           { x: this.cueBall.x, y: this.cueBall.y },
+          direction,
           preview ?? undefined
         );
       }
