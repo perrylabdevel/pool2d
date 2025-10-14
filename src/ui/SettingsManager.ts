@@ -9,6 +9,7 @@ export interface GameSettings {
 
 export interface UIColors {
   tableColor: string;
+  frameColor: string;
   railColor: string;
   activePlayerColor: string;
   turnIndicatorColor: string;
@@ -40,6 +41,7 @@ const DEFAULT_GAME_SETTINGS: GameSettings = {
 
 const DEFAULT_UI_COLORS: UIColors = {
   tableColor: '#0a5f0a',
+  frameColor: '#3d2413',
   railColor: '#2d1810',
   activePlayerColor: '#4CAF50',
   turnIndicatorColor: '#FFC107',
@@ -138,6 +140,7 @@ export class SettingsManager {
   private applyUIColors() {
     // Update CONFIG for rendering
     CONFIG.TABLE_COLOR = this.uiColors.tableColor;
+    CONFIG.FRAME_COLOR = this.uiColors.frameColor;
     CONFIG.RAIL_COLOR = this.uiColors.railColor;
 
     // Update CSS variables for UI elements

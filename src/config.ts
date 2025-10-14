@@ -40,6 +40,7 @@ export const CONFIG = {
   // Rendering
   CANVAS_SCALE: 8, // Pixels per game unit
   TABLE_COLOR: '#0a5f0a',
+  FRAME_COLOR: '#3d2413',
   RAIL_COLOR: '#2d1810',
   POCKET_COLOR: '#000000',
   CUE_BALL_COLOR: '#ffffff',

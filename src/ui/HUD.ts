@@ -93,6 +93,14 @@ export class HUD {
       this.settingsManager.saveUIColors({ railColor: color });
     });
 
+    const frameColorInput = document.getElementById('frame-color') as HTMLInputElement;
+    if (frameColorInput) {
+      frameColorInput.addEventListener('input', (e) => {
+        const color = (e.target as HTMLInputElement).value;
+        this.settingsManager.saveUIColors({ frameColor: color });
+      });
+    }
+
     const activePlayerColorInput = document.getElementById('active-player-color') as HTMLInputElement;
     activePlayerColorInput.addEventListener('input', (e) => {
       const color = (e.target as HTMLInputElement).value;
@@ -137,6 +145,9 @@ export class HUD {
 
     const railColorInput = document.getElementById('rail-color') as HTMLInputElement;
     if (railColorInput) railColorInput.value = uiColors.railColor;
+
+    const frameColorInput = document.getElementById('frame-color') as HTMLInputElement;
+    if (frameColorInput) frameColorInput.value = uiColors.frameColor;
 
     const activePlayerColorInput = document.getElementById('active-player-color') as HTMLInputElement;
     if (activePlayerColorInput) activePlayerColorInput.value = uiColors.activePlayerColor;

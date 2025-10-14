@@ -102,6 +102,25 @@ export class Renderer3D {
 
     // Load FBX ball models (async)
     this.loadBallModels();
+
+    // React to UI color changes without rebuilding geometry
+    window.addEventListener('settings:colors-changed', () => {
+      if (this.tableMesh && this.tableMesh.material instanceof THREE.MeshStandardMaterial) {
+        this.tableMesh.material.color = new THREE.Color(CONFIG.TABLE_COLOR);
+        this.tableMesh.material.needsUpdate = true;
+      }
+      if (this.frameMesh && this.frameMesh.material instanceof THREE.MeshStandardMaterial) {
+        this.frameMesh.material.color = new THREE.Color(CONFIG.FRAME_COLOR);
+        this.frameMesh.material.needsUpdate = true;
+      }
+      this.railMeshes.forEach((m) => {
+        const mat = m.material as THREE.MeshStandardMaterial;
+        if (mat) {
+          mat.color = new THREE.Color(CONFIG.RAIL_COLOR);
+          mat.needsUpdate = true;
+        }
+      });
+    });
   }
 
   updateLoadingText(text: string) {
@@ -325,7 +344,7 @@ export class Renderer3D {
     // Wooden frame as shape with hole matching play surface
     const frameWidth = 4;
     const frameMaterial = new THREE.MeshStandardMaterial({
-      color: 0x3d2413,
+      color: new THREE.Color(CONFIG.FRAME_COLOR),
       roughness: 0.6,
       metalness: 0.2,
       side: THREE.DoubleSide
