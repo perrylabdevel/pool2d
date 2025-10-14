@@ -6,7 +6,7 @@ import { Ball, Rail, Pocket } from '../physics/Shapes';
 import { PhysicsWorld } from '../physics/Physics';
 import { CONFIG, BALL_CUE } from '../config';
 import { TABLE_GEOMETRY } from '../geometry/Geometry';
-import { PredictionResult } from '../physics/Prediction';
+import { PredictionResult, ShotPreviewPaths } from '../physics/Prediction';
 
 export class Renderer {
   canvas: HTMLCanvasElement;
@@ -69,8 +69,8 @@ export class Renderer {
     
     // Draw in correct order: bottom to top
     this.drawPlayingSurface();
-    this.drawRails(world.rails);
     this.drawFrame();
+    this.drawRails(world.rails);
     this.drawPockets(world.pockets);
     this.drawBalls(world.balls, alpha);
     
@@ -128,7 +128,20 @@ export class Renderer {
   }
   
   drawRails(rails: Rail[]) {
-    rails.forEach((rail) => this.drawRail(rail));
+    // Group rails by cushion ID to draw complete polygons
+    const cushionMap = new Map<string, Rail[]>();
+
+    rails.forEach((rail) => {
+      if (!cushionMap.has(rail.cushionId)) {
+        cushionMap.set(rail.cushionId, []);
+      }
+      cushionMap.get(rail.cushionId)!.push(rail);
+    });
+
+    // Draw each cushion as a filled polygon
+    cushionMap.forEach((railSegments, cushionId) => {
+      this.drawCushionPolygon(railSegments, cushionId);
+    });
   }
   
   drawBalls(balls: Ball[], alpha: number) {
@@ -139,25 +152,73 @@ export class Renderer {
     });
   }
   
-  drawRail(rail: Rail) {
-    // Draw simple cushion with consistent thickness
-    this.ctx.strokeStyle = '#0d3d0d';
-    this.ctx.lineWidth = CONFIG.RAIL_THICKNESS * 2;
-    this.ctx.lineCap = 'butt';
-    
+  drawCushionPolygon(railSegments: Rail[], cushionId: string) {
+    if (railSegments.length === 0) return;
+
+    // Extract polygon vertices from rail segments
+    // Each rail segment contributes its first point; the last point closes the loop
+    const vertices: { x: number; y: number }[] = [];
+
+    // Sort segments to form a continuous polygon (they should already be in order)
+    railSegments.forEach((rail) => {
+      vertices.push({ x: rail.x1, y: rail.y1 });
+    });
+
+    if (vertices.length < 3) return; // Need at least 3 points for a polygon
+
+    // Draw filled cushion polygon
+    this.ctx.fillStyle = '#0d3d0d'; // Dark green cushion color
     this.ctx.beginPath();
-    this.ctx.moveTo(rail.x1, rail.y1);
-    this.ctx.lineTo(rail.x2, rail.y2);
-    this.ctx.stroke();
-    
-    // Add inner highlight
+    this.ctx.moveTo(vertices[0].x, vertices[0].y);
+    for (let i = 1; i < vertices.length; i++) {
+      this.ctx.lineTo(vertices[i].x, vertices[i].y);
+    }
+    this.ctx.closePath();
+    this.ctx.fill();
+
+    // Draw lighter inner highlight for 3D effect
     this.ctx.strokeStyle = '#1a5d1a';
-    this.ctx.lineWidth = CONFIG.RAIL_THICKNESS * 1;
-    
+    this.ctx.lineWidth = 0.5;
     this.ctx.beginPath();
-    this.ctx.moveTo(rail.x1, rail.y1);
-    this.ctx.lineTo(rail.x2, rail.y2);
+    this.ctx.moveTo(vertices[0].x, vertices[0].y);
+    for (let i = 1; i < vertices.length; i++) {
+      this.ctx.lineTo(vertices[i].x, vertices[i].y);
+    }
+    this.ctx.closePath();
     this.ctx.stroke();
+
+    // ALWAYS draw physics collision edges prominently (bright yellow)
+    railSegments.forEach((rail) => {
+      this.ctx.strokeStyle = 'rgba(255, 255, 0, 0.8)'; // Bright yellow
+      this.ctx.lineWidth = 0.3;
+      this.ctx.beginPath();
+      this.ctx.moveTo(rail.x1, rail.y1);
+      this.ctx.lineTo(rail.x2, rail.y2);
+      this.ctx.stroke();
+
+      // Draw endpoint markers
+      this.ctx.fillStyle = 'rgba(255, 0, 0, 0.9)'; // Red dots
+      this.ctx.beginPath();
+      this.ctx.arc(rail.x1, rail.y1, 0.3, 0, Math.PI * 2);
+      this.ctx.fill();
+      this.ctx.beginPath();
+      this.ctx.arc(rail.x2, rail.y2, 0.3, 0, Math.PI * 2);
+      this.ctx.fill();
+    });
+
+    // Optional normal debug visualization for geometry validation
+    if (CONFIG.DEBUG_DRAW_NORMALS) {
+      railSegments.forEach((rail) => {
+        const midX = (rail.x1 + rail.x2) / 2;
+        const midY = (rail.y1 + rail.y2) / 2;
+        this.ctx.strokeStyle = 'rgba(0, 255, 0, 0.6)';
+        this.ctx.lineWidth = 0.15;
+        this.ctx.beginPath();
+        this.ctx.moveTo(midX, midY);
+        this.ctx.lineTo(midX + rail.nx * 3, midY + rail.ny * 3);
+        this.ctx.stroke();
+      });
+    }
   }
   
   drawPocket(pocket: Pocket) {
@@ -252,7 +313,7 @@ export class Renderer {
     this.ctx.fill();
   }
   
-  drawCueAndPowerBar(ball: Ball, angle: number, power: number, showGhost: boolean, showPowerBar: boolean, isAimMode: boolean, prediction?: PredictionResult) {
+  drawCueAndPowerBar(ball: Ball, angle: number, power: number, showGhost: boolean, showPowerBar: boolean, isAimMode: boolean, prediction?: PredictionResult, isFineAimMode?: boolean, isUltraFineMode?: boolean, isSpacebarMode?: boolean) {
     this.ctx.save();
     
     // Use same transform as main render
@@ -315,109 +376,94 @@ export class Renderer {
     
     // Power bar (vertical bar to the right of the table)
     if (showPowerBar) {
-      this.drawPowerBar(power, isAimMode);
+      this.drawPowerBar(power, isAimMode, isFineAimMode, isUltraFineMode, isSpacebarMode);
     }
-    
+
     this.ctx.restore();
   }
   
-  drawTrajectoryLines(prediction: PredictionResult, cueBallPos: { x: number; y: number }, shotDirection: { x: number; y: number }, predictor: any) {
-    if (prediction.type === 'none') return;
-    
+  drawTrajectoryLines(prediction: PredictionResult, _cueBallPos: { x: number; y: number }, preview?: ShotPreviewPaths) {
+    if (prediction.type === 'none' || !preview) return;
+
     this.ctx.save();
-    
-    // Use same transform as main render
+
     const canvasCenterX = this.canvas.width / 2;
     const canvasCenterY = this.canvas.height / 2;
     this.ctx.translate(canvasCenterX, canvasCenterY);
-    this.ctx.scale(this.scale, -this.scale); // Y-up for world coords
-    
-    // Get trajectory predictions
-    const trajectories = predictor.predictTrajectories(
-      prediction,
-      cueBallPos,
-      shotDirection,
-      15 // Line length in inches
-    );
-    
-    // Draw object ball trajectory (yellow dashed line with arrowhead)
-    if (trajectories.objectBallPath) {
-      const start = trajectories.objectBallPath.start;
-      const end = trajectories.objectBallPath.end;
-      
-      // Draw line
-      this.ctx.strokeStyle = 'rgba(255, 255, 0, 0.6)';
+    this.ctx.scale(this.scale, -this.scale);
+
+    const drawPath = (points: { x: number; y: number }[], strokeStyle: string, arrowStyle: string) => {
+      if (!points || points.length < 2) return;
+
+      const sampled = points.filter((_, index) => index === 0 || index % 2 === 0);
+      if (sampled.length < 2) return;
+
+      this.ctx.strokeStyle = strokeStyle;
       this.ctx.lineWidth = 0.1;
       this.ctx.setLineDash([1, 1]);
       this.ctx.beginPath();
-      this.ctx.moveTo(start.x, start.y);
-      this.ctx.lineTo(end.x, end.y);
+      this.ctx.moveTo(sampled[0].x, sampled[0].y);
+      for (let i = 1; i < sampled.length; i++) {
+        this.ctx.lineTo(sampled[i].x, sampled[i].y);
+      }
       this.ctx.stroke();
       this.ctx.setLineDash([]);
-      
-      // Draw arrowhead at end
-      const dx = end.x - start.x;
-      const dy = end.y - start.y;
+
+      const last = sampled[sampled.length - 1];
+      const prev = sampled[sampled.length - 2];
+      const dx = last.x - prev.x;
+      const dy = last.y - prev.y;
       const len = Math.sqrt(dx * dx + dy * dy);
-      if (len > 0) {
+      if (len > 0.01) {
         const arrowSize = 1.5;
         const angle = Math.atan2(dy, dx);
-        
-        this.ctx.fillStyle = 'rgba(255, 255, 0, 0.8)';
+        this.ctx.fillStyle = arrowStyle;
         this.ctx.beginPath();
-        this.ctx.moveTo(end.x, end.y);
+        this.ctx.moveTo(last.x, last.y);
         this.ctx.lineTo(
-          end.x - arrowSize * Math.cos(angle - Math.PI / 6),
-          end.y - arrowSize * Math.sin(angle - Math.PI / 6)
+          last.x - arrowSize * Math.cos(angle - Math.PI / 6),
+          last.y - arrowSize * Math.sin(angle - Math.PI / 6)
         );
         this.ctx.lineTo(
-          end.x - arrowSize * Math.cos(angle + Math.PI / 6),
-          end.y - arrowSize * Math.sin(angle + Math.PI / 6)
+          last.x - arrowSize * Math.cos(angle + Math.PI / 6),
+          last.y - arrowSize * Math.sin(angle + Math.PI / 6)
         );
         this.ctx.closePath();
         this.ctx.fill();
       }
-    }
-    
-    // Draw cue ball trajectory (white dashed line with arrowhead)
-    if (trajectories.cueBallPath) {
-      const start = trajectories.cueBallPath.start;
-      const end = trajectories.cueBallPath.end;
-      
-      // Draw line
-      this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-      this.ctx.lineWidth = 0.1;
-      this.ctx.setLineDash([1, 1]);
-      this.ctx.beginPath();
-      this.ctx.moveTo(start.x, start.y);
-      this.ctx.lineTo(end.x, end.y);
-      this.ctx.stroke();
-      this.ctx.setLineDash([]);
-      
-      // Draw arrowhead at end
-      const dx = end.x - start.x;
-      const dy = end.y - start.y;
-      const len = Math.sqrt(dx * dx + dy * dy);
-      if (len > 0) {
-        const arrowSize = 1.5;
-        const angle = Math.atan2(dy, dx);
-        
-        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-        this.ctx.beginPath();
-        this.ctx.moveTo(end.x, end.y);
-        this.ctx.lineTo(
-          end.x - arrowSize * Math.cos(angle - Math.PI / 6),
-          end.y - arrowSize * Math.sin(angle - Math.PI / 6)
-        );
-        this.ctx.lineTo(
-          end.x - arrowSize * Math.cos(angle + Math.PI / 6),
-          end.y - arrowSize * Math.sin(angle + Math.PI / 6)
-        );
-        this.ctx.closePath();
-        this.ctx.fill();
+    };
+
+    const trimPathFromContact = (points: { x: number; y: number }[], contact: { x: number; y: number }) => {
+      if (!points || points.length === 0) return points;
+      let closestIndex = 0;
+      let closestDist = Number.MAX_VALUE;
+      for (let i = 0; i < points.length; i++) {
+        const dx = points[i].x - contact.x;
+        const dy = points[i].y - contact.y;
+        const distSq = dx * dx + dy * dy;
+        if (distSq < closestDist) {
+          closestDist = distSq;
+          closestIndex = i;
+        }
+      }
+
+      const trimmed = points.slice(closestIndex);
+      if (trimmed.length === 0 || closestDist > 0.25) {
+        trimmed.unshift({ x: contact.x, y: contact.y });
+      }
+      return trimmed;
+    };
+
+    const cuePath = trimPathFromContact(preview.cuePath, prediction.contactPoint);
+    drawPath(cuePath, 'rgba(255, 255, 255, 0.5)', 'rgba(255, 255, 255, 0.7)');
+
+    if (prediction.type === 'ball' && prediction.hitBall) {
+      const objectPath = preview.objectPaths.get(prediction.hitBall.id);
+      if (objectPath) {
+        drawPath(objectPath, 'rgba(255, 255, 0, 0.6)', 'rgba(255, 255, 0, 0.8)');
       }
     }
-    
+
     this.ctx.restore();
   }
   
@@ -437,7 +483,7 @@ export class Renderer {
     return `rgb(${r}, ${g}, ${b})`;
   }
   
-  drawPowerBar(power: number, isAimMode: boolean) {
+  drawPowerBar(power: number, isAimMode: boolean, isFineAimMode?: boolean, isUltraFineMode?: boolean, isSpacebarMode?: boolean) {
     this.ctx.restore(); // Exit game space
     this.ctx.save();
     
@@ -477,11 +523,63 @@ export class Renderer {
     
     // Mode indicator
     this.ctx.font = 'bold 16px Arial';
-    this.ctx.fillStyle = isAimMode ? '#ffaa00' : '#00ff00';
-    this.ctx.fillText(isAimMode ? 'AIM' : 'POWER', barX + barWidth / 2, barY + barHeight + 30);
-    this.ctx.font = '12px Arial';
-    this.ctx.fillStyle = '#cccccc';
-    this.ctx.fillText('Press A to toggle', barX + barWidth / 2, barY + barHeight + 50);
+    if (isSpacebarMode) {
+      this.ctx.fillStyle = '#00ff00'; // Green for instant shoot mode
+      this.ctx.fillText('SHOOT', barX + barWidth / 2, barY + barHeight + 30);
+      this.ctx.font = '12px Arial';
+      this.ctx.fillStyle = '#cccccc';
+      this.ctx.fillText('Release Space', barX + barWidth / 2, barY + barHeight + 50);
+    } else {
+      this.ctx.fillStyle = isAimMode ? '#ffaa00' : '#00ff00';
+      this.ctx.fillText(isAimMode ? 'AIM' : 'POWER', barX + barWidth / 2, barY + barHeight + 30);
+      this.ctx.font = '12px Arial';
+      this.ctx.fillStyle = '#cccccc';
+      this.ctx.fillText('Press A to toggle', barX + barWidth / 2, barY + barHeight + 50);
+    }
+
+    // Precision mode indicators or spacebar mode instructions
+    if (isSpacebarMode) {
+      // Spacebar mode: show power adjustment instructions
+      this.ctx.font = 'bold 14px Arial';
+      this.ctx.fillStyle = '#ffff00'; // Yellow for spacebar mode
+      this.ctx.fillText('LOCKED AIM', barX + barWidth / 2, barY + barHeight + 70);
+      this.ctx.font = '11px Arial';
+      this.ctx.fillStyle = '#888888';
+      this.ctx.fillText('Move mouse ↑↓', barX + barWidth / 2, barY + barHeight + 88);
+      this.ctx.font = '10px Arial';
+      this.ctx.fillStyle = '#777777';
+      this.ctx.fillText('or ↑ ↓ keys', barX + barWidth / 2, barY + barHeight + 103);
+    } else if (isAimMode) {
+      if (isUltraFineMode) {
+        // Ultra-fine mode (Shift + Ctrl)
+        this.ctx.font = 'bold 14px Arial';
+        this.ctx.fillStyle = '#ff00ff'; // Magenta for ultra-fine
+        this.ctx.fillText('ULTRA FINE', barX + barWidth / 2, barY + barHeight + 70);
+        this.ctx.font = '10px Arial';
+        this.ctx.fillStyle = '#aaaaaa';
+        this.ctx.fillText('0.02°/press', barX + barWidth / 2, barY + barHeight + 88);
+      } else if (isFineAimMode) {
+        // Fine mode (Shift only)
+        this.ctx.font = 'bold 14px Arial';
+        this.ctx.fillStyle = '#00ffff'; // Cyan for fine
+        this.ctx.fillText('FINE AIM', barX + barWidth / 2, barY + barHeight + 70);
+        this.ctx.font = '10px Arial';
+        this.ctx.fillStyle = '#aaaaaa';
+        this.ctx.fillText('0.1°/press', barX + barWidth / 2, barY + barHeight + 88);
+      } else {
+        // Normal mode
+        this.ctx.font = '11px Arial';
+        this.ctx.fillStyle = '#888888';
+        this.ctx.fillText('← → arrows (0.5°)', barX + barWidth / 2, barY + barHeight + 70);
+        this.ctx.font = '10px Arial';
+        this.ctx.fillStyle = '#777777';
+        this.ctx.fillText('+ Shift (0.1°)', barX + barWidth / 2, barY + barHeight + 86);
+        this.ctx.fillText('+ Shift+Ctrl (0.02°)', barX + barWidth / 2, barY + barHeight + 100);
+        this.ctx.font = '11px Arial';
+        this.ctx.fillStyle = '#666666';
+        this.ctx.fillText('Hold Space = shoot', barX + barWidth / 2, barY + barHeight + 116);
+      }
+    }
     
     // Re-enter game space for subsequent drawing
     this.ctx.restore();

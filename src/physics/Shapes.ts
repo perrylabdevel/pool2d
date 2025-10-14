@@ -53,6 +53,23 @@ export class Ball {
     this.prevY = y;
   }
   
+  clone(): Ball {
+    const copy = new Ball(this.id, this.x, this.y, this.radius, this.mass);
+    copy.vx = this.vx;
+    copy.vy = this.vy;
+    copy.invMass = this.invMass;
+    copy.pocketed = this.pocketed;
+    copy.sleeping = this.sleeping;
+    copy.angle = this.angle;
+    copy.angularVelocity = this.angularVelocity;
+    copy.rotationX = this.rotationX;
+    copy.rotationY = this.rotationY;
+    copy.rotationZ = this.rotationZ;
+    copy.prevX = this.prevX;
+    copy.prevY = this.prevY;
+    return copy;
+  }
+
   saveState() {
     this.prevX = this.x;
     this.prevY = this.y;
@@ -76,23 +93,32 @@ export class Rail {
   y2: number;
   nx: number; // Normal pointing inward
   ny: number;
-  
-  constructor(x1: number, y1: number, x2: number, y2: number) {
+  cushionId: string; // ID of the parent cushion polygon
+
+  constructor(x1: number, y1: number, x2: number, y2: number, cushionId: string = '') {
     this.x1 = x1;
     this.y1 = y1;
     this.x2 = x2;
     this.y2 = y2;
-    
+    this.cushionId = cushionId;
+
     // Calculate normal (perpendicular to rail, pointing inward)
     const dx = x2 - x1;
     const dy = y2 - y1;
     const len = Math.sqrt(dx * dx + dy * dy);
-    
-    // Perpendicular vector (rotated 90 degrees)
+
+    // Perpendicular vector (rotated 90 degrees CCW)
     this.nx = -dy / len;
     this.ny = dx / len;
   }
-  
+
+  clone(): Rail {
+    const copy = new Rail(this.x1, this.y1, this.x2, this.y2, this.cushionId);
+    copy.nx = this.nx;
+    copy.ny = this.ny;
+    return copy;
+  }
+
   // Flip normal if needed (to point inward)
   flipNormal() {
     this.nx = -this.nx;
@@ -109,6 +135,10 @@ export class Pocket {
     this.x = x;
     this.y = y;
     this.radius = radius;
+  }
+
+  clone(): Pocket {
+    return new Pocket(this.x, this.y, this.radius);
   }
   
   contains(ball: Ball): boolean {

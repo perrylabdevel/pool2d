@@ -4,7 +4,7 @@ import { Ball, Rail, Pocket } from '../physics/Shapes';
 import { PhysicsWorld } from '../physics/Physics';
 import { CONFIG, BALL_CUE } from '../config';
 import { TABLE_GEOMETRY } from '../geometry/Geometry';
-import { PredictionResult, Predictor } from '../physics/Prediction';
+import { PredictionResult, ShotPreviewPaths } from '../physics/Prediction';
 
 export class Renderer3D {
   canvas: HTMLCanvasElement;
@@ -278,10 +278,7 @@ export class Renderer3D {
   
   initializeTable() {
     // Create table felt
-    const tableGeometry = new THREE.PlaneGeometry(
-      TABLE_GEOMETRY.playWidthIn,
-      TABLE_GEOMETRY.playHeightIn
-    );
+    const tableGeometry = new THREE.ShapeGeometry(this.createPlaySurfaceShape(), 48);
     const tableMaterial = new THREE.MeshStandardMaterial({
       color: new THREE.Color(CONFIG.TABLE_COLOR),
       roughness: 0.8,
@@ -336,32 +333,72 @@ export class Renderer3D {
     this.scene.add(rightFrame);
   }
   
-  initializeRails(rails: Rail[]) {
-    const railMaterial = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(CONFIG.RAIL_COLOR),
-      roughness: 0.5,
-      metalness: 0.3
-    });
-    
-    rails.forEach((rail) => {
-      const dx = rail.x2 - rail.x1;
-      const dy = rail.y2 - rail.y1;
-      const length = Math.sqrt(dx * dx + dy * dy);
-      const angle = Math.atan2(dy, dx);
-      
-      const railGeometry = new THREE.BoxGeometry(length, CONFIG.RAIL_THICKNESS * 2, 1.5);
-      const railMesh = new THREE.Mesh(railGeometry, railMaterial);
-      
-      railMesh.position.set(
-        (rail.x1 + rail.x2) / 2,
-        (rail.y1 + rail.y2) / 2,
-        0.75
+  initializeRails(_rails: Rail[]) {
+    if (this.railMeshes.length > 0) {
+      this.railMeshes.forEach(mesh => {
+        this.scene.remove(mesh);
+        mesh.geometry.dispose();
+        if (mesh.material instanceof THREE.Material) {
+          mesh.material.dispose();
+        }
+      });
+      this.railMeshes = [];
+    }
+
+    // Different colors for each cushion to help with debugging geometry
+    const cushionColors = [
+      0xff00ff,  // N_west - Magenta
+      0x00ffff,  // N_east - Cyan
+      0xffff00,  // S_west - Yellow
+      0xff8800,  // S_east - Orange
+      0x00ff00,  // W - Green
+      0x0088ff   // E - Blue
+    ];
+
+    TABLE_GEOMETRY.rails.forEach((railDef, index) => {
+      const shape = new THREE.Shape();
+      const { points } = railDef;
+      shape.moveTo(points[0].x, points[0].y);
+      for (let i = 1; i < points.length; i++) {
+        shape.lineTo(points[i].x, points[i].y);
+      }
+      shape.closePath();
+
+      const geometry = new THREE.ShapeGeometry(shape);
+      const mesh = new THREE.Mesh(
+        geometry,
+        new THREE.MeshStandardMaterial({
+          color: new THREE.Color(cushionColors[index]),
+          roughness: 0.5,
+          metalness: 0.3
+        })
       );
-      railMesh.rotation.z = angle;
-      
-      this.scene.add(railMesh);
-      this.railMeshes.push(railMesh);
+      mesh.position.z = 0.1;
+      mesh.renderOrder = 1000;  // Render above pockets (which are at 999)
+      this.scene.add(mesh);
+      this.railMeshes.push(mesh);
     });
+  }
+
+  private createPlaySurfaceShape(): THREE.Shape {
+    const halfW = TABLE_GEOMETRY.playWidthIn / 2;
+    const halfH = TABLE_GEOMETRY.playHeightIn / 2;
+
+    const shape = new THREE.Shape();
+    shape.moveTo(-halfW, -halfH);
+    shape.lineTo(halfW, -halfH);
+    shape.lineTo(halfW, halfH);
+    shape.lineTo(-halfW, halfH);
+    shape.closePath();
+
+    TABLE_GEOMETRY.pockets.forEach((pocket) => {
+      const radius = pocket.captureRadiusIn ?? TABLE_GEOMETRY.pocketCaptureRadiusIn;
+      const hole = new THREE.Path();
+      hole.absarc(pocket.center.x, pocket.center.y, radius, 0, Math.PI * 2, true);
+      shape.holes.push(hole);
+    });
+
+    return shape;
   }
   
   initializePockets(pockets: Pocket[]) {
@@ -769,6 +806,49 @@ export class Renderer3D {
     ctx.closePath();
     ctx.stroke();
 
+    // Draw cushion polygon vertices with colored dots
+    const cushionColors = [
+      '#ff00ff',  // N_west - Magenta
+      '#00ffff',  // N_east - Cyan
+      '#ffff00',  // S_west - Yellow
+      '#ff8800',  // S_east - Orange
+      '#00ff00',  // W - Green
+      '#0088ff'   // E - Blue
+    ];
+
+    TABLE_GEOMETRY.rails.forEach((cushionDef, cushionIndex) => {
+      const color = cushionColors[cushionIndex];
+
+      // Draw each polygon vertex
+      cushionDef.points.forEach((point, pointIndex) => {
+        const screen = this.worldToScreen(point.x, point.y);
+
+        // Draw filled circle for vertex
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(screen.x, screen.y, 6, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Draw black border for visibility
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Draw point number label
+        ctx.fillStyle = '#ffffff';
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 3;
+        ctx.font = 'bold 14px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        const label = `${pointIndex}`;
+        // Stroke text for outline
+        ctx.strokeText(label, screen.x, screen.y - 12);
+        ctx.fillText(label, screen.x, screen.y - 12);
+      });
+    });
+
     // Vertical ticks and labels
     for (let x = -halfW; x <= halfW + 0.01; x += tickSpacing) {
       const top = this.worldToScreen(x, halfH);
@@ -907,7 +987,7 @@ export class Renderer3D {
   }
   
   // Compatibility methods for existing code
-  drawCueAndPowerBar(ball: Ball, angle: number, power: number, showGhost: boolean, showPowerBar: boolean, _isAimMode: boolean, prediction?: PredictionResult) {
+  drawCueAndPowerBar(ball: Ball, angle: number, power: number, showGhost: boolean, showPowerBar: boolean, _isAimMode: boolean, prediction?: PredictionResult, _isFineAimMode?: boolean, _isUltraFineMode?: boolean, _isSpacebarMode?: boolean) {
     // Remove old 3D elements if they exist
     if (this.cueStick) {
       this.scene.remove(this.cueStick);
@@ -1009,7 +1089,11 @@ export class Renderer3D {
     // Prediction is drawn as part of drawTrajectoryLines
   }
   
-  drawTrajectoryLines(prediction: PredictionResult, cueBallPos: { x: number; y: number }, shotDirection: { x: number; y: number }, predictor: Predictor) {
+  drawTrajectoryLines(
+    prediction: PredictionResult,
+    cueBallPos: { x: number; y: number },
+    preview?: ShotPreviewPaths
+  ) {
     // Clear old 3D trajectory lines
     this.trajectoryLines.forEach(line => this.scene.remove(line));
     this.trajectoryLines = [];
@@ -1029,101 +1113,89 @@ export class Renderer3D {
     this.uiCtx.stroke();
     this.uiCtx.setLineDash([]);
     
-    // Get trajectory predictions
-    const trajectories = predictor.predictTrajectories(
-      prediction,
-      cueBallPos,
-      shotDirection,
-      50 // Line length in inches (much longer for visibility)
-    );
-    
-    // Draw object ball trajectory (yellow dashed line with arrowhead)
-    if (trajectories.objectBallPath) {
-      const start = trajectories.objectBallPath.start;
-      const endRaw = trajectories.objectBallPath.end;
-      
-      // Clip the line at table boundaries
-      const end = this.clipLineAtRails(start, endRaw);
-      
-      const startScreen = this.worldToScreen(start.x, start.y);
-      const endScreen = this.worldToScreen(end.x, end.y);
-      
-      // Draw line
-      this.uiCtx.strokeStyle = 'rgba(255, 255, 0, 0.6)';
-      this.uiCtx.lineWidth = 2;
-      this.uiCtx.setLineDash([10, 10]);
-      this.uiCtx.beginPath();
-      this.uiCtx.moveTo(startScreen.x, startScreen.y);
-      this.uiCtx.lineTo(endScreen.x, endScreen.y);
-      this.uiCtx.stroke();
-      this.uiCtx.setLineDash([]);
-      
-      // Draw arrowhead at end
-      const dx = endScreen.x - startScreen.x;
-      const dy = endScreen.y - startScreen.y;
-      const len = Math.sqrt(dx * dx + dy * dy);
-      if (len > 0) {
-        const arrowSize = 10;
-        const angle = Math.atan2(dy, dx);
-        
-        this.uiCtx.fillStyle = 'rgba(255, 255, 0, 0.8)';
+    if (preview) {
+      const drawPath = (points: { x: number; y: number }[], strokeStyle: string, arrowFill: string) => {
+        if (!points || points.length < 2) return;
+
+        const sampled = points.filter((_, index) => index === 0 || index % 2 === 0);
+        if (sampled.length < 2) return;
+
+        this.uiCtx.strokeStyle = strokeStyle;
+        this.uiCtx.lineWidth = 2;
+        this.uiCtx.setLineDash([10, 10]);
+
+        const first = this.worldToScreen(sampled[0].x, sampled[0].y);
         this.uiCtx.beginPath();
-        this.uiCtx.moveTo(endScreen.x, endScreen.y);
-        this.uiCtx.lineTo(
-          endScreen.x - arrowSize * Math.cos(angle - Math.PI / 6),
-          endScreen.y - arrowSize * Math.sin(angle - Math.PI / 6)
-        );
-        this.uiCtx.lineTo(
-          endScreen.x - arrowSize * Math.cos(angle + Math.PI / 6),
-          endScreen.y - arrowSize * Math.sin(angle + Math.PI / 6)
-        );
-        this.uiCtx.closePath();
-        this.uiCtx.fill();
+        this.uiCtx.moveTo(first.x, first.y);
+
+        let lastScreen = first;
+        for (let i = 1; i < sampled.length; i++) {
+          const point = sampled[i];
+          const screen = this.worldToScreen(point.x, point.y);
+          this.uiCtx.lineTo(screen.x, screen.y);
+          lastScreen = screen;
+        }
+
+        this.uiCtx.stroke();
+        this.uiCtx.setLineDash([]);
+
+        const prevPoint = this.worldToScreen(sampled[sampled.length - 2].x, sampled[sampled.length - 2].y);
+        const dx = lastScreen.x - prevPoint.x;
+        const dy = lastScreen.y - prevPoint.y;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        if (len > 0.01) {
+          const arrowSize = 10;
+          const angle = Math.atan2(dy, dx);
+
+          this.uiCtx.fillStyle = arrowFill;
+          this.uiCtx.beginPath();
+          this.uiCtx.moveTo(lastScreen.x, lastScreen.y);
+          this.uiCtx.lineTo(
+            lastScreen.x - arrowSize * Math.cos(angle - Math.PI / 6),
+            lastScreen.y - arrowSize * Math.sin(angle - Math.PI / 6)
+          );
+          this.uiCtx.lineTo(
+            lastScreen.x - arrowSize * Math.cos(angle + Math.PI / 6),
+            lastScreen.y - arrowSize * Math.sin(angle + Math.PI / 6)
+          );
+          this.uiCtx.closePath();
+          this.uiCtx.fill();
+        }
+      };
+
+      const trimPathFromContact = (path: { x: number; y: number }[], contact: { x: number; y: number }) => {
+        if (!path || path.length === 0) return path;
+        let closestIndex = 0;
+        let closestDist = Number.MAX_VALUE;
+        for (let i = 0; i < path.length; i++) {
+          const dx = path[i].x - contact.x;
+          const dy = path[i].y - contact.y;
+          const distSq = dx * dx + dy * dy;
+          if (distSq < closestDist) {
+            closestDist = distSq;
+            closestIndex = i;
+          }
+        }
+
+        const trimmed = path.slice(closestIndex);
+        if (trimmed.length === 0 || closestDist > 0.25) {
+          trimmed.unshift({ x: contact.x, y: contact.y });
+        }
+        return trimmed;
+      };
+
+      const cuePath = trimPathFromContact(preview.cuePath, prediction.contactPoint);
+      if (cuePath.length > 1) {
+        const cueStroke = prediction.type === 'rail' ? 'rgba(0, 255, 255, 0.4)' : 'rgba(255, 255, 255, 0.5)';
+        const cueArrow = prediction.type === 'rail' ? 'rgba(0, 255, 255, 0.6)' : 'rgba(255, 255, 255, 0.7)';
+        drawPath(cuePath, cueStroke, cueArrow);
       }
-    }
-    
-    // Draw cue ball trajectory (white dashed line with arrowhead)
-    if (trajectories.cueBallPath) {
-      const start = trajectories.cueBallPath.start;
-      const endRaw = trajectories.cueBallPath.end;
-      
-      // Clip the line at table boundaries
-      const end = this.clipLineAtRails(start, endRaw);
-      
-      const startScreen = this.worldToScreen(start.x, start.y);
-      const endScreen = this.worldToScreen(end.x, end.y);
-      
-      // Draw line
-      this.uiCtx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-      this.uiCtx.lineWidth = 2;
-      this.uiCtx.setLineDash([10, 10]);
-      this.uiCtx.beginPath();
-      this.uiCtx.moveTo(startScreen.x, startScreen.y);
-      this.uiCtx.lineTo(endScreen.x, endScreen.y);
-      this.uiCtx.stroke();
-      this.uiCtx.setLineDash([]);
-      
-      // Draw arrowhead at end
-      const dx = endScreen.x - startScreen.x;
-      const dy = endScreen.y - startScreen.y;
-      const len = Math.sqrt(dx * dx + dy * dy);
-      if (len > 0) {
-        const arrowSize = 10;
-        const angle = Math.atan2(dy, dx);
-        
-        this.uiCtx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-        this.uiCtx.beginPath();
-        this.uiCtx.moveTo(endScreen.x, endScreen.y);
-        this.uiCtx.lineTo(
-          endScreen.x - arrowSize * Math.cos(angle - Math.PI / 6),
-          endScreen.y - arrowSize * Math.sin(angle - Math.PI / 6)
-        );
-        this.uiCtx.lineTo(
-          endScreen.x - arrowSize * Math.cos(angle + Math.PI / 6),
-          endScreen.y - arrowSize * Math.sin(angle + Math.PI / 6)
-        );
-        this.uiCtx.closePath();
-        this.uiCtx.fill();
+
+      if (prediction.type === 'ball' && prediction.hitBall) {
+        const objectPath = preview.objectPaths.get(prediction.hitBall.id);
+        if (objectPath && objectPath.length > 0) {
+          drawPath(objectPath, 'rgba(255, 255, 0, 0.6)', 'rgba(255, 255, 0, 0.8)');
+        }
       }
     }
   }

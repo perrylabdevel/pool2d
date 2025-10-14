@@ -400,11 +400,17 @@ export class Game {
 
       // Draw trajectory lines only if aim assist is enabled
       if (this.aimAssist && prediction) {
+        const preview = this.predictor.simulateShotPaths(
+          this.world,
+          this.cueBall,
+          angle,
+          this.currentPower
+        );
+
         this.renderer.drawTrajectoryLines(
           prediction,
           { x: this.cueBall.x, y: this.cueBall.y },
-          direction,
-          this.predictor
+          preview ?? undefined
         );
       }
 

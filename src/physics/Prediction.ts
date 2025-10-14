@@ -1,8 +1,9 @@
 // Aim assist prediction system
 // Lightweight raycast for first contact prediction
 
-import { Ball, Rail } from './Shapes';
+import { Ball, Rail, Vec2 } from './Shapes';
 import { PhysicsWorld } from './Physics';
+import { CONFIG } from '../config';
 
 export interface Vec2 {
   x: number;
@@ -16,6 +17,11 @@ export interface PredictionResult {
   hitBall?: Ball;
   hitRail?: Rail;
   distance: number;
+}
+
+export interface ShotPreviewPaths {
+  cuePath: Vec2[];
+  objectPaths: Map<number, Vec2[]>;
 }
 
 export class Predictor {
@@ -74,6 +80,64 @@ export class Predictor {
     return closestHit;
   }
 
+  simulateShotPaths(
+    world: PhysicsWorld,
+    cueBall: Ball,
+    angle: number,
+    power?: number,
+    duration: number = 1.1
+  ): ShotPreviewPaths | null {
+    if (cueBall.pocketed) return null;
+
+    const previewWorld = world.clone({ enableRecording: false });
+    const previewCue = previewWorld.getBallById(cueBall.id);
+
+    if (!previewCue) return null;
+
+    const effectivePower = Math.max(power ?? CONFIG.CUE_POWER_MAX * 0.6, CONFIG.CUE_POWER_MIN * 1.5);
+    const speed = effectivePower * CONFIG.CUE_POWER_MULTIPLIER;
+
+    previewCue.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
+    previewCue.sleeping = false;
+    previewCue.prevX = previewCue.x;
+    previewCue.prevY = previewCue.y;
+
+    const cuePath: Vec2[] = [{ x: previewCue.x, y: previewCue.y }];
+    const objectPaths = new Map<number, Vec2[]>();
+
+    const maxSteps = Math.min(240, Math.ceil(duration / CONFIG.PHYSICS_DT));
+    const activationSpeed = CONFIG.VELOCITY_EPSILON * 2;
+
+    for (let step = 0; step < maxSteps; step++) {
+      previewWorld.step(CONFIG.PHYSICS_DT);
+
+      cuePath.push({ x: previewCue.x, y: previewCue.y });
+
+      for (const ball of previewWorld.balls) {
+        if (ball.id === previewCue.id || ball.pocketed) continue;
+
+        if (ball.getSpeed() > activationSpeed) {
+          const path = objectPaths.get(ball.id);
+          const point = { x: ball.x, y: ball.y };
+          if (path) {
+            path.push(point);
+          } else {
+            objectPaths.set(ball.id, [point]);
+          }
+        }
+      }
+
+      const cueSleeping = previewCue.sleeping || previewCue.getSpeed() < CONFIG.VELOCITY_EPSILON;
+      const anyActive = Array.from(objectPaths.values()).some((path) => path.length > 0);
+
+      if (cueSleeping && !anyActive) {
+        break;
+      }
+    }
+
+    return { cuePath, objectPaths };
+  }
+
   /**
    * Sphere-sphere sweep (for ball collisions)
    * Treats cue ball as a moving sphere, not a point
@@ -87,7 +151,7 @@ export class Predictor {
   ): { point: Vec2; normal: Vec2; distance: number } | null {
     // For sphere-sphere collision, we need to account for both radii
     // Treat it as a ray hitting a circle with combined radius
-    const cueBallRadius = 1.125; // CONFIG.BALL_RADIUS
+    const cueBallRadius = CONFIG.BALL_RADIUS;
     const combinedRadius = ball.radius + cueBallRadius;
     
     // Vector from ray origin to circle center

@@ -11,47 +11,48 @@ export class PhysicsWorld {
   balls: Ball[] = [];
   rails: Rail[] = [];
   pockets: Pocket[] = [];
+  recordingEnabled: boolean;
   
-  constructor() {
-    this.initializeRails();
-    this.initializePockets();
+  constructor(options: { initializeGeometry?: boolean; enableRecording?: boolean } = {}) {
+    const { initializeGeometry = true, enableRecording = true } = options;
+    this.recordingEnabled = enableRecording;
+
+    if (initializeGeometry) {
+      this.initializeRails();
+      this.initializePockets();
+    }
   }
   
   initializeRails() {
-    const pocketGap = 4; // Gap for pockets (inches)
-    
-    // Create rail segments with gaps for pockets
-    // N_rail (North/top): split at center pocket
-    this.rails.push(new Rail(-50 + pocketGap, 25, -pocketGap, 25));  // NW corner to N middle
-    this.rails.push(new Rail(pocketGap, 25, 50 - pocketGap, 25));     // N middle to NE corner
-    
-    // S_rail (South/bottom): split at center pocket  
-    this.rails.push(new Rail(-50 + pocketGap, -25, -pocketGap, -25)); // SW corner to S middle
-    this.rails.push(new Rail(pocketGap, -25, 50 - pocketGap, -25));   // S middle to SE corner
-    
-    // W_rail (West/left): solid rail between corners (no middle pocket)
-    this.rails.push(new Rail(-50, -25 + pocketGap, -50, 25 - pocketGap));
-    
-    // E_rail (East/right): solid rail between corners (no middle pocket)
-    this.rails.push(new Rail(50, -25 + pocketGap, 50, 25 - pocketGap));
-    
-    // Set normals to point inward (toward center)
-    this.rails.forEach((rail) => {
+    // Create ONLY the playing surface edge for each cushion (not all 4 edges)
+    TABLE_GEOMETRY.rails.forEach((cushionDef) => {
+      const points = cushionDef.points;
+      const [idx1, idx2] = cushionDef.playingSurfaceEdge;
+
+      const p1 = points[idx1];
+      const p2 = points[idx2];
+
+      const rail = new Rail(p1.x, p1.y, p2.x, p2.y, cushionDef.id);
+
+      // Ensure normals point inward (toward center of table)
       const midX = (rail.x1 + rail.x2) / 2;
       const midY = (rail.y1 + rail.y2) / 2;
-      
-      // Vector from midpoint to center (0,0)
-      const toCenter = {
-        x: -midX,
-        y: -midY,
-      };
-      
-      // If normal points away from center, flip it
+      const toCenter = { x: -midX, y: -midY };
       const dot = rail.nx * toCenter.x + rail.ny * toCenter.y;
+
       if (dot < 0) {
         rail.flipNormal();
       }
+
+      this.rails.push(rail);
     });
+
+    if (this.recordingEnabled) {
+      console.log(`🎱 Initialized ${this.rails.length} rail collision edges`);
+      this.rails.forEach((rail, i) => {
+        console.log(`  Rail ${i} (${rail.cushionId}): (${rail.x1.toFixed(1)}, ${rail.y1.toFixed(1)}) → (${rail.x2.toFixed(1)}, ${rail.y2.toFixed(1)}), normal: (${rail.nx.toFixed(2)}, ${rail.ny.toFixed(2)})`);
+      });
+    }
   }
   
   initializePockets() {
@@ -69,6 +70,18 @@ export class PhysicsWorld {
   
   addBall(ball: Ball) {
     this.balls.push(ball);
+  }
+
+  getBallById(id: number): Ball | undefined {
+    return this.balls.find((ball) => ball.id === id);
+  }
+
+  clone(options: { enableRecording?: boolean } = {}): PhysicsWorld {
+    const clone = new PhysicsWorld({ initializeGeometry: false, enableRecording: options.enableRecording ?? false });
+    clone.rails = this.rails.map((rail) => rail.clone());
+    clone.pockets = this.pockets.map((pocket) => pocket.clone());
+    clone.balls = this.balls.map((ball) => ball.clone());
+    return clone;
   }
   
   step(dt: number) {
@@ -187,7 +200,9 @@ export class PhysicsWorld {
           ball.pocketed = true;
           ball.vx = 0;
           ball.vy = 0;
-          physicsRecorder.recordPocket(ball);
+      if (this.recordingEnabled) {
+        physicsRecorder.recordPocket(ball);
+      }
           // Notify game logic (will be handled by Game class)
           break;
         }
