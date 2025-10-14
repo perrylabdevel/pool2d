@@ -185,6 +185,9 @@ export class Game {
     this.renderer.initializeRails(this.world.rails);
     this.renderer.initializePockets(this.world.pockets);
     
+    // Connect debug overlay to renderer for coordinate projection
+    this.debug.setRenderer(this.renderer);
+    
     this.resize();
     this.rules.startGame();
     this.hud.setMode(this.mode === GameMode.PRACTICE ? 'Practice Mode' : '8-Ball');

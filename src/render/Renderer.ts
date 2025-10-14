@@ -5,18 +5,21 @@
 import { Ball, Rail, Pocket } from '../physics/Shapes';
 import { PhysicsWorld } from '../physics/Physics';
 import { CONFIG, BALL_CUE } from '../config';
-import { TABLE_GEOMETRY } from '../geometry/Geometry';
+import { TABLE_GEOMETRY, computeBoundaryBounds, computePlayBoundaryPoints, type Vec2, type BoundaryBounds } from '../geometry/Geometry';
 import { PredictionResult } from '../physics/Prediction';
 
 export class Renderer {
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
   scale: number;
+  private playBoundaryPoints: Vec2[] = [];
+  private playBounds: BoundaryBounds = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
   
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d')!;
     this.scale = CONFIG.CANVAS_SCALE;
+    this.refreshDerivedGeometry();
   }
   
   resize() {
@@ -54,6 +57,7 @@ export class Renderer {
   }
   
   render(world: PhysicsWorld, alpha: number) {
+    this.refreshDerivedGeometry();
     this.clear();
     
     this.ctx.save();
@@ -70,6 +74,7 @@ export class Renderer {
     // Draw in correct order: bottom to top
     this.drawFrame();
     this.drawPlayingSurface();
+    this.drawRailBackground();
     this.drawRails(world.rails);
     this.drawPockets(world.pockets);
     this.drawBalls(world.balls, alpha);
@@ -78,13 +83,16 @@ export class Renderer {
   }
   
   drawPlayingSurface() {
-    if (!this.tracePlayBoundary()) return;
+    const boundary = this.playBoundaryPoints;
+    if (boundary.length < 3) return;
 
+    this.beginBoundaryPath(boundary);
     this.ctx.fillStyle = CONFIG.TABLE_COLOR;
     this.ctx.fill();
 
     // Felt texture inside play area
     this.ctx.save();
+    this.beginBoundaryPath(boundary);
     this.ctx.clip();
     this.ctx.fillStyle = 'rgba(0, 0, 0, 0.02)';
     for (let i = 0; i < 120; i++) {
@@ -95,42 +103,74 @@ export class Renderer {
     this.ctx.restore();
   }
 
-  drawFrame() {
-    const frameWidth = 6;
-    const halfW = TABLE_GEOMETRY.playWidthIn / 2;
-    const halfH = TABLE_GEOMETRY.playHeightIn / 2;
-
-    // Base wood background encompassing play area
-    this.ctx.fillStyle = '#3d2413';
-    this.ctx.fillRect(
-      -halfW - frameWidth,
-      -halfH - frameWidth,
-      TABLE_GEOMETRY.playWidthIn + frameWidth * 2,
-      TABLE_GEOMETRY.playHeightIn + frameWidth * 2
-    );
-
-    // Inner lip following rail outline
-    if (this.tracePlayBoundary()) {
-      this.ctx.strokeStyle = '#2d1810';
-      this.ctx.lineWidth = frameWidth;
-      this.ctx.lineJoin = 'round';
-      this.ctx.stroke();
-    }
+  private refreshDerivedGeometry() {
+    this.playBoundaryPoints = computePlayBoundaryPoints(TABLE_GEOMETRY.rails);
+    this.playBounds = computeBoundaryBounds(this.playBoundaryPoints);
   }
 
-  private tracePlayBoundary(): boolean {
-    const rails = TABLE_GEOMETRY.rails;
-    if (!rails.length) {
-      return false;
+  drawRailBackground() {
+    // Rectangular background for the entire rail system
+    // This encompasses all rails including corner pocket extensions
+    const { minX, maxX, minY, maxY } = this.playBounds;
+    
+    // Extend slightly beyond the rail boundaries to ensure full coverage
+    const padding = 0.5;
+    
+    this.ctx.fillStyle = '#2d1810'; // Dark wood color
+    this.ctx.fillRect(
+      minX - padding,
+      minY - padding,
+      (maxX - minX) + padding * 2,
+      (maxY - minY) + padding * 2
+    );
+  }
+
+  drawFrame() {
+    const frameWidth = 6;
+    const boundary = this.playBoundaryPoints;
+    if (boundary.length < 3) {
+      const halfW = TABLE_GEOMETRY.playWidthIn / 2;
+      const halfH = TABLE_GEOMETRY.playHeightIn / 2;
+      this.ctx.fillStyle = '#3d2413';
+      this.ctx.fillRect(
+        -halfW - frameWidth,
+        -halfH - frameWidth,
+        TABLE_GEOMETRY.playWidthIn + frameWidth * 2,
+        TABLE_GEOMETRY.playHeightIn + frameWidth * 2
+      );
+      return;
     }
 
+    // Outer frame rectangle with inner play boundary removed
     this.ctx.beginPath();
-    this.ctx.moveTo(rails[0].from.x, rails[0].from.y);
-    rails.forEach((rail) => {
-      this.ctx.lineTo(rail.to.x, rail.to.y);
-    });
+    const { minX, maxX, minY, maxY } = this.playBounds;
+    this.ctx.moveTo(minX - frameWidth, minY - frameWidth);
+    this.ctx.lineTo(maxX + frameWidth, minY - frameWidth);
+    this.ctx.lineTo(maxX + frameWidth, maxY + frameWidth);
+    this.ctx.lineTo(minX - frameWidth, maxY + frameWidth);
     this.ctx.closePath();
-    return true;
+    this.beginBoundaryPath(boundary, false);
+    this.ctx.fillStyle = '#3d2413';
+    this.ctx.fill('evenodd');
+
+    // Inner lip following cushion line
+    this.beginBoundaryPath(boundary);
+    this.ctx.strokeStyle = '#2d1810';
+    this.ctx.lineWidth = frameWidth;
+    this.ctx.lineJoin = 'round';
+    this.ctx.stroke();
+  }
+
+  private beginBoundaryPath(points: Vec2[], close: boolean = true) {
+    if (points.length === 0) return;
+    this.ctx.beginPath();
+    this.ctx.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length; i++) {
+      this.ctx.lineTo(points[i].x, points[i].y);
+    }
+    if (close) {
+      this.ctx.closePath();
+    }
   }
   
   drawPockets(pockets: Pocket[]) {
@@ -152,8 +192,8 @@ export class Renderer {
   drawRail(rail: Rail) {
     // Draw simple cushion with consistent thickness
     this.ctx.strokeStyle = '#0d3d0d';
-    this.ctx.lineWidth = CONFIG.RAIL_THICKNESS * 2;
-    this.ctx.lineCap = 'butt';
+    this.ctx.lineWidth = CONFIG.RAIL_THICKNESS * 1;
+    this.ctx.lineCap = 'round';
     
     this.ctx.beginPath();
     this.ctx.moveTo(rail.x1, rail.y1);
@@ -171,6 +211,7 @@ export class Renderer {
   }
   
   drawPocket(pocket: Pocket) {
+    // Draw pocket hole (black circle)
     this.ctx.fillStyle = CONFIG.POCKET_COLOR;
     this.ctx.beginPath();
     this.ctx.arc(pocket.x, pocket.y, pocket.radius, 0, Math.PI * 2);

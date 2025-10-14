@@ -28,6 +28,53 @@ export interface TableGeometry {
   pockets: PocketDef[];
 }
 
+export function computePlayBoundaryPoints(rails: RailDef[]): Vec2[] {
+  if (!rails.length) {
+    return [];
+  }
+
+  const points: Vec2[] = [];
+  points.push({ x: rails[0].from.x, y: rails[0].from.y });
+  rails.forEach((rail, index) => {
+    const point = { x: rail.to.x, y: rail.to.y };
+    const first = points[0];
+    const isClosing =
+      index === rails.length - 1 && Math.abs(point.x - first.x) < 1e-6 && Math.abs(point.y - first.y) < 1e-6;
+    if (!isClosing) {
+      points.push(point);
+    }
+  });
+  return points;
+}
+
+export interface BoundaryBounds {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+}
+
+export function computeBoundaryBounds(points: Vec2[]): BoundaryBounds {
+  if (!points.length) {
+    return { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+  }
+
+  let minX = points[0].x;
+  let maxX = points[0].x;
+  let minY = points[0].y;
+  let maxY = points[0].y;
+
+  for (let i = 1; i < points.length; i++) {
+    const { x, y } = points[i];
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+  }
+
+  return { minX, maxX, minY, maxY };
+}
+
 // 9-ft table geometry (100" x 50" play area)
 export const TABLE_GEOMETRY: TableGeometry = {
   playWidthIn: 100.0,
@@ -36,28 +83,59 @@ export const TABLE_GEOMETRY: TableGeometry = {
   pocketCaptureRadiusIn: 2.5,
   
   // Rails approximating WPA throat geometry, normals point inward
+  // Corner rails stop short of pocket centers to leave openings
   rails: [
     {
       id: 'N_west_taper',
-      from: { x: -50.0, y: 25.0 },
+      from: { x: -51.77, y: 26.77 },
       to: { x: -46.0, y: 23.5 },
       normal: { x: 0.447214, y: -0.894427 }
     },
     {
-      id: 'N_center',
+      id: 'N_west_straight',
       from: { x: -46.0, y: 23.5 },
+      to: { x: -6.0, y: 23.5 },
+      normal: { x: 0, y: -1 }
+    },
+    {
+      id: 'N_left_throat_outer',
+      from: { x: -6.0, y: 23.5 },
+      to: { x: -2.5, y: 24.6 },
+      normal: { x: 0, y: -1 }
+    },
+    {
+      id: 'N_left_throat_inner',
+      from: { x: -2.5, y: 24.6 },
+      to: { x: 0.0, y: 25.0 },
+      normal: { x: 0, y: -1 }
+    },
+    {
+      id: 'N_right_throat_inner',
+      from: { x: 0.0, y: 25.0 },
+      to: { x: 2.5, y: 24.6 },
+      normal: { x: 0, y: -1 }
+    },
+    {
+      id: 'N_right_throat_outer',
+      from: { x: 2.5, y: 24.6 },
+      to: { x: 6.0, y: 23.5 },
+      normal: { x: 0, y: -1 }
+    },
+    {
+      id: 'N_east_straight',
+      from: { x: 6.0, y: 23.5 },
       to: { x: 46.0, y: 23.5 },
       normal: { x: 0, y: -1 }
     },
     {
       id: 'N_east_taper',
       from: { x: 46.0, y: 23.5 },
-      to: { x: 50.0, y: 25.0 },
+      to: { x: 51.77, y: 26.77 },
       normal: { x: -0.447214, y: -0.894427 }
     },
     {
       id: 'E_north_taper',
-      from: { x: 50.0, y: 25.0 },
+      from: { x: 51.77, y: 26.77 },
       to: { x: 48.5, y: 21.0 },
       normal: { x: -0.894427, y: -0.447214 }
     },
@@ -70,30 +148,60 @@ export const TABLE_GEOMETRY: TableGeometry = {
     {
       id: 'E_south_taper',
       from: { x: 48.5, y: -21.0 },
-      to: { x: 50.0, y: -25.0 },
+      to: { x: 51.77, y: -26.77 },
       normal: { x: -0.894427, y: 0.447214 }
     },
     {
       id: 'S_east_taper',
-      from: { x: 50.0, y: -25.0 },
+      from: { x: 51.77, y: -26.77 },
       to: { x: 46.0, y: -23.5 },
       normal: { x: -0.447214, y: 0.894427 }
     },
     {
-      id: 'S_center',
+      id: 'S_east_straight',
       from: { x: 46.0, y: -23.5 },
+      to: { x: 6.0, y: -23.5 },
+      normal: { x: 0, y: 1 }
+    },
+    {
+      id: 'S_right_throat_outer',
+      from: { x: 6.0, y: -23.5 },
+      to: { x: 2.5, y: -24.6 },
+      normal: { x: 0, y: 1 }
+    },
+    {
+      id: 'S_right_throat_inner',
+      from: { x: 2.5, y: -24.6 },
+      to: { x: 0.0, y: -25.0 },
+      normal: { x: 0, y: 1 }
+    },
+    {
+      id: 'S_left_throat_inner',
+      from: { x: 0.0, y: -25.0 },
+      to: { x: -2.5, y: -24.6 },
+      normal: { x: 0, y: 1 }
+    },
+    {
+      id: 'S_left_throat_outer',
+      from: { x: -2.5, y: -24.6 },
+      to: { x: -6.0, y: -23.5 },
+      normal: { x: 0, y: 1 }
+    },
+    {
+      id: 'S_west_straight',
+      from: { x: -6.0, y: -23.5 },
       to: { x: -46.0, y: -23.5 },
       normal: { x: 0, y: 1 }
     },
     {
       id: 'S_west_taper',
       from: { x: -46.0, y: -23.5 },
-      to: { x: -50.0, y: -25.0 },
+      to: { x: -51.77, y: -26.77 },
       normal: { x: 0.447214, y: 0.894427 }
     },
     {
       id: 'W_south_taper',
-      from: { x: -50.0, y: -25.0 },
+      from: { x: -51.77, y: -26.77 },
       to: { x: -48.5, y: -21.0 },
       normal: { x: 0.894427, y: 0.447214 }
     },
@@ -106,7 +214,7 @@ export const TABLE_GEOMETRY: TableGeometry = {
     {
       id: 'W_north_taper',
       from: { x: -48.5, y: 21.0 },
-      to: { x: -50.0, y: 25.0 },
+      to: { x: -51.77, y: 26.77 },
       normal: { x: 0.894427, y: -0.447214 }
     }
   ],

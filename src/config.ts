@@ -10,9 +10,9 @@ export const CONFIG = {
   
   // Table dimensions (9-ft table: 100" x 50" play area)
   // NOTE: Actual geometry defined in src/geometry/Geometry.ts
-  TABLE_WIDTH: 100, // inches (full width, for legacy compat)
+  TABLE_WIDTH: 100, // incheas (full width, for legacy compat)
   TABLE_HEIGHT: 50,  // inches (full height, for legacy compat)
-  RAIL_THICKNESS: 2,
+  RAIL_THICKNESS: .2,
   
   // Ball properties
   BALL_RADIUS: 2.25 / 2, // 2.25" diameter

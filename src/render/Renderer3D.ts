@@ -4,7 +4,7 @@ import { FBXLoader } from 'three-stdlib';
 import { Ball, Rail, Pocket } from '../physics/Shapes';
 import { PhysicsWorld } from '../physics/Physics';
 import { CONFIG, BALL_CUE } from '../config';
-import { TABLE_GEOMETRY } from '../geometry/Geometry';
+import { TABLE_GEOMETRY, computePlayBoundaryPoints, computeBoundaryBounds, type Vec2, type BoundaryBounds } from '../geometry/Geometry';
 import { PredictionResult } from '../physics/Prediction';
 
 export class Renderer3D {
@@ -15,6 +15,8 @@ export class Renderer3D {
   camera: THREE.OrthographicCamera;
   renderer: THREE.WebGLRenderer;
   scale: number;
+  private playBoundaryPoints: Vec2[] = [];
+  private playBounds: BoundaryBounds = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
   
   // 3D objects
   ballMeshes: Map<number, THREE.Object3D> = new Map();
@@ -50,6 +52,7 @@ export class Renderer3D {
     // Create Three.js scene
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x0a0a0a);
+    this.refreshDerivedGeometry();
     
     // Create orthographic camera (top-down view)
     const aspect = 1;
@@ -304,6 +307,7 @@ export class Renderer3D {
   }
   
   initializeTable() {
+    this.refreshDerivedGeometry();
     const playShape = this.createPlayShape();
 
     // Felt surface following cushion outline
@@ -335,31 +339,34 @@ export class Renderer3D {
     this.scene.add(this.frameMesh);
   }
 
+  private refreshDerivedGeometry() {
+    this.playBoundaryPoints = computePlayBoundaryPoints(TABLE_GEOMETRY.rails);
+    this.playBounds = computeBoundaryBounds(this.playBoundaryPoints);
+  }
+
   private createPlayShape(): THREE.Shape {
-    const rails = TABLE_GEOMETRY.rails;
     const shape = new THREE.Shape();
-    if (!rails.length) {
+    const points = this.playBoundaryPoints;
+    if (!points.length) {
       return shape;
     }
 
-    shape.moveTo(rails[0].from.x, rails[0].from.y);
-    rails.forEach((rail) => {
-      shape.lineTo(rail.to.x, rail.to.y);
-    });
+    shape.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length; i++) {
+      shape.lineTo(points[i].x, points[i].y);
+    }
     shape.autoClose = true;
     return shape;
   }
 
   private createFrameShape(frameWidth: number, playShape: THREE.Shape): THREE.Shape {
-    const halfW = TABLE_GEOMETRY.playWidthIn / 2;
-    const halfH = TABLE_GEOMETRY.playHeightIn / 2;
-
     const outer = new THREE.Shape();
-    outer.moveTo(-halfW - frameWidth, -halfH - frameWidth);
-    outer.lineTo(halfW + frameWidth, -halfH - frameWidth);
-    outer.lineTo(halfW + frameWidth, halfH + frameWidth);
-    outer.lineTo(-halfW - frameWidth, halfH + frameWidth);
-    outer.lineTo(-halfW - frameWidth, -halfH - frameWidth);
+    const { minX, maxX, minY, maxY } = this.playBounds;
+    outer.moveTo(minX - frameWidth, minY - frameWidth);
+    outer.lineTo(maxX + frameWidth, minY - frameWidth);
+    outer.lineTo(maxX + frameWidth, maxY + frameWidth);
+    outer.lineTo(minX - frameWidth, maxY + frameWidth);
+    outer.lineTo(minX - frameWidth, minY - frameWidth);
 
     const hole = new THREE.Path();
     const holePoints = playShape.getPoints();
