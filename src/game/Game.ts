@@ -9,7 +9,7 @@ import { HUD } from '../ui/HUD';
 import { CONFIG, CUE_BALL_POSITION, RACK_POSITIONS } from '../config';
 import { EightBallRules } from '../rules/EightBall';
 import { physicsRecorder } from '../debug/PhysicsRecorder';
-import { Predictor, ShotPreviewPaths } from '../physics/Prediction';
+import { Predictor, ShotPreviewPaths, PredictionResult } from '../physics/Prediction';
 import { shotCapture } from '../debug/ShotCapture';
 import { SettingsPanel } from '../ui/SettingsPanel';
 
@@ -29,6 +29,10 @@ export class Game {
   predictor: Predictor;
   mode: GameMode;
   trajectoryPreview: ShotPreviewPaths | null = null;
+  lastPrediction: PredictionResult | null = null;
+  lastDirection: { x: number; y: number } = { x: 1, y: 0 };
+  lockedPrediction: PredictionResult | null = null;
+  lockedDirection: { x: number; y: number } | null = null;
   
   // Game loop
   accumulator: number = 0;
@@ -121,6 +125,10 @@ export class Game {
         // Also set it as manual angle to prevent mouse movements from changing it
         this.input.setManualAngle(this.spacebarLockedAngle);
 
+        // Snapshot prediction/direction for locked overlays
+        this.lockedPrediction = this.lastPrediction;
+        this.lockedDirection = { ...this.lastDirection };
+
         // Store current mouse Y position for power control
         const rect = this.input.canvas.getBoundingClientRect();
         this.spacebarStartMouseY = this.input.lastMouseY || (this.input.canvas.height / 2);
@@ -130,11 +138,21 @@ export class Game {
       }
 
       if (e.key === 'a' || e.key === 'A') {
-        if (this.isAimMode && this.cueBall && !this.cueBall.pocketed) {
-          // Switching from aim to power: lock the current angle
+        const switchingToPower = this.isAimMode && this.cueBall && !this.cueBall.pocketed;
+        if (switchingToPower) {
+          // Switching from aim to power: lock the current angle and prediction snapshot
           this.lockedAngle = this.input.getAimAngle(this.cueBall);
+          this.lockedPrediction = this.lastPrediction;
+          this.lockedDirection = { ...this.lastDirection };
+        } else {
+          this.lockedPrediction = null;
+          this.lockedDirection = null;
         }
         this.isAimMode = !this.isAimMode;
+        if (this.isAimMode) {
+          this.lockedPrediction = null;
+          this.lockedDirection = null;
+        }
       }
 
       // Arrow key micro-aim adjustments (only in aim mode and not holding spacebar)
@@ -191,6 +209,9 @@ export class Game {
 
         // Clear manual angle so mouse aim works again
         this.input.clearManualAngle();
+
+        this.lockedPrediction = null;
+        this.lockedDirection = null;
 
         // Shoot if power is sufficient
         if (this.currentPower >= CONFIG.CUE_POWER_MIN && this.cueBall && !this.cueBall.pocketed) {
@@ -267,6 +288,12 @@ export class Game {
 
   initializeGame() {
     this.world.balls = [];
+
+    this.trajectoryPreview = null;
+    this.lastPrediction = null;
+    this.lockedPrediction = null;
+    this.lockedDirection = null;
+    this.lastDirection = { x: 1, y: 0 };
     
     // Create cue ball
     this.cueBall = new Ball(
@@ -330,6 +357,8 @@ export class Game {
     physicsRecorder.recordShot(angle, power);
     this.canShoot = false;
     this.trajectoryPreview = null;
+    this.lockedPrediction = null;
+    this.lockedDirection = null;
     if (this.mode === GameMode.EIGHT_BALL) {
       this.rules.startShot();
     }
@@ -387,30 +416,62 @@ export class Game {
         effectiveAimMode = false;
       }
 
-      // Predict first contact (always run to clip aim line at rails/balls)
-      const direction = {
+      // Predict first contact and optionally freeze for locked power mode
+      let direction = {
         x: Math.cos(angle),
         y: Math.sin(angle),
       };
 
-      const prediction = this.predictor.predictFirstContact(
-        { x: this.cueBall.x, y: this.cueBall.y },
-        direction,
-        this.world,
-        this.cueBall
-      );
+      const lockedMode = this.isSpacebarHeld || !this.isAimMode;
+      let prediction: PredictionResult | null = null;
 
-      // Draw trajectory lines only if aim assist is enabled
-      if (this.aimAssist && prediction) {
-        const lockedMode = this.isSpacebarHeld || !this.isAimMode;
-        if (!lockedMode) {
-          this.trajectoryPreview = this.predictor.simulateShotPaths(
+      if (this.aimAssist) {
+        if (lockedMode) {
+          if (!this.lockedPrediction) {
+            const computed =
+              this.lastPrediction ??
+              this.predictor.predictFirstContact(
+                { x: this.cueBall.x, y: this.cueBall.y },
+                direction,
+                this.world,
+                this.cueBall
+              );
+            this.lockedPrediction = computed;
+
+            if (!this.lockedDirection) {
+              if (this.lastPrediction) {
+                this.lockedDirection = { ...this.lastDirection };
+              } else {
+                this.lockedDirection = { ...direction };
+              }
+            }
+
+            if (!this.trajectoryPreview) {
+              this.trajectoryPreview = this.predictor.simulateShotPaths(
+                this.world,
+                this.cueBall,
+                angle,
+                this.currentPower
+              );
+            }
+          }
+
+          prediction = this.lockedPrediction;
+          if (this.lockedDirection) {
+            direction = { ...this.lockedDirection };
+          }
+        } else {
+          const computed = this.predictor.predictFirstContact(
+            { x: this.cueBall.x, y: this.cueBall.y },
+            direction,
             this.world,
-            this.cueBall,
-            angle,
-            this.currentPower
+            this.cueBall
           );
-        } else if (!this.trajectoryPreview) {
+          prediction = computed;
+          this.lastPrediction = computed;
+          this.lastDirection = { ...direction };
+          this.lockedPrediction = null;
+          this.lockedDirection = null;
           this.trajectoryPreview = this.predictor.simulateShotPaths(
             this.world,
             this.cueBall,
@@ -419,17 +480,32 @@ export class Game {
           );
         }
 
-        const preview = this.trajectoryPreview;
-
-        this.renderer.drawTrajectoryLines(
-          prediction,
-          { x: this.cueBall.x, y: this.cueBall.y },
-          direction,
-          preview ?? undefined
-        );
+        if (prediction) {
+          this.renderer.drawTrajectoryLines(
+            prediction,
+            { x: this.cueBall.x, y: this.cueBall.y },
+            direction,
+            this.trajectoryPreview ?? undefined
+          );
+        } else {
+          this.trajectoryPreview = null;
+        }
       } else {
         this.trajectoryPreview = null;
+        this.lockedPrediction = null;
+        this.lockedDirection = null;
       }
+
+      const cuePrediction =
+        prediction ??
+        this.lockedPrediction ??
+        this.lastPrediction ??
+        this.predictor.predictFirstContact(
+          { x: this.cueBall.x, y: this.cueBall.y },
+          direction,
+          this.world,
+          this.cueBall
+        );
 
       this.renderer.drawCueAndPowerBar(
         this.cueBall,
@@ -438,7 +514,7 @@ export class Game {
         this.aimAssist,
         true,
         effectiveAimMode,
-        prediction,
+        cuePrediction,
         this.input.isFineAimMode,
         this.input.isFineAimMode && this.isCtrlPressed,
         this.isSpacebarHeld
