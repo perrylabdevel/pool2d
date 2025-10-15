@@ -261,6 +261,9 @@ export class SettingsManager {
     CONFIG.FRAME_OFFSET_IN = this.geometrySettings.FRAME_OFFSET_IN;
     CONFIG.JAW_REF_RADIUS_IN = this.geometrySettings.JAW_REF_RADIUS_IN;
     // Signal that geometry parameters changed (requires rebuild)
+    try {
+      console.info('[Settings] Geometry updated', this.geometrySettings);
+    } catch {}
     window.dispatchEvent(new CustomEvent('settings:geometry-changed'));
   }
 

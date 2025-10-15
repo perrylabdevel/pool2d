@@ -187,6 +187,15 @@ export class HUD {
     const applyGeomBtn = document.getElementById('settings-apply-geometry');
     if (applyGeomBtn) {
       applyGeomBtn.addEventListener('click', () => {
+        // Ensure current input values are saved before applying
+        const jr = parseFloat((document.getElementById('jaw-radius-in') as HTMLInputElement)?.value || '');
+        const fo = parseFloat((document.getElementById('frame-offset-in') as HTMLInputElement)?.value || '');
+        const patch: any = {};
+        if (!isNaN(jr)) patch.JAW_REF_RADIUS_IN = jr;
+        if (!isNaN(fo)) patch.FRAME_OFFSET_IN = fo;
+        if (Object.keys(patch).length) {
+          this.settingsManager.saveGeometrySettings(patch);
+        }
         window.dispatchEvent(new CustomEvent('settings:geometry-apply'));
       });
     }

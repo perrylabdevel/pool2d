@@ -82,11 +82,6 @@ export function computeBoundaryBounds(points: Vec2[]): BoundaryBounds {
 const PLAY_HALF_W_IN = 100.0 / 2;
 const PLAY_HALF_H_IN = 50.0 / 2;
 
-// Reference outer-rectangle offset (matches renderer frame width)
-const FRAME_OFFSET_IN = CONFIG.FRAME_OFFSET_IN;
-// Jaw reference radius used to derive jaw angle vs the outer rectangle
-// Larger radius widens the jaw opening; must be >= FRAME_OFFSET_IN to intersect
-const JAW_REF_RADIUS_IN = CONFIG.JAW_REF_RADIUS_IN;
 
 // Existing felt straight and inner throat Y-levels for north/south
 const Y_N_PLAY = PLAY_HALF_H_IN;        // 25.0
@@ -96,13 +91,14 @@ const Y_S_STRAIGHT = -23.5;             // existing straight rail y (south)
 const Y_N_INNER = 24.6;                 // inner throat y (north)
 const Y_S_INNER = -24.6;                // inner throat y (south)
 
-// Outer rectangle top/bottom used to derive jaw angle
-const Y_RECT_TOP = Y_N_PLAY + FRAME_OFFSET_IN;   // 29.0
-const Y_RECT_BOTTOM = Y_S_PLAY - FRAME_OFFSET_IN; // -29.0
-
 function deriveSideJawXMagnitudes(): { xOuter: number; xInner: number } {
-  const dTop = Y_RECT_TOP - Y_N_PLAY; // FRAME_OFFSET_IN
-  const r = JAW_REF_RADIUS_IN;
+  // Read current geometry params from CONFIG at call time
+  const frameOffset = CONFIG.FRAME_OFFSET_IN;
+  const jawRadius = CONFIG.JAW_REF_RADIUS_IN;
+  const yRectTop = Y_N_PLAY + frameOffset;
+
+  const dTop = yRectTop - Y_N_PLAY; // equals frameOffset
+  const r = jawRadius;
   const under = Math.max(0, r * r - dTop * dTop);
   const xi = Math.sqrt(under);
 
@@ -122,7 +118,7 @@ function deriveSideJawXMagnitudes(): { xOuter: number; xInner: number } {
   const xOuterClamped = Number.isFinite(xOuter) && xOuter > 0.01 ? xOuter : 6.0;
   const xInnerClamped = Number.isFinite(xInner) && xInner > 0.01 ? xInner : 2.5;
   try {
-    console.info(`[Geometry] Apply side jaws: FRAME_OFFSET_IN=${FRAME_OFFSET_IN}, JAW_REF_RADIUS_IN=${JAW_REF_RADIUS_IN}, dTop=${dTop.toFixed(3)}, xi=${xi.toFixed(3)}, xOuter=${xOuterClamped.toFixed(3)}, xInner=${xInnerClamped.toFixed(3)}`);
+    console.info(`[Geometry] Apply side jaws: FRAME_OFFSET_IN=${frameOffset}, JAW_REF_RADIUS_IN=${jawRadius}, dTop=${dTop.toFixed(3)}, xi=${xi.toFixed(3)}, xOuter=${xOuterClamped.toFixed(3)}, xInner=${xInnerClamped.toFixed(3)}`);
   } catch {}
   return { xOuter: xOuterClamped, xInner: xInnerClamped };
 }
