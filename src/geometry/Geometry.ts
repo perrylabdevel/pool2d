@@ -81,6 +81,8 @@ export function computeBoundaryBounds(points: Vec2[]): BoundaryBounds {
 // --- Derived jaw geometry helpers (side pockets) ---
 const PLAY_HALF_W_IN = 100.0 / 2;
 const PLAY_HALF_H_IN = 50.0 / 2;
+const X_E_PLAY = PLAY_HALF_W_IN;
+const X_W_PLAY = -PLAY_HALF_W_IN;
 
 
 // Existing felt straight and inner throat Y-levels for north/south
@@ -90,6 +92,8 @@ const Y_N_STRAIGHT = 23.5;              // existing straight rail y (north)
 const Y_S_STRAIGHT = -23.5;             // existing straight rail y (south)
 const Y_N_INNER = 24.6;                 // inner throat y (north)
 const Y_S_INNER = -24.6;                // inner throat y (south)
+const X_E_STRAIGHT = 48.5;              // existing vertical straight x (east)
+const X_W_STRAIGHT = -48.5;             // existing vertical straight x (west)
 
 function deriveSideJawXMagnitudes(): { xOuter: number; xInner: number } {
   // Read current geometry params from CONFIG at call time
@@ -128,6 +132,28 @@ const { xOuter: JAW_X_OUTER, xInner: JAW_X_INNER } = deriveSideJawXMagnitudes();
 export function getTableGeometry(): TableGeometry {
   // Recompute on demand from current CONFIG values
   const { xOuter: JAW_X_OUTER, xInner: JAW_X_INNER } = deriveSideJawXMagnitudes();
+  // Corner jaw helpers using circle-rectangle intersections
+  function cornerTopStraightX(signX: 1 | -1, signY: 1 | -1): number {
+    const frameOffset = CONFIG.FRAME_OFFSET_IN;
+    const r = CONFIG.JAW_REF_RADIUS_IN;
+    const Cx = signX * X_E_PLAY;
+    const Cy = signY * Y_N_PLAY;
+    const yRect = signY > 0 ? (Y_N_PLAY + frameOffset) : (Y_S_PLAY - frameOffset);
+    const dy = yRect - Cy;
+    const disc = r * r - dy * dy;
+    if (!(disc > 0)) return 46.0;
+    const xi = Math.sqrt(disc);
+    const xOnRect = signX > 0 ? (Cx - xi) : (Cx + xi); // toward table center
+    const yTarget = signY > 0 ? Y_N_STRAIGHT : Y_S_STRAIGHT;
+    const s = (yTarget - Cy) / dy;
+    const xStraight = Cx + s * (xOnRect - Cx);
+    try { console.info(`[Geometry] Corner topX sX=${signX} sY=${signY} x=${xStraight.toFixed(3)}`); } catch {}
+    return (isFinite(xStraight) ? xStraight : 46.0);
+  }
+  function cornerRectVertex(signX: 1 | -1, signY: 1 | -1): Vec2 {
+    const frameOffset = CONFIG.FRAME_OFFSET_IN;
+    return { x: signX * (PLAY_HALF_W_IN + frameOffset), y: signY * (PLAY_HALF_H_IN + frameOffset) };
+  }
   return {
     playWidthIn: 100.0,
     playHeightIn: 50.0,
@@ -139,13 +165,13 @@ export function getTableGeometry(): TableGeometry {
     rails: [
     {
       id: 'N_west_taper',
-      from: { x: -51.77, y: 26.77 },
-      to: { x: -46.0, y: 23.5 },
+      from: cornerRectVertex(-1, +1),
+      to: { x: -cornerTopStraightX(-1, +1), y: Y_N_STRAIGHT },
       normal: { x: 0.447214, y: -0.894427 }
     },
     {
       id: 'N_west_straight',
-      from: { x: -46.0, y: Y_N_STRAIGHT },
+      from: { x: -cornerTopStraightX(-1, +1), y: Y_N_STRAIGHT },
       to: { x: -JAW_X_OUTER, y: Y_N_STRAIGHT },
       normal: { x: 0, y: -1 }
     },
@@ -176,19 +202,19 @@ export function getTableGeometry(): TableGeometry {
     {
       id: 'N_east_straight',
       from: { x: JAW_X_OUTER, y: Y_N_STRAIGHT },
-      to: { x: 46.0, y: Y_N_STRAIGHT },
+      to: { x: cornerTopStraightX(+1, +1), y: Y_N_STRAIGHT },
       normal: { x: 0, y: -1 }
     },
     {
       id: 'N_east_taper',
-      from: { x: 46.0, y: 23.5 },
-      to: { x: 51.77, y: 26.77 },
+      from: { x: cornerTopStraightX(+1, +1), y: Y_N_STRAIGHT },
+      to: cornerRectVertex(+1, +1),
       normal: { x: -0.447214, y: -0.894427 }
     },
     {
       id: 'E_north_taper',
-      from: { x: 51.77, y: 26.77 },
-      to: { x: 48.5, y: 21.0 },
+      from: cornerRectVertex(+1, +1),
+      to: { x: X_E_STRAIGHT, y: 21.0 },
       normal: { x: -0.894427, y: -0.447214 }
     },
     {
@@ -199,19 +225,19 @@ export function getTableGeometry(): TableGeometry {
     },
     {
       id: 'E_south_taper',
-      from: { x: 48.5, y: -21.0 },
-      to: { x: 51.77, y: -26.77 },
+      from: { x: X_E_STRAIGHT, y: -21.0 },
+      to: cornerRectVertex(+1, -1),
       normal: { x: -0.894427, y: 0.447214 }
     },
     {
       id: 'S_east_taper',
-      from: { x: 51.77, y: -26.77 },
-      to: { x: 46.0, y: -23.5 },
+      from: cornerRectVertex(+1, -1),
+      to: { x: cornerTopStraightX(+1, -1), y: Y_S_STRAIGHT },
       normal: { x: -0.447214, y: 0.894427 }
     },
     {
       id: 'S_east_straight',
-      from: { x: 46.0, y: Y_S_STRAIGHT },
+      from: { x: cornerTopStraightX(+1, -1), y: Y_S_STRAIGHT },
       to: { x: JAW_X_OUTER, y: Y_S_STRAIGHT },
       normal: { x: 0, y: 1 }
     },
@@ -247,14 +273,14 @@ export function getTableGeometry(): TableGeometry {
     },
     {
       id: 'S_west_taper',
-      from: { x: -46.0, y: -23.5 },
-      to: { x: -51.77, y: -26.77 },
+      from: { x: -cornerTopStraightX(-1, -1), y: Y_S_STRAIGHT },
+      to: cornerRectVertex(-1, -1),
       normal: { x: 0.447214, y: 0.894427 }
     },
     {
       id: 'W_south_taper',
-      from: { x: -51.77, y: -26.77 },
-      to: { x: -48.5, y: -21.0 },
+      from: cornerRectVertex(-1, -1),
+      to: { x: X_W_STRAIGHT, y: -21.0 },
       normal: { x: 0.894427, y: 0.447214 }
     },
     {
@@ -265,8 +291,8 @@ export function getTableGeometry(): TableGeometry {
     },
     {
       id: 'W_north_taper',
-      from: { x: -48.5, y: 21.0 },
-      to: { x: -51.77, y: 26.77 },
+      from: { x: X_W_STRAIGHT, y: 21.0 },
+      to: cornerRectVertex(-1, +1),
       normal: { x: 0.894427, y: -0.447214 }
     }
     ],
