@@ -138,17 +138,19 @@ export function getTableGeometry(): TableGeometry {
     const r = CONFIG.JAW_REF_RADIUS_IN;
     const Cx = signX * X_E_PLAY;
     const Cy = signY * Y_N_PLAY;
-    const yRect = signY > 0 ? (Y_N_PLAY + frameOffset) : (Y_S_PLAY - frameOffset);
-    const dy = yRect - Cy;
-    const disc = r * r - dy * dy;
-    if (!(disc > 0)) return 46.0;
-    const xi = Math.sqrt(disc);
-    const xOnRect = signX > 0 ? (Cx - xi) : (Cx + xi); // toward table center
-    const yTarget = signY > 0 ? Y_N_STRAIGHT : Y_S_STRAIGHT;
-    const s = (yTarget - Cy) / dy;
-    const xStraight = Cx + s * (xOnRect - Cx);
-    try { console.info(`[Geometry] Corner topX sX=${signX} sY=${signY} x=${xStraight.toFixed(3)}`); } catch {}
-    return (isFinite(xStraight) ? xStraight : 46.0);
+    const dTop = frameOffset;
+    const disc = r * r - dTop * dTop;
+    if (!(disc > 0)) return signX > 0 ? 46.0 : -46.0;
+    const dx = Math.sqrt(disc); // magnitude along x toward center on rectangle top/bottom
+    const k = (Cy - (signY > 0 ? Y_N_STRAIGHT : Y_S_STRAIGHT)) / dTop; // positive scale
+    // Move inward horizontally from corner pocket center toward table center
+    const xStraight = Cx - k * (signX * dx);
+    const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+    const clamped = signX > 0
+      ? clamp(xStraight, JAW_X_OUTER, 46.0)
+      : clamp(xStraight, -46.0, -JAW_X_OUTER);
+    try { console.info(`[Geometry] Corner topX sX=${signX} sY=${signY} x=${xStraight.toFixed(3)} -> ${clamped.toFixed(3)}`); } catch {}
+    return clamped;
   }
   function cornerRectVertex(signX: 1 | -1, signY: 1 | -1): Vec2 {
     const frameOffset = CONFIG.FRAME_OFFSET_IN;
