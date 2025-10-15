@@ -194,18 +194,28 @@ export class PhysicsWorld {
   checkPockets() {
     this.balls.forEach((ball) => {
       if (ball.pocketed) return;
-      
+
       for (const pocket of this.pockets) {
         if (pocket.contains(ball)) {
           ball.pocketed = true;
           ball.vx = 0;
           ball.vy = 0;
-      if (this.recordingEnabled) {
-        physicsRecorder.recordPocket(ball);
-      }
-          // Notify game logic (will be handled by Game class)
+          ball.x = pocket.x;
+          ball.y = pocket.y;
+          if (this.recordingEnabled) {
+            physicsRecorder.recordPocket(ball);
+          }
           break;
         }
+      }
+
+      if (!ball.pocketed) {
+        const halfWidth = TABLE_GEOMETRY.playWidthIn / 2;
+        const halfHeight = TABLE_GEOMETRY.playHeightIn / 2;
+        const clampedX = Math.max(-halfWidth + ball.radius, Math.min(halfWidth - ball.radius, ball.x));
+        const clampedY = Math.max(-halfHeight + ball.radius, Math.min(halfHeight - ball.radius, ball.y));
+        if (clampedX !== ball.x) ball.x = clampedX;
+        if (clampedY !== ball.y) ball.y = clampedY;
       }
     });
   }
