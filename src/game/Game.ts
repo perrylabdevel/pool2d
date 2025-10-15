@@ -137,6 +137,7 @@ export class Game {
 
         // Start at minimum power
         this.currentPower = CONFIG.CUE_POWER_MIN;
+        this.previewPowerSnapshot = this.currentPower;
       }
 
       if (e.key === 'a' || e.key === 'A') {
@@ -146,10 +147,11 @@ export class Game {
           this.lockedAngle = this.input.getAimAngle(this.cueBall);
           this.lockedPrediction = this.lastPrediction;
           this.lockedDirection = { ...this.lastDirection };
-          this.previewPowerSnapshot = null;
+          this.previewPowerSnapshot = Math.max(this.currentPower, CONFIG.CUE_POWER_MIN);
         } else {
           this.lockedPrediction = null;
           this.lockedDirection = null;
+          this.previewPowerSnapshot = null;
         }
         this.isAimMode = !this.isAimMode;
         if (this.isAimMode) {
@@ -459,20 +461,16 @@ export class Game {
             direction = { ...this.lockedDirection };
           }
 
-          const needsPreviewUpdate =
-            !this.trajectoryPreview ||
-            this.previewPowerSnapshot === null ||
-            Math.abs(this.previewPowerSnapshot - this.currentPower) > 0.01;
-
-          if (needsPreviewUpdate) {
+          if (!this.trajectoryPreview) {
             const lockedAngle = this.isSpacebarHeld ? this.spacebarLockedAngle : this.lockedAngle;
+            const previewPower = this.previewPowerSnapshot ?? this.currentPower;
+            this.previewPowerSnapshot = previewPower;
             this.trajectoryPreview = this.predictor.simulateShotPaths(
               this.world,
               this.cueBall,
               lockedAngle,
-              this.currentPower
+              previewPower
             );
-            this.previewPowerSnapshot = this.currentPower;
           }
         } else {
           const computed = this.predictor.predictFirstContact(
