@@ -3,6 +3,7 @@
 
 import { Ball } from '../physics/Shapes';
 import { PredictionResult } from '../physics/Prediction';
+import { CONFIG } from '../config';
 
 interface ShotData {
   // Pre-shot data
@@ -113,7 +114,7 @@ class ShotCaptureSystem {
       const vRel = dvx * nx + dvy * ny;
       
       // Normal impulse
-      const e = 0.93; // BALL_RESTITUTION
+      const e = CONFIG.BALL_RESTITUTION;
       const j = -(1 + e) * vRel / totalInvMass;
       
       // Apply normal impulse first
@@ -131,8 +132,7 @@ class ShotCaptureSystem {
       const dvy_post = objBallVyAfterNormal - cueBallVyAfterNormal;
       const vt = dvx_post * tx + dvy_post * ty;
       const jt = -vt / totalInvMass;
-      const ballBallFriction = 0.05; // BALL_BALL_FRICTION
-      const maxFriction = Math.abs(j) * ballBallFriction;
+      const maxFriction = Math.abs(j) * CONFIG.BALL_BALL_FRICTION;
       const jtClamped = Math.max(-maxFriction, Math.min(maxFriction, jt));
       
       // Apply friction impulse
@@ -434,6 +434,8 @@ class ShotCaptureSystem {
 
 export const shotCapture = new ShotCaptureSystem();
 
-// Global helpers
-(window as any).captureShot = () => shotCapture.startCapture();
-(window as any).cancelCapture = () => shotCapture.cancelCapture();
+// Global helpers (only in browser environment)
+if (typeof window !== 'undefined') {
+  (window as any).captureShot = () => shotCapture.startCapture();
+  (window as any).cancelCapture = () => shotCapture.cancelCapture();
+}

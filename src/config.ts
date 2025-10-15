@@ -25,7 +25,7 @@ export const CONFIG = {
   // Friction - balanced for 10x velocity multiplier
   ROLLING_FRICTION: 0.50, // High friction to counteract 10x velocity multiplier (ball-table)
   SLIDING_FRICTION: 0.65, // Ball-table friction
-  BALL_BALL_FRICTION: 0.05, // Ball-ball collision friction (smooth, hard surfaces)
+  BALL_BALL_FRICTION: 0.0, // Ball-ball collision friction - DISABLED to ensure object balls move exactly along collision normal [BUILD: 2025-10-15]
   VELOCITY_EPSILON: 0.2, // Sleep threshold adjusted for 10x velocity scale
   
   // Pockets (center-origin coordinates: see Geometry.ts for authoritative definitions)

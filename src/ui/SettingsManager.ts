@@ -47,7 +47,7 @@ const DEFAULT_UI_COLORS: UIColors = {
 
 const DEFAULT_PHYSICS_SETTINGS: PhysicsSettings = {
   BALL_RESTITUTION: 0.93,
-  BALL_BALL_FRICTION: 0.05,
+  BALL_BALL_FRICTION: 0.0, // DISABLED - object balls should move exactly along collision normal
   CUSHION_RESTITUTION: 0.88,
   CUE_POWER_MAX: 25.0,
   CUE_POWER_MULTIPLIER: 10.0,

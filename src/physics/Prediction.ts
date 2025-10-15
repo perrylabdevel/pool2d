@@ -95,7 +95,11 @@ export class Predictor {
 
     if (!previewCue) return null;
 
-    const effectivePower = Math.max(power ?? CONFIG.CUE_POWER_MAX * 0.6, CONFIG.CUE_POWER_MIN * 1.5);
+    // Use a representative default power (80% of max) if not specified or if 0
+    // This better matches typical shot power, improving prediction accuracy
+    const effectivePower = (power && power > CONFIG.CUE_POWER_MIN) 
+      ? power 
+      : CONFIG.CUE_POWER_MAX * 0.8;
     const speed = effectivePower * CONFIG.CUE_POWER_MULTIPLIER;
 
     previewCue.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);

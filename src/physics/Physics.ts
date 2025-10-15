@@ -4,7 +4,7 @@
 import { Ball, Rail, Pocket } from './Shapes';
 import { CONFIG } from '../config';
 import { TABLE_GEOMETRY } from '../geometry/Geometry';
-import { detectBallBall, detectBallRail, resolveBallBall, resolveBallRail, Contact } from './Collision';
+import { detectBallBall, detectBallRail, resolveBallBall, resolveBallRail, Contact, resetCollisionTracking } from './Collision';
 import { physicsRecorder } from '../debug/PhysicsRecorder';
 
 export class PhysicsWorld {
@@ -85,6 +85,11 @@ export class PhysicsWorld {
   }
   
   step(dt: number) {
+    // Reset collision tracking at the start of EACH TIMESTEP
+    // This ensures velocity impulses are only applied once per collision per timestep,
+    // even if the collision spans multiple substeps
+    resetCollisionTracking();
+    
     // Adaptive substepping for high-speed collisions
     // Calculate max ball speed to determine substeps needed
     let maxSpeed = 0;

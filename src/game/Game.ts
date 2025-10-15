@@ -47,6 +47,8 @@ export class Game {
   cueBall: Ball | null = null;
   aimAssist: boolean = true;
   currentPower: number = 0;
+  lastShotPower: number = CONFIG.CUE_POWER_MAX * 0.8; // Default to 80% for prediction accuracy
+  previewPower: number = CONFIG.CUE_POWER_MAX * 0.8; // Power used for aim prediction (adjustable with mouse wheel)
   isDraggingPower: boolean = false;
   isAimMode: boolean = true; // true = aim, false = power
   lockedAngle: number = 0; // Locked angle when in power mode
@@ -108,6 +110,20 @@ export class Game {
     window.addEventListener('mousemove', (e) => this.handlePowerBarMouseMove(e));
     window.addEventListener('mouseup', (e) => this.handlePowerBarMouseUp(e));
     
+    // Mouse wheel: Adjust preview power in aim mode
+    this.input.canvas.addEventListener('wheel', (e) => {
+      if (this.isAimMode && this.canShoot && this.cueBall && !this.cueBall.pocketed) {
+        e.preventDefault();
+        
+        // Adjust preview power (negative deltaY = scroll up = more power)
+        const powerDelta = -Math.sign(e.deltaY) * 1.0; // 1.0 power per wheel notch
+        this.previewPower = Math.max(CONFIG.CUE_POWER_MIN, Math.min(CONFIG.CUE_POWER_MAX, this.previewPower + powerDelta));
+        
+        // Clear cached prediction to force re-simulation with new power
+        this.trajectoryPreview = null;
+      }
+    }, { passive: false });
+    
     // Handle A key to toggle aim/power mode
     window.addEventListener('keydown', (e) => {
       // Track Ctrl state
@@ -133,8 +149,8 @@ export class Game {
         const rect = this.input.canvas.getBoundingClientRect();
         this.spacebarStartMouseY = this.input.lastMouseY || (this.input.canvas.height / 2);
 
-        // Start at minimum power
-        this.currentPower = CONFIG.CUE_POWER_MIN;
+        // Start at preview power (the power shown in the aim prediction)
+        this.currentPower = this.previewPower;
       }
 
       if (e.key === 'a' || e.key === 'A') {
@@ -144,6 +160,8 @@ export class Game {
           this.lockedAngle = this.input.getAimAngle(this.cueBall);
           this.lockedPrediction = this.lastPrediction;
           this.lockedDirection = { ...this.lastDirection };
+          // Start power at preview power (the power shown in the aim prediction)
+          this.currentPower = this.previewPower;
         } else {
           this.lockedPrediction = null;
           this.lockedDirection = null;
@@ -336,6 +354,10 @@ export class Game {
   shoot(angle: number, power: number) {
     if (!this.cueBall || this.cueBall.pocketed) return;
     
+    // Remember this power for future predictions and preview
+    this.lastShotPower = power;
+    this.previewPower = power;
+    
     // Record shot for capture system if active
     if (shotCapture.isCapturing()) {
       const direction = { x: Math.cos(angle), y: Math.sin(angle) };
@@ -430,11 +452,13 @@ export class Game {
         if (lockedMode) {
           if (!preview) {
             const lockedAngle = this.isSpacebarHeld ? this.spacebarLockedAngle : this.lockedAngle;
+            // Use current power in power mode, or preview power in aim mode
+            const predictionPower = this.currentPower > 0 ? this.currentPower : this.previewPower;
             preview = this.predictor.simulateShotPaths(
               this.world,
               this.cueBall,
               lockedAngle,
-              this.currentPower
+              predictionPower
             );
             this.trajectoryPreview = preview;
           }
@@ -458,11 +482,12 @@ export class Game {
 
           prediction = previewPrediction ?? this.lockedPrediction ?? null;
         } else {
+          // In aim mode, use preview power (adjustable with mouse wheel)
           preview = this.predictor.simulateShotPaths(
             this.world,
             this.cueBall,
             angle,
-            this.currentPower
+            this.previewPower
           );
           this.trajectoryPreview = preview;
 
@@ -521,7 +546,8 @@ export class Game {
         cuePrediction,
         this.input.isFineAimMode,
         this.input.isFineAimMode && this.isCtrlPressed,
-        this.isSpacebarHeld
+        this.isSpacebarHeld,
+        this.previewPower
       );
     }
 

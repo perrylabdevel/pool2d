@@ -3,6 +3,7 @@
 import { Game } from './game/Game';
 import { AssetLoader } from './assets/AssetLoader';
 import { LoadingScreen } from './ui/LoadingScreen';
+import { getCollisionTrackingStatus } from './physics/Collision';
 
 async function main() {
   const gameCanvas = document.getElementById('game-canvas') as HTMLCanvasElement;
@@ -43,6 +44,15 @@ async function main() {
     game.start();
     
     console.log('Pool 2D initialized');
+    
+    // Debug helper to verify collision tracking fix is active
+    (window as any).checkCollisionTracking = () => {
+      const status = getCollisionTrackingStatus();
+      console.log('✅ Collision tracking is ACTIVE - Fix is loaded!');
+      console.log('Tracked collision pairs this step:', status.trackedCollisions);
+      console.log('Pairs:', status.pairs);
+      return status;
+    };
   } catch (error) {
     console.error('Failed to initialize game:', error);
     loadingScreen.updateProgress(0, 100, 'Error loading assets. Please refresh.');

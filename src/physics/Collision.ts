@@ -14,6 +14,27 @@ export interface Contact {
   depth: number;
 }
 
+// Track which collision pairs have had impulses applied this timestep
+const resolvedPairsThisStep = new Set<string>();
+
+export function resetCollisionTracking() {
+  resolvedPairsThisStep.clear();
+}
+
+export function getCollisionTrackingStatus() {
+  return {
+    trackedCollisions: resolvedPairsThisStep.size,
+    pairs: Array.from(resolvedPairsThisStep),
+  };
+}
+
+function getCollisionPairId(ballA: Ball, ballB: Ball): string {
+  // Use sorted IDs to ensure consistent pair identification
+  const id1 = Math.min(ballA.id, ballB.id);
+  const id2 = Math.max(ballA.id, ballB.id);
+  return `${id1}-${id2}`;
+}
+
 // Ball-ball collision detection
 export function detectBallBall(a: Ball, b: Ball): Contact | null {
   if (a.pocketed || b.pocketed) return null;
@@ -122,9 +143,12 @@ export function resolveBallBall(contact: Contact) {
   const { ballA, ballB, nx, ny, depth } = contact;
   if (!ballB) return;
   
-  // Positional correction (Baumgarte stabilization)
-  const correction = depth * 1.2; // 120% correction to prevent collision loops
   const totalInvMass = ballA.invMass + ballB.invMass;
+  const pairId = getCollisionPairId(ballA, ballB);
+  const isFirstResolution = !resolvedPairsThisStep.has(pairId);
+  
+  // Positional correction (Baumgarte stabilization) - always apply
+  const correction = depth * 1.2; // 120% correction to prevent collision loops
   
   if (totalInvMass > 0) {
     const correctionX = (correction * nx) / totalInvMass;
@@ -143,6 +167,14 @@ export function resolveBallBall(contact: Contact) {
   const dist_corrected = Math.sqrt(dx_corrected * dx_corrected + dy_corrected * dy_corrected);
   const nx_corrected = dist_corrected > 1e-8 ? dx_corrected / dist_corrected : nx;
   const ny_corrected = dist_corrected > 1e-8 ? dy_corrected / dist_corrected : ny;
+  
+  // Only apply velocity impulses on first resolution
+  if (!isFirstResolution) {
+    return; // Position correction only on subsequent iterations
+  }
+  
+  // Mark this pair as resolved for this timestep
+  resolvedPairsThisStep.add(pairId);
   
   // Record for shot capture BEFORE any impulses (to get pre-collision state)
   if (shotCapture.isCapturing()) {

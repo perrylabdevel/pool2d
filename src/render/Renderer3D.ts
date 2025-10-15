@@ -987,7 +987,7 @@ export class Renderer3D {
   }
   
   // Compatibility methods for existing code
-  drawCueAndPowerBar(ball: Ball, angle: number, power: number, showGhost: boolean, showPowerBar: boolean, _isAimMode: boolean, prediction?: PredictionResult, _isFineAimMode?: boolean, _isUltraFineMode?: boolean, _isSpacebarMode?: boolean) {
+  drawCueAndPowerBar(ball: Ball, angle: number, power: number, showGhost: boolean, showPowerBar: boolean, isAimMode: boolean, prediction?: PredictionResult, isFineAimMode?: boolean, isUltraFineMode?: boolean, isSpacebarMode?: boolean, previewPower?: number) {
     // Remove old 3D elements if they exist
     if (this.cueStick) {
       this.scene.remove(this.cueStick);
@@ -1055,11 +1055,11 @@ export class Renderer3D {
     
     // Draw power bar in 2D
     if (showPowerBar) {
-      this.drawPowerBar2D(power);
+      this.drawPowerBar2D(power, isAimMode, previewPower, isFineAimMode, isUltraFineMode, isSpacebarMode);
     }
   }
   
-  drawPowerBar2D(power: number) {
+  drawPowerBar2D(power: number, isAimMode?: boolean, previewPower?: number, isFineAimMode?: boolean, isUltraFineMode?: boolean, isSpacebarMode?: boolean) {
     const barWidth = 30;
     const barHeight = 200;
     const barX = this.uiCanvas.width - 60;
@@ -1083,6 +1083,24 @@ export class Renderer3D {
     this.uiCtx.strokeStyle = '#ffffff';
     this.uiCtx.lineWidth = 2;
     this.uiCtx.strokeRect(barX, barY, barWidth, barHeight);
+    
+    // Show preview power in aim mode
+    if (isAimMode && previewPower !== undefined) {
+      this.uiCtx.textAlign = 'center';
+      this.uiCtx.textBaseline = 'middle';
+      this.uiCtx.font = 'bold 12px Arial';
+      this.uiCtx.fillStyle = '#00ffff'; // Cyan
+      this.uiCtx.fillText('Preview:', barX + barWidth / 2, barY - 25);
+      this.uiCtx.font = 'bold 14px Arial';
+      this.uiCtx.fillStyle = '#ffffff';
+      this.uiCtx.fillText(`${previewPower.toFixed(1)}`, barX + barWidth / 2, barY - 8);
+      
+      // Hint text
+      this.uiCtx.font = '10px Arial';
+      this.uiCtx.fillStyle = '#aaaaaa';
+      this.uiCtx.fillText('Mouse wheel', barX + barWidth / 2, barY + barHeight + 15);
+      this.uiCtx.fillText('to adjust', barX + barWidth / 2, barY + barHeight + 28);
+    }
   }
   
   drawPrediction(_prediction: PredictionResult) {
