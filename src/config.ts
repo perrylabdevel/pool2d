@@ -12,7 +12,7 @@ export const CONFIG = {
   // NOTE: Actual geometry defined in src/geometry/Geometry.ts
   TABLE_WIDTH: 100, // inches (full width, for legacy compat)
   TABLE_HEIGHT: 50,  // inches (full height, for legacy compat)
-  RAIL_THICKNESS: 2,
+  RAIL_THICKNESS: 2.5,
   
   // Ball properties
   BALL_RADIUS: 2.25 / 2, // 2.25" diameter
@@ -38,6 +38,14 @@ export const CONFIG = {
   CUE_DRAG_SCALE: 0.08, // Power buildup rate
   AIM_LINE_LENGTH: 20,
   GHOST_LINE_LENGTH: 30,
+
+  // Aim assistance
+  AIM_MOUSE_SENSITIVITY_NORMAL: 1.0,
+  AIM_MOUSE_SENSITIVITY_FINE: 0.2, // 5x slower for precise aim (hold Shift)
+  AIM_ARROW_KEY_INCREMENT_BASE: 0.5, // Base degrees per arrow key press
+  AIM_ARROW_KEY_INCREMENT_FINE: 0.1, // Fine degrees when holding Shift
+  AIM_ARROW_KEY_INCREMENT_ULTRA: 0.02, // Ultra-fine when holding Shift + Ctrl
+  AIM_FINE_MODE_KEY: 'Shift', // Hold for fine aim mode
   
   // Rendering
   CANVAS_SCALE: 8, // Pixels per game unit
