@@ -97,32 +97,29 @@ const X_W_STRAIGHT = -48.5;             // existing vertical straight x (west)
 
 function deriveSideJawXMagnitudes(): { xOuter: number; xInner: number } {
   // Read current geometry params from CONFIG at call time
-  const frameOffset = CONFIG.FRAME_OFFSET_IN;
-  const jawRadius = CONFIG.JAW_REF_RADIUS_IN;
-  const yRectTop = Y_N_PLAY + frameOffset;
-
-  const dTop = yRectTop - Y_N_PLAY; // equals frameOffset
-  const r = jawRadius;
-  const under = Math.max(0, r * r - dTop * dTop);
-  const xi = Math.sqrt(under);
-
-  // Fallback to current geometry if no intersection
-  if (!(xi > 1e-6)) {
+  const f = CONFIG.FRAME_OFFSET_IN; // vertical distance to rectangle edge
+  const r = CONFIG.JAW_REF_RADIUS_IN;
+  const yTop = Y_N_PLAY + f;
+  const under = r * r - f * f;
+  if (!(under > 0)) {
     return { xOuter: 6.0, xInner: 2.5 };
   }
+  const xi = Math.sqrt(under); // horizontal from center to circle-rect intersection on top
 
-  // Line from pocket center C to (±xi, Y_RECT_TOP):
-  // Param L(s) = C + s * (dx, dy) with dx=±xi, dy=dTop
-  const sStraight = (Y_N_STRAIGHT - Y_N_PLAY) / dTop; // negative
-  const sInner = (Y_N_INNER - Y_N_PLAY) / dTop;       // negative
+  // Use the tangent line at the circle-rectangle contact point to define jaw direction.
+  // Tangent direction at top contact: T = (f, -xi) (points downward and inward)
+  // Parameter t to reach target Y: y(t) = yTop + t * (-xi) -> t = (yTop - yTarget) / xi
+  const tOuter = (yTop - Y_N_STRAIGHT) / xi;
+  const tInner = (yTop - Y_N_INNER) / xi;
+  const xOuter = xi + f * tOuter;
+  const xInner = xi + f * tInner;
 
-  const xOuter = Math.abs(sStraight * xi);
-  const xInner = Math.abs(sInner * xi);
-  // Guard against degenerate values
-  const xOuterClamped = Number.isFinite(xOuter) && xOuter > 0.01 ? xOuter : 6.0;
-  const xInnerClamped = Number.isFinite(xInner) && xInner > 0.01 ? xInner : 2.5;
+  // Clamp to sane ranges (must be positive magnitudes and not exceed straight extent near corners)
+  const clampPos = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+  const xOuterClamped = clampPos(isFinite(xOuter) ? xOuter : 6.0, 0.5, 46.0);
+  const xInnerClamped = clampPos(isFinite(xInner) ? xInner : 2.5, 0.25, xOuterClamped - 0.25);
   try {
-    console.info(`[Geometry] Apply side jaws: FRAME_OFFSET_IN=${frameOffset}, JAW_REF_RADIUS_IN=${jawRadius}, dTop=${dTop.toFixed(3)}, xi=${xi.toFixed(3)}, xOuter=${xOuterClamped.toFixed(3)}, xInner=${xInnerClamped.toFixed(3)}`);
+    console.info(`[Geometry] Apply side jaws (tangent): FRAME_OFFSET_IN=${f}, JAW_REF_RADIUS_IN=${r}, xi=${xi.toFixed(3)}, xOuter=${xOuterClamped.toFixed(3)}, xInner=${xInnerClamped.toFixed(3)}`);
   } catch {}
   return { xOuter: xOuterClamped, xInner: xInnerClamped };
 }
