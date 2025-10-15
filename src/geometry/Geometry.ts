@@ -138,13 +138,14 @@ export function getTableGeometry(): TableGeometry {
     const r = CONFIG.JAW_REF_RADIUS_IN;
     const Cx = signX * X_E_PLAY;
     const Cy = signY * Y_N_PLAY;
-    const dTop = frameOffset;
-    const disc = r * r - dTop * dTop;
+    const d = frameOffset; // vertical distance from pocket center to rectangle edge
+    const disc = r * r - d * d;
     if (!(disc > 0)) return signX > 0 ? 46.0 : -46.0;
-    const dx = Math.sqrt(disc); // magnitude along x toward center on rectangle top/bottom
-    const k = (Cy - (signY > 0 ? Y_N_STRAIGHT : Y_S_STRAIGHT)) / dTop; // positive scale
-    // Move inward horizontally from corner pocket center toward table center
-    const xStraight = Cx - k * (signX * dx);
+    const dx = Math.sqrt(disc); // inward horizontal magnitude at rectangle
+    const yStraight = signY > 0 ? Y_N_STRAIGHT : Y_S_STRAIGHT;
+    const scale = Math.abs((yStraight - Cy) / d); // always positive
+    // Move inward horizontally by scale*dx from the pocket center
+    const xStraight = Cx - signX * (scale * dx);
     const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
     const clamped = signX > 0
       ? clamp(xStraight, JAW_X_OUTER, 46.0)
