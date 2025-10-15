@@ -121,6 +121,9 @@ function deriveSideJawXMagnitudes(): { xOuter: number; xInner: number } {
   // Guard against degenerate values
   const xOuterClamped = Number.isFinite(xOuter) && xOuter > 0.01 ? xOuter : 6.0;
   const xInnerClamped = Number.isFinite(xInner) && xInner > 0.01 ? xInner : 2.5;
+  try {
+    console.info(`[Geometry] Apply side jaws: FRAME_OFFSET_IN=${FRAME_OFFSET_IN}, JAW_REF_RADIUS_IN=${JAW_REF_RADIUS_IN}, dTop=${dTop.toFixed(3)}, xi=${xi.toFixed(3)}, xOuter=${xOuterClamped.toFixed(3)}, xInner=${xInnerClamped.toFixed(3)}`);
+  } catch {}
   return { xOuter: xOuterClamped, xInner: xInnerClamped };
 }
 
