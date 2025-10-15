@@ -218,6 +218,36 @@ export class Predictor {
       }
     }
 
+    if (firstContact?.type === 'ball') {
+      const targetId = firstContact.hitBall?.id;
+      const ballPath = targetId !== undefined ? objectPaths.get(targetId) : undefined;
+      const path = ballPath ?? [];
+
+      if (path.length < 2) {
+        const ballRadius = firstContact.hitBall?.radius ?? previewCue.radius;
+        const contactCenter = {
+          x: firstContact.contactPoint.x + firstContact.contactNormal.x * ballRadius,
+          y: firstContact.contactPoint.y + firstContact.contactNormal.y * ballRadius,
+        };
+
+        if (path.length === 0) {
+          path.push(contactCenter);
+        } else {
+          path[0] = contactCenter;
+        }
+
+        const extension = Math.max(6, speed * 0.05);
+        path.push({
+          x: contactCenter.x + firstContact.contactNormal.x * extension,
+          y: contactCenter.y + firstContact.contactNormal.y * extension,
+        });
+
+        if (targetId !== undefined) {
+          objectPaths.set(targetId, path);
+        }
+      }
+    }
+
     return { cuePath, objectPaths, firstContact: firstContact ?? undefined };
   }
 
