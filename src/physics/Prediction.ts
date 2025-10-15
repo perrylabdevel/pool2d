@@ -22,6 +22,7 @@ export interface PredictionResult {
 export interface ShotPreviewPaths {
   cuePath: Vec2[];
   objectPaths: Map<number, Vec2[]>;
+  firstContact?: PredictionResult;
 }
 
 export class Predictor {
@@ -104,6 +105,10 @@ export class Predictor {
 
     const cuePath: Vec2[] = [{ x: previewCue.x, y: previewCue.y }];
     const objectPaths = new Map<number, Vec2[]>();
+    let firstContact: PredictionResult | null = null;
+    let cueDistance = 0;
+    let prevCueX = previewCue.x;
+    let prevCueY = previewCue.y;
 
     const maxSteps = Math.min(240, Math.ceil(duration / CONFIG.PHYSICS_DT));
     const activationSpeed = CONFIG.VELOCITY_EPSILON * 2;
@@ -111,7 +116,10 @@ export class Predictor {
     for (let step = 0; step < maxSteps; step++) {
       previewWorld.step(CONFIG.PHYSICS_DT);
 
+      cueDistance += Math.hypot(previewCue.x - prevCueX, previewCue.y - prevCueY);
       cuePath.push({ x: previewCue.x, y: previewCue.y });
+      prevCueX = previewCue.x;
+      prevCueY = previewCue.y;
 
       for (const ball of previewWorld.balls) {
         if (ball.id === previewCue.id || ball.pocketed) continue;
@@ -127,6 +135,81 @@ export class Predictor {
         }
       }
 
+      if (!firstContact) {
+        const cueRadius = previewCue.radius;
+        const tolerance = 0.01;
+
+        for (const ball of previewWorld.balls) {
+          if (ball.id === previewCue.id || ball.pocketed) continue;
+
+          const dx = ball.x - previewCue.x;
+          const dy = ball.y - previewCue.y;
+          const dist = Math.hypot(dx, dy);
+          const combinedRadius = ball.radius + cueRadius;
+
+          if (dist <= combinedRadius + tolerance && dist > 1e-5) {
+            const nx = dx / dist;
+            const ny = dy / dist;
+            const contactPoint = {
+              x: previewCue.x + nx * cueRadius,
+              y: previewCue.y + ny * cueRadius,
+            };
+
+            const originalBall = world.getBallById(ball.id) ?? undefined;
+
+            firstContact = {
+              type: 'ball',
+              contactPoint,
+              contactNormal: { x: nx, y: ny },
+              hitBall: originalBall,
+              distance: cueDistance,
+            };
+            break;
+          }
+        }
+
+        if (!firstContact) {
+          for (const rail of previewWorld.rails) {
+            const segDX = rail.x2 - rail.x1;
+            const segDY = rail.y2 - rail.y1;
+            const segLenSq = segDX * segDX + segDY * segDY;
+            if (segLenSq < 1e-6) continue;
+
+            const toPointX = previewCue.x - rail.x1;
+            const toPointY = previewCue.y - rail.y1;
+            let t = (toPointX * segDX + toPointY * segDY) / segLenSq;
+            t = Math.max(0, Math.min(1, t));
+
+            const closestX = rail.x1 + segDX * t;
+            const closestY = rail.y1 + segDY * t;
+
+            const distX = previewCue.x - closestX;
+            const distY = previewCue.y - closestY;
+            const dist = Math.hypot(distX, distY);
+
+            if (dist <= cueRadius + tolerance) {
+              const normalX = dist > 1e-5 ? distX / dist : rail.nx;
+              const normalY = dist > 1e-5 ? distY / dist : rail.ny;
+              const contactPoint = {
+                x: previewCue.x - normalX * cueRadius,
+                y: previewCue.y - normalY * cueRadius,
+              };
+
+              const originalRail = world.rails.find((r) => r.cushionId === rail.cushionId) ?? rail;
+
+              firstContact = {
+                type: 'rail',
+                contactPoint,
+                contactNormal: { x: normalX, y: normalY },
+                hitRail: originalRail,
+                distance: cueDistance,
+              };
+              break;
+            }
+          }
+        }
+      }
+
       const cueSleeping = previewCue.sleeping || previewCue.getSpeed() < CONFIG.VELOCITY_EPSILON;
       const anyActive = Array.from(objectPaths.values()).some((path) => path.length > 0);
 
@@ -135,7 +218,7 @@ export class Predictor {
       }
     }
 
-    return { cuePath, objectPaths };
+    return { cuePath, objectPaths, firstContact: firstContact ?? undefined };
   }
 
   /**
