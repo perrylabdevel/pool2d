@@ -269,6 +269,9 @@ export class SettingsManager {
     CONFIG.JAW_REF_RADIUS_IN = this.geometrySettings.JAW_REF_RADIUS_IN;
     CONFIG.CORNER_JAW_REF_RADIUS_IN = this.geometrySettings.CORNER_JAW_REF_RADIUS_IN;
     // Signal that geometry parameters changed (requires rebuild)
+    try {
+      console.info('[Settings] Geometry updated', this.geometrySettings);
+    } catch {}
     window.dispatchEvent(new CustomEvent('settings:geometry-changed'));
   }
 
