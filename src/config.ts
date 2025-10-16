@@ -79,7 +79,9 @@ export const CONFIG = {
   
   // Geometry tuning
   FRAME_OFFSET_IN: 4.0, // Outer frame offset from play area (in)
-  JAW_REF_RADIUS_IN: 4.0, // Reference radius for jaw angle derivation (in)
+  SIDE_FRAME_OFFSET_IN: 2.0, // Frame offset for side pocket tangent calculation (smaller = steeper jaws)
+  JAW_REF_RADIUS_IN: 4.0, // Reference radius for side pocket jaw angle derivation (in)
+  CORNER_JAW_REF_RADIUS_IN: 4.0, // Reference radius for corner pocket jaw angle derivation (in)
 };
 
 // Ball IDs

@@ -168,6 +168,10 @@ export class HUD {
     const geom = this.settingsManager.getGeometrySettings();
     const jawRadiusInput = document.getElementById('jaw-radius-in') as HTMLInputElement;
     if (jawRadiusInput) jawRadiusInput.value = String(geom.JAW_REF_RADIUS_IN);
+    const sideFrameOffsetInput = document.getElementById('side-frame-offset-in') as HTMLInputElement;
+    if (sideFrameOffsetInput) sideFrameOffsetInput.value = String(geom.SIDE_FRAME_OFFSET_IN);
+    const cornerJawRadiusInput = document.getElementById('corner-jaw-radius-in') as HTMLInputElement;
+    if (cornerJawRadiusInput) cornerJawRadiusInput.value = String(geom.CORNER_JAW_REF_RADIUS_IN);
     const frameOffsetInput = document.getElementById('frame-offset-in') as HTMLInputElement;
     if (frameOffsetInput) frameOffsetInput.value = String(geom.FRAME_OFFSET_IN);
 
@@ -175,6 +179,18 @@ export class HUD {
       jawRadiusInput.addEventListener('input', (e) => {
         const v = parseFloat((e.target as HTMLInputElement).value);
         if (!isNaN(v)) this.settingsManager.saveGeometrySettings({ JAW_REF_RADIUS_IN: v });
+      });
+    }
+    if (sideFrameOffsetInput) {
+      sideFrameOffsetInput.addEventListener('input', (e) => {
+        const v = parseFloat((e.target as HTMLInputElement).value);
+        if (!isNaN(v)) this.settingsManager.saveGeometrySettings({ SIDE_FRAME_OFFSET_IN: v });
+      });
+    }
+    if (cornerJawRadiusInput) {
+      cornerJawRadiusInput.addEventListener('input', (e) => {
+        const v = parseFloat((e.target as HTMLInputElement).value);
+        if (!isNaN(v)) this.settingsManager.saveGeometrySettings({ CORNER_JAW_REF_RADIUS_IN: v });
       });
     }
     if (frameOffsetInput) {

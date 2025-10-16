@@ -30,7 +30,9 @@ export interface PhysicsSettings {
 
 export interface GeometrySettings {
   FRAME_OFFSET_IN: number;
+  SIDE_FRAME_OFFSET_IN: number;
   JAW_REF_RADIUS_IN: number;
+  CORNER_JAW_REF_RADIUS_IN: number;
 }
 
 const STORAGE_KEYS = {
@@ -217,7 +219,9 @@ export class SettingsManager {
   loadGeometrySettings(): GeometrySettings {
     const defaults: GeometrySettings = {
       FRAME_OFFSET_IN: CONFIG.FRAME_OFFSET_IN,
+      SIDE_FRAME_OFFSET_IN: CONFIG.SIDE_FRAME_OFFSET_IN,
       JAW_REF_RADIUS_IN: CONFIG.JAW_REF_RADIUS_IN,
+      CORNER_JAW_REF_RADIUS_IN: CONFIG.CORNER_JAW_REF_RADIUS_IN,
     };
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.GEOMETRY_SETTINGS);
@@ -247,7 +251,9 @@ export class SettingsManager {
   resetGeometrySettings() {
     this.geometrySettings = {
       FRAME_OFFSET_IN: 4.0,
+      SIDE_FRAME_OFFSET_IN: 2.0,
       JAW_REF_RADIUS_IN: 4.0,
+      CORNER_JAW_REF_RADIUS_IN: 4.0,
     };
     try {
       localStorage.setItem(STORAGE_KEYS.GEOMETRY_SETTINGS, JSON.stringify(this.geometrySettings));
@@ -259,7 +265,9 @@ export class SettingsManager {
 
   private applyGeometrySettings() {
     CONFIG.FRAME_OFFSET_IN = this.geometrySettings.FRAME_OFFSET_IN;
+    CONFIG.SIDE_FRAME_OFFSET_IN = this.geometrySettings.SIDE_FRAME_OFFSET_IN;
     CONFIG.JAW_REF_RADIUS_IN = this.geometrySettings.JAW_REF_RADIUS_IN;
+    CONFIG.CORNER_JAW_REF_RADIUS_IN = this.geometrySettings.CORNER_JAW_REF_RADIUS_IN;
     // Signal that geometry parameters changed (requires rebuild)
     window.dispatchEvent(new CustomEvent('settings:geometry-changed'));
   }

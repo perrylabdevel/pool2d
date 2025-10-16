@@ -38,6 +38,7 @@
             <button id="restart-btn" class="icon-btn" title="Restart">↻</button>
             <button id="settings-btn" class="icon-btn" title="Settings">⚙</button>
             <button id="physics-settings-btn" class="icon-btn" title="Physics Settings">⚗</button>
+            <button id="geometry-panel-btn" class="icon-btn" title="Pocket Geometry">📐</button>
             <button id="debug-toggle" class="icon-btn" title="Debug Mode">🐛</button>
             <button id="capture-shot-btn" class="icon-btn" title="Capture Shot">📸</button>
           </div>
@@ -52,6 +53,49 @@
         <canvas id="game-canvas"></canvas>
         <canvas id="ui-canvas"></canvas>
         <canvas id="debug-canvas"></canvas>
+        
+        <!-- Live Geometry Panel -->
+        <div id="geometry-panel" class="floating-panel hidden">
+          <div class="panel-header">
+            <h3>🎱 Pocket Geometry</h3>
+            <button id="geometry-panel-close" class="close-btn">×</button>
+          </div>
+          <div class="panel-content">
+            <div class="slider-group">
+              <label for="live-side-radius">
+                Side Jaw Radius: <span id="live-side-radius-val">4.0</span>"
+              </label>
+              <input type="range" id="live-side-radius" min="1" max="8" step="0.1" value="4" />
+            </div>
+            
+            <div class="slider-group">
+              <label for="live-side-steepness">
+                Side Steepness: <span id="live-side-steepness-val">2.0</span>"
+              </label>
+              <input type="range" id="live-side-steepness" min="0.5" max="6" step="0.1" value="2" />
+            </div>
+            
+            <div class="slider-group">
+              <label for="live-corner-radius">
+                Corner Jaw Radius: <span id="live-corner-radius-val">4.0</span>"
+              </label>
+              <input type="range" id="live-corner-radius" min="3" max="8" step="0.1" value="4" />
+            </div>
+            
+            <div class="slider-group">
+              <label for="live-frame-width">
+                Frame Width: <span id="live-frame-width-val">4.0</span>"
+              </label>
+              <input type="range" id="live-frame-width" min="2" max="8" step="0.1" value="4" />
+            </div>
+            
+            <div class="panel-actions">
+              <button id="geometry-reset-btn" class="panel-btn">Reset Defaults</button>
+            </div>
+            
+            <p class="panel-hint">💡 Changes apply instantly</p>
+          </div>
+        </div>
       </div>
       <div id="settings-modal" class="modal hidden">
         <div class="modal-content">
@@ -104,14 +148,25 @@
           <div class="settings-section">
             <h3>Pocket Geometry</h3>
             <div class="color-setting">
-              <label for="jaw-radius-in">Jaw Reference Radius (in)</label>
-              <input type="number" id="jaw-radius-in" value="4" min="3" max="8" step="0.1" />
+              <label for="jaw-radius-in">Side Jaw Radius (in)</label>
+              <input type="number" id="jaw-radius-in" value="4" min="1" max="8" step="0.1" />
             </div>
             <div class="color-setting">
-              <label for="frame-offset-in">Frame Offset (in)</label>
+              <label for="side-frame-offset-in">Side Jaw Steepness (in)</label>
+              <input type="number" id="side-frame-offset-in" value="2" min="0.5" max="6" step="0.1" />
+            </div>
+            <div class="color-setting">
+              <label for="corner-jaw-radius-in">Corner Jaw Radius (in)</label>
+              <input type="number" id="corner-jaw-radius-in" value="4" min="3" max="8" step="0.1" />
+            </div>
+            <div class="color-setting">
+              <label for="frame-offset-in">Frame Width (in)</label>
               <input type="number" id="frame-offset-in" value="4" min="2" max="8" step="0.1" />
             </div>
-            <p style="font-size: 12px; opacity: 0.85; margin-top: 6px;">Changes require Apply (reload) to rebuild rails.</p>
+            <p style="font-size: 12px; opacity: 0.85; margin-top: 6px;">
+              <strong>Tip:</strong> Lower Side Jaw Steepness = tighter/steeper jaws. Must be ≤ Side Jaw Radius.<br>
+              Changes require Apply to rebuild rails.
+            </p>
             <div class="modal-actions" style="gap: 10px;">
               <button id="settings-apply-geometry">Apply Geometry</button>
               <button id="settings-reset-geometry">Reset Geometry</button>

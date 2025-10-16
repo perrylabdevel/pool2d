@@ -12,6 +12,7 @@ import { physicsRecorder } from '../debug/PhysicsRecorder';
 import { Predictor } from '../physics/Prediction';
 import { shotCapture } from '../debug/ShotCapture';
 import { SettingsPanel } from '../ui/SettingsPanel';
+import { GeometryPanel } from '../ui/GeometryPanel';
 
 export enum GameMode {
   PRACTICE,
@@ -25,6 +26,7 @@ export class Game {
   hud: HUD;
   debug: DebugDraw;
   settings: SettingsPanel;
+  geometryPanel: GeometryPanel;
   rules: EightBallRules;
   predictor: Predictor;
   mode: GameMode;
@@ -60,6 +62,7 @@ export class Game {
     this.hud = new HUD();
     this.debug = new DebugDraw(debugCanvas);
     this.settings = new SettingsPanel(this.hud.settingsManager);
+    this.geometryPanel = new GeometryPanel(this.hud.settingsManager, () => this.restart());
     this.rules = new EightBallRules();
     this.predictor = new Predictor();
     this.mode = GameMode.PRACTICE;
@@ -72,6 +75,7 @@ export class Game {
     if (this.mode === GameMode.PRACTICE) {
       console.log('💡 Tips:');
       console.log('  - Hold SHIFT and drag the cue ball to reposition it');
+      console.log('  - Press G to open Geometry panel (live pocket adjustments)');
       console.log('  - Press S to open Physics Settings panel');
       console.log('  - Press D for Debug view');
     }
@@ -171,6 +175,9 @@ export class Game {
       }
       if (e.key === 's' || e.key === 'S') {
         this.settings.toggle();
+      }
+      if (e.key === 'g' || e.key === 'G') {
+        this.geometryPanel.toggle();
       }
       if (e.key === 'm' || e.key === 'M') {
         this.renderer.toggleMeasurementOverlay();
