@@ -56,10 +56,13 @@ export class Game {
   isDraggingBall: boolean = false;
   
   constructor(gameCanvas: HTMLCanvasElement, debugCanvas: HTMLCanvasElement) {
+    // Create HUD first - it initializes SettingsManager which loads and applies saved CONFIG values
+    this.hud = new HUD();
+    
+    // Now create physics world - it will read the correct CONFIG values
     this.world = new PhysicsWorld();
     this.renderer = new Renderer3D(gameCanvas);
     this.input = new InputManager(gameCanvas);
-    this.hud = new HUD();
     this.debug = new DebugDraw(debugCanvas);
     this.settings = new SettingsPanel(this.hud.settingsManager);
     this.geometryPanel = new GeometryPanel(this.hud.settingsManager, () => this.restart());

@@ -3,6 +3,7 @@
 
 import { Ball } from '../physics/Shapes';
 import { PredictionResult } from '../physics/Prediction';
+import { CONFIG } from '../config';
 
 interface ShotData {
   // Pre-shot data
@@ -87,17 +88,12 @@ class ShotCaptureSystem {
       const nx = prediction.contactNormal.x;
       const ny = prediction.contactNormal.y;
       
-      predictedObjectDir = {
-        x: nx,
-        y: ny,
-      };
-      
       predictedNormal = {
         x: nx,
         y: ny,
       };
       
-      // Calculate predicted cue ball deflection using impulse physics (matches actual collision)
+      // Calculate predicted ball velocities using impulse physics (matches actual collision)
       
       // Use actual shot velocity magnitude
       const cueBallVx = velocity.x;
@@ -113,7 +109,7 @@ class ShotCaptureSystem {
       const vRel = dvx * nx + dvy * ny;
       
       // Normal impulse
-      const e = 0.93; // BALL_RESTITUTION
+      const e = CONFIG.BALL_RESTITUTION;
       const j = -(1 + e) * vRel / totalInvMass;
       
       // Apply normal impulse first
@@ -131,19 +127,31 @@ class ShotCaptureSystem {
       const dvy_post = objBallVyAfterNormal - cueBallVyAfterNormal;
       const vt = dvx_post * tx + dvy_post * ty;
       const jt = -vt / totalInvMass;
-      const ballBallFriction = 0.05; // BALL_BALL_FRICTION
-      const maxFriction = Math.abs(j) * ballBallFriction;
+      const maxFriction = Math.abs(j) * CONFIG.BALL_BALL_FRICTION;
       const jtClamped = Math.max(-maxFriction, Math.min(maxFriction, jt));
       
-      // Apply friction impulse
+      // Apply friction impulse to BOTH balls
       const jtx = jtClamped * tx;
       const jty = jtClamped * ty;
       
       const cueBallVxAfter = cueBallVxAfterNormal - jtx * invMass;
       const cueBallVyAfter = cueBallVyAfterNormal - jty * invMass;
+      const objBallVxAfter = objBallVxAfterNormal + jtx * invMass;
+      const objBallVyAfter = objBallVyAfterNormal + jty * invMass;
+      
+      // Calculate predicted directions from post-collision velocities
+      const objBallSpeed = Math.sqrt(objBallVxAfter * objBallVxAfter + objBallVyAfter * objBallVyAfter);
+      if (objBallSpeed > 0.01) {
+        predictedObjectDir = {
+          x: objBallVxAfter / objBallSpeed,
+          y: objBallVyAfter / objBallSpeed,
+        };
+      } else {
+        // Fallback to normal if object ball has no velocity
+        predictedObjectDir = { x: nx, y: ny };
+      }
       
       const cueBallSpeed = Math.sqrt(cueBallVxAfter * cueBallVxAfter + cueBallVyAfter * cueBallVyAfter);
-      
       if (cueBallSpeed > 0.01) {
         predictedCueDir = {
           x: cueBallVxAfter / cueBallSpeed,

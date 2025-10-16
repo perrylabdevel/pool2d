@@ -56,6 +56,20 @@ export class Ball {
     this.vy = vy;
     this.sleeping = false;
   }
+  
+  clone(): Ball {
+    const copy = new Ball(this.id, this.x, this.y, this.radius, this.mass);
+    copy.vx = this.vx;
+    copy.vy = this.vy;
+    copy.invMass = this.invMass;
+    copy.pocketed = this.pocketed;
+    copy.sleeping = this.sleeping;
+    copy.angle = this.angle;
+    copy.angularVelocity = this.angularVelocity;
+    copy.prevX = this.prevX;
+    copy.prevY = this.prevY;
+    return copy;
+  }
 }
 
 export class Rail {
@@ -87,6 +101,13 @@ export class Rail {
     this.nx = -this.nx;
     this.ny = -this.ny;
   }
+  
+  clone(): Rail {
+    const copy = new Rail(this.x1, this.y1, this.x2, this.y2);
+    copy.nx = this.nx;
+    copy.ny = this.ny;
+    return copy;
+  }
 }
 
 export class Pocket {
@@ -105,6 +126,10 @@ export class Pocket {
     const dy = ball.y - this.y;
     const distSq = dx * dx + dy * dy;
     return distSq < this.radius * this.radius;
+  }
+  
+  clone(): Pocket {
+    return new Pocket(this.x, this.y, this.radius);
   }
 }
 
