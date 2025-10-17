@@ -117,23 +117,12 @@ export class Predictor {
     const maxSteps = Math.min(240, Math.ceil(duration / CONFIG.PHYSICS_DT));
     const activationSpeed = CONFIG.VELOCITY_EPSILON * 2;
     
-    console.log('🎯 PREDICTION START:', {
-      angle: (angle * 180 / Math.PI).toFixed(1) + '°',
-      power: power.toFixed(1),
-      cuePos: `(${cueBall.x.toFixed(1)}, ${cueBall.y.toFixed(1)})`
-    });
-
     for (let step = 0; step < maxSteps; step++) {
       // Record cue ball path BEFORE physics step (capture pre-collision position)
       // Stop recording once we've detected a ball collision
       const shouldRecord = !firstContact || firstContact.type !== 'ball';
       if (shouldRecord) {
         cuePath.push({ x: previewCue.x, y: previewCue.y });
-        if (step < 5 || step % 50 === 0) {
-          console.log(`  Step ${step}: Recording cue path at (${previewCue.x.toFixed(1)}, ${previewCue.y.toFixed(1)}), firstContact=${firstContact?.type || 'none'}`);
-        }
-      } else if (step < 5 || (step === maxSteps - 1)) {
-        console.log(`  Step ${step}: STOPPED recording (firstContact=${firstContact?.type})`);
       }
       
       previewWorld.step(CONFIG.PHYSICS_DT);
@@ -200,13 +189,7 @@ export class Predictor {
                 distance: cueDistance,
               };
               
-              console.log(`🎱 BALL CONTACT DETECTED at step ${step}:`, {
-                ballId: ball.id,
-                dist: dist.toFixed(3),
-                cueVel: `(${previewCue.vx.toFixed(1)}, ${previewCue.vy.toFixed(1)})`,
-                approachVel: cueApproachVelocity.toFixed(2),
-                contactPoint: `(${contactPoint.x.toFixed(1)}, ${contactPoint.y.toFixed(1)})`
-              });
+              console.log(`🎱 Ball #${ball.id} contact at step ${step}, approachVel=${cueApproachVelocity.toFixed(2)}`);
               
               break; // Stop checking other balls - use the FIRST ball detected this frame
             }
@@ -252,10 +235,7 @@ export class Predictor {
                 distance: cueDistance,
               };
               
-              console.log(`🟦 RAIL CONTACT DETECTED at step ${step}:`, {
-                dist: dist.toFixed(3),
-                contactPoint: `(${contactPoint.x.toFixed(1)}, ${contactPoint.y.toFixed(1)})`
-              });
+              console.log(`🟦 Rail contact at step ${step}`);
               
               break;
             }
@@ -270,11 +250,7 @@ export class Predictor {
       }
     }
     
-    console.log('✅ PREDICTION END:', {
-      firstContactType: firstContact?.type || 'none',
-      cuePathLength: cuePath.length,
-      objectPathsCount: objectPaths.size
-    });
+    console.log(`✅ END: contact=${firstContact?.type || 'none'}, cuePath=${cuePath.length} points, objectPaths=${objectPaths.size}`);
 
     if (firstContact?.type === 'ball') {
       const targetId = firstContact.hitBall?.id;
