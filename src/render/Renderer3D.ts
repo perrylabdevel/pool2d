@@ -722,9 +722,23 @@ export class Renderer3D {
           this.rotationAxis.set(-vy, vx, 0).normalize();
           this.rotationQuat.setFromAxisAngle(this.rotationAxis, ball.angle);
           mesh.setRotationFromQuaternion(this.rotationQuat);
+          // Store last rotation axis for when ball stops
+          mesh.userData.lastRotationAxis = this.rotationAxis.clone();
         }
       } else {
-        mesh.rotation.set(0, 0, 0);
+        // Stationary ball: use stored rotation from ball.angle
+        // Use last known rotation axis, or a random one if not set
+        if (!mesh.userData.lastRotationAxis) {
+          // Create a random rotation axis in XY plane for visual variety
+          const randomAngle = Math.random() * Math.PI * 2;
+          mesh.userData.lastRotationAxis = new THREE.Vector3(
+            Math.cos(randomAngle),
+            Math.sin(randomAngle),
+            0
+          );
+        }
+        this.rotationQuat.setFromAxisAngle(mesh.userData.lastRotationAxis, ball.angle);
+        mesh.setRotationFromQuaternion(this.rotationQuat);
       }
     });
     
@@ -929,7 +943,6 @@ export class Renderer3D {
     const cueLength = 20;
     const cueDistance = ball.radius + 2 + (1 - power / CONFIG.CUE_POWER_MAX) * 3;
     
-    const ballScreen = this.worldToScreen(ball.x, ball.y);
     const cueStartX = ball.x - Math.cos(angle) * cueDistance;
     const cueStartY = ball.y - Math.sin(angle) * cueDistance;
     const cueEndX = ball.x - Math.cos(angle) * (cueDistance + cueLength);
@@ -967,25 +980,68 @@ export class Renderer3D {
     
     const aimEnd = this.worldToScreen(aimEndX, aimEndY);
     
-    this.uiCtx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-    this.uiCtx.lineWidth = 1;
-    this.uiCtx.setLineDash([5, 5]);
-    this.uiCtx.beginPath();
-    this.uiCtx.moveTo(ballScreen.x, ballScreen.y);
-    this.uiCtx.lineTo(aimEnd.x, aimEnd.y);
-    this.uiCtx.stroke();
-    this.uiCtx.setLineDash([]);
+    // Start aim line at configured distance from the edge of the cue ball
+    const offsetDistance = ball.radius + CONFIG.AIM_LINE_OFFSET;
+    const aimStartX = ball.x + Math.cos(angle) * offsetDistance;
+    const aimStartY = ball.y + Math.sin(angle) * offsetDistance;
+    const aimStart = this.worldToScreen(aimStartX, aimStartY);
+    
+    if (showGhost) {
+      // Aim assist enabled: solid white with black glow
+      // Draw black glow (outer)
+      this.uiCtx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+      this.uiCtx.lineWidth = 7;
+      this.uiCtx.lineCap = 'round';
+      this.uiCtx.beginPath();
+      this.uiCtx.moveTo(aimStart.x, aimStart.y);
+      this.uiCtx.lineTo(aimEnd.x, aimEnd.y);
+      this.uiCtx.stroke();
+      
+      // Draw solid white line (inner)
+      this.uiCtx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+      this.uiCtx.lineWidth = 3;
+      this.uiCtx.lineCap = 'round';
+      this.uiCtx.beginPath();
+      this.uiCtx.moveTo(aimStart.x, aimStart.y);
+      this.uiCtx.lineTo(aimEnd.x, aimEnd.y);
+      this.uiCtx.stroke();
+    } else {
+      // No aim assist: simple dashed line
+      this.uiCtx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+      this.uiCtx.lineWidth = 1;
+      this.uiCtx.setLineDash([5, 5]);
+      this.uiCtx.beginPath();
+      this.uiCtx.moveTo(aimStart.x, aimStart.y);
+      this.uiCtx.lineTo(aimEnd.x, aimEnd.y);
+      this.uiCtx.stroke();
+      this.uiCtx.setLineDash([]);
+    }
     
     // Draw ghost ball in 2D if prediction exists
     if (showGhost && prediction && prediction.type === 'ball' && prediction.hitBall) {
-      // Ghost ball center is at the contact point (where the two ball surfaces touch)
-      const ghostX = prediction.contactPoint.x;
-      const ghostY = prediction.contactPoint.y;
+      // Ghost ball center with configurable offset from contact point
+      // Positive offset = away from cue ball, negative = toward cue ball
+      const offsetDir = Math.atan2(
+        prediction.contactPoint.y - ball.y,
+        prediction.contactPoint.x - ball.x
+      );
+      const ghostX = prediction.contactPoint.x + Math.cos(offsetDir) * CONFIG.GHOST_BALL_OFFSET;
+      const ghostY = prediction.contactPoint.y + Math.sin(offsetDir) * CONFIG.GHOST_BALL_OFFSET;
       const ghostScreen = this.worldToScreen(ghostX, ghostY);
       
-      // Draw ghost ball outline only (no fill)
-      this.uiCtx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-      this.uiCtx.lineWidth = 1;
+      // Draw ghost ball with black glow + white outline (matching path styling)
+      // Draw black glow (outer)
+      this.uiCtx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+      this.uiCtx.lineWidth = 4;
+      this.uiCtx.lineCap = 'round';
+      this.uiCtx.beginPath();
+      this.uiCtx.arc(ghostScreen.x, ghostScreen.y, ball.radius * this.scale, 0, Math.PI * 2);
+      this.uiCtx.stroke();
+      
+      // Draw solid white circle (inner)
+      this.uiCtx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+      this.uiCtx.lineWidth = 2;
+      this.uiCtx.lineCap = 'round';
       this.uiCtx.beginPath();
       this.uiCtx.arc(ghostScreen.x, ghostScreen.y, ball.radius * this.scale, 0, Math.PI * 2);
       this.uiCtx.stroke();
@@ -1175,7 +1231,7 @@ export class Renderer3D {
    * More accurate than ray-cast prediction, especially for extreme angles
    * @param shotPaths - Physics simulation results with trajectory paths
    * @param cueBallPos - Current cue ball position (unused but kept for API consistency)
-   * @param debugMode - If true, show all object ball paths; if false, only show first contact
+   * @param debugMode - If true, show all object ball paths with colored styling; if false, only show first contact with white/black glow
    */
   drawPhysicsTrajectoryLines(shotPaths: ShotPreviewPaths, cueBallPos: { x: number; y: number }, debugMode: boolean = false) {
     // Clear old 3D trajectory lines
@@ -1184,54 +1240,60 @@ export class Renderer3D {
     
     if (!shotPaths.firstContact || shotPaths.cuePath.length < 2) return;
     
-    // Draw cue ball path (cyan dashed line)
-    this.uiCtx.strokeStyle = 'rgba(0, 255, 255, 0.4)';
-    this.uiCtx.lineWidth = 1;
-    this.uiCtx.setLineDash([5, 5]);
-    this.uiCtx.beginPath();
-    
-    for (let i = 0; i < shotPaths.cuePath.length; i++) {
-      const point = shotPaths.cuePath[i];
-      const screen = this.worldToScreen(point.x, point.y);
-      
-      if (i === 0) {
-        this.uiCtx.moveTo(screen.x, screen.y);
-      } else {
-        this.uiCtx.lineTo(screen.x, screen.y);
-      }
-      
-      // Stop at first contact
-      if (shotPaths.firstContact && i > 0) {
-        const prevPoint = shotPaths.cuePath[i - 1];
-        const contactDist = Math.hypot(
-          shotPaths.firstContact.contactPoint.x - prevPoint.x,
-          shotPaths.firstContact.contactPoint.y - prevPoint.y
-        );
-        const segmentDist = Math.hypot(point.x - prevPoint.x, point.y - prevPoint.y);
-        
-        if (contactDist <= segmentDist) {
-          break;
-        }
-      }
-    }
-    
-    this.uiCtx.stroke();
-    this.uiCtx.setLineDash([]);
-    
-    // Draw object ball trajectories (yellow/orange lines with arrows)
-    // In normal mode: only show first contact ball
-    // In debug mode: show all object ball paths
     const firstContactBallId = shotPaths.firstContact?.hitBall?.id;
     
-    shotPaths.objectPaths.forEach((path, ballId) => {
+    // Draw cue ball path up to first contact
+    if (debugMode) {
+      // Debug mode: cyan dashed line
+      this.uiCtx.strokeStyle = 'rgba(0, 255, 255, 0.4)';
+      this.uiCtx.lineWidth = 1;
+      this.uiCtx.setLineDash([5, 5]);
+    } else {
+      // Normal mode: don't draw cue path before contact
+      // (the aim line already shows this)
+    }
+    
+    if (debugMode) {
+      this.uiCtx.beginPath();
+      
+      for (let i = 0; i < shotPaths.cuePath.length; i++) {
+        const point = shotPaths.cuePath[i];
+        const screen = this.worldToScreen(point.x, point.y);
+        
+        if (i === 0) {
+          this.uiCtx.moveTo(screen.x, screen.y);
+        } else {
+          this.uiCtx.lineTo(screen.x, screen.y);
+        }
+        
+        // Stop at first contact
+        if (shotPaths.firstContact && i > 0) {
+          const prevPoint = shotPaths.cuePath[i - 1];
+          const contactDist = Math.hypot(
+            shotPaths.firstContact.contactPoint.x - prevPoint.x,
+            shotPaths.firstContact.contactPoint.y - prevPoint.y
+          );
+          const segmentDist = Math.hypot(point.x - prevPoint.x, point.y - prevPoint.y);
+          
+          if (contactDist <= segmentDist) {
+            break;
+          }
+        }
+      }
+      
+      this.uiCtx.stroke();
+      this.uiCtx.setLineDash([]);
+    }
+    
+    // Helper functions for solid white + black glow styling
+    const drawPathWithGlow = (path: Vec2[], glowColor: string, lineColor: string, lineWidth: number) => {
       if (path.length < 2) return;
       
-      // Filter: only show first contact ball unless debug mode is on
-      if (!debugMode && ballId !== firstContactBallId) return;
-      
-      this.uiCtx.strokeStyle = 'rgba(255, 200, 0, 0.7)';
-      this.uiCtx.lineWidth = 2;
-      this.uiCtx.setLineDash([10, 5]);
+      // Draw black glow (outer)
+      this.uiCtx.strokeStyle = glowColor;
+      this.uiCtx.lineWidth = lineWidth + 4;
+      this.uiCtx.lineCap = 'round';
+      this.uiCtx.lineJoin = 'round';
       this.uiCtx.beginPath();
       
       for (let i = 0; i < path.length; i++) {
@@ -1246,14 +1308,151 @@ export class Renderer3D {
       }
       
       this.uiCtx.stroke();
-      this.uiCtx.setLineDash([]);
       
-      // Draw arrowhead at the end
-      if (path.length >= 2) {
-        const lastIdx = path.length - 1;
-        const endPoint = path[lastIdx];
-        const prevPoint = path[lastIdx - 1];
+      // Draw solid line (inner)
+      this.uiCtx.strokeStyle = lineColor;
+      this.uiCtx.lineWidth = lineWidth;
+      this.uiCtx.lineCap = 'round';
+      this.uiCtx.lineJoin = 'round';
+      this.uiCtx.beginPath();
+      
+      for (let i = 0; i < path.length; i++) {
+        const point = path[i];
+        const screen = this.worldToScreen(point.x, point.y);
         
+        if (i === 0) {
+          this.uiCtx.moveTo(screen.x, screen.y);
+        } else {
+          this.uiCtx.lineTo(screen.x, screen.y);
+        }
+      }
+      
+      this.uiCtx.stroke();
+      
+      return path;
+    };
+    
+    const drawArrowWithGlow = (endPoint: Vec2, prevPoint: Vec2, glowColor: string, fillColor: string, arrowSize: number) => {
+      const endScreen = this.worldToScreen(endPoint.x, endPoint.y);
+      const dx = endPoint.x - prevPoint.x;
+      const dy = endPoint.y - prevPoint.y;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      
+      if (len > 0) {
+        const angle = Math.atan2(dy, dx);
+        
+        // Draw black glow for arrow
+        this.uiCtx.fillStyle = glowColor;
+        this.uiCtx.beginPath();
+        this.uiCtx.moveTo(endScreen.x, endScreen.y);
+        this.uiCtx.lineTo(
+          endScreen.x - (arrowSize + 2) * Math.cos(angle - Math.PI / 6),
+          endScreen.y - (arrowSize + 2) * Math.sin(angle - Math.PI / 6)
+        );
+        this.uiCtx.lineTo(
+          endScreen.x - (arrowSize + 2) * Math.cos(angle + Math.PI / 6),
+          endScreen.y - (arrowSize + 2) * Math.sin(angle + Math.PI / 6)
+        );
+        this.uiCtx.closePath();
+        this.uiCtx.fill();
+        
+        // Draw white arrow fill
+        this.uiCtx.fillStyle = fillColor;
+        this.uiCtx.beginPath();
+        this.uiCtx.moveTo(endScreen.x, endScreen.y);
+        this.uiCtx.lineTo(
+          endScreen.x - arrowSize * Math.cos(angle - Math.PI / 6),
+          endScreen.y - arrowSize * Math.sin(angle - Math.PI / 6)
+        );
+        this.uiCtx.lineTo(
+          endScreen.x - arrowSize * Math.cos(angle + Math.PI / 6),
+          endScreen.y - arrowSize * Math.sin(angle + Math.PI / 6)
+        );
+        this.uiCtx.closePath();
+        this.uiCtx.fill();
+      }
+    };
+    
+    // Calculate shot complexity for adaptive path length
+    // Complexity is based on cut angle - straighter shots = simpler
+    let pathLengthMultiplier = 1.0;
+    if (!debugMode && shotPaths.firstContact?.type === 'ball') {
+      // Get cue ball direction to contact point
+      const contactIdx = shotPaths.cuePath.findIndex((p, i) => {
+        if (i === 0) return false;
+        const prev = shotPaths.cuePath[i - 1];
+        const dist = Math.hypot(
+          shotPaths.firstContact!.contactPoint.x - prev.x,
+          shotPaths.firstContact!.contactPoint.y - prev.y
+        );
+        return dist < 0.5;
+      });
+      
+      if (contactIdx > 0) {
+        const cueDir = {
+          x: shotPaths.cuePath[contactIdx].x - shotPaths.cuePath[0].x,
+          y: shotPaths.cuePath[contactIdx].y - shotPaths.cuePath[0].y
+        };
+        const cueDirLen = Math.hypot(cueDir.x, cueDir.y);
+        
+        if (cueDirLen > 0.001) {
+          cueDir.x /= cueDirLen;
+          cueDir.y /= cueDirLen;
+          
+          // Contact normal (direction object ball will travel)
+          const normal = shotPaths.firstContact.contactNormal;
+          
+          // Dot product gives cosine of angle between them
+          const dot = cueDir.x * normal.x + cueDir.y * normal.y;
+          const angle = Math.acos(Math.max(-1, Math.min(1, dot)));
+          
+          // Angle ranges from 0 (straight on) to PI/2 (extreme cut)
+          // Map to multiplier: 0° = 1.0, 45° = 0.5, 90° = 0.2
+          const normalizedAngle = angle / (Math.PI / 2);
+          pathLengthMultiplier = 1.0 - (normalizedAngle * 0.8);
+        }
+      }
+    }
+    
+    // Draw object ball trajectories
+    shotPaths.objectPaths.forEach((path, ballId) => {
+      if (path.length < 2) return;
+      
+      // Filter: only show first contact ball unless debug mode is on
+      if (!debugMode && ballId !== firstContactBallId) return;
+      
+      // Shorten path based on shot complexity in normal mode
+      let displayPath = path;
+      if (!debugMode && pathLengthMultiplier < 1.0) {
+        const targetLength = Math.floor(path.length * pathLengthMultiplier);
+        displayPath = path.slice(0, Math.max(2, targetLength));
+      }
+      
+      if (debugMode) {
+        // Debug mode: yellow/orange dashed lines
+        this.uiCtx.strokeStyle = 'rgba(255, 200, 0, 0.7)';
+        this.uiCtx.lineWidth = 2;
+        this.uiCtx.setLineDash([10, 5]);
+        this.uiCtx.beginPath();
+        
+        for (let i = 0; i < displayPath.length; i++) {
+          const point = displayPath[i];
+          const screen = this.worldToScreen(point.x, point.y);
+          
+          if (i === 0) {
+            this.uiCtx.moveTo(screen.x, screen.y);
+          } else {
+            this.uiCtx.lineTo(screen.x, screen.y);
+          }
+        }
+        
+        this.uiCtx.stroke();
+        this.uiCtx.setLineDash([]);
+        
+        // Draw arrowhead at the end
+        const lastIdx = displayPath.length - 1;
+        const endPoint = displayPath[lastIdx];
+        const prevPoint = displayPath[lastIdx - 1];
         const endScreen = this.worldToScreen(endPoint.x, endPoint.y);
         const dx = endPoint.x - prevPoint.x;
         const dy = endPoint.y - prevPoint.y;
@@ -1277,8 +1476,215 @@ export class Renderer3D {
           this.uiCtx.closePath();
           this.uiCtx.fill();
         }
+      } else {
+        // Normal mode: solid white with black glow (no arrows)
+        drawPathWithGlow(displayPath, 'rgba(0, 0, 0, 0.8)', 'rgba(255, 255, 255, 0.95)', 3);
       }
     });
+    
+    // Draw cue ball rebound path (after contact)
+    if (shotPaths.firstContact && shotPaths.cuePath.length > 2) {
+      // Find where contact happened in the cue path
+      const contactIdx = shotPaths.cuePath.findIndex((p, i) => {
+        if (i === 0) return false;
+        const prev = shotPaths.cuePath[i - 1];
+        const dist = Math.hypot(
+          shotPaths.firstContact!.contactPoint.x - prev.x,
+          shotPaths.firstContact!.contactPoint.y - prev.y
+        );
+        return dist < 0.5;
+      });
+      
+      if (contactIdx > 0 && contactIdx < shotPaths.cuePath.length - 1) {
+        // Get cue ball path after contact
+        let cueBallReboundPath = shotPaths.cuePath.slice(contactIdx);
+        
+        // Shorten path based on shot complexity in normal mode
+        if (!debugMode && pathLengthMultiplier < 1.0) {
+          const targetLength = Math.floor(cueBallReboundPath.length * pathLengthMultiplier);
+          cueBallReboundPath = cueBallReboundPath.slice(0, Math.max(2, targetLength));
+        }
+        
+        if (cueBallReboundPath.length >= 2) {
+          if (debugMode) {
+            // Debug mode: cyan dashed line
+            this.uiCtx.strokeStyle = 'rgba(0, 255, 255, 0.6)';
+            this.uiCtx.lineWidth = 2;
+            this.uiCtx.setLineDash([10, 5]);
+            this.uiCtx.beginPath();
+            
+            for (let i = 0; i < cueBallReboundPath.length; i++) {
+              const point = cueBallReboundPath[i];
+              const screen = this.worldToScreen(point.x, point.y);
+              
+              if (i === 0) {
+                this.uiCtx.moveTo(screen.x, screen.y);
+              } else {
+                this.uiCtx.lineTo(screen.x, screen.y);
+              }
+            }
+            
+            this.uiCtx.stroke();
+            this.uiCtx.setLineDash([]);
+            
+            // Draw arrowhead
+            const lastIdx = cueBallReboundPath.length - 1;
+            const endPoint = cueBallReboundPath[lastIdx];
+            const prevPoint = cueBallReboundPath[lastIdx - 1];
+            const endScreen = this.worldToScreen(endPoint.x, endPoint.y);
+            const dx = endPoint.x - prevPoint.x;
+            const dy = endPoint.y - prevPoint.y;
+            const len = Math.sqrt(dx * dx + dy * dy);
+            
+            if (len > 0) {
+              const arrowSize = 10;
+              const angle = Math.atan2(dy, dx);
+              
+              this.uiCtx.fillStyle = 'rgba(0, 255, 255, 0.9)';
+              this.uiCtx.beginPath();
+              this.uiCtx.moveTo(endScreen.x, endScreen.y);
+              this.uiCtx.lineTo(
+                endScreen.x - arrowSize * Math.cos(angle - Math.PI / 6),
+                endScreen.y - arrowSize * Math.sin(angle - Math.PI / 6)
+              );
+              this.uiCtx.lineTo(
+                endScreen.x - arrowSize * Math.cos(angle + Math.PI / 6),
+                endScreen.y - arrowSize * Math.sin(angle + Math.PI / 6)
+              );
+              this.uiCtx.closePath();
+              this.uiCtx.fill();
+            }
+          } else {
+            // Normal mode: solid white with black glow (no arrows)
+            drawPathWithGlow(cueBallReboundPath, 'rgba(0, 0, 0, 0.8)', 'rgba(255, 255, 255, 0.95)', 3);
+          }
+        }
+      }
+    }
+  }
+  
+  /**
+   * Draw simple math-based trajectory lines (for non-debug mode)
+   * Uses predictTrajectories method for simple collision math
+   * Styled with solid white lines + black glow (like ball appearance)
+   * @param prediction - Ray-cast prediction result
+   * @param cueBallPos - Current cue ball position
+   * @param shotDirection - Normalized shot direction vector
+   * @param predictor - Predictor instance for trajectory calculation
+   */
+  drawSimpleMathTrajectoryLines(
+    prediction: PredictionResult,
+    cueBallPos: { x: number; y: number },
+    shotDirection: { x: number; y: number },
+    predictor: any
+  ) {
+    if (prediction.type === 'none') return;
+    
+    // Calculate shot complexity for adaptive path length
+    // Complexity is based on cut angle - straighter shots get longer paths
+    let pathLengthMultiplier = 1.0;
+    if (prediction.type === 'ball' && prediction.contactNormal) {
+      // Dot product between shot direction and contact normal
+      const dot = shotDirection.x * prediction.contactNormal.x + shotDirection.y * prediction.contactNormal.y;
+      const angle = Math.acos(Math.max(-1, Math.min(1, dot)));
+      
+      // Angle ranges from 0 (straight on) to PI/2 (extreme cut)
+      // Map to multiplier: 0° = 1.0 (full length), 90° = 0.3 (30% length)
+      const normalizedAngle = angle / (Math.PI / 2);
+      pathLengthMultiplier = 1.0 - (normalizedAngle * 0.7);
+    }
+    
+    // Base line length adjusted by complexity and user percentage setting
+    const baseLength = 50;
+    const adjustedLength = baseLength * pathLengthMultiplier * CONFIG.OBJECT_PATH_PERCENTAGE;
+    
+    // Get simple trajectory predictions
+    const trajectories = predictor.predictTrajectories(
+      prediction,
+      cueBallPos,
+      shotDirection,
+      adjustedLength
+    );
+    
+    const drawLineWithGlow = (
+      start: { x: number; y: number },
+      end: { x: number; y: number },
+      glowColor: string,
+      lineColor: string,
+      lineWidth: number
+    ) => {
+      const startScreen = this.worldToScreen(start.x, start.y);
+      const endScreen = this.worldToScreen(end.x, end.y);
+      
+      // Draw black glow (outer)
+      this.uiCtx.strokeStyle = glowColor;
+      this.uiCtx.lineWidth = lineWidth + 4;
+      this.uiCtx.lineCap = 'round';
+      this.uiCtx.beginPath();
+      this.uiCtx.moveTo(startScreen.x, startScreen.y);
+      this.uiCtx.lineTo(endScreen.x, endScreen.y);
+      this.uiCtx.stroke();
+      
+      // Draw solid white line (inner)
+      this.uiCtx.strokeStyle = lineColor;
+      this.uiCtx.lineWidth = lineWidth;
+      this.uiCtx.lineCap = 'round';
+      this.uiCtx.beginPath();
+      this.uiCtx.moveTo(startScreen.x, startScreen.y);
+      this.uiCtx.lineTo(endScreen.x, endScreen.y);
+      this.uiCtx.stroke();
+      
+      return { startScreen, endScreen };
+    };
+    
+    // Draw object ball trajectory (solid white with black glow)
+    if (trajectories.objectBallPath) {
+      const dirX = trajectories.objectBallPath.end.x - trajectories.objectBallPath.start.x;
+      const dirY = trajectories.objectBallPath.end.y - trajectories.objectBallPath.start.y;
+      const length = Math.sqrt(dirX * dirX + dirY * dirY);
+      
+      if (length > 0.0001) {
+        const normX = dirX / length;
+        const normY = dirY / length;
+        const start = { x: prediction.contactPoint.x, y: prediction.contactPoint.y };
+        const endRaw = { x: start.x + normX * adjustedLength, y: start.y + normY * adjustedLength };
+        const end = this.clipLineAtRails(start, endRaw);
+        
+        drawLineWithGlow(
+          start,
+          end,
+          'rgba(0, 0, 0, 0.8)',  // Black glow
+          'rgba(255, 255, 255, 0.95)',  // Solid white
+          3
+        );
+      }
+    }
+    
+    // Draw cue ball trajectory (solid white with black glow)
+    // Cue ball path is much shorter than object ball path
+    if (trajectories.cueBallPath) {
+      const dirX = trajectories.cueBallPath.end.x - trajectories.cueBallPath.start.x;
+      const dirY = trajectories.cueBallPath.end.y - trajectories.cueBallPath.start.y;
+      const length = Math.sqrt(dirX * dirX + dirY * dirY);
+      
+      if (length > 0.0001) {
+        const normX = dirX / length;
+        const normY = dirY / length;
+        const start = { x: prediction.contactPoint.x, y: prediction.contactPoint.y };
+        // Cue ball path is 25% the length of object ball path
+        const cueBallLength = adjustedLength * 0.25;
+        const endRaw = { x: start.x + normX * cueBallLength, y: start.y + normY * cueBallLength };
+        const end = this.clipLineAtRails(start, endRaw);
+        
+        drawLineWithGlow(
+          start,
+          end,
+          'rgba(0, 0, 0, 0.8)',  // Black glow
+          'rgba(255, 255, 255, 0.95)',  // Solid white
+          3
+        );
+      }
+    }
   }
   
   getPowerBarBounds() {

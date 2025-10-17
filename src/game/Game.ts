@@ -52,6 +52,10 @@ export class Game {
   powerDragStartY: number = 0;
   spaceKeyHeld: boolean = false;
   
+  // Cached prediction for frozen paths in power mode (normal mode only)
+  cachedPrediction: any = null;
+  cachedDirection: { x: number; y: number } | null = null;
+  
   // Ball dragging (practice mode only)
   isDraggingBall: boolean = false;
   
@@ -221,7 +225,7 @@ export class Game {
   initializeGame() {
     this.world.balls = [];
     
-    // Create cue ball
+    // Create cue ball with randomized initial rotation
     this.cueBall = new Ball(
       0,
       CUE_BALL_POSITION.x,
@@ -229,11 +233,15 @@ export class Game {
       CONFIG.BALL_RADIUS,
       CONFIG.BALL_MASS
     );
+    // Randomize initial rotation angle for visual variety
+    this.cueBall.angle = Math.random() * Math.PI * 2;
     this.world.addBall(this.cueBall);
     
-    // Create racked balls
+    // Create racked balls with randomized initial rotations
     RACK_POSITIONS.forEach((pos) => {
       const ball = new Ball(pos.id, pos.x, pos.y, CONFIG.BALL_RADIUS, CONFIG.BALL_MASS);
+      // Randomize initial rotation angle for visual variety
+      ball.angle = Math.random() * Math.PI * 2;
       this.world.addBall(ball);
     });
     
@@ -269,6 +277,10 @@ export class Game {
   
   shoot(angle: number, power: number) {
     if (!this.cueBall || this.cueBall.pocketed) return;
+    
+    // Clear cached prediction
+    this.cachedPrediction = null;
+    this.cachedDirection = null;
     
     // Record shot for capture system if active
     if (shotCapture.isCapturing()) {
@@ -338,10 +350,45 @@ export class Game {
         y: Math.sin(angle),
       };
       
+      // In normal mode (not debug), use cached prediction when in power mode
+      // This freezes the trajectory paths when transitioning from aim to power
+      let prediction;
+      let useCachedPrediction = false;
+      
+      if (this.isAimMode || this.debug.isEnabled()) {
+        // Aim mode or debug mode: always recalculate
+        prediction = this.predictor.predictFirstContact(
+          { x: this.cueBall.x, y: this.cueBall.y },
+          direction,
+          this.world,
+          this.cueBall
+        );
+        
+        // Cache for power mode (normal mode only)
+        if (this.isAimMode && !this.debug.isEnabled()) {
+          this.cachedPrediction = prediction;
+          this.cachedDirection = direction;
+        }
+      } else {
+        // Power mode in normal mode: use cached prediction
+        if (this.cachedPrediction && this.cachedDirection) {
+          prediction = this.cachedPrediction;
+          useCachedPrediction = true;
+        } else {
+          // Fallback if no cache
+          prediction = this.predictor.predictFirstContact(
+            { x: this.cueBall.x, y: this.cueBall.y },
+            direction,
+            this.world,
+            this.cueBall
+          );
+        }
+      }
+      
       // Use physics simulation for aim assist, fall back to ray-cast for cue line clipping
       let shotPaths = null;
-      if (this.aimAssist) {
-        // Run full physics simulation for accurate trajectory preview
+      if (this.aimAssist && this.debug.isEnabled()) {
+        // Debug mode: always run physics simulation
         shotPaths = this.predictor.simulateShotPaths(
           this.world,
           this.cueBall,
@@ -350,17 +397,17 @@ export class Game {
         );
       }
       
-      // Fall back to ray-cast for basic prediction (for cue line clipping)
-      const prediction = shotPaths?.firstContact ?? this.predictor.predictFirstContact(
-        { x: this.cueBall.x, y: this.cueBall.y },
-        direction,
-        this.world,
-        this.cueBall
-      );
-      
       // Draw trajectory lines if aim assist is enabled
-      if (this.aimAssist && shotPaths) {
-        this.renderer.drawPhysicsTrajectoryLines(shotPaths, { x: this.cueBall.x, y: this.cueBall.y }, this.debug.isEnabled());
+      if (this.aimAssist) {
+        if (this.debug.isEnabled() && shotPaths) {
+          // Debug mode: use full physics simulation with colored styling
+          this.renderer.drawPhysicsTrajectoryLines(shotPaths, { x: this.cueBall.x, y: this.cueBall.y }, true);
+        } else if (prediction) {
+          // Normal mode: use simple straight-line math with white/black glow
+          // Use cached direction in power mode
+          const drawDirection = useCachedPrediction && this.cachedDirection ? this.cachedDirection : direction;
+          this.renderer.drawSimpleMathTrajectoryLines(prediction, { x: this.cueBall.x, y: this.cueBall.y }, drawDirection, this.predictor);
+        }
       }
       
       this.renderer.drawCueAndPowerBar(this.cueBall, angle, this.currentPower, this.aimAssist, true, this.isAimMode, prediction);

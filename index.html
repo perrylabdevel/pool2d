@@ -99,7 +99,7 @@
       </div>
       <div id="settings-modal" class="modal hidden">
         <div class="modal-content">
-          <h2>Settings</h2>
+          <h2>⚙️ Game & UI Settings</h2>
           
           <div class="settings-section">
             <h3>Game Options</h3>
@@ -142,34 +142,6 @@
             <div class="color-setting">
               <label for="turn-indicator-color">Turn Indicator Color</label>
               <input type="color" id="turn-indicator-color" value="#FFC107" />
-            </div>
-          </div>
-
-          <div class="settings-section">
-            <h3>Pocket Geometry</h3>
-            <div class="color-setting">
-              <label for="jaw-radius-in">Side Jaw Radius (in)</label>
-              <input type="number" id="jaw-radius-in" value="4" min="1" max="8" step="0.1" />
-            </div>
-            <div class="color-setting">
-              <label for="side-frame-offset-in">Side Jaw Steepness (in)</label>
-              <input type="number" id="side-frame-offset-in" value="2" min="0.5" max="6" step="0.1" />
-            </div>
-            <div class="color-setting">
-              <label for="corner-jaw-radius-in">Corner Jaw Radius (in)</label>
-              <input type="number" id="corner-jaw-radius-in" value="4" min="3" max="8" step="0.1" />
-            </div>
-            <div class="color-setting">
-              <label for="frame-offset-in">Frame Width (in)</label>
-              <input type="number" id="frame-offset-in" value="4" min="2" max="8" step="0.1" />
-            </div>
-            <p style="font-size: 12px; opacity: 0.85; margin-top: 6px;">
-              <strong>Tip:</strong> Lower Side Jaw Steepness = tighter/steeper jaws. Must be ≤ Side Jaw Radius.<br>
-              Changes require Apply to rebuild rails.
-            </p>
-            <div class="modal-actions" style="gap: 10px;">
-              <button id="settings-apply-geometry">Apply Geometry</button>
-              <button id="settings-reset-geometry">Reset Geometry</button>
             </div>
           </div>
 

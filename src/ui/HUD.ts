@@ -163,65 +163,8 @@ export class HUD {
 
     const turnIndicatorColorInput = document.getElementById('turn-indicator-color') as HTMLInputElement;
     if (turnIndicatorColorInput) turnIndicatorColorInput.value = uiColors.turnIndicatorColor;
-
-    // Geometry settings
-    const geom = this.settingsManager.getGeometrySettings();
-    const jawRadiusInput = document.getElementById('jaw-radius-in') as HTMLInputElement;
-    if (jawRadiusInput) jawRadiusInput.value = String(geom.JAW_REF_RADIUS_IN);
-    const sideFrameOffsetInput = document.getElementById('side-frame-offset-in') as HTMLInputElement;
-    if (sideFrameOffsetInput) sideFrameOffsetInput.value = String(geom.SIDE_FRAME_OFFSET_IN);
-    const cornerJawRadiusInput = document.getElementById('corner-jaw-radius-in') as HTMLInputElement;
-    if (cornerJawRadiusInput) cornerJawRadiusInput.value = String(geom.CORNER_JAW_REF_RADIUS_IN);
-    const frameOffsetInput = document.getElementById('frame-offset-in') as HTMLInputElement;
-    if (frameOffsetInput) frameOffsetInput.value = String(geom.FRAME_OFFSET_IN);
-
-    if (jawRadiusInput) {
-      jawRadiusInput.addEventListener('input', (e) => {
-        const v = parseFloat((e.target as HTMLInputElement).value);
-        if (!isNaN(v)) this.settingsManager.saveGeometrySettings({ JAW_REF_RADIUS_IN: v });
-      });
-    }
-    if (sideFrameOffsetInput) {
-      sideFrameOffsetInput.addEventListener('input', (e) => {
-        const v = parseFloat((e.target as HTMLInputElement).value);
-        if (!isNaN(v)) this.settingsManager.saveGeometrySettings({ SIDE_FRAME_OFFSET_IN: v });
-      });
-    }
-    if (cornerJawRadiusInput) {
-      cornerJawRadiusInput.addEventListener('input', (e) => {
-        const v = parseFloat((e.target as HTMLInputElement).value);
-        if (!isNaN(v)) this.settingsManager.saveGeometrySettings({ CORNER_JAW_REF_RADIUS_IN: v });
-      });
-    }
-    if (frameOffsetInput) {
-      frameOffsetInput.addEventListener('input', (e) => {
-        const v = parseFloat((e.target as HTMLInputElement).value);
-        if (!isNaN(v)) this.settingsManager.saveGeometrySettings({ FRAME_OFFSET_IN: v });
-      });
-    }
-
-    const applyGeomBtn = document.getElementById('settings-apply-geometry');
-    if (applyGeomBtn) {
-      applyGeomBtn.addEventListener('click', () => {
-        // Ensure current input values are saved before applying
-        const jr = parseFloat((document.getElementById('jaw-radius-in') as HTMLInputElement)?.value || '');
-        const fo = parseFloat((document.getElementById('frame-offset-in') as HTMLInputElement)?.value || '');
-        const patch: any = {};
-        if (!isNaN(jr)) patch.JAW_REF_RADIUS_IN = jr;
-        if (!isNaN(fo)) patch.FRAME_OFFSET_IN = fo;
-        if (Object.keys(patch).length) {
-          this.settingsManager.saveGeometrySettings(patch);
-        }
-        window.dispatchEvent(new CustomEvent('settings:geometry-apply'));
-      });
-    }
-    const resetGeomBtn = document.getElementById('settings-reset-geometry');
-    if (resetGeomBtn) {
-      resetGeomBtn.addEventListener('click', () => {
-        this.settingsManager.resetGeometrySettings();
-        this.loadSettings();
-      });
-    }
+    
+    // Note: Geometry settings are now in the dedicated Geometry Panel (press G)
   }
   
   updateFPS(fps: number) {

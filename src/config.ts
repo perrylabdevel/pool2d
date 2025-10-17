@@ -38,6 +38,11 @@ export const CONFIG = {
   GHOST_LINE_LENGTH: 30,
   FINE_AIM_SENSITIVITY: 0.1,
   
+  // Aim assist visual settings
+  AIM_LINE_OFFSET: 0.2, // Distance from cue ball edge to aim line start
+  GHOST_BALL_OFFSET: 0.0, // Offset of ghost ball from contact point (negative = toward cue)
+  OBJECT_PATH_PERCENTAGE: 1.0, // Multiplier for object ball path length (0.5 = 50% length)
+  
   // Rendering
   CANVAS_SCALE: 8, // Pixels per game unit
   TABLE_COLOR: '#0a5f0a',

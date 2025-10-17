@@ -28,7 +28,7 @@ export class SettingsPanel {
 
     panel.innerHTML = `
       <div class="panel-header">
-        <h3>⚗ Physics Settings</h3>
+        <h3>⚗ Physics & Aim Assist</h3>
         <button id="settings-close" class="close-btn">×</button>
       </div>
       
@@ -56,6 +56,13 @@ export class SettingsPanel {
           <h4 class="settings-group-title" style="color: #BA68C8;">⚡ Physics Engine</h4>
           ${this.createSlider('SOLVER_ITERATIONS', 'Solver Iterations', 1, 30, 1, CONFIG.SOLVER_ITERATIONS)}
           ${this.createSlider('VELOCITY_EPSILON', 'Sleep Threshold', 0.05, 1.0, 0.05, CONFIG.VELOCITY_EPSILON)}
+        </div>
+
+        <div class="settings-group">
+          <h4 class="settings-group-title" style="color: #F06292;">🎯 Aim Assist Visuals</h4>
+          ${this.createSlider('AIM_LINE_OFFSET', 'Aim Line Offset', 0.0, 2.0, 0.1, CONFIG.AIM_LINE_OFFSET)}
+          ${this.createSlider('GHOST_BALL_OFFSET', 'Ghost Ball Offset', -2.0, 2.0, 0.1, CONFIG.GHOST_BALL_OFFSET)}
+          ${this.createSlider('OBJECT_PATH_PERCENTAGE', 'Object Path Length %', 0.1, 2.0, 0.1, CONFIG.OBJECT_PATH_PERCENTAGE)}
         </div>
 
         <div class="panel-actions" style="gap: 8px; margin-top: 16px;">

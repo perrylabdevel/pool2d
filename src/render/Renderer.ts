@@ -496,6 +496,151 @@ export class Renderer {
     this.ctx.restore();
   }
 
+  /**
+   * Draw simple math-based trajectory lines (for non-debug mode)
+   * Uses predictTrajectories method for simple collision math
+   * Styled with solid white lines + black glow (like ball appearance)
+   */
+  drawSimpleMathTrajectoryLines(
+    prediction: PredictionResult,
+    cueBallPos: { x: number; y: number },
+    shotDirection: { x: number; y: number },
+    predictor: any
+  ) {
+    if (prediction.type === 'none') return;
+    
+    this.ctx.save();
+    
+    // Use same transform as main render
+    const canvasCenterX = this.canvas.width / 2;
+    const canvasCenterY = this.canvas.height / 2;
+    this.ctx.translate(canvasCenterX, canvasCenterY);
+    this.ctx.scale(this.scale, -this.scale); // Y-up for world coords
+    
+    // Get simple trajectory predictions
+    const trajectories = predictor.predictTrajectories(
+      prediction,
+      cueBallPos,
+      shotDirection,
+      50 // Line length in inches
+    );
+    
+    const strokeWidth = 3 / this.scale;
+    const glowWidth = 7 / this.scale;
+    const arrowLength = 12 / this.scale;
+    
+    const ghostCenter = { x: prediction.contactPoint.x, y: prediction.contactPoint.y };
+    
+    const drawSolidLineWithGlow = (start: Vec2, end: Vec2, glowColor: string, lineColor: string) => {
+      const clampedEnd = this.clampSegmentToPlayArea(start, end);
+      if (!clampedEnd) return { drew: false, end, dirX: 0, dirY: 0 };
+      
+      const dirX = clampedEnd.x - start.x;
+      const dirY = clampedEnd.y - start.y;
+      const length = Math.sqrt(dirX * dirX + dirY * dirY);
+      if (length <= 0.0001) return { drew: false, end: clampedEnd, dirX: 0, dirY: 0 };
+      
+      // Draw black glow (outer)
+      this.ctx.strokeStyle = glowColor;
+      this.ctx.lineWidth = glowWidth;
+      this.ctx.lineCap = 'round';
+      this.ctx.beginPath();
+      this.ctx.moveTo(start.x, start.y);
+      this.ctx.lineTo(clampedEnd.x, clampedEnd.y);
+      this.ctx.stroke();
+      
+      // Draw solid white line (inner)
+      this.ctx.strokeStyle = lineColor;
+      this.ctx.lineWidth = strokeWidth;
+      this.ctx.lineCap = 'round';
+      this.ctx.beginPath();
+      this.ctx.moveTo(start.x, start.y);
+      this.ctx.lineTo(clampedEnd.x, clampedEnd.y);
+      this.ctx.stroke();
+      
+      return { drew: true, end: clampedEnd, dirX, dirY };
+    };
+    
+    const drawArrowWithGlow = (end: Vec2, dirX: number, dirY: number, glowColor: string, fillColor: string) => {
+      const length = Math.sqrt(dirX * dirX + dirY * dirY);
+      if (length <= arrowLength * 1.5) return;
+      
+      const normX = dirX / length;
+      const normY = dirY / length;
+      const baseX = end.x - normX * arrowLength;
+      const baseY = end.y - normY * arrowLength;
+      const leftX = baseX + (-normY) * (arrowLength * 0.5);
+      const leftY = baseY + normX * (arrowLength * 0.5);
+      const rightX = baseX - (-normY) * (arrowLength * 0.5);
+      const rightY = baseY - normX * (arrowLength * 0.5);
+      
+      // Draw black glow for arrow
+      this.ctx.fillStyle = glowColor;
+      this.ctx.beginPath();
+      this.ctx.moveTo(end.x, end.y);
+      this.ctx.lineTo(leftX - normX * 2 / this.scale, leftY - normY * 2 / this.scale);
+      this.ctx.lineTo(rightX - normX * 2 / this.scale, rightY - normY * 2 / this.scale);
+      this.ctx.closePath();
+      this.ctx.fill();
+      
+      // Draw white arrow fill
+      this.ctx.fillStyle = fillColor;
+      this.ctx.beginPath();
+      this.ctx.moveTo(end.x, end.y);
+      this.ctx.lineTo(leftX, leftY);
+      this.ctx.lineTo(rightX, rightY);
+      this.ctx.closePath();
+      this.ctx.fill();
+    };
+    
+    // Draw object ball trajectory (solid white with black glow)
+    if (trajectories.objectBallPath) {
+      const dirX = trajectories.objectBallPath.end.x - trajectories.objectBallPath.start.x;
+      const dirY = trajectories.objectBallPath.end.y - trajectories.objectBallPath.start.y;
+      const length = Math.sqrt(dirX * dirX + dirY * dirY);
+      if (length > 0.0001) {
+        const normX = dirX / length;
+        const normY = dirY / length;
+        const lineLength = 50;
+        const start = ghostCenter;
+        const end = { x: start.x + normX * lineLength, y: start.y + normY * lineLength };
+        const result = drawSolidLineWithGlow(start, end, 'rgba(0, 0, 0, 0.8)', 'rgba(255, 255, 255, 0.95)');
+        if (result.drew) {
+          drawArrowWithGlow(result.end, result.dirX, result.dirY, 'rgba(0, 0, 0, 0.8)', 'rgba(255, 255, 255, 0.95)');
+        }
+      }
+    }
+    
+    // Draw cue ball trajectory (solid white with black glow)
+    if (trajectories.cueBallPath) {
+      const dirX = trajectories.cueBallPath.end.x - trajectories.cueBallPath.start.x;
+      const dirY = trajectories.cueBallPath.end.y - trajectories.cueBallPath.start.y;
+      const length = Math.sqrt(dirX * dirX + dirY * dirY);
+      if (length > 0.0001) {
+        const normX = dirX / length;
+        const normY = dirY / length;
+        const lineLength = 50;
+        const start = ghostCenter;
+        const end = { x: start.x + normX * lineLength, y: start.y + normY * lineLength };
+        const result = drawSolidLineWithGlow(start, end, 'rgba(0, 0, 0, 0.8)', 'rgba(255, 255, 255, 0.95)');
+        if (result.drew) {
+          drawArrowWithGlow(result.end, result.dirX, result.dirY, 'rgba(0, 0, 0, 0.8)', 'rgba(255, 255, 255, 0.95)');
+        }
+      }
+    }
+    
+    this.ctx.restore();
+  }
+  
+  /**
+   * Draw physics-based trajectory lines (for debug mode)
+   * Placeholder for compatibility with 3D renderer
+   */
+  drawPhysicsTrajectoryLines(_shotPaths: any, _cueBallPos: { x: number; y: number }, _debugMode: boolean = false) {
+    // Not implemented for 2D renderer - would need to import ShotPreviewPaths type
+    // For now, falls back to simple math trajectories
+  }
+
   private clampSegmentToPlayArea(start: Vec2, end: Vec2): Vec2 {
     if (this.isPointInsidePlayArea(end)) {
       return end;
