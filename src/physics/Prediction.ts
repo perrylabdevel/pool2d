@@ -126,7 +126,12 @@ export class Predictor {
       previewWorld.step(CONFIG.PHYSICS_DT);
 
       cueDistance += Math.hypot(previewCue.x - prevCueX, previewCue.y - prevCueY);
-      cuePath.push({ x: previewCue.x, y: previewCue.y });
+      
+      // Record cue ball path (stop recording after first contact for cleaner display)
+      if (!firstContact) {
+        cuePath.push({ x: previewCue.x, y: previewCue.y });
+      }
+      
       prevCueX = previewCue.x;
       prevCueY = previewCue.y;
 

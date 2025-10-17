@@ -1185,14 +1185,12 @@ export class Renderer3D {
     if (!shotPaths.firstContact || shotPaths.cuePath.length < 2) return;
     
     // Draw cue ball path (cyan dashed line)
-    // In normal mode: stop at first contact with object ball
-    // In debug mode: show full trajectory including bounces
+    // Path already stops at first contact (handled in simulateShotPaths)
     this.uiCtx.strokeStyle = 'rgba(0, 255, 255, 0.4)';
     this.uiCtx.lineWidth = 1;
     this.uiCtx.setLineDash([5, 5]);
     this.uiCtx.beginPath();
     
-    let stoppedAtContact = false;
     for (let i = 0; i < shotPaths.cuePath.length; i++) {
       const point = shotPaths.cuePath[i];
       const screen = this.worldToScreen(point.x, point.y);
@@ -1201,27 +1199,6 @@ export class Renderer3D {
         this.uiCtx.moveTo(screen.x, screen.y);
       } else {
         this.uiCtx.lineTo(screen.x, screen.y);
-      }
-      
-      // Stop at first contact in normal mode only
-      if (!debugMode && shotPaths.firstContact && i > 0) {
-        const prevPoint = shotPaths.cuePath[i - 1];
-        const contactDist = Math.hypot(
-          shotPaths.firstContact.contactPoint.x - prevPoint.x,
-          shotPaths.firstContact.contactPoint.y - prevPoint.y
-        );
-        const segmentDist = Math.hypot(point.x - prevPoint.x, point.y - prevPoint.y);
-        
-        if (contactDist <= segmentDist) {
-          // Draw line to actual contact point for precision
-          const contactScreen = this.worldToScreen(
-            shotPaths.firstContact.contactPoint.x,
-            shotPaths.firstContact.contactPoint.y
-          );
-          this.uiCtx.lineTo(contactScreen.x, contactScreen.y);
-          stoppedAtContact = true;
-          break;
-        }
       }
     }
     
