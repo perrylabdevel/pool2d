@@ -171,7 +171,8 @@ export class Predictor {
             
             // Only detect collision if cue ball is moving TOWARD target
             // (positive velocity along normal = moving toward target)
-            if (cueApproachVelocity > 0.1) {
+            // Use small threshold to catch slow approaches after rail bounces
+            if (cueApproachVelocity > 0.01) {
               const contactPoint = {
                 x: previewCue.x + nx * cueRadius,
                 y: previewCue.y + ny * cueRadius,
