@@ -144,10 +144,13 @@ export class Predictor {
         }
       }
 
-      if (!firstContact) {
-        const cueRadius = previewCue.radius;
-        const tolerance = 0.01;
+      // Detect first BALL contact (check every frame, don't let rail contacts prevent detection)
+      const cueRadius = previewCue.radius;
+      const tolerance = 0.01;
 
+      // Only check for ball collision if we haven't found a BALL contact yet
+      // (Allow overwriting rail contacts, but never overwrite ball contacts)
+      if (!firstContact || firstContact.type !== 'ball') {
         for (const ball of previewWorld.balls) {
           if (ball.id === previewCue.id || ball.pocketed) continue;
 
@@ -166,6 +169,8 @@ export class Predictor {
 
             const originalBall = world.getBallById(ball.id) ?? undefined;
 
+            // Set firstContact to THIS ball and stop checking
+            // (If rail contact existed, overwrite it; if ball contact exists, we shouldn't be here)
             firstContact = {
               type: 'ball',
               contactPoint,
@@ -173,11 +178,13 @@ export class Predictor {
               hitBall: originalBall,
               distance: cueDistance,
             };
-            break;
+            break; // Stop checking other balls - use the FIRST ball detected this frame
           }
         }
+      }
 
-        if (!firstContact) {
+      // Only check for rail contact if we haven't found ANY contact yet
+      if (!firstContact) {
           for (const rail of previewWorld.rails) {
             const segDX = rail.x2 - rail.x1;
             const segDY = rail.y2 - rail.y1;
