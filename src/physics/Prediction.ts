@@ -5,11 +5,6 @@ import { Ball, Rail, Vec2 } from './Shapes';
 import { PhysicsWorld } from './Physics';
 import { CONFIG } from '../config';
 
-export interface Vec2 {
-  x: number;
-  y: number;
-}
-
 export interface PredictionResult {
   type: 'ball' | 'rail' | 'none';
   contactPoint: Vec2;
@@ -127,8 +122,8 @@ export class Predictor {
 
       cueDistance += Math.hypot(previewCue.x - prevCueX, previewCue.y - prevCueY);
       
-      // Record cue ball path (stop recording after first contact for cleaner display)
-      if (!firstContact) {
+      // Record cue ball path (stop recording after ball contact, but continue through rail bounces)
+      if (!firstContact || firstContact.type !== 'ball') {
         cuePath.push({ x: previewCue.x, y: previewCue.y });
       }
       
