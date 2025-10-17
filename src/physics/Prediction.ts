@@ -223,7 +223,6 @@ export class Predictor {
               break;
             }
           }
-        }
       }
 
       const cueSleeping = previewCue.sleeping || previewCue.getSpeed() < CONFIG.VELOCITY_EPSILON;
