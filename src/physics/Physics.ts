@@ -4,7 +4,7 @@
 import { Ball, Rail, Pocket } from './Shapes';
 import { CONFIG } from '../config';
 import { getTableGeometry } from '../geometry/Geometry';
-import { detectBallBall, detectBallRail, resolveBallBall, resolveBallRail, Contact, resetCollisionTracking } from './Collision';
+import { detectBallBall, detectBallRail, resolveBallBall, resolveBallRail, Contact, resetCollisionTracking, setSuppressWarnings } from './Collision';
 import { physicsRecorder } from '../debug/PhysicsRecorder';
 
 export class PhysicsWorld {
@@ -50,6 +50,9 @@ export class PhysicsWorld {
   step(dt: number) {
     // Reset collision tracking at the start of each timestep
     resetCollisionTracking();
+    
+    // Suppress collision warnings for prediction simulations
+    setSuppressWarnings(!this.recordingEnabled);
     
     // Adaptive substepping for high-speed collisions
     // Calculate max ball speed to determine substeps needed
@@ -198,7 +201,7 @@ export class PhysicsWorld {
   getActiveBalls(): Ball[] {
     return this.balls.filter((ball) => !ball.pocketed);
   }
-  
+ 
   getBallById(id: number): Ball | null {
     return this.balls.find((ball) => ball.id === id) ?? null;
   }

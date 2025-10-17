@@ -17,8 +17,15 @@ export interface Contact {
 // Track which collision pairs have had impulses applied this timestep
 const resolvedPairsThisStep = new Set<string>();
 
+// Suppress collision warnings during prediction simulations
+let suppressCollisionWarnings = false;
+
 export function resetCollisionTracking() {
   resolvedPairsThisStep.clear();
+}
+
+export function setSuppressWarnings(suppress: boolean) {
+  suppressCollisionWarnings = suppress;
 }
 
 function getCollisionPairId(ballA: Ball, ballB: Ball): string {
@@ -71,7 +78,8 @@ export function detectBallBall(a: Ball, b: Ball): Contact | null {
     
     // Log severe overlaps that may indicate physics instability
     // With adaptive substepping, overlaps should be < 0.5" even at high speeds
-    if (originalDepth > 0.5 || (originalDepth > 0.2 && Math.abs(depth) > 0.02)) {
+    // Suppress warnings during prediction simulations
+    if (!suppressCollisionWarnings && (originalDepth > 0.5 || (originalDepth > 0.2 && Math.abs(depth) > 0.02))) {
       console.warn(`⚠️ Collision overlap: ${originalDepth.toFixed(3)}" → ${depth.toFixed(3)}" (ball ${a.id} vs ${b.id})`);
     }
   }
