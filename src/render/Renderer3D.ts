@@ -910,7 +910,7 @@ export class Renderer3D {
   }
   
   // Compatibility methods for existing code
-  drawCueAndPowerBar(ball: Ball, angle: number, power: number, showGhost: boolean, showPowerBar: boolean, _isAimMode: boolean, prediction?: PredictionResult) {
+  drawCueAndPowerBar(ball: Ball, angle: number, power: number, showGhost: boolean, showPowerBar: boolean, _isAimMode: boolean, prediction?: PredictionResult, skipAimLine: boolean = false) {
     // Remove old 3D elements if they exist
     if (this.cueStick) {
       this.scene.remove(this.cueStick);
@@ -947,34 +947,37 @@ export class Renderer3D {
     this.uiCtx.stroke();
     
     // Draw aim line in 2D - clipped to contact point or rails
-    let aimEndX = ball.x + Math.cos(angle) * CONFIG.AIM_LINE_LENGTH;
-    let aimEndY = ball.y + Math.sin(angle) * CONFIG.AIM_LINE_LENGTH;
-    
-    // If we have a prediction, stop at the contact point
-    if (prediction && prediction.type === 'ball') {
-      aimEndX = prediction.contactPoint.x;
-      aimEndY = prediction.contactPoint.y;
-    } else if (prediction && prediction.type === 'rail') {
-      aimEndX = prediction.contactPoint.x;
-      aimEndY = prediction.contactPoint.y;
-    } else {
-      // Clip to rails if no prediction
-      const aimEndRaw = { x: aimEndX, y: aimEndY };
-      const clipped = this.clipLineAtRails({ x: ball.x, y: ball.y }, aimEndRaw);
-      aimEndX = clipped.x;
-      aimEndY = clipped.y;
+    // Skip if physics trajectories are being shown
+    if (!skipAimLine) {
+      let aimEndX = ball.x + Math.cos(angle) * CONFIG.AIM_LINE_LENGTH;
+      let aimEndY = ball.y + Math.sin(angle) * CONFIG.AIM_LINE_LENGTH;
+      
+      // If we have a prediction, stop at the contact point
+      if (prediction && prediction.type === 'ball') {
+        aimEndX = prediction.contactPoint.x;
+        aimEndY = prediction.contactPoint.y;
+      } else if (prediction && prediction.type === 'rail') {
+        aimEndX = prediction.contactPoint.x;
+        aimEndY = prediction.contactPoint.y;
+      } else {
+        // Clip to rails if no prediction
+        const aimEndRaw = { x: aimEndX, y: aimEndY };
+        const clipped = this.clipLineAtRails({ x: ball.x, y: ball.y }, aimEndRaw);
+        aimEndX = clipped.x;
+        aimEndY = clipped.y;
+      }
+      
+      const aimEnd = this.worldToScreen(aimEndX, aimEndY);
+      
+      this.uiCtx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+      this.uiCtx.lineWidth = 1;
+      this.uiCtx.setLineDash([5, 5]);
+      this.uiCtx.beginPath();
+      this.uiCtx.moveTo(ballScreen.x, ballScreen.y);
+      this.uiCtx.lineTo(aimEnd.x, aimEnd.y);
+      this.uiCtx.stroke();
+      this.uiCtx.setLineDash([]);
     }
-    
-    const aimEnd = this.worldToScreen(aimEndX, aimEndY);
-    
-    this.uiCtx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-    this.uiCtx.lineWidth = 1;
-    this.uiCtx.setLineDash([5, 5]);
-    this.uiCtx.beginPath();
-    this.uiCtx.moveTo(ballScreen.x, ballScreen.y);
-    this.uiCtx.lineTo(aimEnd.x, aimEnd.y);
-    this.uiCtx.stroke();
-    this.uiCtx.setLineDash([]);
     
     // Draw ghost ball in 2D if prediction exists
     if (showGhost && prediction && prediction.type === 'ball' && prediction.hitBall) {

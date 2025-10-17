@@ -359,11 +359,13 @@ export class Game {
       );
       
       // Draw trajectory lines if aim assist is enabled
-      if (this.aimAssist && shotPaths) {
+      const showingPhysicsTrajectory = this.aimAssist && shotPaths !== null;
+      if (showingPhysicsTrajectory) {
         this.renderer.drawPhysicsTrajectoryLines(shotPaths, { x: this.cueBall.x, y: this.cueBall.y }, this.debug.isEnabled());
       }
       
-      this.renderer.drawCueAndPowerBar(this.cueBall, angle, this.currentPower, this.aimAssist, true, this.isAimMode, prediction);
+      // Skip old aim line if we're showing physics trajectory
+      this.renderer.drawCueAndPowerBar(this.cueBall, angle, this.currentPower, this.aimAssist, true, this.isAimMode, prediction, showingPhysicsTrajectory);
     }
     
     this.debug.draw(this.world);
