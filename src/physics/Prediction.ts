@@ -1,8 +1,9 @@
 // Aim assist prediction system
 // Lightweight raycast for first contact prediction
 
-import { Ball, Rail } from './Shapes';
+import { Ball, Rail, Vec2 } from './Shapes';
 import { PhysicsWorld } from './Physics';
+import { CONFIG } from '../config';
 
 export interface Vec2 {
   x: number;
@@ -16,6 +17,12 @@ export interface PredictionResult {
   hitBall?: Ball;
   hitRail?: Rail;
   distance: number;
+}
+
+export interface ShotPreviewPaths {
+  cuePath: Vec2[];
+  objectPaths: Map<number, Vec2[]>;
+  firstContact?: PredictionResult;
 }
 
 export class Predictor {
@@ -75,6 +82,185 @@ export class Predictor {
   }
 
   /**
+   * Simulate full physics for shot preview
+   * Returns accurate trajectory paths by running actual physics simulation
+   * Much more accurate than ray-casting, especially for extreme angles
+   */
+  simulateShotPaths(
+    world: PhysicsWorld,
+    cueBall: Ball,
+    angle: number,
+    power?: number,
+    duration: number = 1.1
+  ): ShotPreviewPaths | null {
+    if (cueBall.pocketed) return null;
+
+    const previewWorld = world.clone({ enableRecording: false });
+    const previewCue = previewWorld.getBallById(cueBall.id);
+
+    if (!previewCue) return null;
+
+    // Use a representative default power (80% of max) if not specified or if 0
+    // This better matches typical shot power, improving prediction accuracy
+    const effectivePower = (power && power > CONFIG.CUE_POWER_MIN) 
+      ? power 
+      : CONFIG.CUE_POWER_MAX * 0.8;
+    const speed = effectivePower * CONFIG.CUE_POWER_MULTIPLIER;
+
+    previewCue.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
+    previewCue.sleeping = false;
+    previewCue.prevX = previewCue.x;
+    previewCue.prevY = previewCue.y;
+
+    const cuePath: Vec2[] = [{ x: previewCue.x, y: previewCue.y }];
+    const objectPaths = new Map<number, Vec2[]>();
+    let firstContact: PredictionResult | null = null;
+    let cueDistance = 0;
+    let prevCueX = previewCue.x;
+    let prevCueY = previewCue.y;
+
+    const maxSteps = Math.min(240, Math.ceil(duration / CONFIG.PHYSICS_DT));
+    const activationSpeed = CONFIG.VELOCITY_EPSILON * 2;
+
+    for (let step = 0; step < maxSteps; step++) {
+      previewWorld.step(CONFIG.PHYSICS_DT);
+
+      cueDistance += Math.hypot(previewCue.x - prevCueX, previewCue.y - prevCueY);
+      cuePath.push({ x: previewCue.x, y: previewCue.y });
+      prevCueX = previewCue.x;
+      prevCueY = previewCue.y;
+
+      for (const ball of previewWorld.balls) {
+        if (ball.id === previewCue.id || ball.pocketed) continue;
+
+        if (ball.getSpeed() > activationSpeed) {
+          const path = objectPaths.get(ball.id);
+          const point = { x: ball.x, y: ball.y };
+          if (path) {
+            path.push(point);
+          } else {
+            objectPaths.set(ball.id, [point]);
+          }
+        }
+      }
+
+      if (!firstContact) {
+        const cueRadius = previewCue.radius;
+        const tolerance = 0.01;
+
+        for (const ball of previewWorld.balls) {
+          if (ball.id === previewCue.id || ball.pocketed) continue;
+
+          const dx = ball.x - previewCue.x;
+          const dy = ball.y - previewCue.y;
+          const dist = Math.hypot(dx, dy);
+          const combinedRadius = ball.radius + cueRadius;
+
+          if (dist <= combinedRadius + tolerance && dist > 1e-5) {
+            const nx = dx / dist;
+            const ny = dy / dist;
+            const contactPoint = {
+              x: previewCue.x + nx * cueRadius,
+              y: previewCue.y + ny * cueRadius,
+            };
+
+            const originalBall = world.getBallById(ball.id) ?? undefined;
+
+            firstContact = {
+              type: 'ball',
+              contactPoint,
+              contactNormal: { x: nx, y: ny },
+              hitBall: originalBall,
+              distance: cueDistance,
+            };
+            break;
+          }
+        }
+
+        if (!firstContact) {
+          for (const rail of previewWorld.rails) {
+            const segDX = rail.x2 - rail.x1;
+            const segDY = rail.y2 - rail.y1;
+            const segLenSq = segDX * segDX + segDY * segDY;
+            if (segLenSq < 1e-6) continue;
+
+            const toPointX = previewCue.x - rail.x1;
+            const toPointY = previewCue.y - rail.y1;
+            let t = (toPointX * segDX + toPointY * segDY) / segLenSq;
+            t = Math.max(0, Math.min(1, t));
+
+            const closestX = rail.x1 + segDX * t;
+            const closestY = rail.y1 + segDY * t;
+
+            const distX = previewCue.x - closestX;
+            const distY = previewCue.y - closestY;
+            const dist = Math.hypot(distX, distY);
+
+            if (dist <= cueRadius + tolerance) {
+              const normalX = dist > 1e-5 ? distX / dist : rail.nx;
+              const normalY = dist > 1e-5 ? distY / dist : rail.ny;
+              const contactPoint = {
+                x: previewCue.x - normalX * cueRadius,
+                y: previewCue.y - normalY * cueRadius,
+              };
+
+              const originalRail = world.rails.find((r) => r === rail) ?? rail;
+
+              firstContact = {
+                type: 'rail',
+                contactPoint,
+                contactNormal: { x: normalX, y: normalY },
+                hitRail: originalRail,
+                distance: cueDistance,
+              };
+              break;
+            }
+          }
+        }
+      }
+
+      const cueSleeping = previewCue.sleeping || previewCue.getSpeed() < CONFIG.VELOCITY_EPSILON;
+      const anyActive = Array.from(objectPaths.values()).some((path) => path.length > 0);
+
+      if (cueSleeping && !anyActive) {
+        break;
+      }
+    }
+
+    if (firstContact?.type === 'ball') {
+      const targetId = firstContact.hitBall?.id;
+      const ballPath = targetId !== undefined ? objectPaths.get(targetId) : undefined;
+      const path = ballPath ?? [];
+
+      if (path.length < 2) {
+        const ballRadius = firstContact.hitBall?.radius ?? previewCue.radius;
+        const contactCenter = {
+          x: firstContact.contactPoint.x + firstContact.contactNormal.x * ballRadius,
+          y: firstContact.contactPoint.y + firstContact.contactNormal.y * ballRadius,
+        };
+
+        if (path.length === 0) {
+          path.push(contactCenter);
+        } else {
+          path[0] = contactCenter;
+        }
+
+        const extension = Math.max(6, speed * 0.05);
+        path.push({
+          x: contactCenter.x + firstContact.contactNormal.x * extension,
+          y: contactCenter.y + firstContact.contactNormal.y * extension,
+        });
+
+        if (targetId !== undefined) {
+          objectPaths.set(targetId, path);
+        }
+      }
+    }
+
+    return { cuePath, objectPaths, firstContact: firstContact ?? undefined };
+  }
+
+  /**
    * Sphere-sphere sweep (for ball collisions)
    * Treats cue ball as a moving sphere, not a point
    * Returns the point where cue ball surface first touches object ball surface
@@ -87,7 +273,7 @@ export class Predictor {
   ): { point: Vec2; normal: Vec2; distance: number } | null {
     // For sphere-sphere collision, we need to account for both radii
     // Treat it as a ray hitting a circle with combined radius
-    const cueBallRadius = 1.125; // CONFIG.BALL_RADIUS
+    const cueBallRadius = CONFIG.BALL_RADIUS;
     const combinedRadius = ball.radius + cueBallRadius;
     
     // Vector from ray origin to circle center

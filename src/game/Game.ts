@@ -338,21 +338,29 @@ export class Game {
         y: Math.sin(angle),
       };
       
-      const prediction = this.predictor.predictFirstContact(
+      // Use physics simulation for aim assist, fall back to ray-cast for cue line clipping
+      let shotPaths = null;
+      if (this.aimAssist) {
+        // Run full physics simulation for accurate trajectory preview
+        shotPaths = this.predictor.simulateShotPaths(
+          this.world,
+          this.cueBall,
+          angle,
+          this.currentPower
+        );
+      }
+      
+      // Fall back to ray-cast for basic prediction (for cue line clipping)
+      const prediction = shotPaths?.firstContact ?? this.predictor.predictFirstContact(
         { x: this.cueBall.x, y: this.cueBall.y },
         direction,
         this.world,
         this.cueBall
       );
       
-      // Draw trajectory lines only if aim assist is enabled
-      if (this.aimAssist && prediction) {
-        this.renderer.drawTrajectoryLines(
-          prediction,
-          { x: this.cueBall.x, y: this.cueBall.y },
-          direction,
-          this.predictor
-        );
+      // Draw trajectory lines if aim assist is enabled
+      if (this.aimAssist && shotPaths) {
+        this.renderer.drawPhysicsTrajectoryLines(shotPaths, { x: this.cueBall.x, y: this.cueBall.y });
       }
       
       this.renderer.drawCueAndPowerBar(this.cueBall, angle, this.currentPower, this.aimAssist, true, this.isAimMode, prediction);

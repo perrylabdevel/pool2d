@@ -165,7 +165,9 @@ export class PhysicsWorld {
           ball.pocketed = true;
           ball.vx = 0;
           ball.vy = 0;
-          physicsRecorder.recordPocket(ball);
+          if (this.recordingEnabled) {
+            physicsRecorder.recordPocket(ball);
+          }
           // Notify game logic (will be handled by Game class)
           break;
         }
@@ -195,5 +197,27 @@ export class PhysicsWorld {
   
   getActiveBalls(): Ball[] {
     return this.balls.filter((ball) => !ball.pocketed);
+  }
+  
+  getBallById(id: number): Ball | null {
+    return this.balls.find((ball) => ball.id === id) ?? null;
+  }
+  
+  recordingEnabled: boolean = true;
+  
+  clone(options?: { enableRecording?: boolean }): PhysicsWorld {
+    const copy = new PhysicsWorld();
+    copy.recordingEnabled = options?.enableRecording ?? false;
+    
+    // Clone balls
+    copy.balls = this.balls.map((ball) => ball.clone());
+    
+    // Clone rails
+    copy.rails = this.rails.map((rail) => rail.clone());
+    
+    // Clone pockets
+    copy.pockets = this.pockets.map((pocket) => pocket.clone());
+    
+    return copy;
   }
 }

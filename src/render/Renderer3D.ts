@@ -5,7 +5,7 @@ import { Ball, Rail, Pocket } from '../physics/Shapes';
 import { PhysicsWorld } from '../physics/Physics';
 import { CONFIG, BALL_CUE } from '../config';
 import { getTableGeometry, computePlayBoundaryPoints, computeBoundaryBounds, type Vec2, type BoundaryBounds } from '../geometry/Geometry';
-import { PredictionResult } from '../physics/Prediction';
+import { PredictionResult, ShotPreviewPaths } from '../physics/Prediction';
 
 export class Renderer3D {
   canvas: HTMLCanvasElement;
@@ -1168,6 +1168,107 @@ export class Renderer3D {
         }
       }
     }
+  }
+  
+  /**
+   * Draw trajectories from physics simulation
+   * More accurate than ray-cast prediction, especially for extreme angles
+   */
+  drawPhysicsTrajectoryLines(shotPaths: ShotPreviewPaths, cueBallPos: { x: number; y: number }) {
+    // Clear old 3D trajectory lines
+    this.trajectoryLines.forEach(line => this.scene.remove(line));
+    this.trajectoryLines = [];
+    
+    if (!shotPaths.firstContact || shotPaths.cuePath.length < 2) return;
+    
+    // Draw cue ball path (cyan dashed line)
+    this.uiCtx.strokeStyle = 'rgba(0, 255, 255, 0.4)';
+    this.uiCtx.lineWidth = 1;
+    this.uiCtx.setLineDash([5, 5]);
+    this.uiCtx.beginPath();
+    
+    for (let i = 0; i < shotPaths.cuePath.length; i++) {
+      const point = shotPaths.cuePath[i];
+      const screen = this.worldToScreen(point.x, point.y);
+      
+      if (i === 0) {
+        this.uiCtx.moveTo(screen.x, screen.y);
+      } else {
+        this.uiCtx.lineTo(screen.x, screen.y);
+      }
+      
+      // Stop at first contact
+      if (shotPaths.firstContact && i > 0) {
+        const prevPoint = shotPaths.cuePath[i - 1];
+        const contactDist = Math.hypot(
+          shotPaths.firstContact.contactPoint.x - prevPoint.x,
+          shotPaths.firstContact.contactPoint.y - prevPoint.y
+        );
+        const segmentDist = Math.hypot(point.x - prevPoint.x, point.y - prevPoint.y);
+        
+        if (contactDist <= segmentDist) {
+          break;
+        }
+      }
+    }
+    
+    this.uiCtx.stroke();
+    this.uiCtx.setLineDash([]);
+    
+    // Draw object ball trajectories (yellow/orange lines with arrows)
+    shotPaths.objectPaths.forEach((path, ballId) => {
+      if (path.length < 2) return;
+      
+      this.uiCtx.strokeStyle = 'rgba(255, 200, 0, 0.7)';
+      this.uiCtx.lineWidth = 2;
+      this.uiCtx.setLineDash([10, 5]);
+      this.uiCtx.beginPath();
+      
+      for (let i = 0; i < path.length; i++) {
+        const point = path[i];
+        const screen = this.worldToScreen(point.x, point.y);
+        
+        if (i === 0) {
+          this.uiCtx.moveTo(screen.x, screen.y);
+        } else {
+          this.uiCtx.lineTo(screen.x, screen.y);
+        }
+      }
+      
+      this.uiCtx.stroke();
+      this.uiCtx.setLineDash([]);
+      
+      // Draw arrowhead at the end
+      if (path.length >= 2) {
+        const lastIdx = path.length - 1;
+        const endPoint = path[lastIdx];
+        const prevPoint = path[lastIdx - 1];
+        
+        const endScreen = this.worldToScreen(endPoint.x, endPoint.y);
+        const dx = endPoint.x - prevPoint.x;
+        const dy = endPoint.y - prevPoint.y;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        
+        if (len > 0) {
+          const arrowSize = 10;
+          const angle = Math.atan2(dy, dx);
+          
+          this.uiCtx.fillStyle = 'rgba(255, 200, 0, 0.9)';
+          this.uiCtx.beginPath();
+          this.uiCtx.moveTo(endScreen.x, endScreen.y);
+          this.uiCtx.lineTo(
+            endScreen.x - arrowSize * Math.cos(angle - Math.PI / 6),
+            endScreen.y - arrowSize * Math.sin(angle - Math.PI / 6)
+          );
+          this.uiCtx.lineTo(
+            endScreen.x - arrowSize * Math.cos(angle + Math.PI / 6),
+            endScreen.y - arrowSize * Math.sin(angle + Math.PI / 6)
+          );
+          this.uiCtx.closePath();
+          this.uiCtx.fill();
+        }
+      }
+    });
   }
   
   getPowerBarBounds() {
