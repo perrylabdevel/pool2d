@@ -243,6 +243,12 @@ export class Predictor {
           }
       }
 
+      // Stop simulation early if we found a ball contact
+      if (firstContact?.type === 'ball') {
+        console.log(`⏹️  Stopped simulation early at step ${step} (ball contact found)`);
+        break;
+      }
+
       const cueSleeping = previewCue.sleeping || previewCue.getSpeed() < CONFIG.VELOCITY_EPSILON;
       const anyActive = Array.from(objectPaths.values()).some((path) => path.length > 0);
 
