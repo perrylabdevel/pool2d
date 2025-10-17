@@ -42,6 +42,10 @@ export class DebugDraw {
     this.canvas.classList.toggle('visible', this.enabled);
   }
   
+  isEnabled(): boolean {
+    return this.enabled;
+  }
+  
   resize(width: number, height: number, scale: number) {
     this.canvas.width = width;
     this.canvas.height = height;

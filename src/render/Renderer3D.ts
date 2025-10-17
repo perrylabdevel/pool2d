@@ -1173,8 +1173,11 @@ export class Renderer3D {
   /**
    * Draw trajectories from physics simulation
    * More accurate than ray-cast prediction, especially for extreme angles
+   * @param shotPaths - Physics simulation results with trajectory paths
+   * @param cueBallPos - Current cue ball position (unused but kept for API consistency)
+   * @param debugMode - If true, show all object ball paths; if false, only show first contact
    */
-  drawPhysicsTrajectoryLines(shotPaths: ShotPreviewPaths, cueBallPos: { x: number; y: number }) {
+  drawPhysicsTrajectoryLines(shotPaths: ShotPreviewPaths, cueBallPos: { x: number; y: number }, debugMode: boolean = false) {
     // Clear old 3D trajectory lines
     this.trajectoryLines.forEach(line => this.scene.remove(line));
     this.trajectoryLines = [];
@@ -1216,8 +1219,15 @@ export class Renderer3D {
     this.uiCtx.setLineDash([]);
     
     // Draw object ball trajectories (yellow/orange lines with arrows)
+    // In normal mode: only show first contact ball
+    // In debug mode: show all object ball paths
+    const firstContactBallId = shotPaths.firstContact?.hitBall?.id;
+    
     shotPaths.objectPaths.forEach((path, ballId) => {
       if (path.length < 2) return;
+      
+      // Filter: only show first contact ball unless debug mode is on
+      if (!debugMode && ballId !== firstContactBallId) return;
       
       this.uiCtx.strokeStyle = 'rgba(255, 200, 0, 0.7)';
       this.uiCtx.lineWidth = 2;

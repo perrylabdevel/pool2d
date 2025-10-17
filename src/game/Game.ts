@@ -360,7 +360,7 @@ export class Game {
       
       // Draw trajectory lines if aim assist is enabled
       if (this.aimAssist && shotPaths) {
-        this.renderer.drawPhysicsTrajectoryLines(shotPaths, { x: this.cueBall.x, y: this.cueBall.y });
+        this.renderer.drawPhysicsTrajectoryLines(shotPaths, { x: this.cueBall.x, y: this.cueBall.y }, this.debug.isEnabled());
       }
       
       this.renderer.drawCueAndPowerBar(this.cueBall, angle, this.currentPower, this.aimAssist, true, this.isAimMode, prediction);
