@@ -94,7 +94,13 @@ export class PhysicsWorld {
           ball.angularVelocity = speed / ball.radius;
           ball.angle += ball.angularVelocity * subDt;
         } else {
-          ball.angularVelocity = 0;
+          // Ball nearly stopped - keep last angularVelocity until next movement
+          // This prevents the angle from resetting when ball briefly stops
+          if (ball.angularVelocity > 0.01) {
+            ball.angularVelocity *= 0.9; // Gradually decay
+          } else {
+            ball.angularVelocity = 0;
+          }
         }
       });
       
@@ -187,9 +193,11 @@ export class PhysicsWorld {
         ball.sleeping = true;
         ball.vx = 0;
         ball.vy = 0;
+        ball.angularVelocity = 0; // Stop rotation when ball sleeps
       } else if (ball.sleeping && speed >= CONFIG.VELOCITY_EPSILON * 2) {
         // Wake up if moving fast enough
         ball.sleeping = false;
+        // Angular velocity will be recalculated in next physics step based on new velocity
       }
     });
   }
