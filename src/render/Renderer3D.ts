@@ -1185,11 +1185,14 @@ export class Renderer3D {
     if (!shotPaths.firstContact || shotPaths.cuePath.length < 2) return;
     
     // Draw cue ball path (cyan dashed line)
+    // In normal mode: stop at first contact with object ball
+    // In debug mode: show full trajectory including bounces
     this.uiCtx.strokeStyle = 'rgba(0, 255, 255, 0.4)';
     this.uiCtx.lineWidth = 1;
     this.uiCtx.setLineDash([5, 5]);
     this.uiCtx.beginPath();
     
+    let stoppedAtContact = false;
     for (let i = 0; i < shotPaths.cuePath.length; i++) {
       const point = shotPaths.cuePath[i];
       const screen = this.worldToScreen(point.x, point.y);
@@ -1200,8 +1203,8 @@ export class Renderer3D {
         this.uiCtx.lineTo(screen.x, screen.y);
       }
       
-      // Stop at first contact
-      if (shotPaths.firstContact && i > 0) {
+      // Stop at first contact in normal mode only
+      if (!debugMode && shotPaths.firstContact && i > 0) {
         const prevPoint = shotPaths.cuePath[i - 1];
         const contactDist = Math.hypot(
           shotPaths.firstContact.contactPoint.x - prevPoint.x,
@@ -1210,6 +1213,13 @@ export class Renderer3D {
         const segmentDist = Math.hypot(point.x - prevPoint.x, point.y - prevPoint.y);
         
         if (contactDist <= segmentDist) {
+          // Draw line to actual contact point for precision
+          const contactScreen = this.worldToScreen(
+            shotPaths.firstContact.contactPoint.x,
+            shotPaths.firstContact.contactPoint.y
+          );
+          this.uiCtx.lineTo(contactScreen.x, contactScreen.y);
+          stoppedAtContact = true;
           break;
         }
       }
@@ -1229,13 +1239,18 @@ export class Renderer3D {
       // Filter: only show first contact ball unless debug mode is on
       if (!debugMode && ballId !== firstContactBallId) return;
       
+      // In normal mode, limit path length for cleaner visualization
+      // Show ~20% of full path in normal mode, full path in debug mode
+      const pathLengthLimit = debugMode ? path.length : Math.min(path.length, Math.ceil(path.length * 0.2));
+      const displayPath = path.slice(0, pathLengthLimit);
+      
       this.uiCtx.strokeStyle = 'rgba(255, 200, 0, 0.7)';
       this.uiCtx.lineWidth = 2;
       this.uiCtx.setLineDash([10, 5]);
       this.uiCtx.beginPath();
       
-      for (let i = 0; i < path.length; i++) {
-        const point = path[i];
+      for (let i = 0; i < displayPath.length; i++) {
+        const point = displayPath[i];
         const screen = this.worldToScreen(point.x, point.y);
         
         if (i === 0) {
@@ -1248,11 +1263,11 @@ export class Renderer3D {
       this.uiCtx.stroke();
       this.uiCtx.setLineDash([]);
       
-      // Draw arrowhead at the end
-      if (path.length >= 2) {
-        const lastIdx = path.length - 1;
-        const endPoint = path[lastIdx];
-        const prevPoint = path[lastIdx - 1];
+      // Draw arrowhead at the end of displayed path
+      if (displayPath.length >= 2) {
+        const lastIdx = displayPath.length - 1;
+        const endPoint = displayPath[lastIdx];
+        const prevPoint = displayPath[lastIdx - 1];
         
         const endScreen = this.worldToScreen(endPoint.x, endPoint.y);
         const dx = endPoint.x - prevPoint.x;
