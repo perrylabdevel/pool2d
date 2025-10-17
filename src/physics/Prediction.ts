@@ -110,6 +110,8 @@ export class Predictor {
     const cuePath: Vec2[] = [{ x: previewCue.x, y: previewCue.y }];
     const objectPaths = new Map<number, Vec2[]>();
     let firstContact: PredictionResult | null = null;
+    let contactCount = 0; // Track number of separate contacts
+    let lastContactStep = -10; // Track when last contact was detected
     let cueDistance = 0;
     let prevCueX = previewCue.x;
     let prevCueY = previewCue.y;
@@ -149,39 +151,37 @@ export class Predictor {
       const cueRadius = previewCue.radius;
       const tolerance = 0.01;
 
-      // Only check for ball collision if we haven't found a BALL contact yet
-      // (Allow overwriting rail contacts, but never overwrite ball contacts)
-      if (!firstContact || firstContact.type !== 'ball') {
-        for (const ball of previewWorld.balls) {
-          if (ball.id === previewCue.id || ball.pocketed) continue;
+      // Check for ball collisions (prioritize over rails)
+      for (const ball of previewWorld.balls) {
+        if (ball.id === previewCue.id || ball.pocketed) continue;
 
-          const dx = ball.x - previewCue.x;
-          const dy = ball.y - previewCue.y;
-          const dist = Math.hypot(dx, dy);
-          const combinedRadius = ball.radius + cueRadius;
+        const dx = ball.x - previewCue.x;
+        const dy = ball.y - previewCue.y;
+        const dist = Math.hypot(dx, dy);
+        const combinedRadius = ball.radius + cueRadius;
 
-          // Check if balls are overlapping or very close
-          if (dist <= combinedRadius + tolerance && dist > 1e-5) {
-            const nx = dx / dist;
-            const ny = dy / dist;
-            
-            // CRITICAL: Check if CUE BALL is APPROACHING target (not separating)
-            // Project cue ball velocity onto collision normal
-            const cueApproachVelocity = previewCue.vx * nx + previewCue.vy * ny;
-            
-            // Only detect collision if cue ball is moving TOWARD target
-            // (positive velocity along normal = moving toward target)
-            // Use small threshold to catch slow approaches after rail bounces
-            if (cueApproachVelocity > 0.01) {
-              const contactPoint = {
-                x: previewCue.x + nx * cueRadius,
-                y: previewCue.y + ny * cueRadius,
-              };
+        // Check if balls are overlapping or very close
+        if (dist <= combinedRadius + tolerance && dist > 1e-5) {
+          const nx = dx / dist;
+          const ny = dy / dist;
+          
+          // CRITICAL: Check if CUE BALL is APPROACHING target (not separating)
+          // Project cue ball velocity onto collision normal
+          const cueApproachVelocity = previewCue.vx * nx + previewCue.vy * ny;
+          
+          // Only detect collision if cue ball is moving TOWARD target
+          // (positive velocity along normal = moving toward target)
+          // Use small threshold to catch slow approaches after rail bounces
+          if (cueApproachVelocity > 0.01) {
+            const contactPoint = {
+              x: previewCue.x + nx * cueRadius,
+              y: previewCue.y + ny * cueRadius,
+            };
 
-              const originalBall = world.getBallById(ball.id) ?? undefined;
+            const originalBall = world.getBallById(ball.id) ?? undefined;
 
-              // Set firstContact to THIS ball and stop checking
-              // (If rail contact existed, overwrite it; if ball contact exists, we shouldn't be here)
+            // Only save FIRST contact, increment count only if this is a NEW contact
+            if (!firstContact) {
               firstContact = {
                 type: 'ball',
                 contactPoint,
@@ -189,11 +189,15 @@ export class Predictor {
                 hitBall: originalBall,
                 distance: cueDistance,
               };
-              
-              // console.log(`🎱 Ball #${ball.id} contact at step ${step}, approachVel=${cueApproachVelocity.toFixed(2)}`);
-              
-              break; // Stop checking other balls - use the FIRST ball detected this frame
             }
+            
+            // Only count as new contact if enough steps have passed since last contact
+            if (step - lastContactStep > 5) {
+              contactCount++;
+              lastContactStep = step;
+            }
+            
+            break; // Stop checking other balls - use the FIRST ball detected this frame
           }
         }
       }
@@ -228,24 +232,29 @@ export class Predictor {
 
               const originalRail = world.rails.find((r) => r === rail) ?? rail;
 
-              firstContact = {
-                type: 'rail',
-                contactPoint,
-                contactNormal: { x: normalX, y: normalY },
-                hitRail: originalRail,
-                distance: cueDistance,
-              };
+              if (!firstContact) {
+                firstContact = {
+                  type: 'rail',
+                  contactPoint,
+                  contactNormal: { x: normalX, y: normalY },
+                  hitRail: originalRail,
+                  distance: cueDistance,
+                };
+              }
               
-              // console.log(`🟦 Rail contact at step ${step}`);
+              // Only count as new contact if enough steps have passed since last contact
+              if (step - lastContactStep > 5) {
+                contactCount++;
+                lastContactStep = step;
+              }
               
               break;
             }
           }
       }
 
-      // Stop simulation early if we found a ball contact
-      if (firstContact?.type === 'ball') {
-        // console.log(`⏹️  Stopped simulation early at step ${step} (ball contact found)`);
+      // Stop simulation after one bounce (2 contacts) or ball contact
+      if (firstContact?.type === 'ball' || contactCount >= 2) {
         break;
       }
 
@@ -257,7 +266,7 @@ export class Predictor {
       }
     }
     
-    // console.log(`✅ END: contact=${firstContact?.type || 'none'}, cuePath=${cuePath.length} points, objectPaths=${objectPaths.size}`);
+    // Prediction complete
 
     if (firstContact?.type === 'ball') {
       const targetId = firstContact.hitBall?.id;
