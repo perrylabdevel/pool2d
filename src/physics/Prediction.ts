@@ -159,26 +159,38 @@ export class Predictor {
           const dist = Math.hypot(dx, dy);
           const combinedRadius = ball.radius + cueRadius;
 
+          // Check if balls are overlapping or very close
           if (dist <= combinedRadius + tolerance && dist > 1e-5) {
             const nx = dx / dist;
             const ny = dy / dist;
-            const contactPoint = {
-              x: previewCue.x + nx * cueRadius,
-              y: previewCue.y + ny * cueRadius,
-            };
+            
+            // CRITICAL: Check if balls are APPROACHING (not separating)
+            // Use relative velocity to determine if this is a real collision
+            const dvx = ball.vx - previewCue.vx;
+            const dvy = ball.vy - previewCue.vy;
+            const approachVelocity = dvx * nx + dvy * ny;
+            
+            // Only detect collision if balls are moving toward each other
+            // (negative approach velocity = approaching)
+            if (approachVelocity < 0) {
+              const contactPoint = {
+                x: previewCue.x + nx * cueRadius,
+                y: previewCue.y + ny * cueRadius,
+              };
 
-            const originalBall = world.getBallById(ball.id) ?? undefined;
+              const originalBall = world.getBallById(ball.id) ?? undefined;
 
-            // Set firstContact to THIS ball and stop checking
-            // (If rail contact existed, overwrite it; if ball contact exists, we shouldn't be here)
-            firstContact = {
-              type: 'ball',
-              contactPoint,
-              contactNormal: { x: nx, y: ny },
-              hitBall: originalBall,
-              distance: cueDistance,
-            };
-            break; // Stop checking other balls - use the FIRST ball detected this frame
+              // Set firstContact to THIS ball and stop checking
+              // (If rail contact existed, overwrite it; if ball contact exists, we shouldn't be here)
+              firstContact = {
+                type: 'ball',
+                contactPoint,
+                contactNormal: { x: nx, y: ny },
+                hitBall: originalBall,
+                distance: cueDistance,
+              };
+              break; // Stop checking other balls - use the FIRST ball detected this frame
+            }
           }
         }
       }
