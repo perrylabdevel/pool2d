@@ -190,7 +190,7 @@ export class Predictor {
                 distance: cueDistance,
               };
               
-              console.log(`🎱 Ball #${ball.id} contact at step ${step}, approachVel=${cueApproachVelocity.toFixed(2)}`);
+              // console.log(`🎱 Ball #${ball.id} contact at step ${step}, approachVel=${cueApproachVelocity.toFixed(2)}`);
               
               break; // Stop checking other balls - use the FIRST ball detected this frame
             }
@@ -236,7 +236,7 @@ export class Predictor {
                 distance: cueDistance,
               };
               
-              console.log(`🟦 Rail contact at step ${step}`);
+              // console.log(`🟦 Rail contact at step ${step}`);
               
               break;
             }
@@ -245,7 +245,7 @@ export class Predictor {
 
       // Stop simulation early if we found a ball contact
       if (firstContact?.type === 'ball') {
-        console.log(`⏹️  Stopped simulation early at step ${step} (ball contact found)`);
+        // console.log(`⏹️  Stopped simulation early at step ${step} (ball contact found)`);
         break;
       }
 
@@ -257,7 +257,7 @@ export class Predictor {
       }
     }
     
-    console.log(`✅ END: contact=${firstContact?.type || 'none'}, cuePath=${cuePath.length} points, objectPaths=${objectPaths.size}`);
+    // console.log(`✅ END: contact=${firstContact?.type || 'none'}, cuePath=${cuePath.length} points, objectPaths=${objectPaths.size}`);
 
     if (firstContact?.type === 'ball') {
       const targetId = firstContact.hitBall?.id;
