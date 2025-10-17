@@ -5,6 +5,11 @@ import { Ball, Rail, Vec2 } from './Shapes';
 import { PhysicsWorld } from './Physics';
 import { CONFIG } from '../config';
 
+export interface Vec2 {
+  x: number;
+  y: number;
+}
+
 export interface PredictionResult {
   type: 'ball' | 'rail' | 'none';
   contactPoint: Vec2;
@@ -110,26 +115,18 @@ export class Predictor {
     const cuePath: Vec2[] = [{ x: previewCue.x, y: previewCue.y }];
     const objectPaths = new Map<number, Vec2[]>();
     let firstContact: PredictionResult | null = null;
-    let contactCount = 0; // Track number of separate contacts
-    let lastContactStep = -10; // Track when last contact was detected
     let cueDistance = 0;
     let prevCueX = previewCue.x;
     let prevCueY = previewCue.y;
 
     const maxSteps = Math.min(240, Math.ceil(duration / CONFIG.PHYSICS_DT));
     const activationSpeed = CONFIG.VELOCITY_EPSILON * 2;
-    
+
     for (let step = 0; step < maxSteps; step++) {
-      // Record cue ball path BEFORE physics step (capture pre-collision position)
-      // Stop recording once we've detected a ball collision
-      const shouldRecord = !firstContact || firstContact.type !== 'ball';
-      if (shouldRecord) {
-        cuePath.push({ x: previewCue.x, y: previewCue.y });
-      }
-      
       previewWorld.step(CONFIG.PHYSICS_DT);
 
       cueDistance += Math.hypot(previewCue.x - prevCueX, previewCue.y - prevCueY);
+      cuePath.push({ x: previewCue.x, y: previewCue.y });
       prevCueX = previewCue.x;
       prevCueY = previewCue.y;
 
@@ -147,32 +144,21 @@ export class Predictor {
         }
       }
 
-      // Detect first BALL contact (check every frame, don't let rail contacts prevent detection)
-      const cueRadius = previewCue.radius;
-      const tolerance = 0.01;
+      if (!firstContact) {
+        const cueRadius = previewCue.radius;
+        const tolerance = 0.01;
 
-      // Check for ball collisions (prioritize over rails)
-      for (const ball of previewWorld.balls) {
-        if (ball.id === previewCue.id || ball.pocketed) continue;
+        for (const ball of previewWorld.balls) {
+          if (ball.id === previewCue.id || ball.pocketed) continue;
 
-        const dx = ball.x - previewCue.x;
-        const dy = ball.y - previewCue.y;
-        const dist = Math.hypot(dx, dy);
-        const combinedRadius = ball.radius + cueRadius;
+          const dx = ball.x - previewCue.x;
+          const dy = ball.y - previewCue.y;
+          const dist = Math.hypot(dx, dy);
+          const combinedRadius = ball.radius + cueRadius;
 
-        // Check if balls are overlapping or very close
-        if (dist <= combinedRadius + tolerance && dist > 1e-5) {
-          const nx = dx / dist;
-          const ny = dy / dist;
-          
-          // CRITICAL: Check if CUE BALL is APPROACHING target (not separating)
-          // Project cue ball velocity onto collision normal
-          const cueApproachVelocity = previewCue.vx * nx + previewCue.vy * ny;
-          
-          // Only detect collision if cue ball is moving TOWARD target
-          // (positive velocity along normal = moving toward target)
-          // Very small threshold to catch glancing/sharp angle shots
-          if (cueApproachVelocity > 0.001) {
+          if (dist <= combinedRadius + tolerance && dist > 1e-5) {
+            const nx = dx / dist;
+            const ny = dy / dist;
             const contactPoint = {
               x: previewCue.x + nx * cueRadius,
               y: previewCue.y + ny * cueRadius,
@@ -180,30 +166,18 @@ export class Predictor {
 
             const originalBall = world.getBallById(ball.id) ?? undefined;
 
-            // Only save FIRST contact, increment count only if this is a NEW contact
-            if (!firstContact) {
-              firstContact = {
-                type: 'ball',
-                contactPoint,
-                contactNormal: { x: nx, y: ny },
-                hitBall: originalBall,
-                distance: cueDistance,
-              };
-            }
-            
-            // Only count as new contact if enough steps have passed since last contact
-            if (step - lastContactStep > 5) {
-              contactCount++;
-              lastContactStep = step;
-            }
-            
-            break; // Stop checking other balls - use the FIRST ball detected this frame
+            firstContact = {
+              type: 'ball',
+              contactPoint,
+              contactNormal: { x: nx, y: ny },
+              hitBall: originalBall,
+              distance: cueDistance,
+            };
+            break;
           }
         }
-      }
 
-      // Only check for rail contact if we haven't found ANY contact yet
-      if (!firstContact) {
+        if (!firstContact) {
           for (const rail of previewWorld.rails) {
             const segDX = rail.x2 - rail.x1;
             const segDY = rail.y2 - rail.y1;
@@ -232,50 +206,26 @@ export class Predictor {
 
               const originalRail = world.rails.find((r) => r === rail) ?? rail;
 
-              if (!firstContact) {
-                firstContact = {
-                  type: 'rail',
-                  contactPoint,
-                  contactNormal: { x: normalX, y: normalY },
-                  hitRail: originalRail,
-                  distance: cueDistance,
-                };
-              }
-              
-              // Only count as new contact if enough steps have passed since last contact
-              if (step - lastContactStep > 5) {
-                contactCount++;
-                lastContactStep = step;
-              }
-              
+              firstContact = {
+                type: 'rail',
+                contactPoint,
+                contactNormal: { x: normalX, y: normalY },
+                hitRail: originalRail,
+                distance: cueDistance,
+              };
               break;
             }
           }
-      }
-
-      // Stop simulation after one bounce (2 contacts) 
-      // For ball contacts, continue a bit longer to let object balls start moving
-      if (contactCount >= 2) {
-        break;
+        }
       }
 
       const cueSleeping = previewCue.sleeping || previewCue.getSpeed() < CONFIG.VELOCITY_EPSILON;
       const anyActive = Array.from(objectPaths.values()).some((path) => path.length > 0);
-      
-      // If ball was hit, continue until object balls slow down or we have enough path
-      if (firstContact?.type === 'ball' && step > lastContactStep + 20) {
-        const hasEnoughObjectPaths = Array.from(objectPaths.values()).some(path => path.length >= 10);
-        if (hasEnoughObjectPaths || !anyActive) {
-          break;
-        }
-      }
 
       if (cueSleeping && !anyActive) {
         break;
       }
     }
-    
-    // Prediction complete
 
     if (firstContact?.type === 'ball') {
       const targetId = firstContact.hitBall?.id;

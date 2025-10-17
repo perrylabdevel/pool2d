@@ -910,7 +910,7 @@ export class Renderer3D {
   }
   
   // Compatibility methods for existing code
-  drawCueAndPowerBar(ball: Ball, angle: number, power: number, showGhost: boolean, showPowerBar: boolean, _isAimMode: boolean, prediction?: PredictionResult, skipAimLine: boolean = false) {
+  drawCueAndPowerBar(ball: Ball, angle: number, power: number, showGhost: boolean, showPowerBar: boolean, _isAimMode: boolean, prediction?: PredictionResult) {
     // Remove old 3D elements if they exist
     if (this.cueStick) {
       this.scene.remove(this.cueStick);
@@ -947,37 +947,34 @@ export class Renderer3D {
     this.uiCtx.stroke();
     
     // Draw aim line in 2D - clipped to contact point or rails
-    // Skip if physics trajectories are being shown
-    if (!skipAimLine) {
-      let aimEndX = ball.x + Math.cos(angle) * CONFIG.AIM_LINE_LENGTH;
-      let aimEndY = ball.y + Math.sin(angle) * CONFIG.AIM_LINE_LENGTH;
-      
-      // If we have a prediction, stop at the contact point
-      if (prediction && prediction.type === 'ball') {
-        aimEndX = prediction.contactPoint.x;
-        aimEndY = prediction.contactPoint.y;
-      } else if (prediction && prediction.type === 'rail') {
-        aimEndX = prediction.contactPoint.x;
-        aimEndY = prediction.contactPoint.y;
-      } else {
-        // Clip to rails if no prediction
-        const aimEndRaw = { x: aimEndX, y: aimEndY };
-        const clipped = this.clipLineAtRails({ x: ball.x, y: ball.y }, aimEndRaw);
-        aimEndX = clipped.x;
-        aimEndY = clipped.y;
-      }
-      
-      const aimEnd = this.worldToScreen(aimEndX, aimEndY);
-      
-      this.uiCtx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-      this.uiCtx.lineWidth = 1;
-      this.uiCtx.setLineDash([5, 5]);
-      this.uiCtx.beginPath();
-      this.uiCtx.moveTo(ballScreen.x, ballScreen.y);
-      this.uiCtx.lineTo(aimEnd.x, aimEnd.y);
-      this.uiCtx.stroke();
-      this.uiCtx.setLineDash([]);
+    let aimEndX = ball.x + Math.cos(angle) * CONFIG.AIM_LINE_LENGTH;
+    let aimEndY = ball.y + Math.sin(angle) * CONFIG.AIM_LINE_LENGTH;
+    
+    // If we have a prediction, stop at the contact point
+    if (prediction && prediction.type === 'ball') {
+      aimEndX = prediction.contactPoint.x;
+      aimEndY = prediction.contactPoint.y;
+    } else if (prediction && prediction.type === 'rail') {
+      aimEndX = prediction.contactPoint.x;
+      aimEndY = prediction.contactPoint.y;
+    } else {
+      // Clip to rails if no prediction
+      const aimEndRaw = { x: aimEndX, y: aimEndY };
+      const clipped = this.clipLineAtRails({ x: ball.x, y: ball.y }, aimEndRaw);
+      aimEndX = clipped.x;
+      aimEndY = clipped.y;
     }
+    
+    const aimEnd = this.worldToScreen(aimEndX, aimEndY);
+    
+    this.uiCtx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+    this.uiCtx.lineWidth = 1;
+    this.uiCtx.setLineDash([5, 5]);
+    this.uiCtx.beginPath();
+    this.uiCtx.moveTo(ballScreen.x, ballScreen.y);
+    this.uiCtx.lineTo(aimEnd.x, aimEnd.y);
+    this.uiCtx.stroke();
+    this.uiCtx.setLineDash([]);
     
     // Draw ghost ball in 2D if prediction exists
     if (showGhost && prediction && prediction.type === 'ball' && prediction.hitBall) {
@@ -1188,7 +1185,6 @@ export class Renderer3D {
     if (!shotPaths.firstContact || shotPaths.cuePath.length < 2) return;
     
     // Draw cue ball path (cyan dashed line)
-    // Path already stops at first contact (handled in simulateShotPaths)
     this.uiCtx.strokeStyle = 'rgba(0, 255, 255, 0.4)';
     this.uiCtx.lineWidth = 1;
     this.uiCtx.setLineDash([5, 5]);
@@ -1202,6 +1198,20 @@ export class Renderer3D {
         this.uiCtx.moveTo(screen.x, screen.y);
       } else {
         this.uiCtx.lineTo(screen.x, screen.y);
+      }
+      
+      // Stop at first contact
+      if (shotPaths.firstContact && i > 0) {
+        const prevPoint = shotPaths.cuePath[i - 1];
+        const contactDist = Math.hypot(
+          shotPaths.firstContact.contactPoint.x - prevPoint.x,
+          shotPaths.firstContact.contactPoint.y - prevPoint.y
+        );
+        const segmentDist = Math.hypot(point.x - prevPoint.x, point.y - prevPoint.y);
+        
+        if (contactDist <= segmentDist) {
+          break;
+        }
       }
     }
     
@@ -1219,18 +1229,13 @@ export class Renderer3D {
       // Filter: only show first contact ball unless debug mode is on
       if (!debugMode && ballId !== firstContactBallId) return;
       
-      // In normal mode, limit path length for cleaner visualization
-      // Show ~20% of full path in normal mode, full path in debug mode
-      const pathLengthLimit = debugMode ? path.length : Math.min(path.length, Math.ceil(path.length * 0.2));
-      const displayPath = path.slice(0, pathLengthLimit);
-      
       this.uiCtx.strokeStyle = 'rgba(255, 200, 0, 0.7)';
       this.uiCtx.lineWidth = 2;
       this.uiCtx.setLineDash([10, 5]);
       this.uiCtx.beginPath();
       
-      for (let i = 0; i < displayPath.length; i++) {
-        const point = displayPath[i];
+      for (let i = 0; i < path.length; i++) {
+        const point = path[i];
         const screen = this.worldToScreen(point.x, point.y);
         
         if (i === 0) {
@@ -1243,11 +1248,11 @@ export class Renderer3D {
       this.uiCtx.stroke();
       this.uiCtx.setLineDash([]);
       
-      // Draw arrowhead at the end of displayed path
-      if (displayPath.length >= 2) {
-        const lastIdx = displayPath.length - 1;
-        const endPoint = displayPath[lastIdx];
-        const prevPoint = displayPath[lastIdx - 1];
+      // Draw arrowhead at the end
+      if (path.length >= 2) {
+        const lastIdx = path.length - 1;
+        const endPoint = path[lastIdx];
+        const prevPoint = path[lastIdx - 1];
         
         const endScreen = this.worldToScreen(endPoint.x, endPoint.y);
         const dx = endPoint.x - prevPoint.x;
