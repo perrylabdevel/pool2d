@@ -171,8 +171,8 @@ export class Predictor {
           
           // Only detect collision if cue ball is moving TOWARD target
           // (positive velocity along normal = moving toward target)
-          // Use small threshold to catch slow approaches after rail bounces
-          if (cueApproachVelocity > 0.01) {
+          // Very small threshold to catch glancing/sharp angle shots
+          if (cueApproachVelocity > 0.001) {
             const contactPoint = {
               x: previewCue.x + nx * cueRadius,
               y: previewCue.y + ny * cueRadius,
@@ -253,13 +253,22 @@ export class Predictor {
           }
       }
 
-      // Stop simulation after one bounce (2 contacts) or ball contact
-      if (firstContact?.type === 'ball' || contactCount >= 2) {
+      // Stop simulation after one bounce (2 contacts) 
+      // For ball contacts, continue a bit longer to let object balls start moving
+      if (contactCount >= 2) {
         break;
       }
 
       const cueSleeping = previewCue.sleeping || previewCue.getSpeed() < CONFIG.VELOCITY_EPSILON;
       const anyActive = Array.from(objectPaths.values()).some((path) => path.length > 0);
+      
+      // If ball was hit, continue until object balls slow down or we have enough path
+      if (firstContact?.type === 'ball' && step > lastContactStep + 20) {
+        const hasEnoughObjectPaths = Array.from(objectPaths.values()).some(path => path.length >= 10);
+        if (hasEnoughObjectPaths || !anyActive) {
+          break;
+        }
+      }
 
       if (cueSleeping && !anyActive) {
         break;
