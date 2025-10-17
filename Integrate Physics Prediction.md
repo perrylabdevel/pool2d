@@ -3212,3 +3212,9 @@ ball.angularVelocity = 0;
 **Refresh your browser** and try hitting stationary balls - the texture rotation should now be buttery smooth! 🎱✨
 
 *Viewed [Geometry.ts](file:///c:/Users/Brian/pool2d/src/geometry/Geometry.ts) *
+
+Both cue path and target should only show 1's prediction after contact UNLESS in debug mode.
+
+also, for some reason, the ghost ball dissapears when tryingtrying to aim at extreme edge
+
+be careful and have full context before changing anything 
