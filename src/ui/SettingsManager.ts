@@ -1,5 +1,6 @@
 // Settings manager with local storage persistence
 import { CONFIG } from '../config';
+import { RenderLayerSettings, defaultRenderLayerSettings } from '../render/RenderLayers';
 
 export interface GameSettings {
   aimAssist: boolean;
@@ -31,15 +32,26 @@ export interface PhysicsSettings {
 export interface GeometrySettings {
   FRAME_OFFSET_IN: number;
   SIDE_FRAME_OFFSET_IN: number;
+  SIDE_POCKET_OUTWARD_OFFSET_IN: number;
+  CORNER_FRAME_OFFSET_IN: number;
+  SIDE_STRAIGHT_Y_IN: number;
+  SIDE_INNER_Y_IN: number;
+  CORNER_STRAIGHT_X_IN: number;
+  CORNER_TARGET_Y_IN: number;
+  SIDE_JAW_OUTER_OVERRIDE_IN: number | null;
+  SIDE_JAW_INNER_OVERRIDE_IN: number | null;
   JAW_REF_RADIUS_IN: number;
   CORNER_JAW_REF_RADIUS_IN: number;
 }
+
+export interface RenderSettings extends RenderLayerSettings {}
 
 const STORAGE_KEYS = {
   GAME_SETTINGS: 'pool2d_game_settings',
   UI_COLORS: 'pool2d_ui_colors',
   PHYSICS_SETTINGS: 'pool2d_physics_settings',
   GEOMETRY_SETTINGS: 'pool2d_geometry_settings',
+  RENDER_SETTINGS: 'pool2d_render_settings',
 };
 
 const DEFAULT_GAME_SETTINGS: GameSettings = {
@@ -74,17 +86,20 @@ export class SettingsManager {
   private uiColors: UIColors;
   private physicsSettings: PhysicsSettings;
   private geometrySettings: GeometrySettings;
+  private renderSettings: RenderSettings;
 
   constructor() {
     this.gameSettings = this.loadGameSettings();
     this.uiColors = this.loadUIColors();
     this.physicsSettings = this.loadPhysicsSettings();
     this.geometrySettings = this.loadGeometrySettings();
+    this.renderSettings = this.loadRenderSettings();
     
     // Apply loaded settings
     this.applyPhysicsSettings();
     this.applyUIColors();
     this.applyGeometrySettings();
+    this.applyRenderSettings();
   }
 
   // Game Settings
@@ -220,6 +235,14 @@ export class SettingsManager {
     const defaults: GeometrySettings = {
       FRAME_OFFSET_IN: CONFIG.FRAME_OFFSET_IN,
       SIDE_FRAME_OFFSET_IN: CONFIG.SIDE_FRAME_OFFSET_IN,
+      SIDE_POCKET_OUTWARD_OFFSET_IN: CONFIG.SIDE_POCKET_OUTWARD_OFFSET_IN,
+      CORNER_FRAME_OFFSET_IN: CONFIG.CORNER_FRAME_OFFSET_IN,
+      SIDE_STRAIGHT_Y_IN: CONFIG.SIDE_STRAIGHT_Y_IN,
+      SIDE_INNER_Y_IN: CONFIG.SIDE_INNER_Y_IN,
+      CORNER_STRAIGHT_X_IN: CONFIG.CORNER_STRAIGHT_X_IN,
+      CORNER_TARGET_Y_IN: CONFIG.CORNER_TARGET_Y_IN,
+      SIDE_JAW_OUTER_OVERRIDE_IN: CONFIG.SIDE_JAW_OUTER_OVERRIDE_IN,
+      SIDE_JAW_INNER_OVERRIDE_IN: CONFIG.SIDE_JAW_INNER_OVERRIDE_IN,
       JAW_REF_RADIUS_IN: CONFIG.JAW_REF_RADIUS_IN,
       CORNER_JAW_REF_RADIUS_IN: CONFIG.CORNER_JAW_REF_RADIUS_IN,
     };
@@ -234,6 +257,19 @@ export class SettingsManager {
     return { ...defaults };
   }
 
+  loadRenderSettings(): RenderSettings {
+    const defaults: RenderSettings = { ...defaultRenderLayerSettings };
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.RENDER_SETTINGS);
+      if (stored) {
+        return { ...defaults, ...JSON.parse(stored) };
+      }
+    } catch (e) {
+      console.warn('Failed to load render settings:', e);
+    }
+    return { ...defaults };
+  }
+
   saveGeometrySettings(settings: Partial<GeometrySettings>) {
     this.geometrySettings = { ...this.geometrySettings, ...settings };
     try {
@@ -244,14 +280,36 @@ export class SettingsManager {
     }
   }
 
+  saveRenderSettings(settings: Partial<RenderSettings>) {
+    this.renderSettings = { ...this.renderSettings, ...settings };
+    try {
+      localStorage.setItem(STORAGE_KEYS.RENDER_SETTINGS, JSON.stringify(this.renderSettings));
+      this.applyRenderSettings();
+    } catch (e) {
+      console.warn('Failed to save render settings:', e);
+    }
+  }
+
   getGeometrySettings(): GeometrySettings {
     return { ...this.geometrySettings };
+  }
+
+  getRenderSettings(): RenderSettings {
+    return { ...this.renderSettings };
   }
 
   resetGeometrySettings() {
     this.geometrySettings = {
       FRAME_OFFSET_IN: 4.0,
       SIDE_FRAME_OFFSET_IN: 2.0,
+      SIDE_POCKET_OUTWARD_OFFSET_IN: 0.25,
+      CORNER_FRAME_OFFSET_IN: 4.0,
+      SIDE_STRAIGHT_Y_IN: 23.5,
+      SIDE_INNER_Y_IN: 24.6,
+      CORNER_STRAIGHT_X_IN: 48.5,
+      CORNER_TARGET_Y_IN: 21.0,
+      SIDE_JAW_OUTER_OVERRIDE_IN: null,
+      SIDE_JAW_INNER_OVERRIDE_IN: null,
       JAW_REF_RADIUS_IN: 4.0,
       CORNER_JAW_REF_RADIUS_IN: 4.0,
     };
@@ -263,9 +321,27 @@ export class SettingsManager {
     }
   }
 
+  resetRenderSettings() {
+    this.renderSettings = { ...defaultRenderLayerSettings };
+    try {
+      localStorage.setItem(STORAGE_KEYS.RENDER_SETTINGS, JSON.stringify(this.renderSettings));
+      this.applyRenderSettings();
+    } catch (e) {
+      console.warn('Failed to reset render settings:', e);
+    }
+  }
+
   private applyGeometrySettings() {
     CONFIG.FRAME_OFFSET_IN = this.geometrySettings.FRAME_OFFSET_IN;
     CONFIG.SIDE_FRAME_OFFSET_IN = this.geometrySettings.SIDE_FRAME_OFFSET_IN;
+    CONFIG.SIDE_POCKET_OUTWARD_OFFSET_IN = this.geometrySettings.SIDE_POCKET_OUTWARD_OFFSET_IN;
+    CONFIG.CORNER_FRAME_OFFSET_IN = this.geometrySettings.CORNER_FRAME_OFFSET_IN;
+    CONFIG.SIDE_STRAIGHT_Y_IN = this.geometrySettings.SIDE_STRAIGHT_Y_IN;
+    CONFIG.SIDE_INNER_Y_IN = this.geometrySettings.SIDE_INNER_Y_IN;
+    CONFIG.CORNER_STRAIGHT_X_IN = this.geometrySettings.CORNER_STRAIGHT_X_IN;
+    CONFIG.CORNER_TARGET_Y_IN = this.geometrySettings.CORNER_TARGET_Y_IN;
+    CONFIG.SIDE_JAW_OUTER_OVERRIDE_IN = this.geometrySettings.SIDE_JAW_OUTER_OVERRIDE_IN;
+    CONFIG.SIDE_JAW_INNER_OVERRIDE_IN = this.geometrySettings.SIDE_JAW_INNER_OVERRIDE_IN;
     CONFIG.JAW_REF_RADIUS_IN = this.geometrySettings.JAW_REF_RADIUS_IN;
     CONFIG.CORNER_JAW_REF_RADIUS_IN = this.geometrySettings.CORNER_JAW_REF_RADIUS_IN;
     // Signal that geometry parameters changed (requires rebuild)
@@ -288,15 +364,24 @@ export class SettingsManager {
       localStorage.removeItem(STORAGE_KEYS.GAME_SETTINGS);
       localStorage.removeItem(STORAGE_KEYS.UI_COLORS);
       localStorage.removeItem(STORAGE_KEYS.PHYSICS_SETTINGS);
+      localStorage.removeItem(STORAGE_KEYS.RENDER_SETTINGS);
       
       this.gameSettings = { ...DEFAULT_GAME_SETTINGS };
       this.uiColors = { ...DEFAULT_UI_COLORS };
       this.physicsSettings = { ...DEFAULT_PHYSICS_SETTINGS };
+      this.renderSettings = { ...defaultRenderLayerSettings };
       
       this.applyPhysicsSettings();
       this.applyUIColors();
+      this.applyRenderSettings();
     } catch (e) {
       console.warn('Failed to clear settings:', e);
     }
+  }
+
+  private applyRenderSettings() {
+    window.dispatchEvent(
+      new CustomEvent('settings:render-changed', { detail: { settings: this.renderSettings } })
+    );
   }
 }

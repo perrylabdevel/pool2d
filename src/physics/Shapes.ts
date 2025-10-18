@@ -23,6 +23,11 @@ export class Ball {
   angularAxisX: number;
   angularAxisY: number;
   angularAxisZ: number;
+  // Orientation quaternion (x, y, z vector, w scalar)
+  rotX: number;
+  rotY: number;
+  rotZ: number;
+  rotW: number;
   
   // For interpolation
   prevX: number;
@@ -44,6 +49,10 @@ export class Ball {
     this.angularAxisX = 0;
     this.angularAxisY = 1;
     this.angularAxisZ = 0;
+    this.rotX = 0;
+    this.rotY = 0;
+    this.rotZ = 0;
+    this.rotW = 1;
     this.prevX = x;
     this.prevY = y;
   }
@@ -75,6 +84,10 @@ export class Ball {
     copy.angularAxisX = this.angularAxisX;
     copy.angularAxisY = this.angularAxisY;
     copy.angularAxisZ = this.angularAxisZ;
+    copy.rotX = this.rotX;
+    copy.rotY = this.rotY;
+    copy.rotZ = this.rotZ;
+    copy.rotW = this.rotW;
     copy.prevX = this.prevX;
     copy.prevY = this.prevY;
     return copy;

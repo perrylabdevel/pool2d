@@ -39,6 +39,7 @@
             <button id="settings-btn" class="icon-btn" title="Settings">⚙</button>
             <button id="physics-settings-btn" class="icon-btn" title="Physics Settings">⚗</button>
             <button id="geometry-panel-btn" class="icon-btn" title="Pocket Geometry">📐</button>
+            <button id="render-layer-btn" class="icon-btn" title="Render Layers">👁</button>
             <button id="debug-toggle" class="icon-btn" title="Debug Mode">🐛</button>
             <button id="capture-shot-btn" class="icon-btn" title="Capture Shot">📸</button>
           </div>
@@ -53,6 +54,12 @@
         <canvas id="game-canvas"></canvas>
         <canvas id="ui-canvas"></canvas>
         <canvas id="debug-canvas"></canvas>
+        <img
+          id="reference-overlay"
+          src="/images/reference.PNG"
+          alt="Reference table overlay"
+          class="overlay-hidden"
+        />
         
         <!-- Live Geometry Panel -->
         <div id="geometry-panel" class="floating-panel hidden">
@@ -74,12 +81,74 @@
               </label>
               <input type="range" id="live-side-steepness" min="0.5" max="6" step="0.1" value="2" />
             </div>
-            
+
+            <div class="slider-group">
+              <label for="live-side-offset">
+                Side Pocket Offset: <span id="live-side-offset-val">0.25</span>"
+              </label>
+              <input type="range" id="live-side-offset" min="0" max="1.5" step="0.05" value="0.25" />
+            </div>
+
+            <div class="slider-group">
+              <label for="live-side-straight">
+                Side Straight Y: <span id="live-side-straight-val">23.5</span>"
+              </label>
+              <input type="range" id="live-side-straight" min="22" max="25" step="0.05" value="23.5" />
+            </div>
+
+            <div class="slider-group">
+              <label for="live-side-inner">
+                Side Inner Y: <span id="live-side-inner-val">24.6</span>"
+              </label>
+              <input type="range" id="live-side-inner" min="23" max="26" step="0.05" value="24.6" />
+            </div>
+
+            <div class="slider-group input-group">
+              <label for="side-jaw-outer">
+                Side Jaw Outer Override
+              </label>
+              <div class="input-row">
+                <input type="number" id="side-jaw-outer" step="0.01" min="1" max="49" placeholder="Auto" />
+                <button id="side-jaw-outer-reset" class="panel-mini-btn" data-no-drag="true">Auto</button>
+              </div>
+            </div>
+
+            <div class="slider-group input-group">
+              <label for="side-jaw-inner">
+                Side Jaw Inner Override
+              </label>
+              <div class="input-row">
+                <input type="number" id="side-jaw-inner" step="0.01" min="1" max="48" placeholder="Auto" />
+                <button id="side-jaw-inner-reset" class="panel-mini-btn" data-no-drag="true">Auto</button>
+              </div>
+            </div>
+
+            <div class="slider-group">
+              <label for="live-corner-frame">
+                Corner Frame Offset: <span id="live-corner-frame-val">4.0</span>"
+              </label>
+              <input type="range" id="live-corner-frame" min="2" max="6" step="0.1" value="4" />
+            </div>
+
             <div class="slider-group">
               <label for="live-corner-radius">
                 Corner Jaw Radius: <span id="live-corner-radius-val">4.0</span>"
               </label>
               <input type="range" id="live-corner-radius" min="3" max="8" step="0.1" value="4" />
+            </div>
+
+            <div class="slider-group">
+              <label for="live-corner-straight">
+                Corner Straight X: <span id="live-corner-straight-val">48.5</span>"
+              </label>
+              <input type="range" id="live-corner-straight" min="46" max="50" step="0.05" value="48.5" />
+            </div>
+
+            <div class="slider-group">
+              <label for="live-corner-target">
+                Corner Target Y: <span id="live-corner-target-val">21.0</span>"
+              </label>
+              <input type="range" id="live-corner-target" min="18" max="24" step="0.05" value="21" />
             </div>
             
             <div class="slider-group">
@@ -94,6 +163,89 @@
             </div>
             
             <p class="panel-hint">💡 Changes apply instantly</p>
+          </div>
+        </div>
+
+        <div id="render-layer-panel" class="floating-panel hidden">
+          <div class="panel-header">
+            <h3>👁️ Render Layers</h3>
+            <button id="render-layer-close" class="close-btn" data-no-drag="true">×</button>
+          </div>
+          <div class="panel-content render-layer-content">
+            <label class="layer-checkbox">
+              <input type="checkbox" id="layer-table" checked />
+              Table Felt
+            </label>
+            <label class="layer-checkbox">
+              <input type="checkbox" id="layer-frame" checked />
+              Wooden Frame
+            </label>
+            <label class="layer-checkbox">
+              <input type="checkbox" id="layer-rails" checked />
+              Rails
+            </label>
+            <label class="layer-checkbox">
+              <input type="checkbox" id="layer-pockets" checked />
+              Pockets
+            </label>
+            <label class="layer-checkbox">
+              <input type="checkbox" id="layer-balls" checked />
+              Balls
+            </label>
+            <label class="layer-checkbox">
+              <input type="checkbox" id="layer-ui" checked />
+              UI Overlay
+            </label>
+            <label class="layer-checkbox">
+              <input type="checkbox" id="layer-measure" />
+              Measurement Overlay
+            </label>
+            <label class="layer-checkbox">
+              <input type="checkbox" id="layer-reference" />
+              Reference Overlay
+            </label>
+            <div class="panel-divider"></div>
+            <div class="panel-subtitle">Render Order</div>
+            <div class="slider-group input-group">
+              <label for="order-table">Table</label>
+              <div class="input-row">
+                <input type="number" id="order-table" step="1" min="-1000" max="2000" />
+              </div>
+            </div>
+            <div class="slider-group input-group">
+              <label for="order-frame">Frame</label>
+              <div class="input-row">
+                <input type="number" id="order-frame" step="1" min="-1000" max="2000" />
+              </div>
+            </div>
+            <div class="slider-group input-group">
+              <label for="order-rails">Rails</label>
+              <div class="input-row">
+                <input type="number" id="order-rails" step="1" min="-1000" max="2000" />
+              </div>
+            </div>
+            <div class="slider-group input-group">
+              <label for="order-pockets">Pockets</label>
+              <div class="input-row">
+                <input type="number" id="order-pockets" step="1" min="-1000" max="2000" />
+              </div>
+            </div>
+            <div class="slider-group input-group">
+              <label for="order-balls">Balls</label>
+              <div class="input-row">
+                <input type="number" id="order-balls" step="1" min="-1000" max="2000" />
+              </div>
+            </div>
+            <div class="slider-group input-group">
+              <label for="order-ui">UI Overlay</label>
+              <div class="input-row">
+                <input type="number" id="order-ui" step="1" min="-1000" max="2000" />
+              </div>
+            </div>
+            <div class="panel-actions">
+              <button id="render-layer-reset" class="panel-btn">Reset Defaults</button>
+            </div>
+            <p class="panel-hint">Use checkboxes to isolate components while editing geometry.</p>
           </div>
         </div>
       </div>

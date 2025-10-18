@@ -7,6 +7,56 @@ import { getTableGeometry } from '../geometry/Geometry';
 import { detectBallBall, detectBallRail, resolveBallBall, resolveBallRail, Contact, resetCollisionTracking, setSuppressWarnings } from './Collision';
 import { physicsRecorder } from '../debug/PhysicsRecorder';
 
+const ROTATION_EPSILON = 1e-7;
+
+function applyIncrementalRotation(ball: Ball, axisX: number, axisY: number, axisZ: number, angle: number) {
+  if (Math.abs(angle) < ROTATION_EPSILON) {
+    return;
+  }
+
+  // Axis should already be normalized, but guard against drift
+  const axisLength = Math.sqrt(axisX * axisX + axisY * axisY + axisZ * axisZ);
+  if (axisLength < 1e-6) {
+    return;
+  }
+  const invAxisLen = 1 / axisLength;
+  const nx = axisX * invAxisLen;
+  const ny = axisY * invAxisLen;
+  const nz = axisZ * invAxisLen;
+
+  const halfAngle = angle * 0.5;
+  const sinHalf = Math.sin(halfAngle);
+  const cosHalf = Math.cos(halfAngle);
+
+  const dqX = nx * sinHalf;
+  const dqY = ny * sinHalf;
+  const dqZ = nz * sinHalf;
+  const dqW = cosHalf;
+
+  const { rotX, rotY, rotZ, rotW } = ball;
+
+  // Quaternion multiply: dq * current
+  const newX = dqX * rotW + dqW * rotX + dqY * rotZ - dqZ * rotY;
+  const newY = dqY * rotW + dqW * rotY + dqZ * rotX - dqX * rotZ;
+  const newZ = dqZ * rotW + dqW * rotZ + dqX * rotY - dqY * rotX;
+  const newW = dqW * rotW - dqX * rotX - dqY * rotY - dqZ * rotZ;
+
+  const norm = Math.sqrt(newX * newX + newY * newY + newZ * newZ + newW * newW);
+  if (norm > 1e-8) {
+    const invNorm = 1 / norm;
+    ball.rotX = newX * invNorm;
+    ball.rotY = newY * invNorm;
+    ball.rotZ = newZ * invNorm;
+    ball.rotW = newW * invNorm;
+  } else {
+    // Fallback to identity if numerical issues arise
+    ball.rotX = 0;
+    ball.rotY = 0;
+    ball.rotZ = 0;
+    ball.rotW = 1;
+  }
+}
+
 export class PhysicsWorld {
   balls: Ball[] = [];
   rails: Rail[] = [];
@@ -98,20 +148,25 @@ export class PhysicsWorld {
           const axisY = ball.vx;
           const axisLength = Math.sqrt(axisX * axisX + axisY * axisY);
           if (axisLength > 1e-6) {
-            ball.angularAxisX = axisX / axisLength;
-            ball.angularAxisY = axisY / axisLength;
+            const invAxis = 1 / axisLength;
+            ball.angularAxisX = axisX * invAxis;
+            ball.angularAxisY = axisY * invAxis;
             ball.angularAxisZ = 0;
           }
           const blend = Math.min(1, (speed - spinStart) / Math.max(0.0001, spinFull - spinStart));
           const targetOmega = (speed / ball.radius) * blend;
           const smoothing = 0.2; // Damp abrupt changes when transitioning between speeds
           ball.angularVelocity += (targetOmega - ball.angularVelocity) * smoothing;
-          ball.angle += ball.angularVelocity * subDt;
+          const deltaAngle = ball.angularVelocity * subDt;
+          applyIncrementalRotation(ball, ball.angularAxisX, ball.angularAxisY, ball.angularAxisZ, deltaAngle);
+          ball.angle += deltaAngle;
         } else {
-          // Ball nearly stopped - gently decay any residual spin
+          // Ball nearly stopped - gently decay any residual spin using last known axis
           if (ball.angularVelocity > 0.01) {
             ball.angularVelocity *= 0.85;
-            ball.angle += ball.angularVelocity * subDt;
+            const deltaAngle = ball.angularVelocity * subDt;
+            applyIncrementalRotation(ball, ball.angularAxisX, ball.angularAxisY, ball.angularAxisZ, deltaAngle);
+            ball.angle += deltaAngle;
           } else {
             ball.angularVelocity = 0;
           }
@@ -250,6 +305,12 @@ export class PhysicsWorld {
           Number(ball.angularAxisX.toFixed(3)),
           Number(ball.angularAxisY.toFixed(3)),
           Number(ball.angularAxisZ.toFixed(3)),
+        ],
+        quaternion: [
+          Number(ball.rotX.toFixed(4)),
+          Number(ball.rotY.toFixed(4)),
+          Number(ball.rotZ.toFixed(4)),
+          Number(ball.rotW.toFixed(4)),
         ],
       },
     }));

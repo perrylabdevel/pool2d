@@ -13,7 +13,7 @@ function main() {
   
   const game = new Game(gameCanvas, debugCanvas);
   game.start();
-  
+
   console.log('Pool 2D initialized');
 }
 

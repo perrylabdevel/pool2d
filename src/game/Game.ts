@@ -13,10 +13,26 @@ import { Predictor } from '../physics/Prediction';
 import { shotCapture } from '../debug/ShotCapture';
 import { SettingsPanel } from '../ui/SettingsPanel';
 import { GeometryPanel } from '../ui/GeometryPanel';
+import { RenderLayerPanel } from '../ui/RenderLayerPanel';
 
 export enum GameMode {
   PRACTICE,
   EIGHT_BALL,
+}
+
+function randomizeBallOrientation(ball: Ball) {
+  const axisZ = Math.random() * 2 - 1;
+  const axisRadius = Math.sqrt(Math.max(0, 1 - axisZ * axisZ));
+  const axisTheta = Math.random() * Math.PI * 2;
+  const axisX = axisRadius * Math.cos(axisTheta);
+  const axisY = axisRadius * Math.sin(axisTheta);
+  const angle = Math.random() * Math.PI * 2;
+  const halfAngle = angle * 0.5;
+  const sinHalf = Math.sin(halfAngle);
+  ball.rotX = axisX * sinHalf;
+  ball.rotY = axisY * sinHalf;
+  ball.rotZ = axisZ * sinHalf;
+  ball.rotW = Math.cos(halfAngle);
 }
 
 export class Game {
@@ -27,6 +43,7 @@ export class Game {
   debug: DebugDraw;
   settings: SettingsPanel;
   geometryPanel: GeometryPanel;
+  renderLayersPanel: RenderLayerPanel;
   rules: EightBallRules;
   predictor: Predictor;
   mode: GameMode;
@@ -70,6 +87,7 @@ export class Game {
     this.debug = new DebugDraw(debugCanvas);
     this.settings = new SettingsPanel(this.hud.settingsManager);
     this.geometryPanel = new GeometryPanel(this.hud.settingsManager, () => this.restart());
+    this.renderLayersPanel = new RenderLayerPanel(this.hud.settingsManager, this.renderer);
     this.rules = new EightBallRules();
     this.predictor = new Predictor();
     this.mode = GameMode.PRACTICE;
@@ -187,7 +205,12 @@ export class Game {
         this.geometryPanel.toggle();
       }
       if (e.key === 'm' || e.key === 'M') {
-        this.renderer.toggleMeasurementOverlay();
+        const next = !this.renderer.showMeasurementOverlay;
+        this.renderLayersPanel.setMeasurementOverlayVisible(next);
+      }
+      if ((e.key === 'o' || e.key === 'O') && e.shiftKey) {
+        e.preventDefault();
+        this.renderLayersPanel.toggleReferenceOverlay();
       }
     });
     
@@ -235,13 +258,15 @@ export class Game {
     );
     // Randomize initial rotation angle for visual variety
     this.cueBall.angle = Math.random() * Math.PI * 2;
+    randomizeBallOrientation(this.cueBall);
     this.world.addBall(this.cueBall);
-    
+
     // Create racked balls with randomized initial rotations
     RACK_POSITIONS.forEach((pos) => {
       const ball = new Ball(pos.id, pos.x, pos.y, CONFIG.BALL_RADIUS, CONFIG.BALL_MASS);
       // Randomize initial rotation angle for visual variety
       ball.angle = Math.random() * Math.PI * 2;
+      randomizeBallOrientation(ball);
       this.world.addBall(ball);
     });
     

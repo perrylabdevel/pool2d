@@ -258,6 +258,21 @@ button:active {
   display: block;
 }
 
+#reference-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  opacity: 0.55;
+  mix-blend-mode: lighten;
+  z-index: 40;
+  image-rendering: crisp-edges;
+}
+
+#reference-overlay.overlay-hidden {
+  display: none;
+}
+
 .modal {
   position: fixed;
   top: 0;
@@ -374,10 +389,51 @@ button:active {
   transition: all 0.3s ease;
 }
 
+.slider-group.input-group {
+  gap: 8px;
+}
+
+.input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.input-row input[type="number"] {
+  flex: 1;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.25);
+  color: #fff;
+}
+
+.panel-mini-btn {
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(76, 175, 80, 0.4);
+  background: rgba(76, 175, 80, 0.15);
+  color: #b5ffb9;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.panel-mini-btn:hover {
+  background: rgba(76, 175, 80, 0.3);
+  color: #ffffff;
+}
+
 #geometry-panel {
   top: 16px;
   right: 16px;
   width: 320px;
+}
+
+#render-layer-panel {
+  top: 16px;
+  left: 16px;
+  width: 260px;
 }
 
 .floating-panel.hidden {
@@ -536,4 +592,38 @@ button:active {
   letter-spacing: 0.5px;
   padding-bottom: 8px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+.render-layer-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 20px;
+}
+
+.layer-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.layer-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #4CAF50;
+}
+
+.panel-divider {
+  height: 1px;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 6px 0;
+}
+
+.panel-subtitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.8);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }

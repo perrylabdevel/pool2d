@@ -7,11 +7,18 @@ import { CONFIG, BALL_CUE } from '../config';
 import { getTableGeometry, computePlayBoundaryPoints, computeBoundaryBounds, type Vec2, type BoundaryBounds } from '../geometry/Geometry';
 import { PredictionResult, ShotPreviewPaths } from '../physics/Prediction';
 import { fetchWithCache } from './AssetCache';
+import {
+  RenderLayerSettings,
+  defaultRenderLayerSettings,
+  RenderLayerBooleanKey,
+  RenderLayerOrderKey,
+} from './RenderLayers';
 
 export class Renderer3D {
   canvas: HTMLCanvasElement;
   uiCanvas: HTMLCanvasElement;
   uiCtx: CanvasRenderingContext2D;
+  referenceOverlay: HTMLImageElement | null;
   scene: THREE.Scene;
   camera: THREE.OrthographicCamera;
   renderer: THREE.WebGLRenderer;
@@ -31,7 +38,28 @@ export class Renderer3D {
   pocketMeshes: THREE.Mesh[] = [];
   cornerRectangleMesh: THREE.Mesh | null = null;
   showMeasurementOverlay = false;
-  
+  private layerVisibility: Record<RenderLayerBooleanKey, boolean> = {
+    showTable: defaultRenderLayerSettings.showTable,
+    showFrame: defaultRenderLayerSettings.showFrame,
+    showRails: defaultRenderLayerSettings.showRails,
+    showPockets: defaultRenderLayerSettings.showPockets,
+    showBalls: defaultRenderLayerSettings.showBalls,
+    showUIOverlay: defaultRenderLayerSettings.showUIOverlay,
+    showMeasurementOverlay: defaultRenderLayerSettings.showMeasurementOverlay,
+    showReferenceOverlay: defaultRenderLayerSettings.showReferenceOverlay,
+  };
+  private layerOrder: Record<RenderLayerOrderKey, number> = {
+    orderTable: defaultRenderLayerSettings.orderTable,
+    orderFrame: defaultRenderLayerSettings.orderFrame,
+    orderRails: defaultRenderLayerSettings.orderRails,
+    orderPockets: defaultRenderLayerSettings.orderPockets,
+    orderBalls: defaultRenderLayerSettings.orderBalls,
+    orderUI: defaultRenderLayerSettings.orderUI,
+  };
+  private referenceOverlayVisible = false;
+  private pocketGradientTexture: THREE.CanvasTexture | null = null;
+  private pocketMaterial: THREE.MeshBasicMaterial | null = null;
+
   // UI elements
   cueStick: THREE.Mesh | null = null;
   aimLine: THREE.Line | null = null;
@@ -52,6 +80,12 @@ export class Renderer3D {
     this.uiCanvas = document.getElementById('ui-canvas') as HTMLCanvasElement;
     this.uiCtx = this.uiCanvas.getContext('2d')!;
     
+    this.referenceOverlay = document.getElementById('reference-overlay') as HTMLImageElement | null;
+    if (this.referenceOverlay) {
+      this.referenceOverlayVisible = !this.referenceOverlay.classList.contains('overlay-hidden');
+    }
+    this.layerVisibility.showReferenceOverlay = this.referenceOverlayVisible;
+
     // Create Three.js scene
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x0a0a0a);
@@ -428,11 +462,29 @@ export class Renderer3D {
     this.canvas.style.width = `${width}px`;
     this.canvas.style.height = `${height}px`;
     
+    const offsetX = (containerWidth - width) / 2;
+    const offsetY = (containerHeight - height) / 2;
+    const applyPosition = (el: HTMLElement | null) => {
+      if (!el) return;
+      el.style.left = `${offsetX}px`;
+      el.style.top = `${offsetY}px`;
+    };
+
+    applyPosition(this.canvas);
+
     // Resize UI canvas to match
     this.uiCanvas.width = width;
     this.uiCanvas.height = height;
     this.uiCanvas.style.width = `${width}px`;
     this.uiCanvas.style.height = `${height}px`;
+    applyPosition(this.uiCanvas);
+    
+    if (this.referenceOverlay) {
+      this.referenceOverlay.style.width = `${width}px`;
+      this.referenceOverlay.style.height = `${height}px`;
+      applyPosition(this.referenceOverlay);
+    }
+    this.updateCanvasZIndex();
     
     // Update camera aspect ratio
     const aspect = width / height;
@@ -458,6 +510,9 @@ export class Renderer3D {
     });
     this.tableMesh = new THREE.Mesh(feltGeometry, feltMaterial);
     this.tableMesh.receiveShadow = true;
+    this.tableMesh.visible = this.layerVisibility.showTable;
+    this.tableMesh.renderOrder = this.layerOrder.orderTable;
+    this.enforceRenderOrderControl(this.tableMesh);
     this.scene.add(this.tableMesh);
 
     // Wooden frame as shape with hole matching play surface
@@ -474,6 +529,9 @@ export class Renderer3D {
     this.frameMesh = new THREE.Mesh(frameGeometry, frameMaterial);
     this.frameMesh.position.z = -0.5; // Slightly below felt
     this.frameMesh.receiveShadow = true;
+    this.frameMesh.visible = this.layerVisibility.showFrame;
+    this.frameMesh.renderOrder = this.layerOrder.orderFrame;
+    this.enforceRenderOrderControl(this.frameMesh);
     this.scene.add(this.frameMesh);
   }
 
@@ -542,6 +600,9 @@ export class Renderer3D {
         0.75
       );
       railMesh.rotation.z = angle;
+      railMesh.visible = this.layerVisibility.showRails;
+      railMesh.renderOrder = this.layerOrder.orderRails;
+      this.enforceRenderOrderControl(railMesh);
       
       this.scene.add(railMesh);
       this.railMeshes.push(railMesh);
@@ -549,17 +610,14 @@ export class Renderer3D {
   }
   
   initializePockets(pockets: Pocket[]) {
-    const pocketMaterial = new THREE.MeshBasicMaterial({
-      color: 0x000000,
-      depthTest: false // This forces it to render on top
-    });
+    const pocketMaterial = this.getPocketMaterial();
     
     pockets.forEach((pocket) => {
       const pocketGeometry = new THREE.CylinderGeometry(
         pocket.radius,
-        pocket.radius * 0.8,
+        pocket.radius * 0.85,
         2,
-        32
+        48
       );
       const pocketMesh = new THREE.Mesh(pocketGeometry, pocketMaterial);
       
@@ -567,8 +625,10 @@ export class Renderer3D {
       pocketMesh.position.set(pocket.x, pocket.y, 0);
       pocketMesh.rotation.x = Math.PI / 2;
       
-      // Set high render order to ensure pockets draw last
-      pocketMesh.renderOrder = 999;
+      // Render order controlled by panel settings
+      pocketMesh.renderOrder = this.layerOrder.orderPockets;
+      pocketMesh.visible = this.layerVisibility.showPockets;
+      this.enforceRenderOrderControl(pocketMesh);
       
       this.scene.add(pocketMesh);
       this.pocketMeshes.push(pocketMesh);
@@ -600,14 +660,67 @@ export class Renderer3D {
     this.cornerRectangleMesh.position.z = -0.1; // Below table, above rails, below pockets
     
     // Render order: after rails but before pockets
-    this.cornerRectangleMesh.renderOrder = 500;
+    this.cornerRectangleMesh.renderOrder = this.layerOrder.orderPockets - 1;
+    this.cornerRectangleMesh.visible = this.layerVisibility.showPockets;
+    this.enforceRenderOrderControl(this.cornerRectangleMesh);
     
     this.scene.add(this.cornerRectangleMesh);
   }
-  
-  rotationAxis = new THREE.Vector3();
-  rotationQuat = new THREE.Quaternion();
 
+  private getPocketMaterial(): THREE.MeshBasicMaterial {
+    if (this.pocketMaterial) {
+      return this.pocketMaterial;
+    }
+
+    const texture = this.getPocketGradientTexture();
+    this.pocketMaterial = new THREE.MeshBasicMaterial({
+      map: texture,
+      transparent: true,
+      depthTest: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    return this.pocketMaterial;
+  }
+
+  private getPocketGradientTexture(): THREE.CanvasTexture {
+    if (this.pocketGradientTexture) {
+      return this.pocketGradientTexture;
+    }
+
+    const size = 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      throw new Error('Unable to create pocket gradient texture context');
+    }
+
+    const center = size / 2;
+    const gradient = ctx.createRadialGradient(center, center * 0.6, size * 0.1, center, center, size * 0.55);
+    gradient.addColorStop(0, 'rgba(10, 10, 10, 0.95)');
+    gradient.addColorStop(0.45, 'rgba(5, 5, 5, 0.98)');
+    gradient.addColorStop(0.7, 'rgba(20, 20, 20, 0.85)');
+    gradient.addColorStop(0.9, 'rgba(40, 40, 40, 0.6)');
+    gradient.addColorStop(1, 'rgba(60, 60, 60, 0.2)');
+
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, size, size);
+
+    const rimGradient = ctx.createRadialGradient(center, center, size * 0.4, center, center, size * 0.5);
+    rimGradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    rimGradient.addColorStop(1, 'rgba(0, 0, 0, 0.8)');
+    ctx.fillStyle = rimGradient;
+    ctx.beginPath();
+    ctx.arc(center, center, size * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    this.pocketGradientTexture = new THREE.CanvasTexture(canvas);
+    this.pocketGradientTexture.needsUpdate = true;
+    return this.pocketGradientTexture;
+  }
+  
   createBall(ball: Ball): THREE.Object3D {
     const visualRadius = CONFIG.BALL_RADIUS * this.ballVisualScale;
     if (this.ballModelsLoaded) {
@@ -621,6 +734,9 @@ export class Renderer3D {
         this.addBallGlow(ballMesh, visualRadius);
         
         this.scene.add(ballMesh);
+        this.applyBallRenderOrder(ballMesh);
+        this.enforceRenderOrderControl(ballMesh);
+        ballMesh.visible = this.layerVisibility.showBalls;
         this.ballMeshes.set(ball.id, ballMesh);
         return ballMesh;
       }
@@ -658,6 +774,9 @@ export class Renderer3D {
     this.addBallGlow(mesh, visualRadius);
     
     this.scene.add(mesh);
+    this.applyBallRenderOrder(mesh);
+    this.enforceRenderOrderControl(mesh);
+    mesh.visible = this.layerVisibility.showBalls;
     this.ballMeshes.set(ball.id, mesh);
     
     return mesh;
@@ -676,8 +795,20 @@ export class Renderer3D {
     });
     
     const glowMesh = new THREE.Mesh(glowGeometry, glowMaterial);
-    glowMesh.renderOrder = -1; // Render behind the ball
+    glowMesh.name = 'ball-glow';
+    glowMesh.renderOrder = this.layerOrder.orderBalls - 1; // Render behind the ball
     mesh.add(glowMesh);
+  }
+
+  private applyBallRenderOrder(mesh: THREE.Object3D) {
+    mesh.renderOrder = this.layerOrder.orderBalls;
+    mesh.children.forEach((child) => {
+      if (child.name === 'ball-glow') {
+        child.renderOrder = this.layerOrder.orderBalls - 1;
+      } else {
+        child.renderOrder = this.layerOrder.orderBalls;
+      }
+    });
   }
   
   addBallNumber(mesh: THREE.Mesh, ballId: number) {
@@ -777,38 +908,21 @@ export class Renderer3D {
         mesh = this.createBall(ball);
       }
       
-      mesh.visible = true;
-      
       // Interpolate position
       const x = ball.prevX + (ball.x - ball.prevX) * alpha;
       const y = ball.prevY + (ball.y - ball.prevY) * alpha;
       
+      const shouldRenderBall = this.layerVisibility.showBalls;
+      mesh.visible = shouldRenderBall;
+      if (!shouldRenderBall) {
+        // Update transform so ball appears at correct place when re-enabled
+        mesh.position.set(x, y, CONFIG.BALL_RADIUS * this.ballVisualScale);
+        return;
+      }
+
       mesh.position.set(x, y, CONFIG.BALL_RADIUS * this.ballVisualScale);
       
-      // Update rotation using physics-tracked angular axis
-      // This prevents sudden rotation jumps during low-speed collisions
-      if (ball.angularVelocity > 0.001) {
-        // Use the angular axis from physics simulation
-        this.rotationAxis.set(ball.angularAxisX, ball.angularAxisY, ball.angularAxisZ);
-        this.rotationQuat.setFromAxisAngle(this.rotationAxis, ball.angle);
-        mesh.setRotationFromQuaternion(this.rotationQuat);
-        // Store last rotation axis for when ball stops
-        mesh.userData.lastRotationAxis = this.rotationAxis.clone();
-      } else {
-        // Stationary ball: use stored rotation from ball.angle
-        // Use last known rotation axis, or a random one if not set
-        if (!mesh.userData.lastRotationAxis) {
-          // Create a random rotation axis in XY plane for visual variety
-          const randomAngle = Math.random() * Math.PI * 2;
-          mesh.userData.lastRotationAxis = new THREE.Vector3(
-            Math.cos(randomAngle),
-            Math.sin(randomAngle),
-            0
-          );
-        }
-        this.rotationQuat.setFromAxisAngle(mesh.userData.lastRotationAxis, ball.angle);
-        mesh.setRotationFromQuaternion(this.rotationQuat);
-      }
+      mesh.quaternion.set(ball.rotX, ball.rotY, ball.rotZ, ball.rotW);
     });
     
     // Render the scene
@@ -817,11 +931,187 @@ export class Renderer3D {
 
   toggleMeasurementOverlay(force?: boolean) {
     if (typeof force === 'boolean') {
+      if (this.showMeasurementOverlay === force) {
+        return;
+      }
       this.showMeasurementOverlay = force;
     } else {
       this.showMeasurementOverlay = !this.showMeasurementOverlay;
     }
+    this.layerVisibility.showMeasurementOverlay = this.showMeasurementOverlay;
     console.log(`Measurement overlay ${this.showMeasurementOverlay ? 'enabled' : 'disabled'}`);
+  }
+
+  applyRenderLayerSettings(settings: RenderLayerSettings) {
+    this.applyRenderOrder(settings);
+    this.setLayerVisibility('showTable', settings.showTable);
+    this.setLayerVisibility('showFrame', settings.showFrame);
+    this.setLayerVisibility('showRails', settings.showRails);
+    this.setLayerVisibility('showPockets', settings.showPockets);
+    this.setLayerVisibility('showBalls', settings.showBalls);
+    this.setLayerVisibility('showUIOverlay', settings.showUIOverlay);
+    this.setLayerVisibility('showMeasurementOverlay', settings.showMeasurementOverlay);
+    this.setLayerVisibility('showReferenceOverlay', settings.showReferenceOverlay);
+  }
+
+  private applyRenderOrder(settings: RenderLayerSettings) {
+    this.layerOrder.orderTable = settings.orderTable;
+    this.layerOrder.orderFrame = settings.orderFrame;
+    this.layerOrder.orderRails = settings.orderRails;
+    this.layerOrder.orderPockets = settings.orderPockets;
+    this.layerOrder.orderBalls = settings.orderBalls;
+    this.layerOrder.orderUI = settings.orderUI;
+
+    if (this.tableMesh) {
+      this.tableMesh.renderOrder = this.layerOrder.orderTable;
+    }
+    if (this.frameMesh) {
+      this.frameMesh.renderOrder = this.layerOrder.orderFrame;
+    }
+    this.railMeshes.forEach((mesh) => {
+      mesh.renderOrder = this.layerOrder.orderRails;
+    });
+    this.pocketMeshes.forEach((mesh) => {
+      mesh.renderOrder = this.layerOrder.orderPockets;
+    });
+    if (this.cornerRectangleMesh) {
+      this.cornerRectangleMesh.renderOrder = this.layerOrder.orderPockets - 1;
+    }
+    this.ballMeshes.forEach((mesh) => {
+      this.applyBallRenderOrder(mesh);
+    });
+
+    this.updateCanvasZIndex();
+  }
+
+  private updateCanvasZIndex() {
+    if (this.canvas) {
+      this.canvas.style.zIndex = `${this.layerOrder.orderTable}`;
+    }
+    if (this.uiCanvas) {
+      if (this.layerVisibility.showUIOverlay) {
+        this.uiCanvas.style.zIndex = `${this.layerOrder.orderUI}`;
+        this.uiCanvas.style.display = 'block';
+      } else {
+        this.uiCanvas.style.zIndex = '-1';
+        this.uiCanvas.style.display = 'none';
+      }
+    }
+    const referenceZ = this.layerOrder.orderUI + 1;
+    if (this.referenceOverlay) {
+      if (this.layerVisibility.showReferenceOverlay) {
+        this.referenceOverlay.style.zIndex = `${referenceZ}`;
+      } else {
+        this.referenceOverlay.style.zIndex = '-1';
+      }
+    }
+    const debugCanvas = document.getElementById('debug-canvas') as HTMLCanvasElement | null;
+    if (debugCanvas) {
+      debugCanvas.style.zIndex = `${this.layerOrder.orderUI + 2}`;
+    }
+  }
+
+  private setLayerVisibility(layer: RenderLayerBooleanKey, visible: boolean) {
+    const current = this.layerVisibility[layer];
+    if (current === visible) return;
+    this.layerVisibility[layer] = visible;
+
+    switch (layer) {
+      case 'showTable':
+        if (this.tableMesh) this.tableMesh.visible = visible;
+        break;
+      case 'showFrame':
+        if (this.frameMesh) this.frameMesh.visible = visible;
+        break;
+      case 'showRails':
+        this.railMeshes.forEach((mesh) => (mesh.visible = visible));
+        break;
+      case 'showPockets':
+        this.pocketMeshes.forEach((mesh) => (mesh.visible = visible));
+        if (this.cornerRectangleMesh) this.cornerRectangleMesh.visible = visible;
+        break;
+      case 'showBalls':
+        if (!visible) {
+          this.ballMeshes.forEach((mesh) => (mesh.visible = false));
+        }
+        break;
+      case 'showUIOverlay':
+        this.updateCanvasZIndex();
+        break;
+      case 'showMeasurementOverlay':
+        this.toggleMeasurementOverlay(visible);
+        break;
+      case 'showReferenceOverlay':
+        this.setReferenceOverlayVisible(visible);
+        break;
+      default:
+        break;
+    }
+
+    if (layer === 'showUIOverlay' || layer === 'showReferenceOverlay') {
+      this.updateCanvasZIndex();
+    }
+  }
+
+  private enforceRenderOrderControl(object: THREE.Object3D) {
+    object.traverse((child) => {
+      const mesh = child as THREE.Mesh;
+      const material = mesh.material as THREE.Material | THREE.Material[] | undefined;
+      if (Array.isArray(material)) {
+        material.forEach((mat) => this.disableDepth(mat));
+      } else if (material) {
+        this.disableDepth(material);
+      }
+    });
+  }
+
+  private disableDepth(material: THREE.Material) {
+    if ('depthTest' in material) {
+      material.depthTest = false;
+    }
+    if ('depthWrite' in material) {
+      material.depthWrite = false;
+    }
+    material.needsUpdate = true;
+  }
+
+  getRenderLayerSettings(): RenderLayerSettings {
+    return {
+      showTable: this.layerVisibility.showTable,
+      showFrame: this.layerVisibility.showFrame,
+      showRails: this.layerVisibility.showRails,
+      showPockets: this.layerVisibility.showPockets,
+      showBalls: this.layerVisibility.showBalls,
+      showUIOverlay: this.layerVisibility.showUIOverlay,
+      showMeasurementOverlay: this.layerVisibility.showMeasurementOverlay,
+      showReferenceOverlay: this.layerVisibility.showReferenceOverlay,
+      orderTable: this.layerOrder.orderTable,
+      orderFrame: this.layerOrder.orderFrame,
+      orderRails: this.layerOrder.orderRails,
+      orderPockets: this.layerOrder.orderPockets,
+      orderBalls: this.layerOrder.orderBalls,
+      orderUI: this.layerOrder.orderUI,
+    };
+  }
+
+  setReferenceOverlayVisible(visible: boolean) {
+    this.referenceOverlayVisible = visible;
+    this.layerVisibility.showReferenceOverlay = visible;
+    if (this.referenceOverlay) {
+      if (visible) {
+        this.referenceOverlay.classList.remove('overlay-hidden');
+      } else {
+        this.referenceOverlay.classList.add('overlay-hidden');
+      }
+    }
+    this.updateCanvasZIndex();
+  }
+
+  getReferenceOverlayVisible(): boolean {
+    if (this.referenceOverlay) {
+      return !this.referenceOverlay.classList.contains('overlay-hidden');
+    }
+    return this.referenceOverlayVisible;
   }
 
   drawMeasurementOverlay() {

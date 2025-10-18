@@ -84,20 +84,19 @@ const PLAY_HALF_H_IN = 50.0 / 2;
 const X_E_PLAY = PLAY_HALF_W_IN;
 const X_W_PLAY = -PLAY_HALF_W_IN;
 
-// Existing felt straight and inner throat Y-levels for north/south
+// Existing felt straight and inner throat Y-levels for north/south (configurable)
 const Y_N_PLAY = PLAY_HALF_H_IN;        // 25.0
 const Y_S_PLAY = -PLAY_HALF_H_IN;       // -25.0
-const Y_N_STRAIGHT = 23.5;              // existing straight rail y (north)
-const Y_S_STRAIGHT = -23.5;             // existing straight rail y (south)
-const Y_N_INNER = 24.6;                 // inner throat y (north)
-const Y_S_INNER = -24.6;                // inner throat y (south)
-const X_E_STRAIGHT = 48.5;              // existing vertical straight x (east)
-const X_W_STRAIGHT = -48.5;             // existing vertical straight x (west)
 
-function deriveSideJawXMagnitudes(): { xOuter: number; xInner: number } {
-  // Read current geometry params from CONFIG at call time for dynamic updates
-  const f = CONFIG.SIDE_FRAME_OFFSET_IN; // Use separate offset for steeper side pocket jaws
-  const r = CONFIG.JAW_REF_RADIUS_IN;
+function deriveSideJawXMagnitudes(
+  frameOffset: number,
+  referenceRadius: number,
+  straightY: number,
+  innerY: number,
+  maxOuter: number
+): { xOuter: number; xInner: number } {
+  const f = frameOffset;
+  const r = referenceRadius;
   const yTop = Y_N_PLAY + f;
   const under = r * r - f * f;
   if (!(under > 0)) {
@@ -108,14 +107,15 @@ function deriveSideJawXMagnitudes(): { xOuter: number; xInner: number } {
   // Use the tangent line at the circle-rectangle contact point to define jaw direction.
   // Tangent direction at top contact: T = (f, -xi) (points downward and inward)
   // Parameter t to reach target Y: y(t) = yTop + t * (-xi) -> t = (yTop - yTarget) / xi
-  const tOuter = (yTop - Y_N_STRAIGHT) / xi;
-  const tInner = (yTop - Y_N_INNER) / xi;
+  const tOuter = (yTop - straightY) / xi;
+  const tInner = (yTop - innerY) / xi;
   const xOuter = xi + f * tOuter;
   const xInner = xi + f * tInner;
 
   // Clamp to sane ranges (must be positive magnitudes and not exceed straight extent near corners)
   const clampPos = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-  const xOuterClamped = clampPos(isFinite(xOuter) ? xOuter : 6.0, 0.5, 46.0);
+  const maxOuterSafe = Math.max(1, Math.min(maxOuter, PLAY_HALF_W_IN - 1));
+  const xOuterClamped = clampPos(isFinite(xOuter) ? xOuter : 6.0, 0.5, maxOuterSafe);
   const xInnerClamped = clampPos(isFinite(xInner) ? xInner : 2.5, 0.25, xOuterClamped - 0.25);
   
   return { xOuter: xOuterClamped, xInner: xInnerClamped };
@@ -123,9 +123,13 @@ function deriveSideJawXMagnitudes(): { xOuter: number; xInner: number } {
 
 // Derive corner jaw geometry using the same tangent approach as side pockets
 // Returns the x-coordinate where the horizontal straight section meets the corner
-function deriveCornerJawX(): number {
-  const f = CONFIG.FRAME_OFFSET_IN;
-  const r = CONFIG.CORNER_JAW_REF_RADIUS_IN;
+function deriveCornerJawX(
+  frameOffset: number,
+  referenceRadius: number,
+  straightY: number
+): number {
+  const f = frameOffset;
+  const r = referenceRadius;
   const under = Math.max(0, r * r - f * f);
   const xi = Math.sqrt(under);
   
@@ -138,7 +142,7 @@ function deriveCornerJawX(): number {
   const yFrame = PLAY_HALF_H_IN + f; // 29.0
   
   // Parameter along tangent line to reach Y_N_STRAIGHT
-  const s = (yFrame - Y_N_STRAIGHT) / xi;
+  const s = (yFrame - straightY) / xi;
   const xCorner = PLAY_HALF_W_IN - xi + f * s;
   
   const xClamped = Number.isFinite(xCorner) && xCorner > 0.01 ? xCorner : 46.0;
@@ -146,31 +150,71 @@ function deriveCornerJawX(): number {
 }
 
 // Derive the y-coordinate where vertical straight section meets the corner
-function deriveCornerJawY(): number {
-  const f = CONFIG.FRAME_OFFSET_IN;
-  const r = CONFIG.CORNER_JAW_REF_RADIUS_IN;
+function deriveCornerJawY(
+  frameOffset: number,
+  referenceRadius: number,
+  straightX: number,
+  fallbackY: number
+): number {
+  const f = frameOffset;
+  const r = referenceRadius;
   const under = Math.max(0, r * r - f * f);
   const xi = Math.sqrt(under);
   
   if (!(xi > 1e-6)) {
-    return 21.0; // Fallback to current geometry
+    return fallbackY; // Fallback to current geometry
   }
   
   // Parameter along tangent line to reach X_E_STRAIGHT (48.5)
   const xFrame = PLAY_HALF_W_IN + f; // 54.0
-  const X_E_STRAIGHT = 48.5;
-  const s = (xFrame - X_E_STRAIGHT) / xi;
+  const s = (xFrame - straightX) / xi;
   const yCorner = PLAY_HALF_H_IN - xi + f * s;
   
-  const yClamped = Number.isFinite(yCorner) && yCorner > 0.01 ? yCorner : 21.0;
+  const yClamped = Number.isFinite(yCorner) && yCorner > 0.01 ? yCorner : fallbackY;
   return yClamped;
 }
 
 export function getTableGeometry(): TableGeometry {
   // Recompute on demand from current CONFIG values
-  const { xOuter: JAW_X_OUTER, xInner: JAW_X_INNER } = deriveSideJawXMagnitudes();
-  const CORNER_JAW_X = deriveCornerJawX();
-  const CORNER_JAW_Y = deriveCornerJawY();
+  const sideStraight = Math.max(0, CONFIG.SIDE_STRAIGHT_Y_IN);
+  const sideInner = Math.max(sideStraight + 0.05, CONFIG.SIDE_INNER_Y_IN);
+  const cornerStraight = Math.max(0, CONFIG.CORNER_STRAIGHT_X_IN);
+  const cornerFrameOffset = CONFIG.CORNER_FRAME_OFFSET_IN ?? CONFIG.FRAME_OFFSET_IN;
+  const maxSideJawOuter = Math.max(1, cornerStraight - 0.25);
+
+  const sideJawDerived = deriveSideJawXMagnitudes(
+    CONFIG.SIDE_FRAME_OFFSET_IN,
+    CONFIG.JAW_REF_RADIUS_IN,
+    sideStraight,
+    sideInner,
+    maxSideJawOuter
+  );
+
+  const JAW_X_OUTER = CONFIG.SIDE_JAW_OUTER_OVERRIDE_IN ?? sideJawDerived.xOuter;
+  const JAW_X_INNER = CONFIG.SIDE_JAW_INNER_OVERRIDE_IN ?? sideJawDerived.xInner;
+
+  const cornerJawXRaw = deriveCornerJawX(
+    cornerFrameOffset,
+    CONFIG.CORNER_JAW_REF_RADIUS_IN,
+    sideStraight
+  );
+  const CORNER_JAW_X = Math.min(cornerStraight - 0.25, Math.max(1, cornerJawXRaw));
+
+  const cornerJawYRaw = deriveCornerJawY(
+    cornerFrameOffset,
+    CONFIG.CORNER_JAW_REF_RADIUS_IN,
+    cornerStraight,
+    CONFIG.CORNER_TARGET_Y_IN
+  );
+  const CORNER_JAW_Y = Math.min(sideStraight - 0.25, Math.max(1, cornerJawYRaw));
+
+  const Y_N_STRAIGHT = sideStraight;
+  const Y_S_STRAIGHT = -sideStraight;
+  const Y_N_INNER = sideInner;
+  const Y_S_INNER = -sideInner;
+  const X_E_STRAIGHT = cornerStraight;
+  const X_W_STRAIGHT = -cornerStraight;
+  const SIDE_POCKET_OFFSET = CONFIG.SIDE_POCKET_OUTWARD_OFFSET_IN;
   
   return {
     playWidthIn: 100.0,
@@ -183,7 +227,7 @@ export function getTableGeometry(): TableGeometry {
     rails: [
     {
       id: 'N_west_taper',
-      from: { x: -(PLAY_HALF_W_IN + CONFIG.FRAME_OFFSET_IN), y: PLAY_HALF_H_IN + CONFIG.FRAME_OFFSET_IN },
+      from: { x: -(PLAY_HALF_W_IN + cornerFrameOffset), y: PLAY_HALF_H_IN + cornerFrameOffset },
       to: { x: -CORNER_JAW_X, y: Y_N_STRAIGHT },
       normal: { x: 0.447214, y: -0.894427 }
     },
@@ -226,12 +270,12 @@ export function getTableGeometry(): TableGeometry {
     {
       id: 'N_east_taper',
       from: { x: CORNER_JAW_X, y: Y_N_STRAIGHT },
-      to: { x: PLAY_HALF_W_IN + CONFIG.FRAME_OFFSET_IN, y: PLAY_HALF_H_IN + CONFIG.FRAME_OFFSET_IN },
+      to: { x: PLAY_HALF_W_IN + cornerFrameOffset, y: PLAY_HALF_H_IN + cornerFrameOffset },
       normal: { x: -0.447214, y: -0.894427 }
     },
     {
       id: 'E_north_taper',
-      from: { x: PLAY_HALF_W_IN + CONFIG.FRAME_OFFSET_IN, y: PLAY_HALF_H_IN + CONFIG.FRAME_OFFSET_IN },
+      from: { x: PLAY_HALF_W_IN + cornerFrameOffset, y: PLAY_HALF_H_IN + cornerFrameOffset },
       to: { x: X_E_STRAIGHT, y: CORNER_JAW_Y },
       normal: { x: -0.894427, y: -0.447214 }
     },
@@ -244,12 +288,12 @@ export function getTableGeometry(): TableGeometry {
     {
       id: 'E_south_taper',
       from: { x: X_E_STRAIGHT, y: -CORNER_JAW_Y },
-      to: { x: PLAY_HALF_W_IN + CONFIG.FRAME_OFFSET_IN, y: -(PLAY_HALF_H_IN + CONFIG.FRAME_OFFSET_IN) },
+      to: { x: PLAY_HALF_W_IN + cornerFrameOffset, y: -(PLAY_HALF_H_IN + cornerFrameOffset) },
       normal: { x: -0.894427, y: 0.447214 }
     },
     {
       id: 'S_east_taper',
-      from: { x: PLAY_HALF_W_IN + CONFIG.FRAME_OFFSET_IN, y: -(PLAY_HALF_H_IN + CONFIG.FRAME_OFFSET_IN) },
+      from: { x: PLAY_HALF_W_IN + cornerFrameOffset, y: -(PLAY_HALF_H_IN + cornerFrameOffset) },
       to: { x: CORNER_JAW_X, y: Y_S_STRAIGHT },
       normal: { x: -0.447214, y: 0.894427 }
     },
@@ -292,12 +336,12 @@ export function getTableGeometry(): TableGeometry {
     {
       id: 'S_west_taper',
       from: { x: -CORNER_JAW_X, y: Y_S_STRAIGHT },
-      to: { x: -(PLAY_HALF_W_IN + CONFIG.FRAME_OFFSET_IN), y: -(PLAY_HALF_H_IN + CONFIG.FRAME_OFFSET_IN) },
+      to: { x: -(PLAY_HALF_W_IN + cornerFrameOffset), y: -(PLAY_HALF_H_IN + cornerFrameOffset) },
       normal: { x: 0.447214, y: 0.894427 }
     },
     {
       id: 'W_south_taper',
-      from: { x: -(PLAY_HALF_W_IN + CONFIG.FRAME_OFFSET_IN), y: -(PLAY_HALF_H_IN + CONFIG.FRAME_OFFSET_IN) },
+      from: { x: -(PLAY_HALF_W_IN + cornerFrameOffset), y: -(PLAY_HALF_H_IN + cornerFrameOffset) },
       to: { x: X_W_STRAIGHT, y: -CORNER_JAW_Y },
       normal: { x: 0.894427, y: 0.447214 }
     },
@@ -310,7 +354,7 @@ export function getTableGeometry(): TableGeometry {
     {
       id: 'W_north_taper',
       from: { x: X_W_STRAIGHT, y: CORNER_JAW_Y },
-      to: { x: -(PLAY_HALF_W_IN + CONFIG.FRAME_OFFSET_IN), y: PLAY_HALF_H_IN + CONFIG.FRAME_OFFSET_IN },
+      to: { x: -(PLAY_HALF_W_IN + cornerFrameOffset), y: PLAY_HALF_H_IN + cornerFrameOffset },
       normal: { x: 0.894427, y: -0.447214 }
     }
     ],
@@ -339,12 +383,12 @@ export function getTableGeometry(): TableGeometry {
     },
     { 
       id: 'N_middle', 
-      center: { x: 0.0, y: 25.0 }, 
+      center: { x: 0.0, y: Y_N_PLAY + SIDE_POCKET_OFFSET }, 
       cutNormalHint: { x: 0, y: -1 } 
     },
     { 
       id: 'S_middle', 
-      center: { x: 0.0, y: -25.0 }, 
+      center: { x: 0.0, y: Y_S_PLAY - SIDE_POCKET_OFFSET }, 
       cutNormalHint: { x: 0, y: 1 } 
     }
     ]
