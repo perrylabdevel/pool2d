@@ -1,4 +1,5 @@
 import { SettingsManager } from './SettingsManager';
+import { makePanelDraggable } from './drag';
 
 export class GeometryPanel {
   private panel: HTMLElement;
@@ -11,6 +12,10 @@ export class GeometryPanel {
     this.onGeometryChange = onGeometryChange;
     
     this.panel = document.getElementById('geometry-panel')!;
+    const header = this.panel.querySelector('.panel-header') as HTMLElement | null;
+    if (header) {
+      makePanelDraggable(this.panel, header);
+    }
     this.setupControls();
     this.loadCurrentValues();
   }

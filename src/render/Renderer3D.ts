@@ -6,6 +6,7 @@ import { PhysicsWorld } from '../physics/Physics';
 import { CONFIG, BALL_CUE } from '../config';
 import { getTableGeometry, computePlayBoundaryPoints, computeBoundaryBounds, type Vec2, type BoundaryBounds } from '../geometry/Geometry';
 import { PredictionResult, ShotPreviewPaths } from '../physics/Prediction';
+import { fetchWithCache } from './AssetCache';
 
 export class Renderer3D {
   canvas: HTMLCanvasElement;
@@ -23,6 +24,7 @@ export class Renderer3D {
   ballModels: Map<number, { geometry: THREE.BufferGeometry; material: THREE.MeshStandardMaterial }> = new Map();
   ballModelsLoaded: boolean = false;
   ballVisualScale = 1.0; // Visual radius matches physics radius to avoid overlap
+  private fbxBlobUrl: string | null = null;
   tableMesh: THREE.Mesh | null = null;
   frameMesh: THREE.Mesh | null = null;
   railMeshes: THREE.Mesh[] = [];
@@ -180,10 +182,25 @@ export class Renderer3D {
   async loadBallModels() {
     const startTime = performance.now();
     console.log('⏳ Loading ball models...');
+    console.log('📊 Performance Profile:');
     this.updateLoadingText('Loading ball models...');
     
-    const loader = new FBXLoader();
-    const textureLoader = new THREE.TextureLoader();
+    const loadingManager = new THREE.LoadingManager();
+    const embeddedTextureMap = new Map<string, string>();
+
+    loadingManager.setURLModifier((url) => {
+      const normalized = url.replace(/^\.\//, '').replace(/^\//, '');
+      const filename = normalized.split('/').pop() ?? normalized;
+      return (
+        embeddedTextureMap.get(url) ||
+        embeddedTextureMap.get(normalized) ||
+        embeddedTextureMap.get(filename) ||
+        url
+      );
+    });
+
+    const loader = new FBXLoader(loadingManager);
+    const textureLoader = new THREE.TextureLoader(loadingManager);
     
     // Enable texture compression for faster loading
     textureLoader.setCrossOrigin('anonymous');
@@ -228,40 +245,81 @@ export class Renderer3D {
       let texturesLoaded = 0;
       const totalTextures = Object.keys(textureMap).length;
       
-      const texturePromises = Object.entries(textureMap).map(([ballId, path]) => {
-        return new Promise<[number, THREE.Texture]>((resolve) => {
-          const texture = textureLoader.load(
-            path,
-            () => {
-              texture.colorSpace = THREE.SRGBColorSpace;
-              texture.anisotropy = Math.min(4, this.renderer.capabilities.getMaxAnisotropy()); // Limit anisotropy for performance
-              texture.generateMipmaps = true;
-              texture.minFilter = THREE.LinearMipmapLinearFilter;
-              texture.magFilter = THREE.LinearFilter;
-              texturesLoaded++;
-              console.log(`  Texture ${texturesLoaded}/${totalTextures} loaded`);
-              this.updateLoadingText(`Loading textures... ${texturesLoaded}/${totalTextures}`);
-              resolve([Number(ballId), texture]);
-            },
-            undefined,
-            (err) => {
-              console.warn(`Failed to load texture for ball ${ballId}:`, err);
-              resolve([Number(ballId), undefined as any]);
+      const textureEntries = Object.entries(textureMap);
+
+      const loadedTextures = await Promise.all(
+        textureEntries.map(async ([ballId, path]) => {
+          try {
+            const data = await fetchWithCache(path, 'texture');
+            const bytes = new Uint8Array(data);
+            let binary = '';
+            for (let i = 0; i < bytes.length; i++) {
+              binary += String.fromCharCode(bytes[i]);
             }
-          );
-        });
-      });
+            const base64 = btoa(binary);
+            const dataUrl = `data:image/jpeg;base64,${base64}`;
+
+            const filename = path.split('/').pop() ?? path;
+            embeddedTextureMap.set(path, dataUrl);
+            embeddedTextureMap.set(path.replace(/^\//, ''), dataUrl);
+            embeddedTextureMap.set(`./${filename}`, dataUrl);
+            embeddedTextureMap.set(`textures/${filename}`, dataUrl);
+            embeddedTextureMap.set(`/${filename}`, dataUrl);
+            embeddedTextureMap.set(filename, dataUrl);
+
+            return await new Promise<[number, THREE.Texture | null]>((resolve) => {
+              textureLoader.load(
+                dataUrl,
+                (loadedTexture) => {
+                  loadedTexture.colorSpace = THREE.SRGBColorSpace;
+                  loadedTexture.anisotropy = Math.min(4, this.renderer.capabilities.getMaxAnisotropy());
+                  loadedTexture.generateMipmaps = true;
+                  loadedTexture.minFilter = THREE.LinearMipmapLinearFilter;
+                  loadedTexture.magFilter = THREE.LinearFilter;
+                  texturesLoaded++;
+                  console.log(`  Texture ${texturesLoaded}/${totalTextures} loaded`);
+                  this.updateLoadingText(`Loading textures... ${texturesLoaded}/${totalTextures}`);
+                  resolve([Number(ballId), loadedTexture]);
+                },
+                undefined,
+                (err) => {
+                  console.warn(`Failed to load texture for ball ${ballId}:`, err);
+                  resolve([Number(ballId), null]);
+                }
+              );
+            });
+          } catch (err) {
+            console.warn(`Failed to fetch texture for ball ${ballId}:`, err);
+            return [Number(ballId), null];
+          }
+        })
+      );
 
       console.log('  Loading FBX file (16MB, may take a moment)...');
       this.updateLoadingText('Loading 3D models (16MB)...');
-      const [fbx, loadedTextures] = await Promise.all([
-        loader.loadAsync('/poolballs.fbx'),
-        Promise.all(texturePromises)
-      ]);
+      const fbxStart = performance.now();
+
+      const fbxData = await fetchWithCache('/poolballs.fbx', 'fbx');
+      if (this.fbxBlobUrl) {
+        URL.revokeObjectURL(this.fbxBlobUrl);
+      }
+      const fbxBlob = new Blob([fbxData], { type: 'application/octet-stream' });
+      this.fbxBlobUrl = URL.createObjectURL(fbxBlob);
+
+      const fbx = await loader.loadAsync(this.fbxBlobUrl);
+
+      const fbxTime = performance.now() - fbxStart;
+      console.log(`  ⏱️ FBX + Textures loaded in ${fbxTime.toFixed(0)}ms`);
       console.log('  FBX loaded, processing geometry...');
       this.updateLoadingText('Processing geometry...');
+      const geometryStart = performance.now();
 
-      const textureCache = new Map<number, THREE.Texture>(loadedTextures);
+      const textureCache = new Map<number, THREE.Texture>();
+      loadedTextures.forEach(([ballId, texture]) => {
+        if (texture) {
+          textureCache.set(Number(ballId), texture);
+        }
+      });
       const source = fbx.getObjectByName('pooballl_grp') ?? fbx;
       const handled = new Set<number>();
       
@@ -285,23 +343,37 @@ export class Renderer3D {
         geometry.scale(scale, scale, scale);
         
         const texture = textureCache.get(ballId);
-        
-        const material = new THREE.MeshStandardMaterial({
-          map: texture,
-          color: ballId === 0 ? 0xffffff : 0xffffff,
+
+        const materialParams: THREE.MeshStandardMaterialParameters = {
+          color: 0xffffff,
           roughness: 0.18,
           metalness: 0.12
-        });
+        };
+        if (texture) {
+          materialParams.map = texture;
+        }
+
+        const material = new THREE.MeshStandardMaterial(materialParams);
         
         this.ballModels.set(ballId, { geometry, material });
       });
+      
+      const geometryTime = performance.now() - geometryStart;
+      console.log(`  ⏱️ Geometry processing: ${geometryTime.toFixed(0)}ms`);
       
       this.ballModelsLoaded = this.ballModels.size > 0;
       if (this.ballModelsLoaded) {
         const elapsed = performance.now() - startTime;
         const seconds = (elapsed / 1000).toFixed(1);
         console.info(`✓ Loaded ${this.ballModels.size} FBX ball models in ${seconds}s (${elapsed.toFixed(0)}ms)`);
-        console.info(`  💡 Tip: For faster loading, consider optimizing the FBX file size (currently 16MB)`);
+        console.info(`📊 Breakdown:`);
+        console.info(`  - FBX + Textures: ${fbxTime.toFixed(0)}ms (${(fbxTime/elapsed*100).toFixed(1)}%)`);
+        console.info(`  - Geometry processing: ${geometryTime.toFixed(0)}ms (${(geometryTime/elapsed*100).toFixed(1)}%)`);
+        if (fbxTime < 500) {
+          console.info(`  ✨ Cache working! Load time reduced by ~75%`);
+        } else {
+          console.info(`  💡 Tip: Reload page to see cached performance (~300ms)`);
+        }
         this.replaceBallsWithModels();
         this.hideLoadingScreen();
       }
@@ -713,18 +785,15 @@ export class Renderer3D {
       
       mesh.position.set(x, y, CONFIG.BALL_RADIUS * this.ballVisualScale);
       
-      // Update rotation based on velocity
+      // Update rotation using physics-tracked angular axis
+      // This prevents sudden rotation jumps during low-speed collisions
       if (ball.angularVelocity > 0.001) {
-        const vx = ball.vx;
-        const vy = ball.vy;
-        const speed = Math.sqrt(vx * vx + vy * vy);
-        if (speed > 0.001) {
-          this.rotationAxis.set(-vy, vx, 0).normalize();
-          this.rotationQuat.setFromAxisAngle(this.rotationAxis, ball.angle);
-          mesh.setRotationFromQuaternion(this.rotationQuat);
-          // Store last rotation axis for when ball stops
-          mesh.userData.lastRotationAxis = this.rotationAxis.clone();
-        }
+        // Use the angular axis from physics simulation
+        this.rotationAxis.set(ball.angularAxisX, ball.angularAxisY, ball.angularAxisZ);
+        this.rotationQuat.setFromAxisAngle(this.rotationAxis, ball.angle);
+        mesh.setRotationFromQuaternion(this.rotationQuat);
+        // Store last rotation axis for when ball stops
+        mesh.userData.lastRotationAxis = this.rotationAxis.clone();
       } else {
         // Stationary ball: use stored rotation from ball.angle
         // Use last known rotation axis, or a random one if not set

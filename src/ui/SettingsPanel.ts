@@ -1,6 +1,7 @@
 // Settings panel for live physics tuning
 import { CONFIG } from '../config';
 import { SettingsManager } from './SettingsManager';
+import { makePanelDraggable } from './drag';
 
 export class SettingsPanel {
   private panel: HTMLElement;
@@ -11,6 +12,10 @@ export class SettingsPanel {
     this.settingsManager = settingsManager;
     this.panel = this.createPanel();
     document.body.appendChild(this.panel);
+    const header = this.panel.querySelector('.panel-header') as HTMLElement | null;
+    if (header) {
+      makePanelDraggable(this.panel, header);
+    }
     this.setupEventListeners();
     this.loadSettings();
   }

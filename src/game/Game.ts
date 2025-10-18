@@ -300,6 +300,7 @@ export class Game {
     const vy = Math.sin(angle) * velocity;
     
     this.cueBall.setVelocity(vx, vy);
+    this.world.logShotSnapshot(angle, power);
     physicsRecorder.recordShot(angle, power);
     this.canShoot = false;
     if (this.mode === GameMode.EIGHT_BALL) {

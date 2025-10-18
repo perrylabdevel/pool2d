@@ -1,5 +1,6 @@
 // HUD and UI management
 import { SettingsManager } from './SettingsManager';
+import { makePanelDraggable } from './drag';
 
 export class HUD {
   fpsElement: HTMLElement;
@@ -36,6 +37,11 @@ export class HUD {
     const debugToggle = document.getElementById('debug-toggle')!;
     const settingsModal = document.getElementById('settings-modal')!;
     const settingsClose = document.getElementById('settings-close')!;
+    const settingsModalContent = settingsModal.querySelector('.modal-content') as HTMLElement | null;
+    const settingsModalHeader = settingsModalContent?.querySelector('h2') as HTMLElement | null;
+    if (settingsModalContent) {
+      makePanelDraggable(settingsModalContent, settingsModalHeader ?? settingsModalContent);
+    }
     
     pauseBtn.addEventListener('click', () => {
       // Will be handled by Game class
@@ -49,9 +55,15 @@ export class HUD {
     settingsBtn.addEventListener('click', () => {
       settingsModal.classList.remove('hidden');
     });
-    
+
     settingsClose.addEventListener('click', () => {
       settingsModal.classList.add('hidden');
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !settingsModal.classList.contains('hidden')) {
+        settingsModal.classList.add('hidden');
+      }
     });
     
     debugToggle.addEventListener('click', () => {

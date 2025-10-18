@@ -20,6 +20,9 @@ export class Ball {
   // Rotation (for visual spinning)
   angle: number; // Rotation angle in radians
   angularVelocity: number; // Radians per second
+  angularAxisX: number;
+  angularAxisY: number;
+  angularAxisZ: number;
   
   // For interpolation
   prevX: number;
@@ -38,6 +41,9 @@ export class Ball {
     this.sleeping = false;
     this.angle = 0;
     this.angularVelocity = 0;
+    this.angularAxisX = 0;
+    this.angularAxisY = 1;
+    this.angularAxisZ = 0;
     this.prevX = x;
     this.prevY = y;
   }
@@ -66,6 +72,9 @@ export class Ball {
     copy.sleeping = this.sleeping;
     copy.angle = this.angle;
     copy.angularVelocity = this.angularVelocity;
+    copy.angularAxisX = this.angularAxisX;
+    copy.angularAxisY = this.angularAxisY;
+    copy.angularAxisZ = this.angularAxisZ;
     copy.prevX = this.prevX;
     copy.prevY = this.prevY;
     return copy;

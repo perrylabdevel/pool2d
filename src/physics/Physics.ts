@@ -90,14 +90,28 @@ export class PhysicsWorld {
         
         // Update rotation based on rolling (v = ω × r, so ω = v / r)
         const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
-        if (speed > 0.01) {
-          ball.angularVelocity = speed / ball.radius;
+        const spinStart = 0.05;
+        const spinFull = 0.35;
+        if (speed >= spinStart) {
+          // Update angular axis perpendicular to velocity (rolling direction)
+          const axisX = -ball.vy;
+          const axisY = ball.vx;
+          const axisLength = Math.sqrt(axisX * axisX + axisY * axisY);
+          if (axisLength > 1e-6) {
+            ball.angularAxisX = axisX / axisLength;
+            ball.angularAxisY = axisY / axisLength;
+            ball.angularAxisZ = 0;
+          }
+          const blend = Math.min(1, (speed - spinStart) / Math.max(0.0001, spinFull - spinStart));
+          const targetOmega = (speed / ball.radius) * blend;
+          const smoothing = 0.2; // Damp abrupt changes when transitioning between speeds
+          ball.angularVelocity += (targetOmega - ball.angularVelocity) * smoothing;
           ball.angle += ball.angularVelocity * subDt;
         } else {
-          // Ball nearly stopped - keep last angularVelocity until next movement
-          // This prevents the angle from resetting when ball briefly stops
+          // Ball nearly stopped - gently decay any residual spin
           if (ball.angularVelocity > 0.01) {
-            ball.angularVelocity *= 0.9; // Gradually decay
+            ball.angularVelocity *= 0.85;
+            ball.angle += ball.angularVelocity * subDt;
           } else {
             ball.angularVelocity = 0;
           }
@@ -213,7 +227,40 @@ export class PhysicsWorld {
   getBallById(id: number): Ball | null {
     return this.balls.find((ball) => ball.id === id) ?? null;
   }
-  
+
+  logShotSnapshot(angle: number, power: number) {
+    const cue = this.getBallById(0);
+    const snapshot = this.balls.map((ball) => ({
+      id: ball.id,
+      sleeping: ball.sleeping,
+      pocketed: ball.pocketed,
+      position: {
+        x: Number(ball.x.toFixed(4)),
+        y: Number(ball.y.toFixed(4)),
+      },
+      velocity: {
+        vx: Number(ball.vx.toFixed(4)),
+        vy: Number(ball.vy.toFixed(4)),
+        speed: Number(ball.getSpeed().toFixed(4)),
+      },
+      rotation: {
+        angle: Number(ball.angle.toFixed(4)),
+        angularVelocity: Number(ball.angularVelocity.toFixed(4)),
+        axis: [
+          Number(ball.angularAxisX.toFixed(3)),
+          Number(ball.angularAxisY.toFixed(3)),
+          Number(ball.angularAxisZ.toFixed(3)),
+        ],
+      },
+    }));
+
+    console.groupCollapsed(
+      `🎯 Shot Debug | angle: ${angle.toFixed(3)} rad (${(angle * 180 / Math.PI).toFixed(1)}°), power: ${power.toFixed(2)}, cue speed: ${cue ? cue.getSpeed().toFixed(3) : 'n/a'}`
+    );
+    console.log('Shot snapshot', snapshot);
+    console.groupEnd();
+  }
+
   recordingEnabled: boolean = true;
   
   clone(options?: { enableRecording?: boolean }): PhysicsWorld {

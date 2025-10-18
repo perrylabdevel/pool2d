@@ -58,7 +58,7 @@
         <div id="geometry-panel" class="floating-panel hidden">
           <div class="panel-header">
             <h3>🎱 Pocket Geometry</h3>
-            <button id="geometry-panel-close" class="close-btn">×</button>
+            <button id="geometry-panel-close" class="close-btn" data-no-drag="true">×</button>
           </div>
           <div class="panel-content">
             <div class="slider-group">
@@ -99,8 +99,11 @@
       </div>
       <div id="settings-modal" class="modal hidden">
         <div class="modal-content">
-          <h2>⚙️ Game & UI Settings</h2>
-          
+          <div class="modal-header panel-header">
+            <h3>⚙️ Game & UI Settings</h3>
+            <button id="settings-close" class="close-btn" data-no-drag="true">×</button>
+          </div>
+
           <div class="settings-section">
             <h3>Game Options</h3>
             <label>
@@ -147,7 +150,7 @@
 
           <div class="modal-actions">
             <button id="settings-reset-ui">Reset Colors</button>
-            <button id="settings-close">Close</button>
+            <button id="settings-close-footer">Close</button>
           </div>
         </div>
       </div>
