@@ -309,13 +309,20 @@ export class Game {
     
     // Record shot for capture system if active
     if (shotCapture.isCapturing()) {
-      const direction = { x: Math.cos(angle), y: Math.sin(angle) };
-      const prediction = this.predictor.predictFirstContact(
-        { x: this.cueBall.x, y: this.cueBall.y },
-        direction,
-        this.world,
-        this.cueBall
-      );
+      // Prefer physics-based prediction for capture (more accurate at glancing/rail cases)
+      let prediction: ReturnType<typeof this.predictor.predictFirstContact>;
+      const sim = this.predictor.simulateShotPaths(this.world, this.cueBall, angle, power);
+      if (sim && sim.firstContact) {
+        prediction = sim.firstContact;
+      } else {
+        const direction = { x: Math.cos(angle), y: Math.sin(angle) };
+        prediction = this.predictor.predictFirstContact(
+          { x: this.cueBall.x, y: this.cueBall.y },
+          direction,
+          this.world,
+          this.cueBall
+        );
+      }
       shotCapture.recordShotStart(this.cueBall, angle, power, prediction);
     }
     

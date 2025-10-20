@@ -115,6 +115,11 @@ export class Renderer3D {
       canvas,
       antialias: true,
     });
+    // Ensure correct color output and crisp rendering
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.1;
+    this.renderer.setPixelRatio(window.devicePixelRatio || 1);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     
@@ -138,7 +143,7 @@ export class Renderer3D {
     this.directionalLight.target.position.set(0, 0, 0);
     this.scene.add(this.directionalLight.target);
 
-    this.fillLight = new THREE.HemisphereLight(0xffffff, 0x1a1a1a, 0.55);
+    this.fillLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.55);
     this.scene.add(this.fillLight);
 
     // Load FBX ball models (async)
@@ -796,7 +801,7 @@ export class Renderer3D {
 
     this.railFillMesh = new THREE.Mesh(geometry, material);
     this.railFillMesh.position.z = -0.05;
-    this.railFillMesh.renderOrder = this.layerOrder.orderRails - 1;
+    this.railFillMesh.renderOrder = this.layerOrder.orderTable - 1;
     this.railFillMesh.visible = this.layerVisibility.showRails;
     this.enforceRenderOrderControl(this.railFillMesh);
 
@@ -959,7 +964,7 @@ export class Renderer3D {
     const glowMaterial = new THREE.MeshBasicMaterial({
       color: 0x000000,
       transparent: true,
-      opacity: 0.35,
+      opacity: 0.15,
       side: THREE.BackSide, // Render from inside so it appears as an outline
       depthTest: true,
       depthWrite: false
@@ -1149,7 +1154,7 @@ export class Renderer3D {
       mesh.renderOrder = this.layerOrder.orderCaps;
     });
     if (this.railFillMesh) {
-      this.railFillMesh.renderOrder = this.layerOrder.orderRails - 1;
+      this.railFillMesh.renderOrder = this.layerOrder.orderTable - 1;
     }
     this.ballMeshes.forEach((mesh) => {
       this.applyBallRenderOrder(mesh);
@@ -1243,7 +1248,10 @@ export class Renderer3D {
 
   private enforceRenderOrderControl(object: THREE.Object3D) {
     object.traverse((child) => {
-      const mesh = child as THREE.Mesh;
+      const mesh = child as THREE.Mesh & { isMesh?: boolean };
+      if (!mesh || !(mesh as any).isMesh) return;
+      // Keep depth testing for the ball glow so it doesn't darken the entire ball surface
+      if (mesh.name === 'ball-glow') return;
       const material = mesh.material as THREE.Material | THREE.Material[] | undefined;
       if (Array.isArray(material)) {
         material.forEach((mat) => this.disableDepth(mat));

@@ -4,6 +4,7 @@
 import { Ball } from '../physics/Shapes';
 import { PredictionResult } from '../physics/Prediction';
 import { CONFIG } from '../config';
+import { getTableGeometry } from '../geometry/Geometry';
 
 interface ShotData {
   // Pre-shot data
@@ -69,8 +70,8 @@ class ShotCaptureSystem {
     if (!this.capturing) return;
     
     const velocity = {
-      x: Math.cos(angle) * power * 10, // Apply multiplier
-      y: Math.sin(angle) * power * 10,
+      x: Math.cos(angle) * power * CONFIG.CUE_POWER_MULTIPLIER,
+      y: Math.sin(angle) * power * CONFIG.CUE_POWER_MULTIPLIER,
     };
     
     // Extract prediction data
@@ -95,9 +96,16 @@ class ShotCaptureSystem {
       
       // Calculate predicted ball velocities using impulse physics (matches actual collision)
       
-      // Use actual shot velocity magnitude
-      const cueBallVx = velocity.x;
-      const cueBallVy = velocity.y;
+      // Estimate cue ball speed at the instant of contact (accounts for rolling friction before impact)
+      // For dv/dt = -k*v, distance d = (v0 - v_hit)/k => v_hit = v0 - k*d
+      const v0 = Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
+      const d = prediction.distance;
+      const k = CONFIG.ROLLING_FRICTION;
+      const v_hit = Math.max(0, v0 - k * d);
+      const dirX = v0 > 1e-6 ? velocity.x / v0 : Math.cos(angle);
+      const dirY = v0 > 1e-6 ? velocity.y / v0 : Math.sin(angle);
+      const cueBallVx = dirX * v_hit;
+      const cueBallVy = dirY * v_hit;
       
       // Assume equal mass and object ball at rest
       const invMass = 1.0;
@@ -150,6 +158,50 @@ class ShotCaptureSystem {
         // Fallback to normal if object ball has no velocity
         predictedObjectDir = { x: nx, y: ny };
       }
+
+      // If the predicted target ball is hugging a rail, clamp its direction
+      // to not point into the rail (simultaneous ball-rail resolution effect).
+      try {
+        const GEOM = getTableGeometry();
+        const ballPos = targetBallStart; // position at shot start (adequate for proximity test)
+        let nearest: { n: { x: number; y: number }; dist: number } | null = null;
+        for (const rail of GEOM.rails) {
+          const rx = rail.to.x - rail.from.x;
+          const ry = rail.to.y - rail.from.y;
+          const rLenSq = rx * rx + ry * ry;
+          if (rLenSq < 1e-8) continue;
+          const px = ballPos.x - rail.from.x;
+          const py = ballPos.y - rail.from.y;
+          let t = (px * rx + py * ry) / rLenSq;
+          t = Math.max(0, Math.min(1, t));
+          const cx = rail.from.x + t * rx;
+          const cy = rail.from.y + t * ry;
+          const dx = ballPos.x - cx;
+          const dy = ballPos.y - cy;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (!nearest || dist < nearest.dist) {
+            nearest = { n: { x: rail.normal.x, y: rail.normal.y }, dist };
+          }
+        }
+        if (nearest) {
+          const threshold = CONFIG.BALL_RADIUS + 0.1; // tolerance (in)
+          if (nearest.dist <= threshold) {
+            const dot = predictedObjectDir.x * nearest.n.x + predictedObjectDir.y * nearest.n.y;
+            if (dot < 0) {
+              // Remove inward component; slide along the tangent
+              const vx = predictedObjectDir.x - dot * nearest.n.x;
+              const vy = predictedObjectDir.y - dot * nearest.n.y;
+              const vlen = Math.hypot(vx, vy);
+              if (vlen > 1e-6) {
+                predictedObjectDir = { x: vx / vlen, y: vy / vlen };
+              } else {
+                // Fallback to tangent direction if projection vanished
+                predictedObjectDir = { x: -nearest.n.y, y: nearest.n.x };
+              }
+            }
+          }
+        }
+      } catch {}
       
       const cueBallSpeed = Math.sqrt(cueBallVxAfter * cueBallVxAfter + cueBallVyAfter * cueBallVyAfter);
       if (cueBallSpeed > 0.01) {
@@ -158,6 +210,71 @@ class ShotCaptureSystem {
           y: cueBallVyAfter / cueBallSpeed,
         };
       }
+
+      // If cue ball will immediately contact a nearby rail after the collision,
+      // apply the same rail resolution model as the solver (restitution + sliding friction)
+      try {
+        if (predictedCueDir) {
+          const GEOM = getTableGeometry();
+          const cueCenterAtContact = {
+            x: prediction.contactPoint.x + nx * CONFIG.BALL_RADIUS,
+            y: prediction.contactPoint.y + ny * CONFIG.BALL_RADIUS,
+          };
+          let best: { rail: any; dist: number } | null = null;
+          for (const rail of GEOM.rails) {
+            const rx = rail.to.x - rail.from.x;
+            const ry = rail.to.y - rail.from.y;
+            const rLenSq = rx * rx + ry * ry;
+            if (rLenSq < 1e-8) continue;
+            const px = cueCenterAtContact.x - rail.from.x;
+            const py = cueCenterAtContact.y - rail.from.y;
+            let t = (px * rx + py * ry) / rLenSq;
+            t = Math.max(0, Math.min(1, t));
+            const cx = rail.from.x + t * rx;
+            const cy = rail.from.y + t * ry;
+            const dx = cueCenterAtContact.x - cx;
+            const dy = cueCenterAtContact.y - cy;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (!best || dist < best.dist) {
+              best = { rail, dist };
+            }
+          }
+          if (best) {
+            const threshold = CONFIG.BALL_RADIUS + 0.08; // small tolerance
+            if (best.dist <= threshold) {
+              // Use post-ball-collision cue velocity (before rail)
+              let vx = cueBallVxAfter;
+              let vy = cueBallVyAfter;
+
+              // Rail normal
+              const n = { x: best.rail.normal.x, y: best.rail.normal.y };
+              const vn = vx * n.x + vy * n.y;
+
+              // If approaching the rail, resolve like resolveBallRail()
+              if (vn > 0) {
+                // Normal impulse (restitution)
+                const eRail = CONFIG.CUSHION_RESTITUTION;
+                const jn = -(1 + eRail) * vn;
+                vx += jn * n.x;
+                vy += jn * n.y;
+
+                // Tangential friction along rail
+                const tx = -n.y;
+                const ty = n.x;
+                const vt = vx * tx + vy * ty;
+                const jt = -vt * CONFIG.SLIDING_FRICTION;
+                vx += jt * tx;
+                vy += jt * ty;
+
+                const sp = Math.hypot(vx, vy);
+                if (sp > 1e-6) {
+                  predictedCueDir = { x: vx / sp, y: vy / sp };
+                }
+              }
+            }
+          }
+        }
+      } catch {}
     } else if (prediction.type === 'rail') {
       // Rail hit prediction
       this.expectingRailHit = true;

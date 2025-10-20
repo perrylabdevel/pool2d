@@ -20,8 +20,42 @@ const resolvedPairsThisStep = new Set<string>();
 // Suppress collision warnings during prediction simulations
 let suppressCollisionWarnings = false;
 
+export interface CollisionSnapshot {
+  cueToBall?: {
+    cueId: number;
+    objectId: number;
+    contactPoint: { x: number; y: number };
+    normal: { x: number; y: number };
+    penetration: number;
+  };
+  cueToRail?: {
+    cueId: number;
+    rail: Rail;
+    contactPoint: { x: number; y: number };
+    normal: { x: number; y: number };
+  };
+}
+
+let collisionCaptureEnabled = false;
+let collisionSnapshots: CollisionSnapshot[] = [];
+
+export function enableCollisionCapture(enable: boolean) {
+  collisionCaptureEnabled = enable;
+  if (!enable) {
+    collisionSnapshots = [];
+  }
+}
+
+export function consumeCollisionSnapshot(): CollisionSnapshot | null {
+  if (collisionSnapshots.length === 0) return null;
+  return collisionSnapshots.shift() ?? null;
+}
+
 export function resetCollisionTracking() {
   resolvedPairsThisStep.clear();
+  if (collisionCaptureEnabled) {
+    collisionSnapshots = [];
+  }
 }
 
 export function setSuppressWarnings(suppress: boolean) {
@@ -196,6 +230,35 @@ export function resolveBallBall(contact: Contact) {
     shotCapture.recordCollision(cueBall, otherBall, { x: nx_corrected * normalSign, y: ny_corrected * normalSign }, depth);
   }
   
+  if (collisionCaptureEnabled && (ballA.id === 0 || ballB.id === 0)) {
+    let snapshot = collisionSnapshots[collisionSnapshots.length - 1];
+    if (!snapshot) {
+      snapshot = {};
+      collisionSnapshots.push(snapshot);
+    }
+    if (!snapshot.cueToBall) {
+      const cueIsA = ballA.id === 0;
+      const cue = cueIsA ? ballA : ballB;
+      const object = cueIsA ? ballB : ballA;
+      let normalX = nx_corrected;
+      let normalY = ny_corrected;
+      if (!cueIsA) {
+        normalX = -normalX;
+        normalY = -normalY;
+      }
+      snapshot.cueToBall = {
+        cueId: cue.id,
+        objectId: object.id,
+        contactPoint: {
+          x: cue.x + normalX * cue.radius,
+          y: cue.y + normalY * cue.radius,
+        },
+        normal: { x: normalX, y: normalY },
+        penetration: depth,
+      };
+    }
+  }
+
   // Impulse magnitude
   const e = CONFIG.BALL_RESTITUTION;
   const j = -(1 + e) * vRel / totalInvMass;
@@ -285,5 +348,21 @@ export function resolveBallRail(contact: Contact) {
   if (shotCapture.isCapturing() && ballA.id === 0) {
     const velAfter = { x: ballA.vx, y: ballA.vy };
     shotCapture.recordRailCollision(contactPoint, { x: nx, y: ny }, velBefore, velAfter);
+  }
+
+  if (collisionCaptureEnabled && ballA.id === 0) {
+    let snapshot = collisionSnapshots[collisionSnapshots.length - 1];
+    if (!snapshot) {
+      snapshot = {};
+      collisionSnapshots.push(snapshot);
+    }
+    if (!snapshot.cueToRail) {
+      snapshot.cueToRail = {
+        cueId: ballA.id,
+        rail,
+        contactPoint,
+        normal: { x: nx, y: ny },
+      };
+    }
   }
 }

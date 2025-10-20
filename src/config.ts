@@ -22,7 +22,7 @@ export const CONFIG = {
   CUSHION_RESTITUTION: 0.88, // Ball-cushion
   
   // Friction - balanced for 10x velocity multiplier
-  ROLLING_FRICTION: 0.50, // High friction to counteract 10x velocity multiplier (ball-table)
+  ROLLING_FRICTION: 0.55, // Slightly higher for faster settles (tuned for 10x velocity)
   SLIDING_FRICTION: 0.65, // Ball-table friction
   BALL_BALL_FRICTION: 0.01, // Reduced for more realistic smooth ball surfaces (phenolic resin)
   VELOCITY_EPSILON: 0.2, // Sleep threshold adjusted for 10x velocity scale

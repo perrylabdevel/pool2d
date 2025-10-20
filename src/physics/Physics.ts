@@ -114,11 +114,14 @@ export class PhysicsWorld {
       }
     }
     
-    // Calculate substeps: keep travel distance per substep < ball radius (1.125")
-    // This prevents balls from tunneling through each other
-    const maxTravelPerSubstep = CONFIG.BALL_RADIUS; // 1.125"
+    // Calculate substeps: keep travel distance per substep well below ball radius
+    // Tighter slicing reduces overlap on extreme, high-speed/glancing impacts
+    const maxTravelPerSubstep = CONFIG.BALL_RADIUS * 0.4;
     const maxTravelThisStep = maxSpeed * dt;
-    const substeps = Math.max(1, Math.ceil(maxTravelThisStep / maxTravelPerSubstep));
+    const substeps = Math.min(
+      CONFIG.MAX_SUBSTEPS,
+      Math.max(1, Math.ceil(maxTravelThisStep / Math.max(1e-6, maxTravelPerSubstep)))
+    );
     const subDt = dt / substeps;
     
     // Run physics in substeps
