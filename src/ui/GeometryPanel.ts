@@ -224,6 +224,26 @@ export class GeometryPanel {
       });
     }
 
+    const railThicknessInnerSlider = document.getElementById('live-rail-thickness-inner') as HTMLInputElement;
+    const railThicknessInnerVal = document.getElementById('live-rail-thickness-inner-val');
+    if (railThicknessInnerSlider && railThicknessInnerVal) {
+      railThicknessInnerSlider.addEventListener('input', (e) => {
+        const value = parseFloat((e.target as HTMLInputElement).value);
+        railThicknessInnerVal.textContent = formatNumber(value);
+        notify({ RAIL_THICKNESS_INNER: value });
+      });
+    }
+
+    const railThicknessOuterSlider = document.getElementById('live-rail-thickness-outer') as HTMLInputElement;
+    const railThicknessOuterVal = document.getElementById('live-rail-thickness-outer-val');
+    if (railThicknessOuterSlider && railThicknessOuterVal) {
+      railThicknessOuterSlider.addEventListener('input', (e) => {
+        const value = parseFloat((e.target as HTMLInputElement).value);
+        railThicknessOuterVal.textContent = formatNumber(value);
+        notify({ RAIL_THICKNESS_OUTER: value });
+      });
+    }
+
     const resetBtn = document.getElementById('geometry-reset-btn');
     if (resetBtn) {
       resetBtn.addEventListener('click', () => {
@@ -287,6 +307,8 @@ export class GeometryPanel {
     setSlider('live-corner-straight', settings.CORNER_STRAIGHT_X_IN);
     setSlider('live-corner-target', settings.CORNER_TARGET_Y_IN);
     setSlider('live-frame-width', settings.FRAME_OFFSET_IN, (v) => formatNumber(v, 1), 1);
+    setSlider('live-rail-thickness-inner', settings.RAIL_THICKNESS_INNER);
+    setSlider('live-rail-thickness-outer', settings.RAIL_THICKNESS_OUTER);
 
     if (sideOffsetSlider instanceof HTMLInputElement) {
       sideOffsetSlider.value = settings.SIDE_POCKET_OUTWARD_OFFSET_IN.toFixed(2);

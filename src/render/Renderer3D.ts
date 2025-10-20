@@ -33,16 +33,18 @@ export class Renderer3D {
   ballVisualScale = 1.0; // Visual radius matches physics radius to avoid overlap
   private fbxBlobUrl: string | null = null;
   tableMesh: THREE.Mesh | null = null;
-  frameMesh: THREE.Mesh | null = null;
+  frameMesh: THREE.Group | null = null;
   railMeshes: THREE.Mesh[] = [];
   pocketMeshes: THREE.Mesh[] = [];
-  cornerRectangleMesh: THREE.Mesh | null = null;
+  pocketCapMeshes: THREE.Mesh[] = [];
+  railFillMesh: THREE.Mesh | null = null;
   showMeasurementOverlay = false;
   private layerVisibility: Record<RenderLayerBooleanKey, boolean> = {
     showTable: defaultRenderLayerSettings.showTable,
     showFrame: defaultRenderLayerSettings.showFrame,
     showRails: defaultRenderLayerSettings.showRails,
     showPockets: defaultRenderLayerSettings.showPockets,
+    showCaps: defaultRenderLayerSettings.showCaps,
     showBalls: defaultRenderLayerSettings.showBalls,
     showUIOverlay: defaultRenderLayerSettings.showUIOverlay,
     showMeasurementOverlay: defaultRenderLayerSettings.showMeasurementOverlay,
@@ -53,12 +55,14 @@ export class Renderer3D {
     orderFrame: defaultRenderLayerSettings.orderFrame,
     orderRails: defaultRenderLayerSettings.orderRails,
     orderPockets: defaultRenderLayerSettings.orderPockets,
+    orderCaps: defaultRenderLayerSettings.orderCaps,
     orderBalls: defaultRenderLayerSettings.orderBalls,
     orderUI: defaultRenderLayerSettings.orderUI,
   };
   private referenceOverlayVisible = false;
   private pocketGradientTexture: THREE.CanvasTexture | null = null;
-  private pocketMaterial: THREE.MeshBasicMaterial | null = null;
+  private pocketCapMaterial: THREE.MeshBasicMaterial | null = null;
+  private pocketSideMaterial: THREE.MeshBasicMaterial | null = null;
 
   // UI elements
   cueStick: THREE.Mesh | null = null;
@@ -146,9 +150,17 @@ export class Renderer3D {
         this.tableMesh.material.color = new THREE.Color(CONFIG.TABLE_COLOR);
         this.tableMesh.material.needsUpdate = true;
       }
-      if (this.frameMesh && this.frameMesh.material instanceof THREE.MeshStandardMaterial) {
-        this.frameMesh.material.color = new THREE.Color(CONFIG.FRAME_COLOR);
-        this.frameMesh.material.needsUpdate = true;
+      if (this.frameMesh) {
+        this.frameMesh.traverse((obj) => {
+          if ((obj as THREE.Mesh).isMesh) {
+            const mesh = obj as THREE.Mesh;
+            const mat = mesh.material as THREE.MeshStandardMaterial;
+            if (mat) {
+              mat.color = new THREE.Color(CONFIG.FRAME_COLOR);
+              mat.needsUpdate = true;
+            }
+          }
+        });
       }
       this.railMeshes.forEach((m) => {
         const mat = m.material as THREE.MeshStandardMaterial;
@@ -159,8 +171,8 @@ export class Renderer3D {
       });
       
       // Update corner rectangle fill color
-      if (this.cornerRectangleMesh) {
-        const mat = this.cornerRectangleMesh.material as THREE.MeshBasicMaterial;
+      if (this.railFillMesh) {
+        const mat = this.railFillMesh.material as THREE.MeshBasicMaterial;
         if (mat) {
           mat.color = new THREE.Color(CONFIG.RAIL_FILL_COLOR);
           mat.needsUpdate = true;
@@ -182,12 +194,14 @@ export class Renderer3D {
     }
     if (this.frameMesh) {
       this.scene.remove(this.frameMesh);
-      this.frameMesh.geometry.dispose();
-      if (Array.isArray(this.frameMesh.material)) {
-        this.frameMesh.material.forEach(m => m.dispose());
-      } else {
-        (this.frameMesh.material as THREE.Material).dispose();
-      }
+      this.frameMesh.traverse((obj) => {
+        if ((obj as THREE.Mesh).isMesh) {
+          const mesh = obj as THREE.Mesh;
+          mesh.geometry?.dispose();
+          const mat = mesh.material as THREE.Material | THREE.Material[];
+          if (Array.isArray(mat)) mat.forEach((m) => m.dispose()); else mat?.dispose();
+        }
+      });
       this.frameMesh = null;
     }
     this.railMeshes.forEach(m => {
@@ -204,6 +218,20 @@ export class Renderer3D {
       if (Array.isArray(mat)) mat.forEach(mm => mm.dispose()); else mat.dispose();
     });
     this.pocketMeshes = [];
+    this.pocketCapMeshes.forEach((m) => {
+      this.scene.remove(m);
+      m.geometry.dispose();
+      const mat = m.material as THREE.Material | THREE.Material[];
+      if (Array.isArray(mat)) mat.forEach(mm => mm.dispose()); else mat.dispose();
+    });
+    this.pocketCapMeshes = [];
+    if (this.railFillMesh) {
+      this.scene.remove(this.railFillMesh);
+      this.railFillMesh.geometry.dispose();
+      const mat = this.railFillMesh.material as THREE.Material | THREE.Material[];
+      if (Array.isArray(mat)) mat.forEach(mm => mm.dispose()); else mat.dispose();
+      this.railFillMesh = null;
+    }
   }
 
   updateLoadingText(text: string) {
@@ -515,24 +543,9 @@ export class Renderer3D {
     this.enforceRenderOrderControl(this.tableMesh);
     this.scene.add(this.tableMesh);
 
-    // Wooden frame as shape with hole matching play surface
+    // Wooden frame planks surrounding play surface
     const frameWidth = 4;
-    const frameMaterial = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(CONFIG.FRAME_COLOR),
-      roughness: 0.6,
-      metalness: 0.2,
-      side: THREE.DoubleSide
-    });
-
-    const frameShape = this.createFrameShape(frameWidth, playShape);
-    const frameGeometry = new THREE.ShapeGeometry(frameShape);
-    this.frameMesh = new THREE.Mesh(frameGeometry, frameMaterial);
-    this.frameMesh.position.z = -0.5; // Slightly below felt
-    this.frameMesh.receiveShadow = true;
-    this.frameMesh.visible = this.layerVisibility.showFrame;
-    this.frameMesh.renderOrder = this.layerOrder.orderFrame;
-    this.enforceRenderOrderControl(this.frameMesh);
-    this.scene.add(this.frameMesh);
+    this.initializeFrame(frameWidth);
   }
 
   private refreshDerivedGeometry() {
@@ -555,132 +568,294 @@ export class Renderer3D {
     return shape;
   }
 
-  private createFrameShape(frameWidth: number, playShape: THREE.Shape): THREE.Shape {
-    const outer = new THREE.Shape();
-    const { minX, maxX, minY, maxY } = this.playBounds;
-    outer.moveTo(minX - frameWidth, minY - frameWidth);
-    outer.lineTo(maxX + frameWidth, minY - frameWidth);
-    outer.lineTo(maxX + frameWidth, maxY + frameWidth);
-    outer.lineTo(minX - frameWidth, maxY + frameWidth);
-    outer.lineTo(minX - frameWidth, minY - frameWidth);
-
-    const hole = new THREE.Path();
-    const holePoints = playShape.getPoints();
-    if (holePoints.length) {
-      hole.moveTo(holePoints[0].x, holePoints[0].y);
-      for (let i = 1; i < holePoints.length; i++) {
-        hole.lineTo(holePoints[i].x, holePoints[i].y);
-      }
-      hole.closePath();
-      outer.holes.push(hole);
+  private initializeFrame(frameWidth: number) {
+    if (this.frameMesh) {
+      this.scene.remove(this.frameMesh);
+      this.frameMesh.traverse((obj) => {
+        if ((obj as THREE.Mesh).isMesh) {
+          const mesh = obj as THREE.Mesh;
+          mesh.geometry?.dispose();
+          const mat = mesh.material as THREE.Material | THREE.Material[];
+          if (Array.isArray(mat)) mat.forEach((m) => m.dispose()); else mat?.dispose();
+        }
+      });
+      this.frameMesh = null;
     }
 
-    return outer;
+    const material = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(CONFIG.FRAME_COLOR),
+      roughness: 0.6,
+      metalness: 0.2,
+    });
+
+    const group = new THREE.Group();
+    const geom = getTableGeometry();
+    const playHalfW = geom.playWidthIn / 2;
+    const playHalfH = geom.playHeightIn / 2;
+    const innerX = playHalfW + CONFIG.RAIL_THICKNESS_OUTER;
+    const innerY = playHalfH + CONFIG.RAIL_THICKNESS_OUTER;
+    const outerX = innerX + frameWidth;
+    const outerY = innerY + frameWidth;
+    const depth = 0.75;
+
+    const horizontalWidth = outerX * 2;
+    const horizontalHeight = frameWidth;
+    const verticalWidth = frameWidth;
+    const verticalHeight = outerY * 2;
+
+    const topGeom = new THREE.BoxGeometry(horizontalWidth, horizontalHeight, depth);
+    const topMesh = new THREE.Mesh(topGeom, material.clone());
+    topMesh.position.set(0, innerY + horizontalHeight / 2, 0);
+    group.add(topMesh);
+
+    const bottomMesh = new THREE.Mesh(topGeom.clone(), material.clone());
+    bottomMesh.position.set(0, -(innerY + horizontalHeight / 2), 0);
+    group.add(bottomMesh);
+
+    const verticalGeom = new THREE.BoxGeometry(verticalWidth, verticalHeight, depth);
+
+    const leftMesh = new THREE.Mesh(verticalGeom.clone(), material.clone());
+    leftMesh.position.set(-(innerX + verticalWidth / 2), 0, 0);
+    group.add(leftMesh);
+
+    const rightMesh = new THREE.Mesh(verticalGeom.clone(), material.clone());
+    rightMesh.position.set(innerX + verticalWidth / 2, 0, 0);
+    group.add(rightMesh);
+
+    group.position.z = 0;
+    group.visible = this.layerVisibility.showFrame;
+    this.frameMesh = group;
+    this.scene.add(group);
+    this.applyFrameRenderOrder();
   }
   
   initializeRails(rails: Rail[]) {
     const railMaterial = new THREE.MeshStandardMaterial({
       color: new THREE.Color(CONFIG.RAIL_COLOR),
       roughness: 0.5,
-      metalness: 0.3
+      metalness: 0.3,
     });
-    
+
+    const inner = CONFIG.RAIL_THICKNESS_INNER;
+    const outer = CONFIG.RAIL_THICKNESS_OUTER;
+    const totalWidth = inner + outer;
+    const centerShift = (outer - inner) / 2;
+
     rails.forEach((rail) => {
       const dx = rail.x2 - rail.x1;
       const dy = rail.y2 - rail.y1;
       const length = Math.sqrt(dx * dx + dy * dy);
       const angle = Math.atan2(dy, dx);
-      
-      const railGeometry = new THREE.BoxGeometry(length, CONFIG.RAIL_THICKNESS * 2, 1.5);
-      const railMesh = new THREE.Mesh(railGeometry, railMaterial);
-      
-      railMesh.position.set(
-        (rail.x1 + rail.x2) / 2,
-        (rail.y1 + rail.y2) / 2,
-        0.75
-      );
+
+      let nx = rail.nx;
+      let ny = rail.ny;
+      const midX = (rail.x1 + rail.x2) / 2;
+      const midY = (rail.y1 + rail.y2) / 2;
+      const toCenterX = -midX;
+      const toCenterY = -midY;
+      const dot = nx * toCenterX + ny * toCenterY;
+      if (dot < 0) {
+        nx = -nx;
+        ny = -ny;
+      }
+
+      const railGeometry = new THREE.BoxGeometry(length, totalWidth, 1.5);
+
+      const railMesh = new THREE.Mesh(railGeometry, railMaterial.clone());
+      railMesh.position.set(midX - nx * centerShift, midY - ny * centerShift, 0.75);
       railMesh.rotation.z = angle;
       railMesh.visible = this.layerVisibility.showRails;
       railMesh.renderOrder = this.layerOrder.orderRails;
       this.enforceRenderOrderControl(railMesh);
-      
+
       this.scene.add(railMesh);
       this.railMeshes.push(railMesh);
     });
   }
   
   initializePockets(pockets: Pocket[]) {
-    const pocketMaterial = this.getPocketMaterial();
-    
+    const sideMaterial = this.getPocketSideMaterial();
+
     pockets.forEach((pocket) => {
       const pocketGeometry = new THREE.CylinderGeometry(
         pocket.radius,
         pocket.radius * 0.85,
         2,
-        48
+        48,
+        1,
+        true
       );
-      const pocketMesh = new THREE.Mesh(pocketGeometry, pocketMaterial);
-      
-      // Position pockets at table level
+      const pocketMesh = new THREE.Mesh(pocketGeometry, sideMaterial.clone());
       pocketMesh.position.set(pocket.x, pocket.y, 0);
       pocketMesh.rotation.x = Math.PI / 2;
-      
-      // Render order controlled by panel settings
       pocketMesh.renderOrder = this.layerOrder.orderPockets;
       pocketMesh.visible = this.layerVisibility.showPockets;
       this.enforceRenderOrderControl(pocketMesh);
-      
       this.scene.add(pocketMesh);
       this.pocketMeshes.push(pocketMesh);
+
+      // Solid black bottom fill for the pocket hole using ShapeGeometry
+      const circleShape = new THREE.Shape();
+      const radius = pocket.radius * 0.98;
+      circleShape.absarc(0, 0, radius, 0, Math.PI * 2, false);
+      const bottomGeometry = new THREE.ShapeGeometry(circleShape);
+      
+      const bottomMaterial = new THREE.MeshBasicMaterial({
+        color: 0x000000,
+        side: THREE.DoubleSide,
+        depthTest: false,
+        depthWrite: false,
+      });
+      const bottomMesh = new THREE.Mesh(bottomGeometry, bottomMaterial);
+      bottomMesh.position.set(pocket.x, pocket.y, 0.15);
+      bottomMesh.renderOrder = this.layerOrder.orderTable + 5;
+      bottomMesh.visible = this.layerVisibility.showPockets;
+      this.scene.add(bottomMesh);
+      this.pocketMeshes.push(bottomMesh);
+
+      // Gradient overlay using ShapeGeometry with proper UV mapping
+      const gradientShape = new THREE.Shape();
+      gradientShape.absarc(0, 0, pocket.radius, 0, Math.PI * 2, false);
+      const gradientGeometry = new THREE.ShapeGeometry(gradientShape);
+      
+      // Fix UV mapping for the gradient texture
+      const uvAttribute = gradientGeometry.attributes.uv;
+      const posAttribute = gradientGeometry.attributes.position;
+      for (let i = 0; i < uvAttribute.count; i++) {
+        const x = posAttribute.getX(i);
+        const y = posAttribute.getY(i);
+        // Map from circle coordinates [-radius, radius] to UV [0, 1]
+        const u = (x / pocket.radius + 1) * 0.5;
+        const v = (y / pocket.radius + 1) * 0.5;
+        uvAttribute.setXY(i, u, v);
+      }
+      uvAttribute.needsUpdate = true;
+      
+      // Create fresh material for each pocket to avoid texture sharing issues
+      const gradientTexture = this.getPocketGradientTexture();
+      const gradientMat = new THREE.MeshBasicMaterial({
+        map: gradientTexture,
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+      const gradientMesh = new THREE.Mesh(gradientGeometry, gradientMat);
+      gradientMesh.position.set(pocket.x, pocket.y, 0.16);
+      gradientMesh.renderOrder = this.layerOrder.orderPockets;
+      gradientMesh.visible = this.layerVisibility.showPockets;
+      this.scene.add(gradientMesh);
+      this.pocketMeshes.push(gradientMesh);
     });
     
-    // Create corner pocket rectangle (between rails and pockets)
-    this.initializeCornerRectangle();
+    this.initializeRailFillMesh();
+    this.initializePocketCaps(pockets);
   }
-  
-  initializeCornerRectangle() {
-    // Create a plane connecting the four corner pockets
-    const shape = new THREE.Shape();
-    shape.moveTo(-50, 25);  // NW
-    shape.lineTo(50, 25);   // NE
-    shape.lineTo(50, -25);  // SE
-    shape.lineTo(-50, -25); // SW
-    shape.closePath();
-    
-    const geometry = new THREE.ShapeGeometry(shape);
+
+  initializePocketCaps(pockets: Pocket[]) {
+    const capThickness = 0.2;
+    const capMaterial = new THREE.MeshBasicMaterial({
+      color: new THREE.Color('#0a0a0a'),
+      depthTest: false,
+      depthWrite: false,
+      transparent: true,
+      opacity: 0.75,
+    });
+
+    pockets.forEach((pocket) => {
+      const capGeometry = new THREE.CylinderGeometry(
+        pocket.radius * 1.02,
+        pocket.radius * 1.02,
+        capThickness,
+        48
+      );
+      const capMesh = new THREE.Mesh(capGeometry, capMaterial.clone());
+      capMesh.position.set(pocket.x, pocket.y, 0.6);
+      capMesh.rotation.x = Math.PI / 2;
+      capMesh.renderOrder = this.layerOrder.orderCaps;
+      capMesh.visible = this.layerVisibility.showCaps;
+      this.enforceRenderOrderControl(capMesh);
+
+      this.scene.add(capMesh);
+      this.pocketCapMeshes.push(capMesh);
+    });
+  }
+
+  initializeRailFillMesh() {
+    const geometry = this.createRailFillGeometry();
+    if (!geometry) return;
+
     const material = new THREE.MeshBasicMaterial({
       color: new THREE.Color(CONFIG.RAIL_FILL_COLOR),
       side: THREE.DoubleSide,
-      depthTest: true,  // Enable depth testing so it respects Z-order
-      transparent: false
+      depthTest: false,
+      depthWrite: false,
+      transparent: true,
+      opacity: 1,
     });
-    
-    this.cornerRectangleMesh = new THREE.Mesh(geometry, material);
-    // Position below table felt
-    this.cornerRectangleMesh.position.z = -0.1; // Below table, above rails, below pockets
-    
-    // Render order: after rails but before pockets
-    this.cornerRectangleMesh.renderOrder = this.layerOrder.orderPockets - 1;
-    this.cornerRectangleMesh.visible = this.layerVisibility.showPockets;
-    this.enforceRenderOrderControl(this.cornerRectangleMesh);
-    
-    this.scene.add(this.cornerRectangleMesh);
+
+    this.railFillMesh = new THREE.Mesh(geometry, material);
+    this.railFillMesh.position.z = -0.05;
+    this.railFillMesh.renderOrder = this.layerOrder.orderRails - 1;
+    this.railFillMesh.visible = this.layerVisibility.showRails;
+    this.enforceRenderOrderControl(this.railFillMesh);
+
+    this.scene.add(this.railFillMesh);
   }
 
-  private getPocketMaterial(): THREE.MeshBasicMaterial {
-    if (this.pocketMaterial) {
-      return this.pocketMaterial;
+  private createRailFillGeometry(): THREE.ShapeGeometry | null {
+    if (!this.playBoundaryPoints.length) {
+      return null;
+    }
+
+    const margin = Math.max(0.1, CONFIG.FRAME_OFFSET_IN);
+    const { minX, maxX, minY, maxY } = this.playBounds;
+
+    const outer = new THREE.Shape();
+    const outerOffset = CONFIG.RAIL_THICKNESS_OUTER;
+    outer.moveTo(minX - outerOffset, minY - outerOffset);
+    outer.lineTo(maxX + outerOffset, minY - outerOffset);
+    outer.lineTo(maxX + outerOffset, maxY + outerOffset);
+    outer.lineTo(minX - outerOffset, maxY + outerOffset);
+    outer.closePath();
+
+    const inner = new THREE.Path();
+    inner.moveTo(minX, minY);
+    inner.lineTo(maxX, minY);
+    inner.lineTo(maxX, maxY);
+    inner.lineTo(minX, maxY);
+    inner.closePath();
+    outer.holes.push(inner);
+
+    return new THREE.ShapeGeometry(outer);
+  }
+
+  private getPocketSideMaterial(): THREE.MeshBasicMaterial {
+    if (!this.pocketSideMaterial) {
+      this.pocketSideMaterial = new THREE.MeshBasicMaterial({
+        color: 0x151515,
+        depthTest: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+    }
+    return this.pocketSideMaterial;
+  }
+
+  private getPocketCapMaterial(): THREE.MeshBasicMaterial {
+    if (this.pocketCapMaterial) {
+      return this.pocketCapMaterial;
     }
 
     const texture = this.getPocketGradientTexture();
-    this.pocketMaterial = new THREE.MeshBasicMaterial({
+    this.pocketCapMaterial = new THREE.MeshBasicMaterial({
       map: texture,
       transparent: true,
       depthTest: true,
       depthWrite: false,
       side: THREE.DoubleSide,
     });
-    return this.pocketMaterial;
+    return this.pocketCapMaterial;
   }
 
   private getPocketGradientTexture(): THREE.CanvasTexture {
@@ -698,25 +873,21 @@ export class Renderer3D {
     }
 
     const center = size / 2;
-    const gradient = ctx.createRadialGradient(center, center * 0.6, size * 0.1, center, center, size * 0.55);
-    gradient.addColorStop(0, 'rgba(10, 10, 10, 0.95)');
-    gradient.addColorStop(0.45, 'rgba(5, 5, 5, 0.98)');
-    gradient.addColorStop(0.7, 'rgba(20, 20, 20, 0.85)');
-    gradient.addColorStop(0.9, 'rgba(40, 40, 40, 0.6)');
-    gradient.addColorStop(1, 'rgba(60, 60, 60, 0.2)');
-
+    const radius = size / 2;
+    
+    // Main radial gradient from center to edge of canvas
+    const gradient = ctx.createRadialGradient(center, center, 0, center, center, radius);
+    gradient.addColorStop(0, 'rgba(120, 120, 120, 0.95)');
+    gradient.addColorStop(0.4, 'rgba(70, 70, 70, 0.9)');
+    gradient.addColorStop(0.75, 'rgba(30, 30, 30, 0.7)');
+    gradient.addColorStop(1, 'rgba(5, 5, 5, 0.2)');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, size, size);
 
-    const rimGradient = ctx.createRadialGradient(center, center, size * 0.4, center, center, size * 0.5);
-    rimGradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
-    rimGradient.addColorStop(1, 'rgba(0, 0, 0, 0.8)');
-    ctx.fillStyle = rimGradient;
-    ctx.beginPath();
-    ctx.arc(center, center, size * 0.5, 0, Math.PI * 2);
-    ctx.fill();
-
     this.pocketGradientTexture = new THREE.CanvasTexture(canvas);
+    this.pocketGradientTexture.colorSpace = THREE.SRGBColorSpace;
+    this.pocketGradientTexture.wrapS = THREE.ClampToEdgeWrapping;
+    this.pocketGradientTexture.wrapT = THREE.ClampToEdgeWrapping;
     this.pocketGradientTexture.needsUpdate = true;
     return this.pocketGradientTexture;
   }
@@ -948,6 +1119,7 @@ export class Renderer3D {
     this.setLayerVisibility('showFrame', settings.showFrame);
     this.setLayerVisibility('showRails', settings.showRails);
     this.setLayerVisibility('showPockets', settings.showPockets);
+    this.setLayerVisibility('showCaps', settings.showCaps);
     this.setLayerVisibility('showBalls', settings.showBalls);
     this.setLayerVisibility('showUIOverlay', settings.showUIOverlay);
     this.setLayerVisibility('showMeasurementOverlay', settings.showMeasurementOverlay);
@@ -959,29 +1131,42 @@ export class Renderer3D {
     this.layerOrder.orderFrame = settings.orderFrame;
     this.layerOrder.orderRails = settings.orderRails;
     this.layerOrder.orderPockets = settings.orderPockets;
+    this.layerOrder.orderCaps = settings.orderCaps;
     this.layerOrder.orderBalls = settings.orderBalls;
     this.layerOrder.orderUI = settings.orderUI;
 
     if (this.tableMesh) {
       this.tableMesh.renderOrder = this.layerOrder.orderTable;
     }
-    if (this.frameMesh) {
-      this.frameMesh.renderOrder = this.layerOrder.orderFrame;
-    }
+    this.applyFrameRenderOrder();
     this.railMeshes.forEach((mesh) => {
       mesh.renderOrder = this.layerOrder.orderRails;
     });
     this.pocketMeshes.forEach((mesh) => {
       mesh.renderOrder = this.layerOrder.orderPockets;
     });
-    if (this.cornerRectangleMesh) {
-      this.cornerRectangleMesh.renderOrder = this.layerOrder.orderPockets - 1;
+    this.pocketCapMeshes.forEach((mesh) => {
+      mesh.renderOrder = this.layerOrder.orderCaps;
+    });
+    if (this.railFillMesh) {
+      this.railFillMesh.renderOrder = this.layerOrder.orderRails - 1;
     }
     this.ballMeshes.forEach((mesh) => {
       this.applyBallRenderOrder(mesh);
     });
 
     this.updateCanvasZIndex();
+  }
+
+  private applyFrameRenderOrder() {
+    if (!this.frameMesh) return;
+    this.frameMesh.traverse((obj) => {
+      if ((obj as THREE.Mesh).isMesh) {
+        (obj as THREE.Mesh).renderOrder = this.layerOrder.orderFrame;
+      }
+    });
+    this.frameMesh.visible = this.layerVisibility.showFrame;
+    this.enforceRenderOrderControl(this.frameMesh);
   }
 
   private updateCanvasZIndex() {
@@ -1025,10 +1210,13 @@ export class Renderer3D {
         break;
       case 'showRails':
         this.railMeshes.forEach((mesh) => (mesh.visible = visible));
+        if (this.railFillMesh) this.railFillMesh.visible = visible;
         break;
       case 'showPockets':
         this.pocketMeshes.forEach((mesh) => (mesh.visible = visible));
-        if (this.cornerRectangleMesh) this.cornerRectangleMesh.visible = visible;
+        break;
+      case 'showCaps':
+        this.pocketCapMeshes.forEach((mesh) => (mesh.visible = visible));
         break;
       case 'showBalls':
         if (!visible) {
@@ -1081,6 +1269,7 @@ export class Renderer3D {
       showFrame: this.layerVisibility.showFrame,
       showRails: this.layerVisibility.showRails,
       showPockets: this.layerVisibility.showPockets,
+      showCaps: this.layerVisibility.showCaps,
       showBalls: this.layerVisibility.showBalls,
       showUIOverlay: this.layerVisibility.showUIOverlay,
       showMeasurementOverlay: this.layerVisibility.showMeasurementOverlay,
@@ -1089,6 +1278,7 @@ export class Renderer3D {
       orderFrame: this.layerOrder.orderFrame,
       orderRails: this.layerOrder.orderRails,
       orderPockets: this.layerOrder.orderPockets,
+      orderCaps: this.layerOrder.orderCaps,
       orderBalls: this.layerOrder.orderBalls,
       orderUI: this.layerOrder.orderUI,
     };
@@ -1108,10 +1298,7 @@ export class Renderer3D {
   }
 
   getReferenceOverlayVisible(): boolean {
-    if (this.referenceOverlay) {
-      return !this.referenceOverlay.classList.contains('overlay-hidden');
-    }
-    return this.referenceOverlayVisible;
+    return this.layerVisibility.showReferenceOverlay;
   }
 
   drawMeasurementOverlay() {

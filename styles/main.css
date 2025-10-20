@@ -428,12 +428,16 @@ button:active {
   top: 16px;
   right: 16px;
   width: 320px;
+  max-height: 80vh;
+  overflow-y: auto;
 }
 
 #render-layer-panel {
   top: 16px;
   left: 16px;
   width: 260px;
+  max-height: 80vh;
+  overflow-y: auto;
 }
 
 .floating-panel.hidden {

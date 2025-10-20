@@ -143,24 +143,25 @@ export class Renderer {
       return;
     }
 
-    // Outer frame rectangle with inner play boundary removed
-    this.ctx.beginPath();
-    const { minX, maxX, minY, maxY } = this.playBounds;
-    this.ctx.moveTo(minX - frameWidth, minY - frameWidth);
-    this.ctx.lineTo(maxX + frameWidth, minY - frameWidth);
-    this.ctx.lineTo(maxX + frameWidth, maxY + frameWidth);
-    this.ctx.lineTo(minX - frameWidth, maxY + frameWidth);
-    this.ctx.closePath();
-    this.beginBoundaryPath(boundary, false);
-    this.ctx.fillStyle = '#3d2413';
-    this.ctx.fill('evenodd');
+    const outerOffset = frameWidth + CONFIG.RAIL_THICKNESS_OUTER;
+    const innerOffset = CONFIG.RAIL_THICKNESS_OUTER;
+    const playHalfWidth = (this.playBounds.maxX - this.playBounds.minX) / 2;
+    const playHalfHeight = (this.playBounds.maxY - this.playBounds.minY) / 2;
 
-    // Inner lip following cushion line
-    this.beginBoundaryPath(boundary);
-    this.ctx.strokeStyle = '#2d1810';
-    this.ctx.lineWidth = frameWidth;
-    this.ctx.lineJoin = 'round';
-    this.ctx.stroke();
+    const outerX = playHalfWidth + outerOffset;
+    const outerY = playHalfHeight + outerOffset;
+    const innerX = playHalfWidth + innerOffset;
+    const innerY = playHalfHeight + innerOffset;
+
+    this.ctx.fillStyle = '#3d2413';
+    // Top plank
+    this.ctx.fillRect(-innerX, innerY, innerX * 2, frameWidth);
+    // Bottom plank
+    this.ctx.fillRect(-innerX, -(innerY + frameWidth), innerX * 2, frameWidth);
+    // Left plank
+    this.ctx.fillRect(-outerX, -outerY, frameWidth, outerY * 2);
+    // Right plank
+    this.ctx.fillRect(innerX, -outerY, frameWidth, outerY * 2);
   }
 
   private beginBoundaryPath(points: Vec2[], close: boolean = true) {
@@ -193,22 +194,42 @@ export class Renderer {
   
   drawRail(rail: Rail) {
     // Draw simple cushion with consistent thickness
+    const width = CONFIG.RAIL_THICKNESS_INNER + CONFIG.RAIL_THICKNESS_OUTER;
+    let nx = rail.nx;
+    let ny = rail.ny;
+    const midX = (rail.x1 + rail.x2) / 2;
+    const midY = (rail.y1 + rail.y2) / 2;
+    const toCenterX = -midX;
+    const toCenterY = -midY;
+    const dot = nx * toCenterX + ny * toCenterY;
+    if (dot < 0) {
+      nx = -nx;
+      ny = -ny;
+    }
+
+    const centerShift = (CONFIG.RAIL_THICKNESS_OUTER - CONFIG.RAIL_THICKNESS_INNER) / 2;
+    const startX = rail.x1 - nx * centerShift;
+    const startY = rail.y1 - ny * centerShift;
+    const endX = rail.x2 - nx * centerShift;
+    const endY = rail.y2 - ny * centerShift;
+
     this.ctx.strokeStyle = '#0d3d0d';
-    this.ctx.lineWidth = CONFIG.RAIL_THICKNESS * 1;
-    this.ctx.lineCap = 'round';
+    this.ctx.lineWidth = width;
+    this.ctx.lineCap = 'butt';
     
     this.ctx.beginPath();
-    this.ctx.moveTo(rail.x1, rail.y1);
-    this.ctx.lineTo(rail.x2, rail.y2);
+    this.ctx.moveTo(startX, startY);
+    this.ctx.lineTo(endX, endY);
     this.ctx.stroke();
     
     // Add inner highlight
     this.ctx.strokeStyle = '#1a5d1a';
-    this.ctx.lineWidth = CONFIG.RAIL_THICKNESS * 1;
+    this.ctx.lineWidth = width * 0.6;
+    this.ctx.lineCap = 'butt';
     
     this.ctx.beginPath();
-    this.ctx.moveTo(rail.x1, rail.y1);
-    this.ctx.lineTo(rail.x2, rail.y2);
+    this.ctx.moveTo(startX, startY);
+    this.ctx.lineTo(endX, endY);
     this.ctx.stroke();
   }
   

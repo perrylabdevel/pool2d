@@ -42,6 +42,8 @@ export interface GeometrySettings {
   SIDE_JAW_INNER_OVERRIDE_IN: number | null;
   JAW_REF_RADIUS_IN: number;
   CORNER_JAW_REF_RADIUS_IN: number;
+  RAIL_THICKNESS_INNER: number;
+  RAIL_THICKNESS_OUTER: number;
 }
 
 export interface RenderSettings extends RenderLayerSettings {}
@@ -245,11 +247,19 @@ export class SettingsManager {
       SIDE_JAW_INNER_OVERRIDE_IN: CONFIG.SIDE_JAW_INNER_OVERRIDE_IN,
       JAW_REF_RADIUS_IN: CONFIG.JAW_REF_RADIUS_IN,
       CORNER_JAW_REF_RADIUS_IN: CONFIG.CORNER_JAW_REF_RADIUS_IN,
+      RAIL_THICKNESS_INNER: CONFIG.RAIL_THICKNESS_INNER,
+      RAIL_THICKNESS_OUTER: CONFIG.RAIL_THICKNESS_OUTER,
     };
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.GEOMETRY_SETTINGS);
       if (stored) {
-        return { ...defaults, ...JSON.parse(stored) };
+        const parsed = JSON.parse(stored);
+        if (parsed.RAIL_THICKNESS !== undefined) {
+          parsed.RAIL_THICKNESS_INNER = parsed.RAIL_THICKNESS_INNER ?? parsed.RAIL_THICKNESS;
+          parsed.RAIL_THICKNESS_OUTER = parsed.RAIL_THICKNESS_OUTER ?? parsed.RAIL_THICKNESS;
+          delete parsed.RAIL_THICKNESS;
+        }
+        return { ...defaults, ...parsed };
       }
     } catch (e) {
       console.warn('Failed to load geometry settings:', e);
@@ -312,6 +322,8 @@ export class SettingsManager {
       SIDE_JAW_INNER_OVERRIDE_IN: null,
       JAW_REF_RADIUS_IN: 4.0,
       CORNER_JAW_REF_RADIUS_IN: 4.0,
+      RAIL_THICKNESS_INNER: 0.2,
+      RAIL_THICKNESS_OUTER: 0.2,
     };
     try {
       localStorage.setItem(STORAGE_KEYS.GEOMETRY_SETTINGS, JSON.stringify(this.geometrySettings));
@@ -344,6 +356,8 @@ export class SettingsManager {
     CONFIG.SIDE_JAW_INNER_OVERRIDE_IN = this.geometrySettings.SIDE_JAW_INNER_OVERRIDE_IN;
     CONFIG.JAW_REF_RADIUS_IN = this.geometrySettings.JAW_REF_RADIUS_IN;
     CONFIG.CORNER_JAW_REF_RADIUS_IN = this.geometrySettings.CORNER_JAW_REF_RADIUS_IN;
+    CONFIG.RAIL_THICKNESS_INNER = this.geometrySettings.RAIL_THICKNESS_INNER;
+    CONFIG.RAIL_THICKNESS_OUTER = this.geometrySettings.RAIL_THICKNESS_OUTER;
     // Signal that geometry parameters changed (requires rebuild)
     try {
       console.info('[Settings] Geometry updated', this.geometrySettings);

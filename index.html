@@ -157,6 +157,20 @@
               </label>
               <input type="range" id="live-frame-width" min="2" max="8" step="0.1" value="4" />
             </div>
+
+            <div class="slider-group">
+              <label for="live-rail-thickness">
+                Rail Thickness (Inner): <span id="live-rail-thickness-inner-val">0.2</span>"
+              </label>
+              <input type="range" id="live-rail-thickness-inner" min="0.05" max="1" step="0.01" value="0.2" />
+            </div>
+
+            <div class="slider-group">
+              <label for="live-rail-thickness-outer">
+                Rail Thickness (Outer): <span id="live-rail-thickness-outer-val">0.2</span>"
+              </label>
+              <input type="range" id="live-rail-thickness-outer" min="0.05" max="1" step="0.01" value="0.2" />
+            </div>
             
             <div class="panel-actions">
               <button id="geometry-reset-btn" class="panel-btn">Reset Defaults</button>
@@ -187,6 +201,10 @@
             <label class="layer-checkbox">
               <input type="checkbox" id="layer-pockets" checked />
               Pockets
+            </label>
+            <label class="layer-checkbox">
+              <input type="checkbox" id="layer-caps" checked />
+              Pocket Caps
             </label>
             <label class="layer-checkbox">
               <input type="checkbox" id="layer-balls" checked />
@@ -228,6 +246,12 @@
               <label for="order-pockets">Pockets</label>
               <div class="input-row">
                 <input type="number" id="order-pockets" step="1" min="-1000" max="2000" />
+              </div>
+            </div>
+            <div class="slider-group input-group">
+              <label for="order-caps">Pocket Caps</label>
+              <div class="input-row">
+                <input type="number" id="order-caps" step="1" min="-1000" max="2000" />
               </div>
             </div>
             <div class="slider-group input-group">

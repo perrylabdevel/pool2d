@@ -13,6 +13,7 @@ const LAYER_CHECKBOX_MAP: Record<string, RenderLayerBooleanKey> = {
   'layer-frame': 'showFrame',
   'layer-rails': 'showRails',
   'layer-pockets': 'showPockets',
+  'layer-caps': 'showCaps',
   'layer-balls': 'showBalls',
   'layer-ui': 'showUIOverlay',
   'layer-measure': 'showMeasurementOverlay',
@@ -172,6 +173,7 @@ export class RenderLayerPanel {
       'order-frame': 'orderFrame',
       'order-rails': 'orderRails',
       'order-pockets': 'orderPockets',
+      'order-caps': 'orderCaps',
       'order-balls': 'orderBalls',
       'order-ui': 'orderUI',
     };

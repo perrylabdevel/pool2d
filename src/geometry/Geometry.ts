@@ -221,7 +221,7 @@ export function getTableGeometry(): TableGeometry {
     playHeightIn: 50.0,
     cushionProfileIn: 1.75,
     pocketCaptureRadiusIn: 2.5,
-    
+
     // Rails approximating WPA throat geometry, normals point inward
     // Corner rails stop short of pocket centers to leave openings
     rails: [

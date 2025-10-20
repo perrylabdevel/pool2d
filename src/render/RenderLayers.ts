@@ -3,6 +3,7 @@ export const RENDER_LAYER_BOOLEAN_KEYS = [
   'showFrame',
   'showRails',
   'showPockets',
+  'showCaps',
   'showBalls',
   'showUIOverlay',
   'showMeasurementOverlay',
@@ -14,6 +15,7 @@ export const RENDER_LAYER_ORDER_KEYS = [
   'orderFrame',
   'orderRails',
   'orderPockets',
+  'orderCaps',
   'orderBalls',
   'orderUI',
 ] as const;
@@ -26,6 +28,7 @@ export interface RenderLayerSettings {
   showFrame: boolean;
   showRails: boolean;
   showPockets: boolean;
+  showCaps: boolean;
   showBalls: boolean;
   showUIOverlay: boolean;
   showMeasurementOverlay: boolean;
@@ -34,6 +37,7 @@ export interface RenderLayerSettings {
   orderFrame: number;
   orderRails: number;
   orderPockets: number;
+  orderCaps: number;
   orderBalls: number;
   orderUI: number;
 }
@@ -43,6 +47,7 @@ export const defaultRenderLayerSettings: RenderLayerSettings = {
   showFrame: true,
   showRails: true,
   showPockets: true,
+  showCaps: true,
   showBalls: true,
   showUIOverlay: true,
   showMeasurementOverlay: false,
@@ -51,6 +56,7 @@ export const defaultRenderLayerSettings: RenderLayerSettings = {
   orderFrame: 5,
   orderRails: 10,
   orderPockets: 20,
+  orderCaps: 25,
   orderBalls: 30,
   orderUI: 40,
 };
