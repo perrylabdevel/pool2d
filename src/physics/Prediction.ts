@@ -642,9 +642,9 @@ export class Predictor {
           }
         }
         if (nearest) {
-          const threshold = CONFIG.BALL_RADIUS + 0.1;
+          const threshold = CONFIG.BALL_RADIUS + 0.02;
           const dotInward = nx * nearest.n.x + ny * nearest.n.y;
-          if (nearest.dist <= threshold && dotInward < 0) {
+          if (nearest.dist <= threshold && dotInward < -0.05) {
             // Remove inward component; slide along tangent
             const vx = nx - dotInward * nearest.n.x;
             const vy = ny - dotInward * nearest.n.y;
@@ -693,7 +693,7 @@ export class Predictor {
               nearest = { n: { x: rail.normal.x, y: rail.normal.y }, dist };
             }
           }
-          if (nearest && nearest.dist <= CONFIG.BALL_RADIUS + 0.08) {
+          if (nearest && nearest.dist <= CONFIG.BALL_RADIUS + 0.02) {
             let vx2 = cueDirNormX;
             let vy2 = cueDirNormY;
             const n2 = nearest.n;

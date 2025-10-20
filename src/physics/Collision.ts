@@ -326,9 +326,12 @@ export function resolveBallRail(contact: Contact) {
   // Record pre-collision velocity for shot capture
   const velBefore = { x: ballA.vx, y: ballA.vy };
   
-  // Reflect with restitution
-  const e = CONFIG.CUSHION_RESTITUTION;
-  const jn = -(1 + e) * vn;
+  // Reflect with restitution (reduce bounce for shallow grazing to promote short rail glide)
+  const speedMag = Math.hypot(ballA.vx, ballA.vy);
+  const approachRatio = Math.abs(vn) / Math.max(1e-6, speedMag);
+  const eBase = CONFIG.CUSHION_RESTITUTION;
+  const eEffective = approachRatio < 0.12 ? 0.0 : eBase;
+  const jn = -(1 + eEffective) * vn;
   
   ballA.vx += jn * nx;
   ballA.vy += jn * ny;
@@ -343,6 +346,13 @@ export function resolveBallRail(contact: Contact) {
   
   ballA.vx += jt * tx;
   ballA.vy += jt * ty;
+  
+  // Clamp tiny separating normal velocity when still against rail to extend brief glide realistically
+  const vnAfter = ballA.vx * nx + ballA.vy * ny;
+  if (vnAfter > 0 && vnAfter < 0.5) {
+    ballA.vx -= vnAfter * nx;
+    ballA.vy -= vnAfter * ny;
+  }
   
   // Record rail collision for shot capture (only for cue ball)
   if (shotCapture.isCapturing() && ballA.id === 0) {

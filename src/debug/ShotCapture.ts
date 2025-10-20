@@ -184,10 +184,9 @@ class ShotCaptureSystem {
           }
         }
         if (nearest) {
-          const threshold = CONFIG.BALL_RADIUS + 0.1; // tolerance (in)
-          if (nearest.dist <= threshold) {
-            const dot = predictedObjectDir.x * nearest.n.x + predictedObjectDir.y * nearest.n.y;
-            if (dot < 0) {
+          const threshold = CONFIG.BALL_RADIUS + 0.02; // tighter tolerance (in)
+          const dot = predictedObjectDir.x * nearest.n.x + predictedObjectDir.y * nearest.n.y;
+          if (nearest.dist <= threshold && dot < -0.05) {
               // Remove inward component; slide along the tangent
               const vx = predictedObjectDir.x - dot * nearest.n.x;
               const vy = predictedObjectDir.y - dot * nearest.n.y;
@@ -198,7 +197,6 @@ class ShotCaptureSystem {
                 // Fallback to tangent direction if projection vanished
                 predictedObjectDir = { x: -nearest.n.y, y: nearest.n.x };
               }
-            }
           }
         }
       } catch {}
@@ -240,7 +238,7 @@ class ShotCaptureSystem {
             }
           }
           if (best) {
-            const threshold = CONFIG.BALL_RADIUS + 0.08; // small tolerance
+            const threshold = CONFIG.BALL_RADIUS + 0.02; // small tolerance
             if (best.dist <= threshold) {
               // Use post-ball-collision cue velocity (before rail)
               let vx = cueBallVxAfter;
