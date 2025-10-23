@@ -48,7 +48,9 @@ export interface GeometrySettings {
   RAIL_THICKNESS_OUTER: number;
 }
 
-export interface RenderSettings extends RenderLayerSettings {}
+export interface RenderSettings extends RenderLayerSettings {
+  canvasScale: number;
+}
 
 const STORAGE_KEYS = {
   GAME_SETTINGS: 'pool2d_game_settings',
@@ -272,11 +274,15 @@ export class SettingsManager {
   }
 
   loadRenderSettings(): RenderSettings {
-    const defaults: RenderSettings = { ...defaultRenderLayerSettings };
+    const defaults: RenderSettings = {
+      ...defaultRenderLayerSettings,
+      canvasScale: CONFIG.CANVAS_SCALE_MULTIPLIER ?? 1,
+    };
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.RENDER_SETTINGS);
       if (stored) {
-        return { ...defaults, ...JSON.parse(stored) };
+        const parsed = JSON.parse(stored);
+        return { ...defaults, ...parsed };
       }
     } catch (e) {
       console.warn('Failed to load render settings:', e);
@@ -340,7 +346,10 @@ export class SettingsManager {
   }
 
   resetRenderSettings() {
-    this.renderSettings = { ...defaultRenderLayerSettings };
+    this.renderSettings = {
+      ...defaultRenderLayerSettings,
+      canvasScale: 1,
+    };
     try {
       localStorage.setItem(STORAGE_KEYS.RENDER_SETTINGS, JSON.stringify(this.renderSettings));
       this.applyRenderSettings();
@@ -391,7 +400,7 @@ export class SettingsManager {
       this.gameSettings = { ...DEFAULT_GAME_SETTINGS };
       this.uiColors = { ...DEFAULT_UI_COLORS };
       this.physicsSettings = { ...DEFAULT_PHYSICS_SETTINGS };
-      this.renderSettings = { ...defaultRenderLayerSettings };
+      this.renderSettings = { ...defaultRenderLayerSettings, canvasScale: 1 };
       
       this.applyPhysicsSettings();
       this.applyUIColors();
@@ -402,6 +411,7 @@ export class SettingsManager {
   }
 
   private applyRenderSettings() {
+    CONFIG.CANVAS_SCALE_MULTIPLIER = this.renderSettings.canvasScale ?? 1;
     window.dispatchEvent(
       new CustomEvent('settings:render-changed', { detail: { settings: this.renderSettings } })
     );

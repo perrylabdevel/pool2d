@@ -1,222 +1,97 @@
-# Pool 2D - Geometry & Coordinate System
+# Table Geometry & Coordinate Reference
 
-This document defines the authoritative coordinate system, table geometry, and naming conventions used throughout the Pool 2D codebase.
+This document captures the authoritative coordinate system, derived jaw geometry, and pocket conventions used throughout Pool 2D. All units are **inches** unless noted otherwise.
 
 ## Coordinate System
 
-### World Space
-- **Units**: Inches (realistic pool table measurements)
-- **Origin**: (0, 0) at exact center of play area
-- **Axes**: 
-  - `+X` = **Right** (East)
-  - `+Y` = **Up** (North, toward head cushion)
-- **Orientation Names**:
-  - **N** (North/Top/Head)
-  - **S** (South/Bottom/Foot)
-  - **W** (West/Left)
-  - **E** (East/Right)
+| Space        | Origin           | Axes                         | Notes                                |
+|--------------|------------------|------------------------------|--------------------------------------|
+| **World**    | Play-field centre| +X East (right), +Y North (head) | Used by physics, prediction, UI math |
+| **Canvas**   | Varies per renderer | Y increases downward            | `Renderer.ts` / `Renderer3D.ts` apply their own transforms |
+| **Three.js** | (0, 0, 0) table centre, +Z up | X/Y align with world space | Camera is orthographic top-down      |
 
-### Canvas Mapping
-Canvas Y-axis is inverted (down = positive) compared to world space (up = positive).
+### Conversions
 
-**Transform** (from `Renderer.ts`):
-```typescript
-const canvasCenterX = this.canvas.width / 2;
-const canvasCenterY = this.canvas.height / 2;
+```ts
+// Renderer.ts / 2D overlay
+ctx.translate(canvas.width / 2, canvas.height / 2);
+ctx.scale(scale, -scale); // flip Y
 
-this.ctx.translate(canvasCenterX, canvasCenterY);
-this.ctx.scale(this.scale, -this.scale);  // Negative Y flips vertical axis
+// Input.ts (screen → world)
+world.x = (screenX - rect.width / 2) / scale;
+world.y = -(screenY - rect.height / 2) / scale;
 ```
 
-**Conversion**:
-```typescript
-// World → Canvas
-canvas.x = canvasCenter.x + scale * world.x
-canvas.y = canvasCenter.y - scale * world.y  // Note: minus for Y flip
+## Table Dimensions
 
-// Canvas → World (for mouse input)
-world.x = (canvas.x - canvasCenter.x) / scale
-world.y = -(canvas.y - canvasCenter.y) / scale  // Note: negate for Y flip
-```
+- **Play area**: 100" × 50" (standard 9‑foot table)
+- **Rails**: Derived from configuration values in `SettingsManager` / geometry panel
+- **Ball radius**: 1.125" (2.25" diameter)
+- **Capture radii**:
+  - `POCKET_RADIUS_CORNER` – default 2.5" (adjustable live)
+  - `POCKET_RADIUS_SIDE`   – default 2.5" (adjustable live)
 
-## Table Geometry
+## Derived Jaw Geometry
 
-### Dimensions (Standard 9-foot table)
-- **Play Area**: 100" × 50" (2:1 aspect ratio)
-- **Center**: (0, 0)
-- **Bounds**: 
-  - X ∈ [-50, 50]
-  - Y ∈ [-25, 25]
-- **Ball Radius**: 1.125" (standard 2.25" diameter)
-- **Pocket Radius**: 2.0" (capture zone)
-- **Rail Thickness**: 3.5" (visual cushion width)
+Geometry derivation lives in `src/geometry/Geometry.ts`. The panel sliders map directly to the following tunables:
 
-### Rails (4 line segments)
+| Setting                     | Effect                                                                    |
+|-----------------------------|---------------------------------------------------------------------------|
+| `FRAME_OFFSET_IN`           | Frame distance from play area (visual reference)                          |
+| `SIDE_FRAME_OFFSET_IN`      | Side-pocket jaw origin offset                                             |
+| `JAW_REF_RADIUS_IN`         | Control radius for tangent-based side jaw computation                     |
+| `SIDE_STRAIGHT_Y_IN`        | Y of straight section before side pocket                                  |
+| `SIDE_INNER_Y_IN`           | Inner throat Y (auto-clamped ≥ `SIDE_STRAIGHT_Y_IN + 0.05`)               |
+| `CORNER_JAW_REF_RADIUS_IN`  | Tangent reference for corner jaw                                          |
+| `CORNER_STRAIGHT_X_IN`      | Start of corner straight along X                                          |
+| `CORNER_TARGET_Y_IN`        | Corner throat target Y                                                     |
+| `CORNER/ SIDE_POCKET_RADIUS_IN` | Capture radius for the associated pockets                          |
 
-Rails are defined in `Physics.ts` initialization. Each rail has an **inward-pointing normal** calculated automatically.
+The derivation pipeline:
 
-```typescript
-// North rail (top/head)
-new Rail(-50, 25, 50, 25)
-// → Endpoints: (-50, 25) to (50, 25)
-// → Normal: (0, -1) pointing down into play area
+1. **Side jaws** use the reference radius + frame offset to compute tangent contact (`xi`), then solve for outer/inner X magnitudes that hit the requested straight and inner Y values.
+2. **Corner jaws** mirror the same tangent approach, projecting back from the frame offset toward `CORNER_TARGET_Y_IN` to produce a continuous straight → taper.
+3. **Rails array** is rebuilt every time geometry settings change (settings panel emits `settings:geometry-apply` → `Game.restart()` → `PhysicsWorld.initializeRails()`).
+4. **Pockets** store both centre and capture radius so physics can differentiate corner vs. side sizing.
 
-// South rail (bottom/foot)
-new Rail(-50, -25, 50, -25)
-// → Endpoints: (-50, -25) to (50, -25)
-// → Normal: (0, 1) pointing up into play area
+### Pocket Definitions
 
-// West rail (left)
-new Rail(-50, -25, -50, 25)
-// → Endpoints: (-50, -25) to (-50, 25)
-// → Normal: (1, 0) pointing right into play area
+```ts
+{
+  id: 'NW_corner',
+  center: { x: -50, y: 25 },
+  radius: CONFIG.POCKET_RADIUS_CORNER,
+  cutNormalHint: { x: 1, y: -1 } // for visual jaw alignment
+}
 
-// East rail (right)
-new Rail(50, -25, 50, 25)
-// → Endpoints: (50, -25) to (50, 25)
-// → Normal: (-1, 0) pointing left into play area
-```
-
-**Normal Calculation** (from `Shapes.ts`):
-```typescript
-class Rail {
-  constructor(x1, y1, x2, y2) {
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-    const len = Math.sqrt(dx * dx + dy * dy);
-    
-    // Perpendicular vector (rotated 90° CCW)
-    this.nx = -dy / len;
-    this.ny = dx / len;
-  }
+{
+  id: 'N_middle',
+  center: { x: 0, y: playHalfHeight + sideOffset },
+  radius: CONFIG.POCKET_RADIUS_SIDE,
+  cutNormalHint: { x: 0, y: -1 }
 }
 ```
 
-### Pockets (6 circular zones)
-
-Pockets are defined in `Physics.ts` initialization with 2.0" capture radius.
-
-```typescript
-// Corner pockets (4)
-new Pocket(-50, 25, 2.0)   // NW (top-left)
-new Pocket(50, 25, 2.0)    // NE (top-right)
-new Pocket(-50, -25, 2.0)  // SW (bottom-left)
-new Pocket(50, -25, 2.0)   // SE (bottom-right)
-
-// Middle pockets (2)
-new Pocket(-50, 0, 2.0)    // W (left middle)
-new Pocket(50, 0, 2.0)     // E (right middle)
-```
-
-**Capture Detection** (from `Shapes.ts`):
-```typescript
-class Pocket {
-  contains(ball: Ball): boolean {
-    const dx = ball.x - this.x;
-    const dy = ball.y - this.y;
-    const distSq = dx * dx + dy * dy;
-    return distSq < this.radius * this.radius;
-  }
-}
-```
+Physics uses the radius for capture detection, while the renderer extrudes a cylinder matching the current pocket size.
 
 ## Naming Conventions
 
-### In Code Comments & Logic
-❌ **Avoid**: "left", "right", "top", "bottom"
-✅ **Use**: N, E, S, W or "north", "east", "south", "west"
+To avoid ambiguity across the project:
 
-### Examples
-```typescript
-// ❌ Bad
-const topRail = new Rail(-50, 25, 50, 25);  // Ambiguous
+- Use **N / E / S / W** (or “north/east/…”) instead of “top/bottom/left/right”.
+- Rails, jaws, and pockets are named using compass directions (e.g., `N_west_taper`).
+- Logging follows `[Geometry]` tags with signed orientation to aid debugging.
 
-// ✅ Good
-const northRail = new Rail(-50, 25, 50, 25);  // Clear orientation
+## Useful Events
 
-// ❌ Bad
-ball.x = -25;  // Move ball to left side
+- `settings:geometry-changed` – emitted when the geometry panel persists new values (restarts the world).
+- `settings:geometry-apply` – dispatched when “Apply Geometry” is clicked; `Game` restarts immediately.
+- `settings:render-changed` – emitted after render settings (including table scale) update.
 
-// ✅ Good  
-ball.x = -25;  // Move ball 25" west of center
-```
+## Troubleshooting Pointers
 
-### Position Descriptions
-- **"North of center"**: Positive Y
-- **"South of center"**: Negative Y
-- **"East of center"**: Positive X
-- **"West of center"**: Negative X
+- **Corner shots rattling**: Increase `CORNER_TARGET_Y_IN` slightly or raise corner capture radius.
+- **Rail cling**: Lower `SLIDING_FRICTION` in the physics settings panel.
+- **Ball overlaps after geometry change**: Hit **R** to rebuild the world; rails/pockets are regenerated on restart.
 
-## Standard Positions
-
-### Cue Ball (Break Position)
-```typescript
-const CUE_BALL_POSITION = { x: -25.0, y: 0.0 };
-// 25" west of center, on centerline
-```
-
-### Rack (Apex at Foot Spot)
-```typescript
-const FOOT_SPOT = { x: 25.0, y: 0.0 };
-// 25" east of center, on centerline
-// Rack extends south from this point
-```
-
-### Head String & Foot String
-```typescript
-const HEAD_STRING_X = -18.0;  // West side
-const FOOT_STRING_X = 18.0;   // East side
-```
-
-## Debug Visualization
-
-The debug overlay (`DebugDraw.ts`) shows:
-- **Rail normals**: Green arrows pointing inward from rail midpoints
-- **Velocities**: Yellow arrows from ball centers
-- **Contact points**: Red circles at collision locations
-- **Pocket zones**: Dashed circles showing 2.0" capture radius
-
-Toggle with **D** key or **Debug** button.
-
-## Collision Normals
-
-### Ball-Rail Collisions
-Normal always points **from rail into play area** (inward).
-
-Example: Ball hitting North rail
-- Rail position: Y = 25
-- Rail normal: (0, -1)
-- Reflection flips Y velocity while preserving X
-
-### Ball-Ball Collisions  
-Normal points **from ball A to ball B**.
-
-```typescript
-const dx = ballB.x - ballA.x;
-const dy = ballB.y - ballA.y;
-const dist = Math.sqrt(dx * dx + dy * dy);
-const nx = dx / dist;
-const ny = dy / dist;
-```
-
-## Validation Checklist
-
-When adding/modifying geometry:
-
-✅ Are world coordinates in inches?
-✅ Is origin at (0, 0) center of play area?
-✅ Does +Y point north (up)?
-✅ Does +X point east (right)?
-✅ Do rail normals point inward?
-✅ Are N/E/S/W names used instead of left/right/top/bottom?
-✅ Does canvas transform flip Y-axis correctly?
-✅ Do collisions use the correct normal direction?
-
-## Reference Implementation
-
-See these files for authoritative geometry usage:
-- `src/config.ts` - Table dimensions and constants
-- `src/physics/Shapes.ts` - Ball, Rail, Pocket classes
-- `src/physics/Physics.ts` - World initialization
-- `src/render/Renderer.ts` - Canvas transform and rendering
-- `src/game/Game.ts` - Ball dragging (canvas ↔ world conversion)
+Keep geometry experiments reproducible by exporting settings (`SettingsPanel` → Copy Config) alongside shot capture reports.

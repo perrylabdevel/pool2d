@@ -23,7 +23,7 @@ const LAYER_CHECKBOX_MAP: Record<string, RenderLayerBooleanKey> = {
 export class RenderLayerPanel {
   private panel: HTMLElement;
   private isOpen = false;
-  private settings: RenderLayerSettings;
+  private settings: RenderSettings;
   private orderInputs: Partial<Record<RenderLayerOrderKey, HTMLInputElement>> = {};
 
   constructor(
@@ -42,7 +42,7 @@ export class RenderLayerPanel {
     this.syncUI();
 
     window.addEventListener('settings:render-changed', (event: Event) => {
-      const detail = (event as CustomEvent<{ settings: RenderLayerSettings }>).detail;
+      const detail = (event as CustomEvent<{ settings: RenderSettings }>).detail;
       if (!detail) return;
       this.settings = { ...detail.settings };
       this.applyToRenderer(this.settings);
@@ -93,7 +93,7 @@ export class RenderLayerPanel {
     value: boolean,
     options?: { applyRenderer?: boolean; save?: boolean }
   ) {
-    const updated: RenderLayerSettings = { ...this.settings, [key]: value } as RenderLayerSettings;
+    const updated: RenderSettings = { ...this.settings, [key]: value } as RenderSettings;
     this.settings = updated;
     if (options?.save !== false) {
       this.settingsManager.saveRenderSettings({ [key]: value } as Partial<RenderSettings>);
@@ -104,8 +104,9 @@ export class RenderLayerPanel {
     this.syncCheckbox(key, value);
   }
 
-  private applyToRenderer(settings: RenderLayerSettings) {
-    this.renderer.applyRenderLayerSettings(settings);
+  private applyToRenderer(settings: RenderSettings) {
+    const { canvasScale: _canvasScale, ...layerSettings } = settings;
+    this.renderer.applyRenderLayerSettings(layerSettings);
   }
 
   private syncCheckbox(key: RenderLayerBooleanKey, value: boolean) {
@@ -149,8 +150,8 @@ export class RenderLayerPanel {
 
   syncFromRenderer() {
     const current = this.renderer.getRenderLayerSettings();
-    this.settings = { ...current };
-    this.settingsManager.saveRenderSettings(current);
+    this.settings = { ...this.settings, ...current };
+    this.settingsManager.saveRenderSettings(current as Partial<RenderSettings>);
     this.syncUI();
   }
 

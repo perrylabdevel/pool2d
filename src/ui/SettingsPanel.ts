@@ -70,6 +70,11 @@ export class SettingsPanel {
           ${this.createSlider('OBJECT_PATH_PERCENTAGE', 'Object Path Length %', 0.1, 2.0, 0.1, CONFIG.OBJECT_PATH_PERCENTAGE)}
         </div>
 
+        <div class="settings-group">
+          <h4 class="settings-group-title" style="color: #90CAF9;">🖥️ Display</h4>
+          ${this.createSlider('CANVAS_SCALE_MULTIPLIER', 'Table Scale', 0.6, 1.6, 0.05, CONFIG.CANVAS_SCALE_MULTIPLIER)}
+        </div>
+
         <div class="panel-actions" style="gap: 8px; margin-top: 16px;">
           <button id="settings-reset" class="panel-btn" style="background: #FF9800;">Reset</button>
           <button id="settings-export" class="panel-btn" style="background: #2196F3;">Copy Config</button>
@@ -125,19 +130,28 @@ export class SettingsPanel {
         const input = e.target as HTMLInputElement;
         const key = input.id as keyof typeof CONFIG;
         const value = parseFloat(input.value);
-        
-        // Update CONFIG
-        (CONFIG as any)[key] = value;
-        
-        // Update display value
+
         const valueDisplay = this.panel.querySelector(`#${key}-value`);
+
+        if (key === 'CANVAS_SCALE_MULTIPLIER') {
+          CONFIG.CANVAS_SCALE_MULTIPLIER = value;
+          if (valueDisplay) {
+            valueDisplay.textContent = value.toFixed(2);
+          }
+          this.settingsManager.saveRenderSettings({ canvasScale: value });
+          console.log(`🖥️ ${key} = ${value}`);
+          return;
+        }
+
+        // Update CONFIG for physics settings
+        (CONFIG as any)[key] = value;
+
         if (valueDisplay) {
           valueDisplay.textContent = value.toString();
         }
-        
-        // Save to local storage
+
         this.settingsManager.savePhysicsSettings({ [key]: value } as any);
-        
+
         console.log(`⚙️ ${key} = ${value}`);
       });
     });
@@ -154,11 +168,22 @@ export class SettingsPanel {
       const valueDisplay = this.panel.querySelector(`#${key}-value`);
       if (valueDisplay) valueDisplay.textContent = value.toString();
     });
+
+    const renderSettings = this.settingsManager.getRenderSettings();
+    const canvasSlider = this.panel.querySelector('#CANVAS_SCALE_MULTIPLIER') as HTMLInputElement;
+    if (canvasSlider) {
+      canvasSlider.value = renderSettings.canvasScale.toString();
+    }
+    const canvasDisplay = this.panel.querySelector('#CANVAS_SCALE_MULTIPLIER-value');
+    if (canvasDisplay) {
+      canvasDisplay.textContent = renderSettings.canvasScale.toFixed(2);
+    }
   }
 
   private resetDefaults() {
     // Reset via settings manager (saves to local storage)
     this.settingsManager.resetPhysicsSettings();
+    this.settingsManager.saveRenderSettings({ canvasScale: 1 });
     
     // Reload UI to reflect reset values
     this.loadSettings();
@@ -177,6 +202,7 @@ export class SettingsPanel {
       SLIDING_FRICTION: CONFIG.SLIDING_FRICTION,
       SOLVER_ITERATIONS: CONFIG.SOLVER_ITERATIONS,
       VELOCITY_EPSILON: CONFIG.VELOCITY_EPSILON,
+      CANVAS_SCALE_MULTIPLIER: CONFIG.CANVAS_SCALE_MULTIPLIER,
     };
 
     const configText = JSON.stringify(config, null, 2);

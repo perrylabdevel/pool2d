@@ -187,6 +187,7 @@ export class Game {
   
   setupEventListeners() {
     window.addEventListener('resize', () => this.resize());
+    window.addEventListener('settings:render-changed', () => this.resize());
     
     // Instant geometry apply: rebuild world and renderer without full reload
     window.addEventListener('settings:geometry-apply', () => {

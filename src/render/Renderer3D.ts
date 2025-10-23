@@ -493,10 +493,15 @@ export class Renderer3D {
     const availableWidth = containerWidth - externalMargin * 2;
     const availableHeight = containerHeight - externalMargin * 2;
     
-    // Calculate scale to fit table with internal padding
-    const scaleX = (availableWidth - internalPadding * 2) / CONFIG.TABLE_WIDTH;
-    const scaleY = (availableHeight - internalPadding * 2) / CONFIG.TABLE_HEIGHT;
-    this.scale = Math.min(scaleX, scaleY);
+    const scaleMultiplier = CONFIG.CANVAS_SCALE_MULTIPLIER ?? 1;
+    const adjustedWidth = availableWidth / Math.max(0.01, scaleMultiplier);
+    const adjustedHeight = availableHeight / Math.max(0.01, scaleMultiplier);
+
+    // Calculate scale to fit table with internal padding, then apply multiplier
+    const scaleX = (adjustedWidth - internalPadding * 2) / CONFIG.TABLE_WIDTH;
+    const scaleY = (adjustedHeight - internalPadding * 2) / CONFIG.TABLE_HEIGHT;
+    const baseScale = Math.min(scaleX, scaleY);
+    this.scale = baseScale * scaleMultiplier;
     
     // Set canvas size
     const width = CONFIG.TABLE_WIDTH * this.scale + internalPadding * 2;
