@@ -29,6 +29,8 @@ export const CONFIG = {
   
   // Pockets (center-origin coordinates: see Geometry.ts for authoritative definitions)
   POCKET_RADIUS: 2.5,
+  POCKET_RADIUS_CORNER: 2.5,
+  POCKET_RADIUS_SIDE: 2.5,
   
   // Cue
   CUE_POWER_MIN: 0.5,

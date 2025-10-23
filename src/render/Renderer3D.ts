@@ -14,6 +14,15 @@ import {
   RenderLayerOrderKey,
 } from './RenderLayers';
 
+type AxisAlignment = 'horizontal' | 'vertical' | null;
+
+interface AxisColorPalette {
+  line: string;
+  glow: string;
+  debugStroke: string;
+  debugFill: string;
+}
+
 export class Renderer3D {
   canvas: HTMLCanvasElement;
   uiCanvas: HTMLCanvasElement;
@@ -23,6 +32,8 @@ export class Renderer3D {
   camera: THREE.OrthographicCamera;
   renderer: THREE.WebGLRenderer;
   scale: number;
+  canvasOffsetX: number = 0;
+  canvasOffsetY: number = 0;
   private playBoundaryPoints: Vec2[] = [];
   private playBounds: BoundaryBounds = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
   
@@ -497,6 +508,11 @@ export class Renderer3D {
     
     const offsetX = (containerWidth - width) / 2;
     const offsetY = (containerHeight - height) / 2;
+    
+    // Store offsets for use by other canvases
+    this.canvasOffsetX = offsetX;
+    this.canvasOffsetY = offsetY;
+    
     const applyPosition = (el: HTMLElement | null) => {
       if (!el) return;
       el.style.left = `${offsetX}px`;
@@ -1476,6 +1492,53 @@ export class Renderer3D {
       y: start.y + dirY * minT
     };
   }
+
+  private classifyAxisAlignmentFromVector(dx: number, dy: number, tolerance: number = 0.02): AxisAlignment {
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len < 1e-4) return null;
+    const nx = dx / len;
+    const ny = dy / len;
+    if (Math.abs(ny) <= tolerance && Math.abs(nx) > tolerance) {
+      return 'horizontal';
+    }
+    if (Math.abs(nx) <= tolerance && Math.abs(ny) > tolerance) {
+      return 'vertical';
+    }
+    return null;
+  }
+
+  private classifyAxisAlignmentFromPath(path: Vec2[]): AxisAlignment {
+    if (path.length < 2) return null;
+    const start = path[0];
+    const end = path[path.length - 1];
+    return this.classifyAxisAlignmentFromVector(end.x - start.x, end.y - start.y);
+  }
+
+  private getAxisPalette(alignment: AxisAlignment): AxisColorPalette {
+    switch (alignment) {
+      case 'horizontal':
+        return {
+          line: 'rgba(80, 255, 180, 0.95)',
+          glow: 'rgba(0, 120, 90, 0.85)',
+          debugStroke: 'rgba(80, 255, 180, 0.7)',
+          debugFill: 'rgba(80, 255, 180, 0.9)',
+        };
+      case 'vertical':
+        return {
+          line: 'rgba(255, 170, 80, 0.95)',
+          glow: 'rgba(140, 70, 0, 0.85)',
+          debugStroke: 'rgba(255, 170, 80, 0.7)',
+          debugFill: 'rgba(255, 170, 80, 0.9)',
+        };
+      default:
+        return {
+          line: 'rgba(255, 255, 255, 0.95)',
+          glow: 'rgba(0, 0, 0, 0.8)',
+          debugStroke: 'rgba(255, 230, 120, 0.7)',
+          debugFill: 'rgba(255, 230, 120, 0.9)',
+        };
+    }
+  }
   
   // Compatibility methods for existing code
   drawCueAndPowerBar(ball: Ball, angle: number, power: number, showGhost: boolean, showPowerBar: boolean, _isAimMode: boolean, prediction?: PredictionResult) {
@@ -1687,8 +1750,11 @@ export class Renderer3D {
         const startScreen = this.worldToScreen(start.x, start.y);
         const endScreen = this.worldToScreen(end.x, end.y);
         
+        const orientation = this.classifyAxisAlignmentFromVector(normX, normY);
+        const palette = this.getAxisPalette(orientation);
+
         // Draw line
-        this.uiCtx.strokeStyle = 'rgba(255, 255, 0, 0.6)';
+        this.uiCtx.strokeStyle = palette.debugStroke;
         this.uiCtx.lineWidth = 1;
         this.uiCtx.setLineDash([10, 10]);
         this.uiCtx.beginPath();
@@ -1705,7 +1771,7 @@ export class Renderer3D {
           const arrowSize = 10;
           const angle = Math.atan2(dy, dx);
           
-          this.uiCtx.fillStyle = 'rgba(255, 255, 0, 0.8)';
+          this.uiCtx.fillStyle = palette.debugFill;
           this.uiCtx.beginPath();
           this.uiCtx.moveTo(endScreen.x, endScreen.y);
           this.uiCtx.lineTo(
@@ -1981,10 +2047,13 @@ export class Renderer3D {
         const targetLength = Math.floor(path.length * pathLengthMultiplier);
         displayPath = path.slice(0, Math.max(2, targetLength));
       }
+
+      const orientation = this.classifyAxisAlignmentFromPath(displayPath);
+      const palette = this.getAxisPalette(orientation);
       
       if (debugMode) {
         // Debug mode: yellow/orange dashed lines
-        this.uiCtx.strokeStyle = 'rgba(255, 200, 0, 0.7)';
+        this.uiCtx.strokeStyle = palette.debugStroke;
         this.uiCtx.lineWidth = 2;
         this.uiCtx.setLineDash([10, 5]);
         this.uiCtx.beginPath();
@@ -2016,7 +2085,7 @@ export class Renderer3D {
           const arrowSize = 10;
           const angle = Math.atan2(dy, dx);
           
-          this.uiCtx.fillStyle = 'rgba(255, 200, 0, 0.9)';
+          this.uiCtx.fillStyle = palette.debugFill;
           this.uiCtx.beginPath();
           this.uiCtx.moveTo(endScreen.x, endScreen.y);
           this.uiCtx.lineTo(
@@ -2032,7 +2101,7 @@ export class Renderer3D {
         }
       } else {
         // Normal mode: solid white with black glow (no arrows)
-        drawPathWithGlow(displayPath, 'rgba(0, 0, 0, 0.8)', 'rgba(255, 255, 255, 0.95)', 3);
+        drawPathWithGlow(displayPath, palette.glow, palette.line, 3);
       }
     });
     
@@ -2204,11 +2273,14 @@ export class Renderer3D {
         const endRaw = { x: start.x + normX * adjustedLength, y: start.y + normY * adjustedLength };
         const end = this.clipLineAtRails(start, endRaw);
         
+        const orientation = this.classifyAxisAlignmentFromVector(normX, normY);
+        const palette = this.getAxisPalette(orientation);
+
         drawLineWithGlow(
           start,
           end,
-          'rgba(0, 0, 0, 0.8)',  // Black glow
-          'rgba(255, 255, 255, 0.95)',  // Solid white
+          palette.glow,
+          palette.line,
           3
         );
       }

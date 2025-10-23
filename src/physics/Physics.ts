@@ -87,7 +87,7 @@ export class PhysicsWorld {
         new Pocket(
           pocketDef.center.x,
           pocketDef.center.y,
-          GEOM.pocketCaptureRadiusIn
+          pocketDef.radius ?? GEOM.pocketCaptureRadiusIn
         )
       );
     });

@@ -14,6 +14,7 @@ import { shotCapture } from '../debug/ShotCapture';
 import { SettingsPanel } from '../ui/SettingsPanel';
 import { GeometryPanel } from '../ui/GeometryPanel';
 import { RenderLayerPanel } from '../ui/RenderLayerPanel';
+import { scenarioManager } from '../debug/ScenarioManager';
 
 export enum GameMode {
   PRACTICE,
@@ -95,6 +96,7 @@ export class Game {
     this.setupCallbacks();
     this.setupEventListeners();
     this.initializeGame();
+    scenarioManager.attach(this);
     
     // Log helpful tips
     if (this.mode === GameMode.PRACTICE) {
@@ -297,7 +299,13 @@ export class Game {
   resize() {
     this.renderer.resize();
     this.input.updateScale(this.renderer.scale);
-    this.debug.resize(this.renderer.canvas.width, this.renderer.canvas.height, this.renderer.scale);
+    this.debug.resize(
+      this.renderer.uiCanvas.width,
+      this.renderer.uiCanvas.height,
+      this.renderer.scale,
+      this.renderer.canvasOffsetX,
+      this.renderer.canvasOffsetY
+    );
   }
   
   shoot(angle: number, power: number) {

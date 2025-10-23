@@ -183,6 +183,29 @@ export class GeometryPanel {
         notify({ CORNER_JAW_REF_RADIUS_IN: value });
       });
     }
+    const cornerPocketRadiusSlider = document.getElementById('live-corner-pocket-radius') as HTMLInputElement;
+    const cornerPocketRadiusVal = document.getElementById('live-corner-pocket-radius-val');
+    if (cornerPocketRadiusSlider && cornerPocketRadiusVal) {
+      cornerPocketRadiusSlider.addEventListener('input', (e) => {
+        const raw = parseFloat((e.target as HTMLInputElement).value);
+        const value = Math.max(1.5, Math.min(3.75, raw));
+        cornerPocketRadiusSlider.value = value.toFixed(2);
+        cornerPocketRadiusVal.textContent = formatNumber(value, 2);
+        notify({ CORNER_POCKET_RADIUS_IN: value });
+      });
+    }
+
+    const sidePocketRadiusSlider = document.getElementById('live-side-pocket-radius') as HTMLInputElement;
+    const sidePocketRadiusVal = document.getElementById('live-side-pocket-radius-val');
+    if (sidePocketRadiusSlider && sidePocketRadiusVal) {
+      sidePocketRadiusSlider.addEventListener('input', (e) => {
+        const raw = parseFloat((e.target as HTMLInputElement).value);
+        const value = Math.max(1.5, Math.min(3.75, raw));
+        sidePocketRadiusSlider.value = value.toFixed(2);
+        sidePocketRadiusVal.textContent = formatNumber(value, 2);
+        notify({ SIDE_POCKET_RADIUS_IN: value });
+      });
+    }
 
     const cornerFrameSlider = document.getElementById('live-corner-frame') as HTMLInputElement;
     const cornerFrameVal = document.getElementById('live-corner-frame-val');
@@ -304,6 +327,8 @@ export class GeometryPanel {
 
     setSlider('live-corner-frame', settings.CORNER_FRAME_OFFSET_IN, (v) => formatNumber(v, 1), 1);
     setSlider('live-corner-radius', settings.CORNER_JAW_REF_RADIUS_IN, (v) => formatNumber(v, 1), 1);
+    setSlider('live-corner-pocket-radius', settings.CORNER_POCKET_RADIUS_IN, (v) => formatNumber(v, 2), 2);
+    setSlider('live-side-pocket-radius', settings.SIDE_POCKET_RADIUS_IN, (v) => formatNumber(v, 2), 2);
     setSlider('live-corner-straight', settings.CORNER_STRAIGHT_X_IN);
     setSlider('live-corner-target', settings.CORNER_TARGET_Y_IN);
     setSlider('live-frame-width', settings.FRAME_OFFSET_IN, (v) => formatNumber(v, 1), 1);

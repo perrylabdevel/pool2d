@@ -8,6 +8,15 @@ import { CONFIG, BALL_CUE } from '../config';
 import { getTableGeometry, computeBoundaryBounds, computePlayBoundaryPoints, type Vec2, type BoundaryBounds } from '../geometry/Geometry';
 import { PredictionResult } from '../physics/Prediction';
 
+type AxisAlignment = 'horizontal' | 'vertical' | null;
+
+interface AxisColorPalette {
+  line: string;
+  glow: string;
+  debugStroke: string;
+  debugFill: string;
+}
+
 export class Renderer {
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
@@ -485,12 +494,14 @@ export class Renderer {
       if (length > 0.0001) {
         const normX = dirX / length;
         const normY = dirY / length;
+        const orientation = this.classifyAxisAlignmentFromVector(normX, normY);
+        const palette = this.getAxisPalette(orientation);
         const lineLength = 15; // Match the length passed to predictTrajectories
         const start = ghostCenter;
         const end = { x: start.x + normX * lineLength, y: start.y + normY * lineLength };
-        const result = drawClampedLine(start, end, 'rgba(255, 255, 0, 0.6)');
+        const result = drawClampedLine(start, end, palette.debugStroke);
         if (result.drew && result.length > 0) {
-          drawArrow(result.end, result.dirX, result.dirY, 'rgba(255, 255, 0, 0.8)');
+          drawArrow(result.end, result.dirX, result.dirY, palette.debugFill);
         }
       }
     }
@@ -532,18 +543,16 @@ export class Renderer {
     
     this.ctx.save();
     
-    // Use same transform as main render
     const canvasCenterX = this.canvas.width / 2;
     const canvasCenterY = this.canvas.height / 2;
     this.ctx.translate(canvasCenterX, canvasCenterY);
-    this.ctx.scale(this.scale, -this.scale); // Y-up for world coords
+    this.ctx.scale(this.scale, -this.scale);
     
-    // Get simple trajectory predictions
     const trajectories = predictor.predictTrajectories(
       prediction,
       cueBallPos,
       shotDirection,
-      50 // Line length in inches
+      50
     );
     
     const strokeWidth = 3 / this.scale;
@@ -561,7 +570,6 @@ export class Renderer {
       const length = Math.sqrt(dirX * dirX + dirY * dirY);
       if (length <= 0.0001) return { drew: false, end: clampedEnd, dirX: 0, dirY: 0 };
       
-      // Draw black glow (outer)
       this.ctx.strokeStyle = glowColor;
       this.ctx.lineWidth = glowWidth;
       this.ctx.lineCap = 'round';
@@ -570,7 +578,6 @@ export class Renderer {
       this.ctx.lineTo(clampedEnd.x, clampedEnd.y);
       this.ctx.stroke();
       
-      // Draw solid white line (inner)
       this.ctx.strokeStyle = lineColor;
       this.ctx.lineWidth = strokeWidth;
       this.ctx.lineCap = 'round';
@@ -595,7 +602,6 @@ export class Renderer {
       const rightX = baseX - (-normY) * (arrowLength * 0.5);
       const rightY = baseY - normX * (arrowLength * 0.5);
       
-      // Draw black glow for arrow
       this.ctx.fillStyle = glowColor;
       this.ctx.beginPath();
       this.ctx.moveTo(end.x, end.y);
@@ -604,7 +610,6 @@ export class Renderer {
       this.ctx.closePath();
       this.ctx.fill();
       
-      // Draw white arrow fill
       this.ctx.fillStyle = fillColor;
       this.ctx.beginPath();
       this.ctx.moveTo(end.x, end.y);
@@ -614,7 +619,6 @@ export class Renderer {
       this.ctx.fill();
     };
     
-    // Draw object ball trajectory (solid white with black glow)
     if (trajectories.objectBallPath) {
       const dirX = trajectories.objectBallPath.end.x - trajectories.objectBallPath.start.x;
       const dirY = trajectories.objectBallPath.end.y - trajectories.objectBallPath.start.y;
@@ -622,15 +626,36 @@ export class Renderer {
       if (length > 0.0001) {
         const normX = dirX / length;
         const normY = dirY / length;
-        const lineLength = 50;
+        const orientation = this.classifyAxisAlignmentFromVector(normX, normY);
+        const palette = this.getAxisPalette(orientation);
         const start = ghostCenter;
-        const end = { x: start.x + normX * lineLength, y: start.y + normY * lineLength };
+        const end = { x: start.x + normX * 50, y: start.y + normY * 50 };
+        const result = drawSolidLineWithGlow(start, end, palette.glow, palette.line);
+        if (result.drew) {
+          drawArrowWithGlow(result.end, result.dirX, result.dirY, palette.glow, palette.line);
+        }
+      }
+    }
+    
+    if (trajectories.cueBallPath) {
+      const dirX = trajectories.cueBallPath.end.x - trajectories.cueBallPath.start.x;
+      const dirY = trajectories.cueBallPath.end.y - trajectories.cueBallPath.start.y;
+      const length = Math.sqrt(dirX * dirX + dirY * dirY);
+      if (length > 0.0001) {
+        const normX = dirX / length;
+        const normY = dirY / length;
+        const start = ghostCenter;
+        const end = { x: start.x + normX * (50 * 0.25), y: start.y + normY * (50 * 0.25) };
         const result = drawSolidLineWithGlow(start, end, 'rgba(0, 0, 0, 0.8)', 'rgba(255, 255, 255, 0.95)');
         if (result.drew) {
           drawArrowWithGlow(result.end, result.dirX, result.dirY, 'rgba(0, 0, 0, 0.8)', 'rgba(255, 255, 255, 0.95)');
         }
       }
     }
+    
+    this.ctx.restore();
+  }
+
     
     // Draw cue ball trajectory (solid white with black glow)
     if (trajectories.cueBallPath) {
@@ -731,6 +756,46 @@ export class Renderer {
     const g = Math.max(0, parseInt(hex.slice(2, 4), 16) - amount * 255);
     const b = Math.max(0, parseInt(hex.slice(4, 6), 16) - amount * 255);
     return `rgb(${r}, ${g}, ${b})`;
+  }
+
+  private classifyAxisAlignmentFromVector(dx: number, dy: number, tolerance: number = 0.02): AxisAlignment {
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len < 1e-4) return null;
+    const nx = dx / len;
+    const ny = dy / len;
+    if (Math.abs(ny) <= tolerance && Math.abs(nx) > tolerance) {
+      return 'horizontal';
+    }
+    if (Math.abs(nx) <= tolerance && Math.abs(ny) > tolerance) {
+      return 'vertical';
+    }
+    return null;
+  }
+
+  private getAxisPalette(alignment: AxisAlignment): AxisColorPalette {
+    switch (alignment) {
+      case 'horizontal':
+        return {
+          line: 'rgba(80, 255, 180, 0.95)',
+          glow: 'rgba(0, 120, 90, 0.85)',
+          debugStroke: 'rgba(80, 255, 180, 0.7)',
+          debugFill: 'rgba(80, 255, 180, 0.9)',
+        };
+      case 'vertical':
+        return {
+          line: 'rgba(255, 170, 80, 0.95)',
+          glow: 'rgba(140, 70, 0, 0.85)',
+          debugStroke: 'rgba(255, 170, 80, 0.7)',
+          debugFill: 'rgba(255, 170, 80, 0.9)',
+        };
+      default:
+        return {
+          line: 'rgba(255, 255, 255, 0.95)',
+          glow: 'rgba(0, 0, 0, 0.8)',
+          debugStroke: 'rgba(255, 230, 120, 0.7)',
+          debugFill: 'rgba(255, 230, 120, 0.9)',
+        };
+    }
   }
   
   drawPowerBar(power: number, isAimMode: boolean) {

@@ -51,8 +51,9 @@ export class InputManager {
     const canvasY = screenY - rect.top;
     
     // Convert from canvas coords (top-left origin, Y-down) to world coords (center origin, Y-up)
-    const canvasCenterX = this.canvas.width / 2;
-    const canvasCenterY = this.canvas.height / 2;
+    // Use rect dimensions (displayed size) not canvas.width/height (internal resolution)
+    const canvasCenterX = rect.width / 2;
+    const canvasCenterY = rect.height / 2;
     
     return {
       x: (canvasX - canvasCenterX) / this.scale,

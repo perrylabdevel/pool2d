@@ -19,6 +19,7 @@ export interface PocketDef {
   id: string;
   center: Vec2;
   cutNormalHint: Vec2; // Direction hint for pocket lip angle
+  radius: number;
 }
 
 export interface TableGeometry {
@@ -220,7 +221,7 @@ export function getTableGeometry(): TableGeometry {
     playWidthIn: 100.0,
     playHeightIn: 50.0,
     cushionProfileIn: 1.75,
-    pocketCaptureRadiusIn: 2.5,
+    pocketCaptureRadiusIn: CONFIG.POCKET_RADIUS_CORNER,
 
     // Rails approximating WPA throat geometry, normals point inward
     // Corner rails stop short of pocket centers to leave openings
@@ -364,32 +365,38 @@ export function getTableGeometry(): TableGeometry {
     { 
       id: 'NW_corner', 
       center: { x: -50.0, y: 25.0 }, 
-      cutNormalHint: { x: 1, y: -1 } 
+      cutNormalHint: { x: 1, y: -1 },
+      radius: CONFIG.POCKET_RADIUS_CORNER,
     },
     { 
       id: 'NE_corner', 
       center: { x: 50.0, y: 25.0 }, 
-      cutNormalHint: { x: -1, y: -1 } 
+      cutNormalHint: { x: -1, y: -1 },
+      radius: CONFIG.POCKET_RADIUS_CORNER,
     },
     { 
       id: 'SW_corner', 
       center: { x: -50.0, y: -25.0 }, 
-      cutNormalHint: { x: 1, y: 1 } 
+      cutNormalHint: { x: 1, y: 1 },
+      radius: CONFIG.POCKET_RADIUS_CORNER,
     },
     { 
       id: 'SE_corner', 
       center: { x: 50.0, y: -25.0 }, 
-      cutNormalHint: { x: -1, y: 1 } 
+      cutNormalHint: { x: -1, y: 1 },
+      radius: CONFIG.POCKET_RADIUS_CORNER,
     },
     { 
       id: 'N_middle', 
       center: { x: 0.0, y: Y_N_PLAY + SIDE_POCKET_OFFSET }, 
-      cutNormalHint: { x: 0, y: -1 } 
+      cutNormalHint: { x: 0, y: -1 },
+      radius: CONFIG.POCKET_RADIUS_SIDE,
     },
     { 
       id: 'S_middle', 
       center: { x: 0.0, y: Y_S_PLAY - SIDE_POCKET_OFFSET }, 
-      cutNormalHint: { x: 0, y: 1 } 
+      cutNormalHint: { x: 0, y: 1 },
+      radius: CONFIG.POCKET_RADIUS_SIDE,
     }
     ]
   };

@@ -46,12 +46,18 @@ export class DebugDraw {
     return this.enabled;
   }
   
-  resize(width: number, height: number, scale: number) {
+  resize(width: number, height: number, scale: number, offsetX?: number, offsetY?: number) {
     this.canvas.width = width;
     this.canvas.height = height;
     this.scale = scale;
     this.canvas.style.width = `${width}px`;
     this.canvas.style.height = `${height}px`;
+    
+    // Apply position offsets if provided
+    if (offsetX !== undefined && offsetY !== undefined) {
+      this.canvas.style.left = `${offsetX}px`;
+      this.canvas.style.top = `${offsetY}px`;
+    }
   }
   
   clear() {
