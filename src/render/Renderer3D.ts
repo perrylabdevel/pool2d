@@ -1,10 +1,10 @@
 // 3D rendering system using Three.js
 import * as THREE from 'three';
 import { FBXLoader } from 'three-stdlib';
-import { Ball, Rail, Pocket } from '../physics/Shapes';
+import { Ball, Rail } from '../physics/Shapes';
 import { PhysicsWorld } from '../physics/Physics';
 import { CONFIG, BALL_CUE } from '../config';
-import { getTableGeometry, computePlayBoundaryPoints, computeBoundaryBounds, type Vec2, type BoundaryBounds } from '../geometry/Geometry';
+import { getTableGeometry, computePlayBoundaryPoints, computeBoundaryBounds, type Vec2, type BoundaryBounds, type PocketDef } from '../geometry/Geometry';
 import { PredictionResult, ShotPreviewPaths } from '../physics/Prediction';
 import { fetchWithCache } from './AssetCache';
 import {
@@ -699,21 +699,26 @@ export class Renderer3D {
     });
   }
   
-  initializePockets(pockets: Pocket[]) {
+  initializePockets(pockets: PocketDef[]) {
     const sideMaterial = this.getPocketSideMaterial();
 
     pockets.forEach((pocket) => {
+      const visualRadius = pocket.visualRadius ?? pocket.radius;
+      const wallTaperRadius = visualRadius * 0.85;
+      const shelfDepth = Math.max(0.1, pocket.shelfDepth ?? CONFIG.POCKET_SHELF_DEPTH_IN);
+      const angleRad = THREE.MathUtils.degToRad(pocket.cutAngleDeg ?? 0);
       const pocketGeometry = new THREE.CylinderGeometry(
-        pocket.radius,
-        pocket.radius * 0.85,
-        2,
+        visualRadius,
+        wallTaperRadius,
+        shelfDepth,
         48,
         1,
         true
       );
       const pocketMesh = new THREE.Mesh(pocketGeometry, sideMaterial.clone());
-      pocketMesh.position.set(pocket.x, pocket.y, 0);
+      pocketMesh.position.set(pocket.center.x, pocket.center.y, 0);
       pocketMesh.rotation.x = Math.PI / 2;
+      pocketMesh.rotation.z = angleRad;
       pocketMesh.renderOrder = this.layerOrder.orderPockets;
       pocketMesh.visible = this.layerVisibility.showPockets;
       this.enforceRenderOrderControl(pocketMesh);
@@ -722,7 +727,7 @@ export class Renderer3D {
 
       // Solid black bottom fill for the pocket hole using ShapeGeometry
       const circleShape = new THREE.Shape();
-      const radius = pocket.radius * 0.98;
+      const radius = visualRadius * 0.98;
       circleShape.absarc(0, 0, radius, 0, Math.PI * 2, false);
       const bottomGeometry = new THREE.ShapeGeometry(circleShape);
       
@@ -733,7 +738,8 @@ export class Renderer3D {
         depthWrite: false,
       });
       const bottomMesh = new THREE.Mesh(bottomGeometry, bottomMaterial);
-      bottomMesh.position.set(pocket.x, pocket.y, 0.15);
+      bottomMesh.position.set(pocket.center.x, pocket.center.y, 0.15);
+      bottomMesh.rotation.z = angleRad;
       bottomMesh.renderOrder = this.layerOrder.orderTable + 5;
       bottomMesh.visible = this.layerVisibility.showPockets;
       this.scene.add(bottomMesh);
@@ -741,9 +747,9 @@ export class Renderer3D {
 
       // Gradient overlay using ShapeGeometry with proper UV mapping
       const gradientShape = new THREE.Shape();
-      gradientShape.absarc(0, 0, pocket.radius, 0, Math.PI * 2, false);
+      gradientShape.absarc(0, 0, visualRadius, 0, Math.PI * 2, false);
       const gradientGeometry = new THREE.ShapeGeometry(gradientShape);
-      
+
       // Fix UV mapping for the gradient texture
       const uvAttribute = gradientGeometry.attributes.uv;
       const posAttribute = gradientGeometry.attributes.position;
@@ -751,8 +757,8 @@ export class Renderer3D {
         const x = posAttribute.getX(i);
         const y = posAttribute.getY(i);
         // Map from circle coordinates [-radius, radius] to UV [0, 1]
-        const u = (x / pocket.radius + 1) * 0.5;
-        const v = (y / pocket.radius + 1) * 0.5;
+        const u = (x / visualRadius + 1) * 0.5;
+        const v = (y / visualRadius + 1) * 0.5;
         uvAttribute.setXY(i, u, v);
       }
       uvAttribute.needsUpdate = true;
@@ -767,7 +773,8 @@ export class Renderer3D {
         side: THREE.DoubleSide,
       });
       const gradientMesh = new THREE.Mesh(gradientGeometry, gradientMat);
-      gradientMesh.position.set(pocket.x, pocket.y, 0.16);
+      gradientMesh.position.set(pocket.center.x, pocket.center.y, 0.16);
+      gradientMesh.rotation.z = angleRad;
       gradientMesh.renderOrder = this.layerOrder.orderPockets;
       gradientMesh.visible = this.layerVisibility.showPockets;
       this.scene.add(gradientMesh);
@@ -778,7 +785,7 @@ export class Renderer3D {
     this.initializePocketCaps(pockets);
   }
 
-  initializePocketCaps(pockets: Pocket[]) {
+  initializePocketCaps(pockets: PocketDef[]) {
     const capThickness = 0.2;
     const capMaterial = new THREE.MeshBasicMaterial({
       color: new THREE.Color('#0a0a0a'),
@@ -789,14 +796,15 @@ export class Renderer3D {
     });
 
     pockets.forEach((pocket) => {
+      const visualRadius = pocket.visualRadius ?? pocket.radius;
       const capGeometry = new THREE.CylinderGeometry(
-        pocket.radius * 1.02,
-        pocket.radius * 1.02,
+        visualRadius * 1.02,
+        visualRadius * 1.02,
         capThickness,
         48
       );
       const capMesh = new THREE.Mesh(capGeometry, capMaterial.clone());
-      capMesh.position.set(pocket.x, pocket.y, 0.6);
+      capMesh.position.set(pocket.center.x, pocket.center.y, 0.6);
       capMesh.rotation.x = Math.PI / 2;
       capMesh.renderOrder = this.layerOrder.orderCaps;
       capMesh.visible = this.layerVisibility.showCaps;

@@ -29,8 +29,11 @@ export const CONFIG = {
   
   // Pockets (center-origin coordinates: see Geometry.ts for authoritative definitions)
   POCKET_RADIUS: 2.5,
-  POCKET_RADIUS_CORNER: 2.5,
-  POCKET_RADIUS_SIDE: 2.5,
+  POCKET_CAPTURE_RADIUS_CORNER: 2.5,
+  POCKET_CAPTURE_RADIUS_SIDE: 2.5,
+  POCKET_VISUAL_RADIUS_CORNER: 2.5,
+  POCKET_VISUAL_RADIUS_SIDE: 2.5,
+  POCKET_SHELF_DEPTH_IN: 0.5,
   
   // Cue
   CUE_POWER_MIN: 0.5,
@@ -48,6 +51,7 @@ export const CONFIG = {
   
   // Rendering
   CANVAS_SCALE: 8, // Pixels per game unit
+  CANVAS_SCALE_MULTIPLIER: 1,
   TABLE_COLOR: '#0a5f0a',
   FRAME_COLOR: '#3d2413',
   RAIL_COLOR: '#2d1810',
@@ -96,8 +100,16 @@ export const CONFIG = {
   CORNER_TARGET_Y_IN: 21.0, // Target Y where corner jaw meets vertical straight segment
   SIDE_JAW_OUTER_OVERRIDE_IN: null as number | null, // Override for side jaw outer X magnitude (null = derive)
   SIDE_JAW_INNER_OVERRIDE_IN: null as number | null, // Override for side jaw inner X magnitude (null = derive)
+  CORNER_JAW_X_OVERRIDE_IN: null as number | null, // Override for corner jaw X transition (null = derive)
+  CORNER_JAW_Y_OVERRIDE_IN: null as number | null, // Override for corner jaw Y transition (null = derive)
+  SIDE_THROAT_WIDTH_IN: null as number | null, // Override for side throat width (null = derive)
+  CORNER_THROAT_WIDTH_IN: null as number | null, // Override for corner throat width (null = derive)
   JAW_REF_RADIUS_IN: 4.0, // Reference radius for side pocket jaw angle derivation (in)
   CORNER_JAW_REF_RADIUS_IN: 4.0, // Reference radius for corner pocket jaw angle derivation (in)
+  SIDE_CUT_ANGLE_DEG: 0.0, // Angle adjustment for side pocket cut (degrees)
+  CORNER_CUT_ANGLE_DEG: 0.0, // Angle adjustment for corner pocket cut (degrees)
+  SIDE_CUT_ROTATION_PIVOT_IN: 23.5, // Distance from center for side cut rotation
+  JAW_CURVE_BLEND: 0.0,
 };
 
 // Ball IDs

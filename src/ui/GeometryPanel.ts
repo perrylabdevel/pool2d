@@ -41,6 +41,46 @@ export class GeometryPanel {
       this.onGeometryChange();
     };
 
+    const initNullableSlider = (
+      sliderId: string,
+      labelId: string,
+      autoBtnId: string,
+      key: keyof GeometrySettings,
+      clamp: (value: number) => number,
+      formatDigits: number = 2
+    ) => {
+      const slider = document.getElementById(sliderId) as HTMLInputElement | null;
+      const label = document.getElementById(labelId);
+      const autoBtn = document.getElementById(autoBtnId);
+      if (!slider || !label || !autoBtn) return;
+
+      const defaultValue = slider.dataset.default ? parseFloat(slider.dataset.default) : parseFloat(slider.value);
+
+      const updateLabel = (value: number | null) => {
+        if (value == null) {
+          label.textContent = 'Auto';
+        } else {
+          label.textContent = formatNumber(value, formatDigits);
+        }
+      };
+
+      slider.addEventListener('input', (e) => {
+        const raw = parseFloat((e.target as HTMLInputElement).value);
+        const clamped = clamp(raw);
+        slider.value = clamped.toFixed(formatDigits);
+        updateLabel(clamped);
+        notify({ [key]: clamped } as Partial<GeometrySettings>);
+      });
+
+      autoBtn.addEventListener('click', () => {
+        slider.value = (defaultValue ?? 0).toFixed(formatDigits);
+        updateLabel(null);
+        notify({ [key]: null } as Partial<GeometrySettings>);
+      });
+
+      return { updateLabel };
+    };
+
     const sideRadiusSlider = document.getElementById('live-side-radius') as HTMLInputElement;
     const sideRadiusVal = document.getElementById('live-side-radius-val');
     if (sideRadiusSlider && sideRadiusVal) {
@@ -120,58 +160,75 @@ export class GeometryPanel {
       });
     }
 
-    const handleOverrideInput = (
-      input: HTMLInputElement | null,
-      resetBtn: HTMLElement | null,
-      key: 'SIDE_JAW_OUTER_OVERRIDE_IN' | 'SIDE_JAW_INNER_OVERRIDE_IN'
+    const initOverrideSlider = (
+      sliderId: string,
+      labelId: string,
+      autoBtnId: string,
+      key: 'SIDE_JAW_OUTER_OVERRIDE_IN' | 'SIDE_JAW_INNER_OVERRIDE_IN' | 'CORNER_JAW_X_OVERRIDE_IN' | 'CORNER_JAW_Y_OVERRIDE_IN',
+      clamp: (value: number) => number,
+      formatDigits: number = 2
     ) => {
-      if (!input) return;
+      const slider = document.getElementById(sliderId) as HTMLInputElement | null;
+      const label = document.getElementById(labelId);
+      const autoBtn = document.getElementById(autoBtnId);
+      if (!slider || !label || !autoBtn) return;
 
-      const commit = () => {
-        const raw = input.value.trim();
-        if (!raw) {
-          notify({ [key]: null } as any);
-          return;
-        }
-        let value = parseFloat(raw);
-        if (!Number.isFinite(value)) {
-          input.value = '';
-          notify({ [key]: null } as any);
-          return;
-        }
-        const settings = this.settingsManager.getGeometrySettings();
-        const maxOuter = settings.CORNER_STRAIGHT_X_IN - 0.25;
-        if (key === 'SIDE_JAW_OUTER_OVERRIDE_IN') {
-          value = Math.min(Math.max(1, value), maxOuter);
-        } else {
-          const outer = settings.SIDE_JAW_OUTER_OVERRIDE_IN ?? maxOuter;
-          value = Math.min(Math.max(0.25, value), outer - 0.25);
-        }
-        input.value = formatNumber(value);
-        notify({ [key]: value } as any);
+      const updateLabel = (value: number, isAuto: boolean) => {
+        label.textContent = isAuto ? 'Auto' : formatNumber(value, formatDigits);
       };
 
-      input.addEventListener('change', commit);
-      input.addEventListener('blur', commit);
+      slider.addEventListener('input', (e) => {
+        const raw = parseFloat((e.target as HTMLInputElement).value);
+        const clamped = clamp(raw);
+        slider.value = clamped.toFixed(formatDigits);
+        updateLabel(clamped, false);
+        notify({ [key]: clamped } as Partial<GeometrySettings>);
+      });
 
-      if (resetBtn) {
-        resetBtn.addEventListener('click', () => {
-          input.value = '';
-          notify({ [key]: null } as any);
-        });
-      }
+      autoBtn.addEventListener('click', () => {
+        const settings = this.settingsManager.getGeometrySettings();
+        updateLabel(0, true);
+        notify({ [key]: null } as Partial<GeometrySettings>);
+        if (key === 'SIDE_JAW_OUTER_OVERRIDE_IN') {
+          const maxOuter = settings.CORNER_STRAIGHT_X_IN - 0.25;
+          slider.value = maxOuter.toFixed(formatDigits);
+        } else if (key === 'SIDE_JAW_INNER_OVERRIDE_IN') {
+          const outer = settings.SIDE_JAW_OUTER_OVERRIDE_IN ?? settings.CORNER_STRAIGHT_X_IN - 0.25;
+          slider.value = Math.max(0.5, outer - 0.25).toFixed(formatDigits);
+        } else if (key === 'CORNER_JAW_X_OVERRIDE_IN') {
+          slider.value = Math.min(settings.CORNER_STRAIGHT_X_IN - 0.25, settings.CORNER_STRAIGHT_X_IN).toFixed(formatDigits);
+        } else {
+          slider.value = Math.max(1, settings.CORNER_TARGET_Y_IN).toFixed(formatDigits);
+        }
+      });
+
+      return { slider, label, updateLabel };
     };
 
-    handleOverrideInput(
-      document.getElementById('side-jaw-outer') as HTMLInputElement,
-      document.getElementById('side-jaw-outer-reset'),
-      'SIDE_JAW_OUTER_OVERRIDE_IN'
+    const getCurrentSettings = () => this.settingsManager.getGeometrySettings();
+
+    initOverrideSlider(
+      'live-side-jaw-outer',
+      'live-side-jaw-outer-val',
+      'live-side-jaw-outer-auto',
+      'SIDE_JAW_OUTER_OVERRIDE_IN',
+      (value) => {
+        const { CORNER_STRAIGHT_X_IN } = getCurrentSettings();
+        const maxOuter = CORNER_STRAIGHT_X_IN - 0.25;
+        return Math.max(1, Math.min(maxOuter, value));
+      }
     );
 
-    handleOverrideInput(
-      document.getElementById('side-jaw-inner') as HTMLInputElement,
-      document.getElementById('side-jaw-inner-reset'),
-      'SIDE_JAW_INNER_OVERRIDE_IN'
+    initOverrideSlider(
+      'live-side-jaw-inner',
+      'live-side-jaw-inner-val',
+      'live-side-jaw-inner-auto',
+      'SIDE_JAW_INNER_OVERRIDE_IN',
+      (value) => {
+        const settings = getCurrentSettings();
+        const maxOuter = settings.SIDE_JAW_OUTER_OVERRIDE_IN ?? settings.CORNER_STRAIGHT_X_IN - 0.25;
+        return Math.max(0.5, Math.min(maxOuter - 0.25, value));
+      }
     );
 
     const cornerRadiusSlider = document.getElementById('live-corner-radius') as HTMLInputElement;
@@ -183,29 +240,73 @@ export class GeometryPanel {
         notify({ CORNER_JAW_REF_RADIUS_IN: value });
       });
     }
-    const cornerPocketRadiusSlider = document.getElementById('live-corner-pocket-radius') as HTMLInputElement;
-    const cornerPocketRadiusVal = document.getElementById('live-corner-pocket-radius-val');
-    if (cornerPocketRadiusSlider && cornerPocketRadiusVal) {
-      cornerPocketRadiusSlider.addEventListener('input', (e) => {
-        const raw = parseFloat((e.target as HTMLInputElement).value);
-        const value = Math.max(1.5, Math.min(3.75, raw));
-        cornerPocketRadiusSlider.value = value.toFixed(2);
-        cornerPocketRadiusVal.textContent = formatNumber(value, 2);
-        notify({ CORNER_POCKET_RADIUS_IN: value });
-      });
-    }
 
-    const sidePocketRadiusSlider = document.getElementById('live-side-pocket-radius') as HTMLInputElement;
-    const sidePocketRadiusVal = document.getElementById('live-side-pocket-radius-val');
-    if (sidePocketRadiusSlider && sidePocketRadiusVal) {
-      sidePocketRadiusSlider.addEventListener('input', (e) => {
+    initOverrideSlider(
+      'live-corner-jaw-x',
+      'live-corner-jaw-x-val',
+      'live-corner-jaw-x-auto',
+      'CORNER_JAW_X_OVERRIDE_IN',
+      (value) => {
+        const { CORNER_STRAIGHT_X_IN } = getCurrentSettings();
+        return Math.max(30, Math.min(CORNER_STRAIGHT_X_IN - 0.25, value));
+      }
+    );
+
+    initOverrideSlider(
+      'live-corner-jaw-y',
+      'live-corner-jaw-y-val',
+      'live-corner-jaw-y-auto',
+      'CORNER_JAW_Y_OVERRIDE_IN',
+      (value) => {
+        const { SIDE_STRAIGHT_Y_IN } = getCurrentSettings();
+        return Math.max(10, Math.min(SIDE_STRAIGHT_Y_IN - 0.25, value));
+      }
+    );
+
+    initNullableSlider(
+      'live-side-throat-width',
+      'live-side-throat-width-val',
+      'live-side-throat-width-auto',
+      'SIDE_THROAT_WIDTH_IN',
+      (value) => Math.max(1, Math.min(8, value))
+    );
+
+    initNullableSlider(
+      'live-corner-throat-width',
+      'live-corner-throat-width-val',
+      'live-corner-throat-width-auto',
+      'CORNER_THROAT_WIDTH_IN',
+      (value) => Math.max(1, Math.min(8, value))
+    );
+
+    const initSimpleSlider = (
+      sliderId: string,
+      labelId: string,
+      key: keyof GeometrySettings,
+      formatDigits: number = 2,
+      clamp?: (value: number) => number
+    ) => {
+      const slider = document.getElementById(sliderId) as HTMLInputElement | null;
+      const label = document.getElementById(labelId);
+      if (!slider || !label) return;
+
+      slider.addEventListener('input', (e) => {
         const raw = parseFloat((e.target as HTMLInputElement).value);
-        const value = Math.max(1.5, Math.min(3.75, raw));
-        sidePocketRadiusSlider.value = value.toFixed(2);
-        sidePocketRadiusVal.textContent = formatNumber(value, 2);
-        notify({ SIDE_POCKET_RADIUS_IN: value });
+        const value = clamp ? clamp(raw) : raw;
+        slider.value = value.toFixed(formatDigits);
+        label.textContent = formatNumber(value, formatDigits);
+        notify({ [key]: value } as Partial<GeometrySettings>);
       });
-    }
+    };
+
+    initSimpleSlider('live-corner-pocket-capture', 'live-corner-pocket-capture-val', 'CORNER_POCKET_CAPTURE_RADIUS_IN');
+    initSimpleSlider('live-side-pocket-capture', 'live-side-pocket-capture-val', 'SIDE_POCKET_CAPTURE_RADIUS_IN');
+    initSimpleSlider('live-corner-pocket-visual', 'live-corner-pocket-visual-val', 'CORNER_POCKET_VISUAL_RADIUS_IN');
+    initSimpleSlider('live-side-pocket-visual', 'live-side-pocket-visual-val', 'SIDE_POCKET_VISUAL_RADIUS_IN');
+    initSimpleSlider('live-pocket-shelf-depth', 'live-pocket-shelf-depth-val', 'POCKET_SHELF_DEPTH_IN');
+    initSimpleSlider('live-jaw-curve-blend', 'live-jaw-curve-blend-val', 'JAW_CURVE_BLEND', 2, (v) => Math.max(0, Math.min(1, v)));
+    initSimpleSlider('live-corner-cut-angle', 'live-corner-cut-angle-val', 'CORNER_CUT_ANGLE_DEG', 1);
+    initSimpleSlider('live-side-cut-angle', 'live-side-cut-angle-val', 'SIDE_CUT_ANGLE_DEG', 1);
 
     const cornerFrameSlider = document.getElementById('live-corner-frame') as HTMLInputElement;
     const cornerFrameVal = document.getElementById('live-corner-frame-val');
@@ -316,19 +417,105 @@ export class GeometryPanel {
       sideStraightSlider.value = settings.SIDE_STRAIGHT_Y_IN.toFixed(2);
     }
 
-    const setOverrideInput = (id: string, value: number | null) => {
-      const input = document.getElementById(id) as HTMLInputElement | null;
-      if (!input) return;
-      input.value = value == null ? '' : formatNumber(value);
+    const setOverrideSlider = (
+      id: string,
+      value: number | null,
+      clamp: (value: number) => number,
+      digits: number = 2
+    ) => {
+      const slider = document.getElementById(id) as HTMLInputElement | null;
+      const valSpan = document.getElementById(`${id}-val`);
+      if (!slider || !valSpan) return;
+      if (value == null) {
+        valSpan.textContent = 'Auto';
+      } else {
+        const clamped = clamp(value);
+        slider.value = clamped.toFixed(digits);
+        valSpan.textContent = formatNumber(clamped, digits);
+      }
     };
 
-    setOverrideInput('side-jaw-outer', settings.SIDE_JAW_OUTER_OVERRIDE_IN);
-    setOverrideInput('side-jaw-inner', settings.SIDE_JAW_INNER_OVERRIDE_IN);
+    setOverrideSlider(
+      'live-side-jaw-outer',
+      settings.SIDE_JAW_OUTER_OVERRIDE_IN,
+      (v) => {
+        const maxOuter = settings.CORNER_STRAIGHT_X_IN - 0.25;
+        return Math.max(1, Math.min(maxOuter, v));
+      }
+    );
+    setOverrideSlider(
+      'live-side-jaw-inner',
+      settings.SIDE_JAW_INNER_OVERRIDE_IN,
+      (v) => {
+        const maxOuter = settings.SIDE_JAW_OUTER_OVERRIDE_IN ?? settings.CORNER_STRAIGHT_X_IN - 0.25;
+        return Math.max(0.5, Math.min(maxOuter - 0.25, v));
+      }
+    );
+
+    setOverrideSlider(
+      'live-corner-jaw-x',
+      settings.CORNER_JAW_X_OVERRIDE_IN,
+      (v) => {
+        const maxX = settings.CORNER_STRAIGHT_X_IN - 0.25;
+        return Math.max(30, Math.min(maxX, v));
+      }
+    );
+    setOverrideSlider(
+      'live-corner-jaw-y',
+      settings.CORNER_JAW_Y_OVERRIDE_IN,
+      (v) => {
+        const maxY = settings.SIDE_STRAIGHT_Y_IN - 0.25;
+        return Math.max(10, Math.min(maxY, v));
+      }
+    );
+
+    const setNullableSlider = (
+      sliderId: string,
+      value: number | null,
+      digits: number = 2,
+      clamp?: (val: number) => number
+    ) => {
+      const slider = document.getElementById(sliderId) as HTMLInputElement | null;
+      const valSpan = document.getElementById(`${sliderId}-val`);
+      if (!slider || !valSpan) return;
+      const defaultValue = slider.dataset.default ? parseFloat(slider.dataset.default) : parseFloat(slider.value);
+      if (value == null) {
+        valSpan.textContent = 'Auto';
+        slider.value = (defaultValue ?? 0).toFixed(digits);
+      } else {
+        const clamped = clamp ? clamp(value) : value;
+        slider.value = clamped.toFixed(digits);
+        valSpan.textContent = formatNumber(clamped, digits);
+      }
+    };
+
+    setNullableSlider('live-side-throat-width', settings.SIDE_THROAT_WIDTH_IN, 2, (v) => Math.max(1, Math.min(8, v)));
+    setNullableSlider('live-corner-throat-width', settings.CORNER_THROAT_WIDTH_IN, 2, (v) => Math.max(1, Math.min(8, v)));
+
+    const setSimpleSlider = (
+      sliderId: string,
+      value: number,
+      digits: number = 2,
+      formatter?: (v: number) => string
+    ) => {
+      const slider = document.getElementById(sliderId) as HTMLInputElement | null;
+      const valueSpan = document.getElementById(`${sliderId}-val`);
+      if (!slider || !valueSpan) return;
+      slider.value = value.toFixed(digits);
+      valueSpan.textContent = formatter ? formatter(value) : formatNumber(value, digits);
+    };
+
+    setSimpleSlider('live-corner-pocket-capture', settings.CORNER_POCKET_CAPTURE_RADIUS_IN);
+    setSimpleSlider('live-side-pocket-capture', settings.SIDE_POCKET_CAPTURE_RADIUS_IN);
+    setSimpleSlider('live-corner-pocket-visual', settings.CORNER_POCKET_VISUAL_RADIUS_IN);
+    setSimpleSlider('live-side-pocket-visual', settings.SIDE_POCKET_VISUAL_RADIUS_IN);
+    setSimpleSlider('live-pocket-shelf-depth', settings.POCKET_SHELF_DEPTH_IN);
+    setSimpleSlider('live-jaw-curve-blend', settings.JAW_CURVE_BLEND, 2);
+    setSimpleSlider('live-corner-cut-angle', settings.CORNER_CUT_ANGLE_DEG, 1, (v) => formatNumber(v, 1));
+    setSimpleSlider('live-side-cut-angle', settings.SIDE_CUT_ANGLE_DEG, 1, (v) => formatNumber(v, 1));
 
     setSlider('live-corner-frame', settings.CORNER_FRAME_OFFSET_IN, (v) => formatNumber(v, 1), 1);
     setSlider('live-corner-radius', settings.CORNER_JAW_REF_RADIUS_IN, (v) => formatNumber(v, 1), 1);
-    setSlider('live-corner-pocket-radius', settings.CORNER_POCKET_RADIUS_IN, (v) => formatNumber(v, 2), 2);
-    setSlider('live-side-pocket-radius', settings.SIDE_POCKET_RADIUS_IN, (v) => formatNumber(v, 2), 2);
     setSlider('live-corner-straight', settings.CORNER_STRAIGHT_X_IN);
     setSlider('live-corner-target', settings.CORNER_TARGET_Y_IN);
     setSlider('live-frame-width', settings.FRAME_OFFSET_IN, (v) => formatNumber(v, 1), 1);

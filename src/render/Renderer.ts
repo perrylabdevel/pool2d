@@ -2,10 +2,11 @@
 // Coordinate system: World uses center-origin Y-up, Canvas uses top-left Y-down
 // Transform applied in render() to convert world->canvas
 
-import { Ball, Rail, Pocket } from '../physics/Shapes';
+import { Ball, Rail } from '../physics/Shapes';
 import { PhysicsWorld } from '../physics/Physics';
 import { CONFIG, BALL_CUE } from '../config';
-import { getTableGeometry, computeBoundaryBounds, computePlayBoundaryPoints, type Vec2, type BoundaryBounds } from '../geometry/Geometry';
+import { getTableGeometry, computeBoundaryBounds, computePlayBoundaryPoints, type Vec2, type BoundaryBounds, type PocketDef } from '../geometry/Geometry';
+
 import { PredictionResult } from '../physics/Prediction';
 
 type AxisAlignment = 'horizontal' | 'vertical' | null;
@@ -84,11 +85,13 @@ export class Renderer {
     this.ctx.scale(this.scale, -this.scale); // Negative Y to flip vertical axis
     
     // Draw in correct order: bottom to top
+    const tableGeom = getTableGeometry();
+
     this.drawFrame();
     this.drawPlayingSurface();
     this.drawRailBackground();
     this.drawRails(world.rails);
-    this.drawPockets(world.pockets);
+    this.drawPockets(tableGeom.pockets);
     this.drawBalls(world.balls, alpha);
     
     this.ctx.restore();
@@ -188,7 +191,59 @@ export class Renderer {
     }
   }
   
-  drawPockets(pockets: Pocket[]) {
+  drawPocket(pocket: PocketDef) {
+    const radius = pocket.visualRadius ?? pocket.radius;
+    const angleRad = (pocket.cutAngleDeg ?? 0) * (Math.PI / 180);
+    const { x, y } = pocket.center;
+
+    this.ctx.save();
+    this.ctx.translate(x, y);
+    this.ctx.rotate(angleRad);
+
+    // Draw pocket hole (black circle)
+    this.ctx.fillStyle = CONFIG.POCKET_COLOR;
+    this.ctx.beginPath();
+    this.ctx.arc(0, 0, radius, 0, Math.PI * 2);
+    this.ctx.fill();
+    
+    // Inner shadow
+    const gradient = this.ctx.createRadialGradient(
+      0,
+      0,
+      0,
+      0,
+      0,
+      radius
+    );
+    gradient.addColorStop(0, 'rgba(0, 0, 0, 1)');
+    gradient.addColorStop(1, 'rgba(50, 50, 50, 0.3)');
+    
+    this.ctx.fillStyle = gradient;
+    this.ctx.beginPath();
+    this.ctx.arc(0, 0, radius, 0, Math.PI * 2);
+    this.ctx.fill();
+
+    // Directional highlight wedge to visualize rotation
+    const wedgeAngle = Math.PI / 3;
+    this.ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+    this.ctx.beginPath();
+    this.ctx.moveTo(0, 0);
+    this.ctx.arc(0, 0, radius * 1.05, -wedgeAngle / 2, wedgeAngle / 2);
+    this.ctx.closePath();
+    this.ctx.fill();
+
+    // Darken opposite wedge for additional contrast
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
+    this.ctx.beginPath();
+    this.ctx.moveTo(0, 0);
+    this.ctx.arc(0, 0, radius, Math.PI - wedgeAngle / 2, Math.PI + wedgeAngle / 2);
+    this.ctx.closePath();
+    this.ctx.fill();
+
+    this.ctx.restore();
+  }
+  
+  drawPockets(pockets: PocketDef[]) {
     pockets.forEach((pocket) => this.drawPocket(pocket));
   }
   
@@ -243,31 +298,6 @@ export class Renderer {
     this.ctx.moveTo(startX, startY);
     this.ctx.lineTo(endX, endY);
     this.ctx.stroke();
-  }
-  
-  drawPocket(pocket: Pocket) {
-    // Draw pocket hole (black circle)
-    this.ctx.fillStyle = CONFIG.POCKET_COLOR;
-    this.ctx.beginPath();
-    this.ctx.arc(pocket.x, pocket.y, pocket.radius, 0, Math.PI * 2);
-    this.ctx.fill();
-    
-    // Inner shadow
-    const gradient = this.ctx.createRadialGradient(
-      pocket.x,
-      pocket.y,
-      0,
-      pocket.x,
-      pocket.y,
-      pocket.radius
-    );
-    gradient.addColorStop(0, 'rgba(0, 0, 0, 1)');
-    gradient.addColorStop(1, 'rgba(50, 50, 50, 0.3)');
-    
-    this.ctx.fillStyle = gradient;
-    this.ctx.beginPath();
-    this.ctx.arc(pocket.x, pocket.y, pocket.radius, 0, Math.PI * 2);
-    this.ctx.fill();
   }
   
   drawBall(ball: Ball, alpha: number) {

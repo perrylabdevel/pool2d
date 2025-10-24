@@ -19,14 +19,23 @@ export interface PocketDef {
   id: string;
   center: Vec2;
   cutNormalHint: Vec2; // Direction hint for pocket lip angle
-  radius: number;
+  cutAngleDeg: number;
+  captureRadius: number;
+  visualRadius: number;
+  shelfDepth: number;
+  radius: number; // Legacy alias for visualRadius (renderers still reference this)
 }
 
 export interface TableGeometry {
   playWidthIn: number;
   playHeightIn: number;
   cushionProfileIn: number;
-  pocketCaptureRadiusIn: number;
+  pocketCaptureRadiusIn: number; // Legacy aggregate value (corner capture radius)
+  cornerPocketCaptureRadiusIn: number;
+  sidePocketCaptureRadiusIn: number;
+  cornerPocketVisualRadiusIn: number;
+  sidePocketVisualRadiusIn: number;
+  pocketShelfDepthIn: number;
   rails: RailDef[];
   pockets: PocketDef[];
 }
@@ -82,9 +91,6 @@ export function computeBoundaryBounds(points: Vec2[]): BoundaryBounds {
 // --- Derived jaw geometry helpers (side pockets) ---
 const PLAY_HALF_W_IN = 100.0 / 2;
 const PLAY_HALF_H_IN = 50.0 / 2;
-const X_E_PLAY = PLAY_HALF_W_IN;
-const X_W_PLAY = -PLAY_HALF_W_IN;
-
 // Existing felt straight and inner throat Y-levels for north/south (configurable)
 const Y_N_PLAY = PLAY_HALF_H_IN;        // 25.0
 const Y_S_PLAY = -PLAY_HALF_H_IN;       // -25.0
@@ -199,7 +205,11 @@ export function getTableGeometry(): TableGeometry {
     CONFIG.CORNER_JAW_REF_RADIUS_IN,
     sideStraight
   );
-  const CORNER_JAW_X = Math.min(cornerStraight - 0.25, Math.max(1, cornerJawXRaw));
+  const cornerJawXOverride = CONFIG.CORNER_JAW_X_OVERRIDE_IN;
+  const CORNER_JAW_X = Math.min(
+    cornerStraight - 0.25,
+    Math.max(1, cornerJawXOverride ?? cornerJawXRaw)
+  );
 
   const cornerJawYRaw = deriveCornerJawY(
     cornerFrameOffset,
@@ -207,7 +217,11 @@ export function getTableGeometry(): TableGeometry {
     cornerStraight,
     CONFIG.CORNER_TARGET_Y_IN
   );
-  const CORNER_JAW_Y = Math.min(sideStraight - 0.25, Math.max(1, cornerJawYRaw));
+  const cornerJawYOverride = CONFIG.CORNER_JAW_Y_OVERRIDE_IN;
+  const CORNER_JAW_Y = Math.min(
+    sideStraight - 0.25,
+    Math.max(1, cornerJawYOverride ?? cornerJawYRaw)
+  );
 
   const Y_N_STRAIGHT = sideStraight;
   const Y_S_STRAIGHT = -sideStraight;
@@ -221,7 +235,12 @@ export function getTableGeometry(): TableGeometry {
     playWidthIn: 100.0,
     playHeightIn: 50.0,
     cushionProfileIn: 1.75,
-    pocketCaptureRadiusIn: CONFIG.POCKET_RADIUS_CORNER,
+    pocketCaptureRadiusIn: CONFIG.POCKET_CAPTURE_RADIUS_CORNER,
+    cornerPocketCaptureRadiusIn: CONFIG.POCKET_CAPTURE_RADIUS_CORNER,
+    sidePocketCaptureRadiusIn: CONFIG.POCKET_CAPTURE_RADIUS_SIDE,
+    cornerPocketVisualRadiusIn: CONFIG.POCKET_VISUAL_RADIUS_CORNER,
+    sidePocketVisualRadiusIn: CONFIG.POCKET_VISUAL_RADIUS_SIDE,
+    pocketShelfDepthIn: CONFIG.POCKET_SHELF_DEPTH_IN,
 
     // Rails approximating WPA throat geometry, normals point inward
     // Corner rails stop short of pocket centers to leave openings
@@ -362,42 +381,66 @@ export function getTableGeometry(): TableGeometry {
     
     // Pockets at corners and midpoints
     pockets: [
-    { 
-      id: 'NW_corner', 
-      center: { x: -50.0, y: 25.0 }, 
-      cutNormalHint: { x: 1, y: -1 },
-      radius: CONFIG.POCKET_RADIUS_CORNER,
-    },
-    { 
-      id: 'NE_corner', 
-      center: { x: 50.0, y: 25.0 }, 
-      cutNormalHint: { x: -1, y: -1 },
-      radius: CONFIG.POCKET_RADIUS_CORNER,
-    },
-    { 
-      id: 'SW_corner', 
-      center: { x: -50.0, y: -25.0 }, 
-      cutNormalHint: { x: 1, y: 1 },
-      radius: CONFIG.POCKET_RADIUS_CORNER,
-    },
-    { 
-      id: 'SE_corner', 
-      center: { x: 50.0, y: -25.0 }, 
-      cutNormalHint: { x: -1, y: 1 },
-      radius: CONFIG.POCKET_RADIUS_CORNER,
-    },
-    { 
-      id: 'N_middle', 
-      center: { x: 0.0, y: Y_N_PLAY + SIDE_POCKET_OFFSET }, 
-      cutNormalHint: { x: 0, y: -1 },
-      radius: CONFIG.POCKET_RADIUS_SIDE,
-    },
-    { 
-      id: 'S_middle', 
-      center: { x: 0.0, y: Y_S_PLAY - SIDE_POCKET_OFFSET }, 
-      cutNormalHint: { x: 0, y: 1 },
-      radius: CONFIG.POCKET_RADIUS_SIDE,
-    }
+      {
+        id: 'NW_corner',
+        center: { x: -50.0, y: 25.0 },
+        cutNormalHint: { x: 1, y: -1 },
+        cutAngleDeg: CONFIG.CORNER_CUT_ANGLE_DEG,
+        captureRadius: CONFIG.POCKET_CAPTURE_RADIUS_CORNER,
+        visualRadius: CONFIG.POCKET_VISUAL_RADIUS_CORNER,
+        shelfDepth: CONFIG.POCKET_SHELF_DEPTH_IN,
+        radius: CONFIG.POCKET_VISUAL_RADIUS_CORNER,
+      },
+      {
+        id: 'NE_corner',
+        center: { x: 50.0, y: 25.0 },
+        cutNormalHint: { x: -1, y: -1 },
+        cutAngleDeg: CONFIG.CORNER_CUT_ANGLE_DEG,
+        captureRadius: CONFIG.POCKET_CAPTURE_RADIUS_CORNER,
+        visualRadius: CONFIG.POCKET_VISUAL_RADIUS_CORNER,
+        shelfDepth: CONFIG.POCKET_SHELF_DEPTH_IN,
+        radius: CONFIG.POCKET_VISUAL_RADIUS_CORNER,
+      },
+      {
+        id: 'SW_corner',
+        center: { x: -50.0, y: -25.0 },
+        cutNormalHint: { x: 1, y: 1 },
+        cutAngleDeg: CONFIG.CORNER_CUT_ANGLE_DEG,
+        captureRadius: CONFIG.POCKET_CAPTURE_RADIUS_CORNER,
+        visualRadius: CONFIG.POCKET_VISUAL_RADIUS_CORNER,
+        shelfDepth: CONFIG.POCKET_SHELF_DEPTH_IN,
+        radius: CONFIG.POCKET_VISUAL_RADIUS_CORNER,
+      },
+      {
+        id: 'SE_corner',
+        center: { x: 50.0, y: -25.0 },
+        cutNormalHint: { x: -1, y: 1 },
+        cutAngleDeg: CONFIG.CORNER_CUT_ANGLE_DEG,
+        captureRadius: CONFIG.POCKET_CAPTURE_RADIUS_CORNER,
+        visualRadius: CONFIG.POCKET_VISUAL_RADIUS_CORNER,
+        shelfDepth: CONFIG.POCKET_SHELF_DEPTH_IN,
+        radius: CONFIG.POCKET_VISUAL_RADIUS_CORNER,
+      },
+      {
+        id: 'N_middle',
+        center: { x: 0.0, y: Y_N_PLAY + SIDE_POCKET_OFFSET },
+        cutNormalHint: { x: 0, y: -1 },
+        cutAngleDeg: CONFIG.SIDE_CUT_ANGLE_DEG,
+        captureRadius: CONFIG.POCKET_CAPTURE_RADIUS_SIDE,
+        visualRadius: CONFIG.POCKET_VISUAL_RADIUS_SIDE,
+        shelfDepth: CONFIG.POCKET_SHELF_DEPTH_IN,
+        radius: CONFIG.POCKET_VISUAL_RADIUS_SIDE,
+      },
+      {
+        id: 'S_middle',
+        center: { x: 0.0, y: Y_S_PLAY - SIDE_POCKET_OFFSET },
+        cutNormalHint: { x: 0, y: 1 },
+        cutAngleDeg: CONFIG.SIDE_CUT_ANGLE_DEG,
+        captureRadius: CONFIG.POCKET_CAPTURE_RADIUS_SIDE,
+        visualRadius: CONFIG.POCKET_VISUAL_RADIUS_SIDE,
+        shelfDepth: CONFIG.POCKET_SHELF_DEPTH_IN,
+        radius: CONFIG.POCKET_VISUAL_RADIUS_SIDE,
+      },
     ]
   };
 }

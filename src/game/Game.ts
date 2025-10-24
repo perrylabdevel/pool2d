@@ -7,6 +7,7 @@ import { InputManager } from '../input/Input';
 import { DebugDraw } from '../debug/DebugDraw';
 import { HUD } from '../ui/HUD';
 import { CONFIG, CUE_BALL_POSITION, RACK_POSITIONS } from '../config';
+import { getTableGeometry } from '../geometry/Geometry';
 import { EightBallRules } from '../rules/EightBall';
 import { physicsRecorder } from '../debug/PhysicsRecorder';
 import { Predictor } from '../physics/Prediction';
@@ -276,7 +277,8 @@ export class Game {
     // Initialize 3D scene
     this.renderer.initializeTable();
     this.renderer.initializeRails(this.world.rails);
-    this.renderer.initializePockets(this.world.pockets);
+    const geometry = getTableGeometry();
+    this.renderer.initializePockets(geometry.pockets);
     
     // Connect debug overlay to renderer for coordinate projection
     this.debug.setRenderer(this.renderer);

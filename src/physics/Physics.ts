@@ -83,11 +83,15 @@ export class PhysicsWorld {
     // Use authoritative geometry definitions
     const GEOM = getTableGeometry();
     GEOM.pockets.forEach((pocketDef) => {
+      const fallbackCapture = pocketDef.id.includes('corner')
+        ? GEOM.cornerPocketCaptureRadiusIn
+        : GEOM.sidePocketCaptureRadiusIn;
+      const captureRadius = pocketDef.captureRadius ?? fallbackCapture ?? GEOM.pocketCaptureRadiusIn;
       this.pockets.push(
         new Pocket(
           pocketDef.center.x,
           pocketDef.center.y,
-          pocketDef.radius ?? GEOM.pocketCaptureRadiusIn
+          captureRadius
         )
       );
     });
