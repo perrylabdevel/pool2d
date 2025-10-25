@@ -570,7 +570,7 @@ export class Renderer3D {
     this.scene.add(this.tableMesh);
 
     // Wooden frame planks surrounding play surface
-    const frameWidth = 4;
+    const frameWidth = Math.max(0.1, CONFIG.FRAME_OFFSET_IN);
     this.initializeFrame(frameWidth);
   }
 
@@ -842,11 +842,11 @@ export class Renderer3D {
       return null;
     }
 
-    const margin = Math.max(0.1, CONFIG.FRAME_OFFSET_IN);
     const { minX, maxX, minY, maxY } = this.playBounds;
 
     const outer = new THREE.Shape();
-    const outerOffset = CONFIG.RAIL_THICKNESS_OUTER;
+    const frameWidth = Math.max(0.1, CONFIG.FRAME_OFFSET_IN);
+    const outerOffset = CONFIG.RAIL_THICKNESS_OUTER + frameWidth;
     outer.moveTo(minX - outerOffset, minY - outerOffset);
     outer.lineTo(maxX + outerOffset, minY - outerOffset);
     outer.lineTo(maxX + outerOffset, maxY + outerOffset);

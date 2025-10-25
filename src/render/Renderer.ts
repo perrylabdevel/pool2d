@@ -142,7 +142,7 @@ export class Renderer {
   }
 
   drawFrame() {
-    const frameWidth = 6;
+    const frameWidth = Math.max(0.1, CONFIG.FRAME_OFFSET_IN);
     const boundary = this.playBoundaryPoints;
     if (boundary.length < 3) {
       const geom = getTableGeometry();

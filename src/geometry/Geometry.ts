@@ -87,6 +87,102 @@ export function computeBoundaryBounds(points: Vec2[]): BoundaryBounds {
   return { minX, maxX, minY, maxY };
 }
 
+const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
+const clamp01 = (value: number): number => clamp(value, 0, 1);
+const degToRad = (deg: number): number => (deg * Math.PI) / 180;
+
+function rotatePoint(point: Vec2, pivot: Vec2, angleRad: number): Vec2 {
+  if (angleRad === 0) return { x: point.x, y: point.y };
+  const cos = Math.cos(angleRad);
+  const sin = Math.sin(angleRad);
+  const dx = point.x - pivot.x;
+  const dy = point.y - pivot.y;
+  return {
+    x: pivot.x + dx * cos - dy * sin,
+    y: pivot.y + dx * sin + dy * cos,
+  };
+}
+
+function rotateVector(vec: Vec2, angleRad: number): Vec2 {
+  if (angleRad === 0) return { x: vec.x, y: vec.y };
+  const cos = Math.cos(angleRad);
+  const sin = Math.sin(angleRad);
+  return {
+    x: vec.x * cos - vec.y * sin,
+    y: vec.x * sin + vec.y * cos,
+  };
+}
+
+type AxisBounds = {
+  minX?: number;
+  maxX?: number;
+  minY?: number;
+  maxY?: number;
+};
+
+function rotateTowardAxis(
+  pivot: Vec2,
+  point: Vec2,
+  angle: number,
+  axis: 'x' | 'y',
+  axisValue: number,
+  clampBounds?: AxisBounds
+): Vec2 {
+  if (Math.abs(angle) < 1e-6) {
+    return { x: point.x, y: point.y };
+  }
+
+  const vector = { x: point.x - pivot.x, y: point.y - pivot.y };
+  const rotated = rotateVector(vector, angle);
+  const denom = axis === 'y' ? rotated.y : rotated.x;
+  if (Math.abs(denom) < 1e-6) {
+    return { x: point.x, y: point.y };
+  }
+
+  const t = axis === 'y' ? (axisValue - pivot.y) / denom : (axisValue - pivot.x) / denom;
+  if (!Number.isFinite(t) || t <= 0) {
+    return { x: point.x, y: point.y };
+  }
+
+  let x = pivot.x + rotated.x * t;
+  let y = pivot.y + rotated.y * t;
+  if (axis === 'y') {
+    y = axisValue;
+  } else {
+    x = axisValue;
+  }
+
+  if (clampBounds) {
+    if (clampBounds.minX !== undefined) x = Math.max(clampBounds.minX, x);
+    if (clampBounds.maxX !== undefined) x = Math.min(clampBounds.maxX, x);
+    if (clampBounds.minY !== undefined) y = Math.max(clampBounds.minY, y);
+    if (clampBounds.maxY !== undefined) y = Math.min(clampBounds.maxY, y);
+  }
+
+  return { x, y };
+}
+
+function normalizeVec(vec: Vec2): Vec2 {
+  const length = Math.sqrt(vec.x * vec.x + vec.y * vec.y) || 1;
+  return { x: vec.x / length, y: vec.y / length };
+}
+
+function computeInwardNormal(from: Vec2, to: Vec2): Vec2 {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const length = Math.sqrt(dx * dx + dy * dy) || 1;
+  let nx = -dy / length;
+  let ny = dx / length;
+  const midX = (from.x + to.x) * 0.5;
+  const midY = (from.y + to.y) * 0.5;
+  const dotToCenter = nx * -midX + ny * -midY;
+  if (dotToCenter < 0) {
+    nx = -nx;
+    ny = -ny;
+  }
+  return { x: nx, y: ny };
+}
+
 // 9-ft table geometry (100" x 50" play area)
 // --- Derived jaw geometry helpers (side pockets) ---
 const PLAY_HALF_W_IN = 100.0 / 2;
@@ -197,19 +293,25 @@ export function getTableGeometry(): TableGeometry {
     maxSideJawOuter
   );
 
-  const JAW_X_OUTER = CONFIG.SIDE_JAW_OUTER_OVERRIDE_IN ?? sideJawDerived.xOuter;
-  const JAW_X_INNER = CONFIG.SIDE_JAW_INNER_OVERRIDE_IN ?? sideJawDerived.xInner;
+  const derivedOuter = clamp(sideJawDerived.xOuter, 1, maxSideJawOuter);
+  const outerOverride = CONFIG.SIDE_JAW_OUTER_OVERRIDE_IN;
+  const JAW_X_OUTER = clamp(outerOverride ?? derivedOuter, 1, maxSideJawOuter);
+
+  const derivedInner = clamp(sideJawDerived.xInner, 0.5, JAW_X_OUTER - 0.25);
+  const throatWidthOverride = CONFIG.SIDE_THROAT_WIDTH_IN != null
+    ? clamp(CONFIG.SIDE_THROAT_WIDTH_IN * 0.5, 0.5, JAW_X_OUTER - 0.25)
+    : null;
+  const innerOverride = CONFIG.SIDE_JAW_INNER_OVERRIDE_IN;
+  const JAW_X_INNER = clamp(innerOverride ?? throatWidthOverride ?? derivedInner, 0.5, JAW_X_OUTER - 0.25);
 
   const cornerJawXRaw = deriveCornerJawX(
     cornerFrameOffset,
     CONFIG.CORNER_JAW_REF_RADIUS_IN,
     sideStraight
   );
+  const cornerJawXDerived = clamp(cornerJawXRaw, 1, cornerStraight - 0.25);
   const cornerJawXOverride = CONFIG.CORNER_JAW_X_OVERRIDE_IN;
-  const CORNER_JAW_X = Math.min(
-    cornerStraight - 0.25,
-    Math.max(1, cornerJawXOverride ?? cornerJawXRaw)
-  );
+  const CORNER_JAW_X = clamp(cornerJawXOverride ?? cornerJawXDerived, 1, cornerStraight - 0.25);
 
   const cornerJawYRaw = deriveCornerJawY(
     cornerFrameOffset,
@@ -218,9 +320,14 @@ export function getTableGeometry(): TableGeometry {
     CONFIG.CORNER_TARGET_Y_IN
   );
   const cornerJawYOverride = CONFIG.CORNER_JAW_Y_OVERRIDE_IN;
-  const CORNER_JAW_Y = Math.min(
-    sideStraight - 0.25,
-    Math.max(1, cornerJawYOverride ?? cornerJawYRaw)
+  const cornerThroatOverride = CONFIG.CORNER_THROAT_WIDTH_IN != null
+    ? clamp(CONFIG.CORNER_THROAT_WIDTH_IN * 0.5, 1, sideStraight - 0.25)
+    : null;
+  const cornerJawYDerived = clamp(cornerJawYRaw, 1, sideStraight - 0.25);
+  const CORNER_JAW_Y = clamp(
+    cornerJawYOverride ?? cornerThroatOverride ?? cornerJawYDerived,
+    1,
+    sideStraight - 0.25
   );
 
   const Y_N_STRAIGHT = sideStraight;
@@ -230,7 +337,237 @@ export function getTableGeometry(): TableGeometry {
   const X_E_STRAIGHT = cornerStraight;
   const X_W_STRAIGHT = -cornerStraight;
   const SIDE_POCKET_OFFSET = CONFIG.SIDE_POCKET_OUTWARD_OFFSET_IN;
-  
+  const curveBlend = clamp01(CONFIG.JAW_CURVE_BLEND ?? 0);
+  const mouthYNorth = PLAY_HALF_H_IN;
+  const mouthYSouth = -PLAY_HALF_H_IN;
+  const throatJoinX = clamp(
+    JAW_X_INNER * (1 - 0.35 * curveBlend),
+    0.5,
+    Math.max(0.5, JAW_X_OUTER - 0.1)
+  );
+  const throatMaxYNorth = Math.max(Y_N_INNER, mouthYNorth - 0.05);
+  const throatJoinYNorth = clamp(
+    Y_N_INNER + (mouthYNorth - Y_N_INNER) * (0.5 * curveBlend),
+    Y_N_INNER,
+    throatMaxYNorth
+  );
+  const throatJoinYSouth = -throatJoinYNorth;
+
+  const rails: RailDef[] = [];
+  const addRail = (id: string, from: Vec2, to: Vec2) => {
+    rails.push({
+      id,
+      from,
+      to,
+      normal: computeInwardNormal(from, to),
+    });
+  };
+
+  let northWestOuter: Vec2 = { x: -(PLAY_HALF_W_IN + cornerFrameOffset), y: PLAY_HALF_H_IN + cornerFrameOffset };
+  let northEastOuter: Vec2 = { x: PLAY_HALF_W_IN + cornerFrameOffset, y: PLAY_HALF_H_IN + cornerFrameOffset };
+  let southEastOuter: Vec2 = { x: PLAY_HALF_W_IN + cornerFrameOffset, y: -(PLAY_HALF_H_IN + cornerFrameOffset) };
+  let southWestOuter: Vec2 = { x: -(PLAY_HALF_W_IN + cornerFrameOffset), y: -(PLAY_HALF_H_IN + cornerFrameOffset) };
+
+  const baseNorthCornerWest: Vec2 = { x: -CORNER_JAW_X, y: Y_N_STRAIGHT };
+  const baseNorthCornerEast: Vec2 = { x: CORNER_JAW_X, y: Y_N_STRAIGHT };
+  const baseSouthCornerEast: Vec2 = { x: CORNER_JAW_X, y: Y_S_STRAIGHT };
+  const baseSouthCornerWest: Vec2 = { x: -CORNER_JAW_X, y: Y_S_STRAIGHT };
+  let northCornerWest: Vec2 = { ...baseNorthCornerWest };
+  let northCornerEast: Vec2 = { ...baseNorthCornerEast };
+  let southCornerEast: Vec2 = { ...baseSouthCornerEast };
+  let southCornerWest: Vec2 = { ...baseSouthCornerWest };
+
+  const northStraightWestEnd: Vec2 = { x: -JAW_X_OUTER, y: Y_N_STRAIGHT };
+  const northStraightEastStart: Vec2 = { x: JAW_X_OUTER, y: Y_N_STRAIGHT };
+  const southStraightEastStart: Vec2 = { x: JAW_X_OUTER, y: Y_S_STRAIGHT };
+  const southStraightWestEnd: Vec2 = { x: -JAW_X_OUTER, y: Y_S_STRAIGHT };
+
+  let northThroatLeftJoint: Vec2 = { x: -throatJoinX, y: throatJoinYNorth };
+  let northThroatRightJoint: Vec2 = { x: throatJoinX, y: throatJoinYNorth };
+  const northMouth: Vec2 = { x: 0, y: mouthYNorth };
+  let southThroatRightJoint: Vec2 = { x: throatJoinX, y: throatJoinYSouth };
+  let southThroatLeftJoint: Vec2 = { x: -throatJoinX, y: throatJoinYSouth };
+  const southMouth: Vec2 = { x: 0, y: mouthYSouth };
+
+  const baseEastVerticalTop: Vec2 = { x: X_E_STRAIGHT, y: CORNER_JAW_Y };
+  const baseEastVerticalBottom: Vec2 = { x: X_E_STRAIGHT, y: -CORNER_JAW_Y };
+  const baseWestVerticalTop: Vec2 = { x: X_W_STRAIGHT, y: CORNER_JAW_Y };
+  const baseWestVerticalBottom: Vec2 = { x: X_W_STRAIGHT, y: -CORNER_JAW_Y };
+  let eastVerticalTop: Vec2 = { ...baseEastVerticalTop };
+  let eastVerticalBottom: Vec2 = { ...baseEastVerticalBottom };
+  let westVerticalTop: Vec2 = { ...baseWestVerticalTop };
+  let westVerticalBottom: Vec2 = { ...baseWestVerticalBottom };
+
+  const sideCutDeg = clamp(CONFIG.SIDE_CUT_ANGLE_DEG ?? 0, -45, 45);
+  const sideCutRad = degToRad(sideCutDeg);
+  const sidePivotMagnitude = clamp(
+    CONFIG.SIDE_CUT_ROTATION_PIVOT_IN ?? sideStraight,
+    sideStraight,
+    mouthYNorth
+  );
+
+  if (sideCutRad !== 0) {
+    const pivotNorth: Vec2 = { x: 0, y: sidePivotMagnitude };
+    const rotatedNorthRight = rotatePoint(northThroatRightJoint, pivotNorth, sideCutRad);
+    const clampedNorthRight: Vec2 = {
+      x: clamp(rotatedNorthRight.x, 0.5, JAW_X_OUTER - 0.05),
+      y: clamp(rotatedNorthRight.y, Y_N_STRAIGHT, mouthYNorth - 0.01),
+    };
+    northThroatRightJoint = clampedNorthRight;
+    northThroatLeftJoint = { x: -clampedNorthRight.x, y: clampedNorthRight.y };
+
+    const pivotSouth: Vec2 = { x: 0, y: -sidePivotMagnitude };
+    const rotatedSouthRight = rotatePoint(southThroatRightJoint, pivotSouth, -sideCutRad);
+    const clampedSouthRight: Vec2 = {
+      x: clamp(rotatedSouthRight.x, 0.5, JAW_X_OUTER - 0.05),
+      y: clamp(rotatedSouthRight.y, mouthYSouth + 0.01, Y_S_STRAIGHT),
+    };
+    southThroatRightJoint = clampedSouthRight;
+    southThroatLeftJoint = { x: -clampedSouthRight.x, y: clampedSouthRight.y };
+  }
+
+  const cornerCutDeg = clamp(CONFIG.CORNER_CUT_ANGLE_DEG ?? 0, -45, 45);
+  const cornerCutRad = degToRad(cornerCutDeg);
+  if (Math.abs(cornerCutRad) > 1e-6) {
+    const pivotNE: Vec2 = { x: PLAY_HALF_W_IN, y: PLAY_HALF_H_IN };
+    const pivotNW: Vec2 = { x: -PLAY_HALF_W_IN, y: PLAY_HALF_H_IN };
+    const pivotSE: Vec2 = { x: PLAY_HALF_W_IN, y: -PLAY_HALF_H_IN };
+    const pivotSW: Vec2 = { x: -PLAY_HALF_W_IN, y: -PLAY_HALF_H_IN };
+
+    const rotateCorner = (
+      pivot: Vec2,
+      baseHorizontal: Vec2,
+      axisY: number,
+      horizontalClamp: AxisBounds,
+      baseVertical: Vec2,
+      axisX: number,
+      verticalClamp: AxisBounds
+    ): { horizontal: Vec2; vertical: Vec2 } => {
+      const sign = Math.sign(pivot.x) * Math.sign(pivot.y) || 1;
+      const angle = cornerCutRad * sign;
+      return {
+        horizontal: rotateTowardAxis(pivot, baseHorizontal, angle, 'y', axisY, horizontalClamp),
+        vertical: rotateTowardAxis(pivot, baseVertical, angle, 'x', axisX, verticalClamp),
+      };
+    };
+
+    const ne = rotateCorner(
+      pivotNE,
+      baseNorthCornerEast,
+      Y_N_STRAIGHT,
+      { minX: JAW_X_OUTER, maxX: pivotNE.x - 0.05 },
+      baseEastVerticalTop,
+      X_E_STRAIGHT,
+      { minY: CORNER_JAW_Y, maxY: pivotNE.y - 0.05 }
+    );
+    northCornerEast = ne.horizontal;
+    eastVerticalTop = ne.vertical;
+
+    const nw = rotateCorner(
+      pivotNW,
+      baseNorthCornerWest,
+      Y_N_STRAIGHT,
+      { minX: pivotNW.x + 0.05, maxX: -JAW_X_OUTER },
+      baseWestVerticalTop,
+      X_W_STRAIGHT,
+      { minY: CORNER_JAW_Y, maxY: pivotNW.y - 0.05 }
+    );
+    northCornerWest = nw.horizontal;
+    westVerticalTop = nw.vertical;
+
+    const se = rotateCorner(
+      pivotSE,
+      baseSouthCornerEast,
+      Y_S_STRAIGHT,
+      { minX: JAW_X_OUTER, maxX: pivotSE.x - 0.05 },
+      baseEastVerticalBottom,
+      X_E_STRAIGHT,
+      { minY: pivotSE.y + 0.05, maxY: -CORNER_JAW_Y }
+    );
+    southCornerEast = se.horizontal;
+    eastVerticalBottom = se.vertical;
+
+    const sw = rotateCorner(
+      pivotSW,
+      baseSouthCornerWest,
+      Y_S_STRAIGHT,
+      { minX: pivotSW.x + 0.05, maxX: -JAW_X_OUTER },
+      baseWestVerticalBottom,
+      X_W_STRAIGHT,
+      { minY: pivotSW.y + 0.05, maxY: -CORNER_JAW_Y }
+    );
+    southCornerWest = sw.horizontal;
+    westVerticalBottom = sw.vertical;
+  } else {
+    northCornerEast = { ...baseNorthCornerEast };
+    eastVerticalTop = { ...baseEastVerticalTop };
+    northCornerWest = { ...baseNorthCornerWest };
+    westVerticalTop = { ...baseWestVerticalTop };
+    southCornerEast = { ...baseSouthCornerEast };
+    eastVerticalBottom = { ...baseEastVerticalBottom };
+    southCornerWest = { ...baseSouthCornerWest };
+    westVerticalBottom = { ...baseWestVerticalBottom };
+  }
+
+  addRail('N_west_taper', northWestOuter, northCornerWest);
+  addRail('N_west_straight', northCornerWest, northStraightWestEnd);
+  addRail('N_left_throat_outer', northStraightWestEnd, northThroatLeftJoint);
+  addRail('N_left_throat_inner', northThroatLeftJoint, northMouth);
+  addRail('N_right_throat_inner', northMouth, northThroatRightJoint);
+  addRail('N_right_throat_outer', northThroatRightJoint, northStraightEastStart);
+  addRail('N_east_straight', northStraightEastStart, northCornerEast);
+  addRail('N_east_taper', northCornerEast, northEastOuter);
+
+  addRail('E_north_taper', northEastOuter, eastVerticalTop);
+  addRail('E_center', eastVerticalTop, eastVerticalBottom);
+  addRail('E_south_taper', eastVerticalBottom, southEastOuter);
+
+  addRail('S_east_taper', southEastOuter, southCornerEast);
+  addRail('S_east_straight', southCornerEast, southStraightEastStart);
+  addRail('S_right_throat_outer', southStraightEastStart, southThroatRightJoint);
+  addRail('S_right_throat_inner', southThroatRightJoint, southMouth);
+  addRail('S_left_throat_inner', southMouth, southThroatLeftJoint);
+  addRail('S_left_throat_outer', southThroatLeftJoint, southStraightWestEnd);
+  addRail('S_west_straight', southStraightWestEnd, southCornerWest);
+  addRail('S_west_taper', southCornerWest, southWestOuter);
+
+  addRail('W_south_taper', southWestOuter, westVerticalBottom);
+  addRail('W_center', westVerticalBottom, westVerticalTop);
+  addRail('W_north_taper', westVerticalTop, northWestOuter);
+
+  const pocketCenterNW: Vec2 = { x: -PLAY_HALF_W_IN, y: PLAY_HALF_H_IN };
+  const pocketCenterNE: Vec2 = { x: PLAY_HALF_W_IN, y: PLAY_HALF_H_IN };
+  const pocketCenterSW: Vec2 = { x: -PLAY_HALF_W_IN, y: -PLAY_HALF_H_IN };
+  const pocketCenterSE: Vec2 = { x: PLAY_HALF_W_IN, y: -PLAY_HALF_H_IN };
+  const pocketCenterNorth: Vec2 = { x: 0, y: Y_N_PLAY + SIDE_POCKET_OFFSET };
+  const pocketCenterSouth: Vec2 = { x: 0, y: Y_S_PLAY - SIDE_POCKET_OFFSET };
+
+  const cornerHintNW = normalizeVec({
+    x: pocketCenterNW.x - northCornerWest.x,
+    y: pocketCenterNW.y - northCornerWest.y,
+  });
+  const cornerHintNE = normalizeVec({
+    x: pocketCenterNE.x - northCornerEast.x,
+    y: pocketCenterNE.y - northCornerEast.y,
+  });
+  const cornerHintSW = normalizeVec({
+    x: pocketCenterSW.x - southCornerWest.x,
+    y: pocketCenterSW.y - southCornerWest.y,
+  });
+  const cornerHintSE = normalizeVec({
+    x: pocketCenterSE.x - southCornerEast.x,
+    y: pocketCenterSE.y - southCornerEast.y,
+  });
+
+  const sideHintNorth = normalizeVec({
+    x: pocketCenterNorth.x - northThroatRightJoint.x,
+    y: pocketCenterNorth.y - northThroatRightJoint.y,
+  });
+  const sideHintSouth = normalizeVec({
+    x: pocketCenterSouth.x - southThroatRightJoint.x,
+    y: pocketCenterSouth.y - southThroatRightJoint.y,
+  });
+
   return {
     playWidthIn: 100.0,
     playHeightIn: 50.0,
@@ -244,147 +581,14 @@ export function getTableGeometry(): TableGeometry {
 
     // Rails approximating WPA throat geometry, normals point inward
     // Corner rails stop short of pocket centers to leave openings
-    rails: [
-    {
-      id: 'N_west_taper',
-      from: { x: -(PLAY_HALF_W_IN + cornerFrameOffset), y: PLAY_HALF_H_IN + cornerFrameOffset },
-      to: { x: -CORNER_JAW_X, y: Y_N_STRAIGHT },
-      normal: { x: 0.447214, y: -0.894427 }
-    },
-    {
-      id: 'N_west_straight',
-      from: { x: -CORNER_JAW_X, y: Y_N_STRAIGHT },
-      to: { x: -JAW_X_OUTER, y: Y_N_STRAIGHT },
-      normal: { x: 0, y: -1 }
-    },
-    {
-      id: 'N_left_throat_outer',
-      from: { x: -JAW_X_OUTER, y: Y_N_STRAIGHT },
-      to: { x: -JAW_X_INNER, y: Y_N_INNER },
-      normal: { x: 0, y: -1 }
-    },
-    {
-      id: 'N_left_throat_inner',
-      from: { x: -JAW_X_INNER, y: Y_N_INNER },
-      to: { x: 0.0, y: Y_N_PLAY },
-      normal: { x: 0, y: -1 }
-    },
-    {
-      id: 'N_right_throat_inner',
-      from: { x: 0.0, y: Y_N_PLAY },
-      to: { x: JAW_X_INNER, y: Y_N_INNER },
-      normal: { x: 0, y: -1 }
-    },
-    {
-      id: 'N_right_throat_outer',
-      from: { x: JAW_X_INNER, y: Y_N_INNER },
-      to: { x: JAW_X_OUTER, y: Y_N_STRAIGHT },
-      normal: { x: 0, y: -1 }
-    },
-    {
-      id: 'N_east_straight',
-      from: { x: JAW_X_OUTER, y: Y_N_STRAIGHT },
-      to: { x: CORNER_JAW_X, y: Y_N_STRAIGHT },
-      normal: { x: 0, y: -1 }
-    },
-    {
-      id: 'N_east_taper',
-      from: { x: CORNER_JAW_X, y: Y_N_STRAIGHT },
-      to: { x: PLAY_HALF_W_IN + cornerFrameOffset, y: PLAY_HALF_H_IN + cornerFrameOffset },
-      normal: { x: -0.447214, y: -0.894427 }
-    },
-    {
-      id: 'E_north_taper',
-      from: { x: PLAY_HALF_W_IN + cornerFrameOffset, y: PLAY_HALF_H_IN + cornerFrameOffset },
-      to: { x: X_E_STRAIGHT, y: CORNER_JAW_Y },
-      normal: { x: -0.894427, y: -0.447214 }
-    },
-    {
-      id: 'E_center',
-      from: { x: X_E_STRAIGHT, y: CORNER_JAW_Y },
-      to: { x: X_E_STRAIGHT, y: -CORNER_JAW_Y },
-      normal: { x: -1, y: 0 }
-    },
-    {
-      id: 'E_south_taper',
-      from: { x: X_E_STRAIGHT, y: -CORNER_JAW_Y },
-      to: { x: PLAY_HALF_W_IN + cornerFrameOffset, y: -(PLAY_HALF_H_IN + cornerFrameOffset) },
-      normal: { x: -0.894427, y: 0.447214 }
-    },
-    {
-      id: 'S_east_taper',
-      from: { x: PLAY_HALF_W_IN + cornerFrameOffset, y: -(PLAY_HALF_H_IN + cornerFrameOffset) },
-      to: { x: CORNER_JAW_X, y: Y_S_STRAIGHT },
-      normal: { x: -0.447214, y: 0.894427 }
-    },
-    {
-      id: 'S_east_straight',
-      from: { x: CORNER_JAW_X, y: Y_S_STRAIGHT },
-      to: { x: JAW_X_OUTER, y: Y_S_STRAIGHT },
-      normal: { x: 0, y: 1 }
-    },
-    {
-      id: 'S_right_throat_outer',
-      from: { x: JAW_X_OUTER, y: Y_S_STRAIGHT },
-      to: { x: JAW_X_INNER, y: Y_S_INNER },
-      normal: { x: 0, y: 1 }
-    },
-    {
-      id: 'S_right_throat_inner',
-      from: { x: JAW_X_INNER, y: Y_S_INNER },
-      to: { x: 0.0, y: Y_S_PLAY },
-      normal: { x: 0, y: 1 }
-    },
-    {
-      id: 'S_left_throat_inner',
-      from: { x: 0.0, y: Y_S_PLAY },
-      to: { x: -JAW_X_INNER, y: Y_S_INNER },
-      normal: { x: 0, y: 1 }
-    },
-    {
-      id: 'S_left_throat_outer',
-      from: { x: -JAW_X_INNER, y: Y_S_INNER },
-      to: { x: -JAW_X_OUTER, y: Y_S_STRAIGHT },
-      normal: { x: 0, y: 1 }
-    },
-    {
-      id: 'S_west_straight',
-      from: { x: -JAW_X_OUTER, y: Y_S_STRAIGHT },
-      to: { x: -CORNER_JAW_X, y: Y_S_STRAIGHT },
-      normal: { x: 0, y: 1 }
-    },
-    {
-      id: 'S_west_taper',
-      from: { x: -CORNER_JAW_X, y: Y_S_STRAIGHT },
-      to: { x: -(PLAY_HALF_W_IN + cornerFrameOffset), y: -(PLAY_HALF_H_IN + cornerFrameOffset) },
-      normal: { x: 0.447214, y: 0.894427 }
-    },
-    {
-      id: 'W_south_taper',
-      from: { x: -(PLAY_HALF_W_IN + cornerFrameOffset), y: -(PLAY_HALF_H_IN + cornerFrameOffset) },
-      to: { x: X_W_STRAIGHT, y: -CORNER_JAW_Y },
-      normal: { x: 0.894427, y: 0.447214 }
-    },
-    {
-      id: 'W_center',
-      from: { x: X_W_STRAIGHT, y: -CORNER_JAW_Y },
-      to: { x: X_W_STRAIGHT, y: CORNER_JAW_Y },
-      normal: { x: 1, y: 0 }
-    },
-    {
-      id: 'W_north_taper',
-      from: { x: X_W_STRAIGHT, y: CORNER_JAW_Y },
-      to: { x: -(PLAY_HALF_W_IN + cornerFrameOffset), y: PLAY_HALF_H_IN + cornerFrameOffset },
-      normal: { x: 0.894427, y: -0.447214 }
-    }
-    ],
+    rails,
     
     // Pockets at corners and midpoints
     pockets: [
       {
         id: 'NW_corner',
         center: { x: -50.0, y: 25.0 },
-        cutNormalHint: { x: 1, y: -1 },
+        cutNormalHint: cornerHintNW,
         cutAngleDeg: CONFIG.CORNER_CUT_ANGLE_DEG,
         captureRadius: CONFIG.POCKET_CAPTURE_RADIUS_CORNER,
         visualRadius: CONFIG.POCKET_VISUAL_RADIUS_CORNER,
@@ -394,7 +598,7 @@ export function getTableGeometry(): TableGeometry {
       {
         id: 'NE_corner',
         center: { x: 50.0, y: 25.0 },
-        cutNormalHint: { x: -1, y: -1 },
+        cutNormalHint: cornerHintNE,
         cutAngleDeg: CONFIG.CORNER_CUT_ANGLE_DEG,
         captureRadius: CONFIG.POCKET_CAPTURE_RADIUS_CORNER,
         visualRadius: CONFIG.POCKET_VISUAL_RADIUS_CORNER,
@@ -404,7 +608,7 @@ export function getTableGeometry(): TableGeometry {
       {
         id: 'SW_corner',
         center: { x: -50.0, y: -25.0 },
-        cutNormalHint: { x: 1, y: 1 },
+        cutNormalHint: cornerHintSW,
         cutAngleDeg: CONFIG.CORNER_CUT_ANGLE_DEG,
         captureRadius: CONFIG.POCKET_CAPTURE_RADIUS_CORNER,
         visualRadius: CONFIG.POCKET_VISUAL_RADIUS_CORNER,
@@ -414,7 +618,7 @@ export function getTableGeometry(): TableGeometry {
       {
         id: 'SE_corner',
         center: { x: 50.0, y: -25.0 },
-        cutNormalHint: { x: -1, y: 1 },
+        cutNormalHint: cornerHintSE,
         cutAngleDeg: CONFIG.CORNER_CUT_ANGLE_DEG,
         captureRadius: CONFIG.POCKET_CAPTURE_RADIUS_CORNER,
         visualRadius: CONFIG.POCKET_VISUAL_RADIUS_CORNER,
@@ -424,7 +628,7 @@ export function getTableGeometry(): TableGeometry {
       {
         id: 'N_middle',
         center: { x: 0.0, y: Y_N_PLAY + SIDE_POCKET_OFFSET },
-        cutNormalHint: { x: 0, y: -1 },
+        cutNormalHint: sideHintNorth,
         cutAngleDeg: CONFIG.SIDE_CUT_ANGLE_DEG,
         captureRadius: CONFIG.POCKET_CAPTURE_RADIUS_SIDE,
         visualRadius: CONFIG.POCKET_VISUAL_RADIUS_SIDE,
@@ -434,7 +638,7 @@ export function getTableGeometry(): TableGeometry {
       {
         id: 'S_middle',
         center: { x: 0.0, y: Y_S_PLAY - SIDE_POCKET_OFFSET },
-        cutNormalHint: { x: 0, y: 1 },
+        cutNormalHint: sideHintSouth,
         cutAngleDeg: CONFIG.SIDE_CUT_ANGLE_DEG,
         captureRadius: CONFIG.POCKET_CAPTURE_RADIUS_SIDE,
         visualRadius: CONFIG.POCKET_VISUAL_RADIUS_SIDE,
