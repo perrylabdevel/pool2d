@@ -1,6 +1,7 @@
 import { Renderer3D } from '../render/Renderer3D';
 import { makePanelDraggable } from './drag';
 import { SettingsManager, RenderSettings } from './SettingsManager';
+import { UIPanel } from './panels/UIPanel';
 import {
   RenderLayerSettings,
   RenderLayerBooleanKey,
@@ -22,7 +23,7 @@ const LAYER_CHECKBOX_MAP: Record<string, RenderLayerBooleanKey> = {
 
 export class RenderLayerPanel {
   private panel: HTMLElement;
-  private isOpen = false;
+  private panelController: UIPanel;
   private settings: RenderSettings;
   private orderInputs: Partial<Record<RenderLayerOrderKey, HTMLInputElement>> = {};
 
@@ -32,9 +33,17 @@ export class RenderLayerPanel {
   ) {
     this.panel = document.getElementById('render-layer-panel')!;
     const header = this.panel.querySelector('.panel-header') as HTMLElement | null;
-    if (header) {
+    if (header && !this.panel.closest('#panel-dock')) {
       makePanelDraggable(this.panel, header);
     }
+
+    const focusTarget = this.panel.querySelector<HTMLElement>('input, button');
+    this.panelController = new UIPanel({
+      id: 'render-layer-panel',
+      element: this.panel,
+      focusTarget,
+    });
+    this.panelController.addEventListener('panel:open', () => this.syncUI());
 
     this.settings = this.settingsManager.getRenderSettings();
     this.applyToRenderer(this.settings);
@@ -51,14 +60,14 @@ export class RenderLayerPanel {
   }
 
   private bindControls() {
-    const toggleBtn = document.getElementById('render-layer-btn');
-    if (toggleBtn) {
-      toggleBtn.addEventListener('click', () => this.toggle());
-    }
-
     const closeBtn = document.getElementById('render-layer-close');
     if (closeBtn) {
       closeBtn.addEventListener('click', () => this.close());
+    }
+
+    const syncBtn = document.getElementById('render-layer-sync');
+    if (syncBtn) {
+      syncBtn.addEventListener('click', () => this.syncFromRenderer());
     }
 
     Object.entries(LAYER_CHECKBOX_MAP).forEach(([id, key]) => {
@@ -80,7 +89,7 @@ export class RenderLayerPanel {
     }
 
     window.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && this.isOpen) {
+      if (e.key === 'Escape' && this.panelController.isOpen()) {
         this.close();
       }
     });
@@ -105,8 +114,12 @@ export class RenderLayerPanel {
   }
 
   private applyToRenderer(settings: RenderSettings) {
-    const { canvasScale: _canvasScale, ...layerSettings } = settings;
-    this.renderer.applyRenderLayerSettings(layerSettings);
+    const { canvasScale, ballVisualScale, ...layerSettings } = settings;
+    void canvasScale;
+    if (typeof ballVisualScale === 'number') {
+      this.renderer.setBallVisualScale(ballVisualScale);
+    }
+    this.renderer.applyRenderLayerSettings(layerSettings as RenderLayerSettings);
   }
 
   private syncCheckbox(key: RenderLayerBooleanKey, value: boolean) {
@@ -130,22 +143,19 @@ export class RenderLayerPanel {
   }
 
   toggle() {
-    if (this.isOpen) {
-      this.close();
-    } else {
-      this.open();
+    this.panelController.toggle();
+    if (this.panelController.isOpen()) {
+      this.syncUI();
     }
   }
 
   open() {
-    this.panel.classList.remove('hidden');
-    this.isOpen = true;
+    this.panelController.open();
     this.syncUI();
   }
 
   close() {
-    this.panel.classList.add('hidden');
-    this.isOpen = false;
+    this.panelController.close();
   }
 
   syncFromRenderer() {
@@ -191,7 +201,7 @@ export class RenderLayerPanel {
         }
         const clamped = Math.max(-1000, Math.min(2000, value));
         input.value = clamped.toString();
-        const updated = { ...this.settings, [key]: clamped } as RenderLayerSettings;
+        const updated: RenderSettings = { ...this.settings, [key]: clamped };
         this.settings = updated;
         this.applyToRenderer(updated);
         this.settingsManager.saveRenderSettings({ [key]: clamped } as Partial<RenderSettings>);
@@ -209,5 +219,9 @@ export class RenderLayerPanel {
         }
       }
     );
+  }
+
+  getController(): UIPanel {
+    return this.panelController;
   }
 }

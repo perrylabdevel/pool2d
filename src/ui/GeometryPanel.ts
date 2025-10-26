@@ -1,12 +1,13 @@
 import { SettingsManager, GeometrySettings } from './SettingsManager';
 import { makePanelDraggable } from './drag';
+import { UIPanel } from './panels/UIPanel';
 
 const formatNumber = (value: number, digits: number = 2): string =>
   value.toFixed(digits).replace(/\.0+$|\.([0-9]*[1-9])0+$/, '.$1').replace(/\.$/, '');
 
 export class GeometryPanel {
   private panel: HTMLElement;
-  private isOpen = false;
+  private panelController: UIPanel;
   private settingsManager: SettingsManager;
   private onGeometryChange: () => void;
 
@@ -16,20 +17,23 @@ export class GeometryPanel {
     
     this.panel = document.getElementById('geometry-panel')!;
     const header = this.panel.querySelector('.panel-header') as HTMLElement | null;
-    if (header) {
+    if (header && !this.panel.closest('#panel-dock')) {
       makePanelDraggable(this.panel, header);
     }
+
+    const focusTarget = this.panel.querySelector<HTMLElement>('input, button');
+    this.panelController = new UIPanel({
+      id: 'geometry-panel',
+      element: this.panel,
+      focusTarget,
+    });
+    this.panelController.addEventListener('panel:open', () => this.loadCurrentValues());
+
     this.setupControls();
     this.loadCurrentValues();
   }
 
   private setupControls() {
-    // Toggle button
-    const toggleBtn = document.getElementById('geometry-panel-btn');
-    if (toggleBtn) {
-      toggleBtn.addEventListener('click', () => this.toggle());
-    }
-
     // Close button
     const closeBtn = document.getElementById('geometry-panel-close');
     if (closeBtn) {
@@ -378,7 +382,7 @@ export class GeometryPanel {
     }
 
     window.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && this.isOpen) {
+      if (e.key === 'Escape' && this.panelController.isOpen()) {
         this.close();
       }
     });
@@ -528,21 +532,18 @@ export class GeometryPanel {
   }
 
   toggle() {
-    if (this.isOpen) {
-      this.close();
-    } else {
-      this.open();
-    }
+    this.panelController.toggle();
   }
 
   open() {
-    this.panel.classList.remove('hidden');
-    this.isOpen = true;
-    this.loadCurrentValues();
+    this.panelController.open();
   }
 
   close() {
-    this.panel.classList.add('hidden');
-    this.isOpen = false;
+    this.panelController.close();
+  }
+
+  getController(): UIPanel {
+    return this.panelController;
   }
 }

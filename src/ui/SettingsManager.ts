@@ -60,6 +60,7 @@ export interface GeometrySettings {
 
 export interface RenderSettings extends RenderLayerSettings {
   canvasScale: number;
+  ballVisualScale: number;
 }
 
 const STORAGE_KEYS = {
@@ -297,6 +298,7 @@ export class SettingsManager {
     const defaults: RenderSettings = {
       ...defaultRenderLayerSettings,
       canvasScale: CONFIG.CANVAS_SCALE_MULTIPLIER ?? 1,
+      ballVisualScale: CONFIG.BALL_VISUAL_SCALE ?? 1,
     };
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.RENDER_SETTINGS);
@@ -379,6 +381,7 @@ export class SettingsManager {
     this.renderSettings = {
       ...defaultRenderLayerSettings,
       canvasScale: 1,
+      ballVisualScale: 1,
     };
     try {
       localStorage.setItem(STORAGE_KEYS.RENDER_SETTINGS, JSON.stringify(this.renderSettings));
@@ -440,7 +443,7 @@ export class SettingsManager {
       this.gameSettings = { ...DEFAULT_GAME_SETTINGS };
       this.uiColors = { ...DEFAULT_UI_COLORS };
       this.physicsSettings = { ...DEFAULT_PHYSICS_SETTINGS };
-      this.renderSettings = { ...defaultRenderLayerSettings, canvasScale: 1 };
+      this.renderSettings = { ...defaultRenderLayerSettings, canvasScale: 1, ballVisualScale: 1 };
       
       this.applyPhysicsSettings();
       this.applyUIColors();
@@ -452,6 +455,7 @@ export class SettingsManager {
 
   private applyRenderSettings() {
     CONFIG.CANVAS_SCALE_MULTIPLIER = this.renderSettings.canvasScale ?? 1;
+    CONFIG.BALL_VISUAL_SCALE = this.renderSettings.ballVisualScale ?? 1;
     window.dispatchEvent(
       new CustomEvent('settings:render-changed', { detail: { settings: this.renderSettings } })
     );

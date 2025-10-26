@@ -52,6 +52,7 @@ export const CONFIG = {
   // Rendering
   CANVAS_SCALE: 8, // Pixels per game unit
   CANVAS_SCALE_MULTIPLIER: 1,
+  BALL_VISUAL_SCALE: 1,
   TABLE_COLOR: '#0a5f0a',
   FRAME_COLOR: '#3d2413',
   RAIL_COLOR: '#2d1810',

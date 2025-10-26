@@ -72,7 +72,7 @@ export class Game {
   spaceKeyHeld: boolean = false;
   
   // Cached prediction for frozen paths in power mode (normal mode only)
-  cachedPrediction: any = null;
+  cachedPrediction: ReturnType<Predictor['predictFirstContact']> | null = null;
   cachedDirection: { x: number; y: number } | null = null;
   
   // Ball dragging (practice mode only)
@@ -93,7 +93,9 @@ export class Game {
     this.rules = new EightBallRules();
     this.predictor = new Predictor();
     this.mode = GameMode.PRACTICE;
-    
+
+    this.registerPanels();
+
     this.setupCallbacks();
     this.setupEventListeners();
     this.initializeGame();
@@ -202,12 +204,6 @@ export class Game {
       if (e.key === 'r' || e.key === 'R') {
         this.restart();
       }
-      if (e.key === 's' || e.key === 'S') {
-        this.settings.toggle();
-      }
-      if (e.key === 'g' || e.key === 'G') {
-        this.geometryPanel.toggle();
-      }
       if (e.key === 'm' || e.key === 'M') {
         const next = !this.renderer.showMeasurementOverlay;
         this.renderLayersPanel.setMeasurementOverlayVisible(next);
@@ -241,12 +237,23 @@ export class Game {
         }, 300);
       });
     }
-    
-    // Wire up physics settings button
-    const physicsSettingsBtn = document.getElementById('physics-settings-btn');
-    if (physicsSettingsBtn) {
-      physicsSettingsBtn.addEventListener('click', () => this.settings.toggle());
-    }
+  }
+
+  private registerPanels() {
+    this.hud.registerPanel('physics-settings', this.settings.getController(), {
+      hotkeys: ['s'],
+      persistState: true,
+    });
+    this.hud.registerPanel('geometry-panel', this.geometryPanel.getController(), {
+      hotkeys: ['g'],
+      persistState: true,
+    });
+    this.hud.registerPanel('render-layer-panel', this.renderLayersPanel.getController(), {
+      hotkeys: ['l'],
+      persistState: true,
+    });
+
+    this.hud.panelManager.restoreLastPanel();
   }
   
   initializeGame() {
@@ -293,8 +300,9 @@ export class Game {
     // Rebuild physics world (recomputes rails/pockets from current CONFIG)
     this.world = new PhysicsWorld();
     // Reset renderer table and rails to avoid duplicates
-    if (this.renderer && (this.renderer as any).clearTableAndRails) {
-      (this.renderer as any).clearTableAndRails();
+    const maybeClear = (this.renderer as Renderer3D & { clearTableAndRails?: () => void }).clearTableAndRails;
+    if (typeof maybeClear === 'function') {
+      maybeClear.call(this.renderer);
     }
     this.initializeGame();
   }

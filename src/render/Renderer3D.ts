@@ -34,6 +34,7 @@ export class Renderer3D {
   scale: number;
   canvasOffsetX: number = 0;
   canvasOffsetY: number = 0;
+  private resizeObserver: ResizeObserver | null = null;
   private playBoundaryPoints: Vec2[] = [];
   private playBounds: BoundaryBounds = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
   
@@ -100,6 +101,9 @@ export class Renderer3D {
       this.referenceOverlayVisible = !this.referenceOverlay.classList.contains('overlay-hidden');
     }
     this.layerVisibility.showReferenceOverlay = this.referenceOverlayVisible;
+    this.ballVisualScale = CONFIG.BALL_VISUAL_SCALE ?? 1;
+
+    this.observeLayoutChanges();
 
     // Create Three.js scene
     this.scene = new THREE.Scene();
@@ -194,6 +198,10 @@ export class Renderer3D {
           mat.needsUpdate = true;
         }
       }
+    });
+
+    window.addEventListener('settings:render-changed', () => {
+      this.setBallVisualScale(CONFIG.BALL_VISUAL_SCALE ?? 1);
     });
   }
 
@@ -416,7 +424,7 @@ export class Renderer3D {
         geometry.translate(-center.x, -center.y, -center.z);
         geometry.computeBoundingSphere();
         const currentRadius = geometry.boundingSphere!.radius;
-        const targetRadius = CONFIG.BALL_RADIUS * this.ballVisualScale;
+        const targetRadius = CONFIG.BALL_RADIUS;
         const scale = targetRadius / currentRadius;
         geometry.scale(scale, scale, scale);
         
@@ -479,9 +487,36 @@ export class Renderer3D {
   }
   
   resize() {
-    const container = this.canvas.parentElement!;
-    const containerWidth = container.clientWidth;
-    const containerHeight = container.clientHeight;
+    const stage = this.canvas.closest('#canvas-stage') as HTMLElement | null;
+    const container = (this.canvas.parentElement as HTMLElement | null) ?? stage ?? this.canvas;
+    const measurementElement = stage ?? container;
+    const measurementRect = measurementElement.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    const workspace = document.getElementById('workspace') as HTMLElement | null;
+    const workspaceRect = workspace?.getBoundingClientRect() ?? measurementRect;
+    
+    const dockInfo = (el: HTMLElement | null) => {
+      if (!el) {
+        return { visible: false as const, rect: null as DOMRect | null };
+      }
+      const rect = el.getBoundingClientRect();
+      const style = window.getComputedStyle(el);
+      const visible =
+        rect.width > 1 &&
+        rect.height > 1 &&
+        style.display !== 'none' &&
+        style.visibility !== 'hidden' &&
+        style.opacity !== '0';
+      return { visible: visible as const, rect };
+    };
+    
+    const leftDockData = dockInfo(document.getElementById('dock-left') as HTMLElement | null);
+    const rightDockData = dockInfo(document.getElementById('dock-right') as HTMLElement | null);
+    
+    const leftBoundary = leftDockData.visible && leftDockData.rect ? leftDockData.rect.right : workspaceRect.left;
+    const rightBoundary = rightDockData.visible && rightDockData.rect ? rightDockData.rect.left : workspaceRect.right;
+    const horizontalSpace = Math.max(1, Math.floor(rightBoundary - leftBoundary));
+    const verticalSpace = Math.max(1, Math.floor(measurementRect.height));
     
     // External margin around canvas
     const externalMargin = 40;
@@ -490,8 +525,8 @@ export class Renderer3D {
     const internalPadding = 40;
     
     // Calculate available space for canvas after external margins
-    const availableWidth = containerWidth - externalMargin * 2;
-    const availableHeight = containerHeight - externalMargin * 2;
+    const availableWidth = Math.max(1, horizontalSpace - externalMargin * 2);
+    const availableHeight = Math.max(1, verticalSpace - externalMargin * 2);
     
     const scaleMultiplier = CONFIG.CANVAS_SCALE_MULTIPLIER ?? 1;
     const adjustedWidth = availableWidth / Math.max(0.01, scaleMultiplier);
@@ -500,28 +535,32 @@ export class Renderer3D {
     // Calculate scale to fit table with internal padding, then apply multiplier
     const scaleX = (adjustedWidth - internalPadding * 2) / CONFIG.TABLE_WIDTH;
     const scaleY = (adjustedHeight - internalPadding * 2) / CONFIG.TABLE_HEIGHT;
-    const baseScale = Math.min(scaleX, scaleY);
-    this.scale = baseScale * scaleMultiplier;
+    const baseScale = Math.max(0.01, Math.min(scaleX, scaleY));
+    this.scale = Math.max(0.01, baseScale * scaleMultiplier);
     
     // Set canvas size
-    const width = CONFIG.TABLE_WIDTH * this.scale + internalPadding * 2;
-    const height = CONFIG.TABLE_HEIGHT * this.scale + internalPadding * 2;
+    const width = Math.max(1, CONFIG.TABLE_WIDTH * this.scale + internalPadding * 2);
+    const height = Math.max(1, CONFIG.TABLE_HEIGHT * this.scale + internalPadding * 2);
     
     this.renderer.setSize(width, height);
     this.canvas.style.width = `${width}px`;
     this.canvas.style.height = `${height}px`;
     
-    const offsetX = (containerWidth - width) / 2;
-    const offsetY = (containerHeight - height) / 2;
+    const globalLeft = leftBoundary + (horizontalSpace - width) / 2;
+    const globalTop = measurementRect.top + (verticalSpace - height) / 2;
+    
+    // Translate offsets into the canvas container's coordinate space (accounts for differences between elements).
+    const relativeOffsetX = globalLeft - containerRect.left;
+    const relativeOffsetY = globalTop - containerRect.top;
     
     // Store offsets for use by other canvases
-    this.canvasOffsetX = offsetX;
-    this.canvasOffsetY = offsetY;
+    this.canvasOffsetX = relativeOffsetX;
+    this.canvasOffsetY = relativeOffsetY;
     
     const applyPosition = (el: HTMLElement | null) => {
       if (!el) return;
-      el.style.left = `${offsetX}px`;
-      el.style.top = `${offsetY}px`;
+      el.style.left = `${relativeOffsetX}px`;
+      el.style.top = `${relativeOffsetY}px`;
     };
 
     applyPosition(this.canvas);
@@ -548,6 +587,38 @@ export class Renderer3D {
     this.camera.top = frustumSize / 2;
     this.camera.bottom = -frustumSize / 2;
     this.camera.updateProjectionMatrix();
+  }
+
+  private observeLayoutChanges() {
+    if (typeof ResizeObserver === 'undefined') {
+      return;
+    }
+    const targets: HTMLElement[] = [];
+    const stage = this.canvas.closest('#canvas-stage') as HTMLElement | null;
+    const workspace = document.getElementById('workspace') as HTMLElement | null;
+    if (stage) targets.push(stage);
+    if (workspace && workspace !== stage) targets.push(workspace);
+    if (!targets.length) {
+      return;
+    }
+    this.resizeObserver = new ResizeObserver(() => {
+      this.resize();
+    });
+    targets.forEach((el) => this.resizeObserver!.observe(el));
+  }
+
+  setBallVisualScale(scale: number) {
+    const safeScale = Number.isFinite(scale) ? Math.max(0.1, scale) : 1;
+    const previous = this.ballVisualScale || 1;
+    if (Math.abs(safeScale - previous) < 1e-4) {
+      return;
+    }
+    const ratio = safeScale / previous;
+    this.ballVisualScale = safeScale;
+
+    this.ballMeshes.forEach((mesh) => {
+      mesh.scale.multiplyScalar(ratio);
+    });
   }
   
   initializeTable() {
@@ -927,7 +998,7 @@ export class Renderer3D {
   }
   
   createBall(ball: Ball): THREE.Object3D {
-    const visualRadius = CONFIG.BALL_RADIUS * this.ballVisualScale;
+    const baseRadius = CONFIG.BALL_RADIUS;
     if (this.ballModelsLoaded) {
       const template = this.ballModels.get(ball.id);
       if (template) {
@@ -936,19 +1007,20 @@ export class Renderer3D {
         ballMesh.receiveShadow = false;
         
         // Add black glow outline
-        this.addBallGlow(ballMesh, visualRadius);
+        this.addBallGlow(ballMesh, baseRadius);
         
         this.scene.add(ballMesh);
         this.applyBallRenderOrder(ballMesh);
         this.enforceRenderOrderControl(ballMesh);
         ballMesh.visible = this.layerVisibility.showBalls;
+        ballMesh.scale.setScalar(this.ballVisualScale);
         this.ballMeshes.set(ball.id, ballMesh);
         return ballMesh;
       }
     }
 
     // Fallback to procedural balls if FBX not loaded or template missing
-    const geometry = new THREE.SphereGeometry(visualRadius, 32, 32);
+    const geometry = new THREE.SphereGeometry(baseRadius, 32, 32);
     
     // Create ball material
     const color = ball.id === BALL_CUE 
@@ -972,16 +1044,17 @@ export class Renderer3D {
     
     // Add stripe for striped balls
     if (ball.id >= 9 && ball.id <= 15) {
-      this.addBallStripe(mesh, visualRadius);
+      this.addBallStripe(mesh, baseRadius);
     }
     
     // Add black glow outline
-    this.addBallGlow(mesh, visualRadius);
+    this.addBallGlow(mesh, baseRadius);
     
     this.scene.add(mesh);
     this.applyBallRenderOrder(mesh);
     this.enforceRenderOrderControl(mesh);
     mesh.visible = this.layerVisibility.showBalls;
+    mesh.scale.setScalar(this.ballVisualScale);
     this.ballMeshes.set(ball.id, mesh);
     
     return mesh;
@@ -1426,7 +1499,7 @@ export class Renderer3D {
     ctx.stroke();
 
     // Ball size reference (top-right corner)
-    const ballRadiusPx = CONFIG.BALL_RADIUS * this.scale;
+    const ballRadiusPx = CONFIG.BALL_RADIUS * this.ballVisualScale * this.scale;
     const sampleX = this.uiCanvas.width - ballRadiusPx * 3;
     const sampleY = ballRadiusPx * 3;
     ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
@@ -1664,17 +1737,22 @@ export class Renderer3D {
       this.uiCtx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
       this.uiCtx.lineWidth = 4;
       this.uiCtx.lineCap = 'round';
-      this.uiCtx.beginPath();
-      this.uiCtx.arc(ghostScreen.x, ghostScreen.y, ball.radius * this.scale, 0, Math.PI * 2);
-      this.uiCtx.stroke();
-      
-      // Draw solid white circle (inner)
-      this.uiCtx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
-      this.uiCtx.lineWidth = 2;
-      this.uiCtx.lineCap = 'round';
-      this.uiCtx.beginPath();
-      this.uiCtx.arc(ghostScreen.x, ghostScreen.y, ball.radius * this.scale, 0, Math.PI * 2);
-      this.uiCtx.stroke();
+      const ghostRadius = Math.abs(ball.radius * this.ballVisualScale * this.scale);
+      if (ghostRadius > 0) {
+        this.uiCtx.beginPath();
+        this.uiCtx.arc(ghostScreen.x, ghostScreen.y, ghostRadius, 0, Math.PI * 2);
+        this.uiCtx.stroke();
+
+        // Draw solid white circle (inner)
+        this.uiCtx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+        this.uiCtx.lineWidth = 2;
+        this.uiCtx.lineCap = 'round';
+        this.uiCtx.beginPath();
+        this.uiCtx.arc(ghostScreen.x, ghostScreen.y, ghostRadius, 0, Math.PI * 2);
+        this.uiCtx.stroke();
+      } else {
+        console.warn('Renderer3D: skipping ghost ball draw due to non-positive radius', ghostRadius, this.scale, this.ballVisualScale);
+      }
     }
     
     // Draw power bar in 2D

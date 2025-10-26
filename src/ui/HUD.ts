@@ -1,6 +1,9 @@
 // HUD and UI management
 import { SettingsManager } from './SettingsManager';
 import { makePanelDraggable } from './drag';
+import { panelManager } from './panels/panelRegistry';
+import type { PanelRegistrationOptions } from './panels/PanelManager';
+import { UIPanel } from './panels/UIPanel';
 
 export class HUD {
   fpsElement: HTMLElement;
@@ -12,6 +15,7 @@ export class HUD {
   player2Panel: HTMLElement;
   statsElement: HTMLElement;
   settingsManager: SettingsManager;
+  panelManager = panelManager;
   
   showStats: boolean = true;
   
@@ -70,6 +74,8 @@ export class HUD {
       window.dispatchEvent(new CustomEvent('game:debug-toggle'));
     });
     
+    this.wirePanelLauncher();
+
     // Game settings toggles
     const aimAssistToggle = document.getElementById('aim-assist-toggle') as HTMLInputElement;
     aimAssistToggle.addEventListener('change', (e) => {
@@ -221,5 +227,67 @@ export class HUD {
     } else {
       ballsContainer.textContent = `Balls: ${balls.join(', ')}`;
     }
+  }
+
+  registerPanel(id: string, panel: UIPanel, options?: PanelRegistrationOptions) {
+    const launcherButtonSelector = `#panel-launcher [data-panel-id="${id}"]`;
+    const button = document.querySelector<HTMLElement>(launcherButtonSelector);
+
+    const registration: PanelRegistrationOptions = {
+      ...options,
+    };
+
+    if (!registration.toggleButton && button) {
+      registration.toggleButton = button;
+    }
+
+    if (!registration.group) {
+      registration.group = 'sidebar';
+    }
+
+    if (!button) {
+      console.warn(`Panel launcher button not found for id "${id}"`);
+    }
+
+    this.panelManager.registerPanel(panel, registration);
+  }
+
+  private wirePanelLauncher() {
+    const launcher = document.getElementById('panel-launcher');
+    if (!launcher) return;
+
+    const toggleButton = document.getElementById('panel-launcher-toggle');
+    if (!toggleButton) return;
+
+    toggleButton.setAttribute('type', 'button');
+    toggleButton.setAttribute('aria-expanded', 'true');
+
+    toggleButton.addEventListener('click', (event) => {
+      event.preventDefault();
+      const collapsed = launcher.classList.toggle('collapsed');
+      toggleButton.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      const rightDock = document.getElementById('dock-right');
+      if (rightDock) {
+        rightDock.classList.toggle('collapsed', collapsed);
+      }
+      const leftDock = document.getElementById('dock-left');
+      if (leftDock) {
+        leftDock.classList.toggle('collapsed', collapsed);
+      }
+      const workspace = document.getElementById('workspace');
+      if (workspace) {
+        workspace.classList.toggle('docks-collapsed', collapsed);
+      }
+      console.log('[HUD] Dock toggle state changed', {
+        collapsed,
+        leftDockWidth: leftDock?.offsetWidth ?? null,
+        rightDockWidth: rightDock?.offsetWidth ?? null,
+      });
+      const emitResize = () => window.dispatchEvent(new Event('resize'));
+      emitResize();
+      requestAnimationFrame(() => {
+        emitResize();
+      });
+    });
   }
 }

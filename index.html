@@ -15,375 +15,410 @@
       </div>
     </div>
     <div id="app">
-      <div id="hud">
-        <div id="top-bar">
-          <div id="game-info">
-            <div id="mode-indicator">Practice Mode</div>
-            <div id="turn-indicator"></div>
-            <div id="player-info">
-              <div id="player1-info" class="player-panel">
-                <span class="player-icon">👤</span>
-                <span class="player-label">P1</span>
-                <span class="balls-remaining"></span>
+      <div id="workspace">
+        <aside id="dock-left">
+          <nav id="panel-launcher" class="panel-launcher" aria-label="Tool Panels">
+            <button id="panel-launcher-toggle" class="panel-launcher-toggle" aria-label="Toggle Panels">
+              <span class="panel-launcher-icon">☰</span>
+            </button>
+            <button
+              class="panel-launcher-btn"
+              data-panel-id="physics-settings"
+              title="Physics &amp; Aim Assist (S)"
+            >
+              <span class="panel-launcher-icon">⚗</span>
+              <span class="panel-launcher-label">Physics</span>
+              <span class="panel-launcher-shortcut">S</span>
+            </button>
+            <button
+              class="panel-launcher-btn"
+              data-panel-id="geometry-panel"
+              title="Pocket Geometry (G)"
+            >
+              <span class="panel-launcher-icon">📐</span>
+              <span class="panel-launcher-label">Geometry</span>
+              <span class="panel-launcher-shortcut">G</span>
+            </button>
+            <button
+              class="panel-launcher-btn"
+              data-panel-id="render-layer-panel"
+              title="Render Layers (L)"
+            >
+              <span class="panel-launcher-icon">👁</span>
+              <span class="panel-launcher-label">Layers</span>
+              <span class="panel-launcher-shortcut">L</span>
+            </button>
+          </nav>
+        </aside>
+
+        <main id="workspace-main">
+          <div id="hud">
+            <div id="top-bar">
+              <div id="game-info">
+                <div id="mode-indicator">Practice Mode</div>
+                <div id="turn-indicator"></div>
+                <div id="player-info">
+                  <div id="player1-info" class="player-panel">
+                    <span class="player-icon">👤</span>
+                    <span class="player-label">P1</span>
+                    <span class="balls-remaining"></span>
+                  </div>
+                  <div id="player2-info" class="player-panel">
+                    <span class="player-icon">👤</span>
+                    <span class="player-label">P2</span>
+                    <span class="balls-remaining"></span>
+                  </div>
+                </div>
               </div>
-              <div id="player2-info" class="player-panel">
-                <span class="player-icon">👤</span>
-                <span class="player-label">P2</span>
-                <span class="balls-remaining"></span>
+              <div id="controls">
+                <button id="pause-btn" class="icon-btn" title="Pause">⏸</button>
+                <button id="restart-btn" class="icon-btn" title="Restart">↻</button>
+                <button id="settings-btn" class="icon-btn" title="Settings">⚙</button>
+                <button id="debug-toggle" class="icon-btn" title="Debug Mode">🐛</button>
+                <button id="capture-shot-btn" class="icon-btn" title="Capture Shot">📸</button>
+              </div>
+            </div>
+            <div id="foul-banner" class="hidden"></div>
+            <div id="stats">
+              <span id="fps">FPS: 0</span>
+              <span id="ups">UPS: 0</span>
+            </div>
+          </div>
+
+          <div id="canvas-stage">
+            <div id="canvas-container">
+              <canvas id="game-canvas"></canvas>
+              <canvas id="ui-canvas"></canvas>
+              <canvas id="debug-canvas"></canvas>
+              <img
+                id="reference-overlay"
+                src="/images/reference.png"
+                alt="Reference table overlay"
+                class="overlay-hidden"
+              />
+            </div>
+          </div>
+        </main>
+
+        <aside id="dock-right">
+          <div id="panel-dock" aria-live="polite">
+            <div id="geometry-panel" class="panel-dock-card hidden">
+              <div class="panel-header">
+                <h3>🎱 Pocket Geometry</h3>
+              </div>
+              <div class="panel-content">
+                <div class="slider-group">
+                  <label for="live-side-radius">
+                    Side Jaw Radius: <span id="live-side-radius-val">4.0</span>
+                  </label>
+                  <input type="range" id="live-side-radius" min="1" max="8" step="0.1" value="4" />
+                </div>
+
+                <div class="slider-group">
+                  <label for="live-side-steepness">
+                    Side Steepness: <span id="live-side-steepness-val">2.0</span>
+                  </label>
+                  <input type="range" id="live-side-steepness" min="0.5" max="6" step="0.1" value="2" />
+                </div>
+
+                <div class="slider-group">
+                  <label for="live-side-offset">
+                    Side Pocket Offset: <span id="live-side-offset-val">0.25</span>
+                  </label>
+                  <input type="range" id="live-side-offset" min="0" max="1.5" step="0.05" value="0.25" />
+                </div>
+
+                <div class="slider-group">
+                  <label for="live-side-straight">
+                    Side Straight Y: <span id="live-side-straight-val">23.5</span>
+                  </label>
+                  <input type="range" id="live-side-straight" min="22" max="25" step="0.05" value="23.5" />
+                </div>
+
+                <div class="slider-group">
+                  <label for="live-side-inner">
+                    Side Inner Y: <span id="live-side-inner-val">24.6</span>
+                  </label>
+                  <input type="range" id="live-side-inner" min="23" max="26" step="0.05" value="24.6" />
+                </div>
+
+                <div class="slider-group input-group">
+                  <label for="live-side-jaw-outer">
+                    Side Jaw Outer: <span id="live-side-jaw-outer-val">Auto</span>
+                  </label>
+                  <div class="input-row">
+                    <input type="range" id="live-side-jaw-outer" min="1" max="48" step="0.05" value="6" />
+                    <button id="live-side-jaw-outer-auto" class="panel-mini-btn" data-no-drag="true">Auto</button>
+                  </div>
+                </div>
+
+                <div class="slider-group input-group">
+                  <label for="live-side-jaw-inner">
+                    Side Jaw Inner: <span id="live-side-jaw-inner-val">Auto</span>
+                  </label>
+                  <div class="input-row">
+                    <input type="range" id="live-side-jaw-inner" min="0.5" max="30" step="0.05" value="4" />
+                    <button id="live-side-jaw-inner-auto" class="panel-mini-btn" data-no-drag="true">Auto</button>
+                  </div>
+                </div>
+
+                <div class="slider-group input-group">
+                  <label for="live-side-throat-width">
+                    Side Throat Width: <span id="live-side-throat-width-val">Auto</span>
+                  </label>
+                  <div class="input-row">
+                    <input
+                      type="range"
+                      id="live-side-throat-width"
+                      min="1"
+                      max="8"
+                      step="0.05"
+                      value="3"
+                      data-default="3"
+                    />
+                    <button id="live-side-throat-width-auto" class="panel-mini-btn" data-no-drag="true">Auto</button>
+                  </div>
+                </div>
+
+                <div class="slider-group input-group">
+                  <label for="live-corner-throat-width">
+                    Corner Throat Width: <span id="live-corner-throat-width-val">Auto</span>
+                  </label>
+                  <div class="input-row">
+                    <input
+                      type="range"
+                      id="live-corner-throat-width"
+                      min="1"
+                      max="8"
+                      step="0.05"
+                      value="3.5"
+                      data-default="3.5"
+                    />
+                    <button id="live-corner-throat-width-auto" class="panel-mini-btn" data-no-drag="true">Auto</button>
+                  </div>
+                </div>
+
+                <div class="slider-group">
+                  <label for="live-corner-frame">
+                    Corner Frame Offset: <span id="live-corner-frame-val">4.0</span>
+                  </label>
+                  <input type="range" id="live-corner-frame" min="2" max="6" step="0.1" value="4" />
+                </div>
+
+                <div class="slider-group">
+                  <label for="live-corner-radius">
+                    Corner Jaw Radius: <span id="live-corner-radius-val">4.0</span>
+                  </label>
+                  <input type="range" id="live-corner-radius" min="3" max="8" step="0.1" value="4" />
+                </div>
+
+                <div class="slider-group input-group">
+                  <label for="live-corner-jaw-x">
+                    Corner Jaw X: <span id="live-corner-jaw-x-val">Auto</span>
+                  </label>
+                  <div class="input-row">
+                    <input type="range" id="live-corner-jaw-x" min="30" max="50" step="0.05" value="46" />
+                    <button id="live-corner-jaw-x-auto" class="panel-mini-btn" data-no-drag="true">Auto</button>
+                  </div>
+                </div>
+
+                <div class="slider-group input-group">
+                  <label for="live-corner-jaw-y">
+                    Corner Jaw Y: <span id="live-corner-jaw-y-val">Auto</span>
+                  </label>
+                  <div class="input-row">
+                    <input type="range" id="live-corner-jaw-y" min="10" max="25" step="0.05" value="21" />
+                    <button id="live-corner-jaw-y-auto" class="panel-mini-btn" data-no-drag="true">Auto</button>
+                  </div>
+                </div>
+
+                <div class="slider-group">
+                  <label for="live-corner-pocket-capture">
+                    Corner Pocket Capture Radius: <span id="live-corner-pocket-capture-val">2.50</span>
+                  </label>
+                  <input type="range" id="live-corner-pocket-capture" min="1.5" max="4.0" step="0.05" value="2.5" />
+                </div>
+
+                <div class="slider-group">
+                  <label for="live-side-pocket-capture">
+                    Side Pocket Capture Radius: <span id="live-side-pocket-capture-val">2.50</span>
+                  </label>
+                  <input type="range" id="live-side-pocket-capture" min="1.5" max="4.0" step="0.05" value="2.5" />
+                </div>
+
+                <div class="slider-group">
+                  <label for="live-corner-pocket-visual">
+                    Corner Pocket Visual Radius: <span id="live-corner-pocket-visual-val">2.50</span>
+                  </label>
+                  <input type="range" id="live-corner-pocket-visual" min="1.5" max="4.0" step="0.05" value="2.5" />
+                </div>
+
+                <div class="slider-group">
+                  <label for="live-side-pocket-visual">
+                    Side Pocket Visual Radius: <span id="live-side-pocket-visual-val">2.50</span>
+                  </label>
+                  <input type="range" id="live-side-pocket-visual" min="1.5" max="4.0" step="0.05" value="2.5" />
+                </div>
+
+                <div class="slider-group">
+                  <label for="live-pocket-shelf-depth">
+                    Pocket Shelf Depth: <span id="live-pocket-shelf-depth-val">0.50</span>
+                  </label>
+                  <input type="range" id="live-pocket-shelf-depth" min="0" max="2" step="0.05" value="0.5" />
+                </div>
+
+                <div class="slider-group">
+                  <label for="live-jaw-curve-blend">
+                    Jaw Curve Blend: <span id="live-jaw-curve-blend-val">0.00</span>
+                  </label>
+                  <input type="range" id="live-jaw-curve-blend" min="0" max="1" step="0.05" value="0" />
+                </div>
+
+                <div class="slider-group">
+                  <label for="live-corner-cut-angle">
+                    Corner Cut Angle: <span id="live-corner-cut-angle-val">0.0</span>&deg;
+                  </label>
+                  <input type="range" id="live-corner-cut-angle" min="-30" max="30" step="0.5" value="0" />
+                </div>
+
+                <div class="slider-group">
+                  <label for="live-side-cut-angle">
+                    Side Cut Angle: <span id="live-side-cut-angle-val">0.0</span>&deg;
+                  </label>
+                  <input type="range" id="live-side-cut-angle" min="-30" max="30" step="0.5" value="0" />
+                </div>
+
+                <div class="slider-group">
+                  <label for="live-corner-straight">
+                    Corner Straight X: <span id="live-corner-straight-val">48.5</span>
+                  </label>
+                  <input type="range" id="live-corner-straight" min="46" max="50" step="0.05" value="48.5" />
+                </div>
+
+                <div class="slider-group">
+                  <label for="live-corner-target">
+                    Corner Target Y: <span id="live-corner-target-val">21.0</span>
+                  </label>
+                  <input type="range" id="live-corner-target" min="18" max="24" step="0.05" value="21" />
+                </div>
+
+                <div class="slider-group">
+                  <label for="live-frame-width">
+                    Frame Width: <span id="live-frame-width-val">4.0</span>
+                  </label>
+                  <input type="range" id="live-frame-width" min="2" max="8" step="0.1" value="4" />
+                </div>
+
+                <div class="slider-group">
+                  <label for="live-rail-thickness-inner">
+                    Rail Thickness (Inner): <span id="live-rail-thickness-inner-val">0.2</span>
+                  </label>
+                  <input type="range" id="live-rail-thickness-inner" min="0.05" max="1" step="0.01" value="0.2" />
+                </div>
+
+                <div class="slider-group">
+                  <label for="live-rail-thickness-outer">
+                    Rail Thickness (Outer): <span id="live-rail-thickness-outer-val">0.2</span>
+                  </label>
+                  <input type="range" id="live-rail-thickness-outer" min="0.05" max="1" step="0.01" value="0.2" />
+                </div>
+
+                <div class="panel-actions">
+                  <button id="geometry-reset-btn" class="panel-btn">Reset Defaults</button>
+                </div>
+                <p class="panel-hint">💡 Changes apply instantly</p>
+              </div>
+            </div>
+
+            <div id="render-layer-panel" class="panel-dock-card hidden">
+              <div class="panel-header">
+                <h3>🧱 Render Layers</h3>
+              </div>
+              <div class="panel-content">
+                <div class="settings-group">
+                  <h4 class="settings-group-title">Visibility</h4>
+                  <div class="panel-toggle-list">
+                    <label class="panel-toggle-row" for="layer-table">
+                      <input id="layer-table" type="checkbox" checked />
+                      <span>Table</span>
+                    </label>
+                    <label class="panel-toggle-row" for="layer-frame">
+                      <input id="layer-frame" type="checkbox" checked />
+                      <span>Frame</span>
+                    </label>
+                    <label class="panel-toggle-row" for="layer-rails">
+                      <input id="layer-rails" type="checkbox" checked />
+                      <span>Rails</span>
+                    </label>
+                    <label class="panel-toggle-row" for="layer-pockets">
+                      <input id="layer-pockets" type="checkbox" checked />
+                      <span>Pockets</span>
+                    </label>
+                    <label class="panel-toggle-row" for="layer-caps">
+                      <input id="layer-caps" type="checkbox" checked />
+                      <span>Caps</span>
+                    </label>
+                    <label class="panel-toggle-row" for="layer-balls">
+                      <input id="layer-balls" type="checkbox" checked />
+                      <span>Balls</span>
+                    </label>
+                    <label class="panel-toggle-row" for="layer-ui">
+                      <input id="layer-ui" type="checkbox" checked />
+                      <span>UI Overlay</span>
+                    </label>
+                    <label class="panel-toggle-row" for="layer-measure">
+                      <input id="layer-measure" type="checkbox" />
+                      <span>Measurement Overlay</span>
+                    </label>
+                    <label class="panel-toggle-row" for="layer-reference">
+                      <input id="layer-reference" type="checkbox" />
+                      <span>Reference Overlay</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="settings-group">
+                  <h4 class="settings-group-title">Render Order</h4>
+                  <div class="panel-order-list">
+                    <label class="panel-order-row" for="order-table">
+                      <span>Table</span>
+                      <input id="order-table" type="number" value="0" step="1" min="-1000" max="2000" />
+                    </label>
+                    <label class="panel-order-row" for="order-frame">
+                      <span>Frame</span>
+                      <input id="order-frame" type="number" value="1" step="1" min="-1000" max="2000" />
+                    </label>
+                    <label class="panel-order-row" for="order-rails">
+                      <span>Rails</span>
+                      <input id="order-rails" type="number" value="2" step="1" min="-1000" max="2000" />
+                    </label>
+                    <label class="panel-order-row" for="order-pockets">
+                      <span>Pockets</span>
+                      <input id="order-pockets" type="number" value="3" step="1" min="-1000" max="2000" />
+                    </label>
+                    <label class="panel-order-row" for="order-caps">
+                      <span>Caps</span>
+                      <input id="order-caps" type="number" value="4" step="1" min="-1000" max="2000" />
+                    </label>
+                    <label class="panel-order-row" for="order-balls">
+                      <span>Balls</span>
+                      <input id="order-balls" type="number" value="5" step="1" min="-1000" max="2000" />
+                    </label>
+                    <label class="panel-order-row" for="order-ui">
+                      <span>UI Overlay</span>
+                      <input id="order-ui" type="number" value="6" step="1" min="-1000" max="2000" />
+                    </label>
+                  </div>
+                </div>
+
+                <div class="panel-actions">
+                  <button id="render-layer-reset" class="panel-btn">Reset Defaults</button>
+                  <button id="render-layer-sync" class="panel-btn">Sync From Scene</button>
+                </div>
               </div>
             </div>
           </div>
-          <div id="controls">
-            <button id="pause-btn" class="icon-btn" title="Pause">⏸</button>
-            <button id="restart-btn" class="icon-btn" title="Restart">↻</button>
-            <button id="settings-btn" class="icon-btn" title="Settings">⚙</button>
-            <button id="physics-settings-btn" class="icon-btn" title="Physics Settings">⚗</button>
-            <button id="geometry-panel-btn" class="icon-btn" title="Pocket Geometry">📐</button>
-            <button id="render-layer-btn" class="icon-btn" title="Render Layers">👁</button>
-            <button id="debug-toggle" class="icon-btn" title="Debug Mode">🐛</button>
-            <button id="capture-shot-btn" class="icon-btn" title="Capture Shot">📸</button>
-          </div>
-        </div>
-        <div id="foul-banner" class="hidden"></div>
-        <div id="stats">
-          <span id="fps">FPS: 0</span>
-          <span id="ups">UPS: 0</span>
-        </div>
-      </div>
-      <div id="canvas-container">
-        <canvas id="game-canvas"></canvas>
-        <canvas id="ui-canvas"></canvas>
-        <canvas id="debug-canvas"></canvas>
-        <img
-          id="reference-overlay"
-          src="/images/reference.png"
-          alt="Reference table overlay"
-          class="overlay-hidden"
-        />
-        
-        <!-- Live Geometry Panel -->
-        <div id="geometry-panel" class="floating-panel hidden">
-          <div class="panel-header">
-            <h3>🎱 Pocket Geometry</h3>
-            <button id="geometry-panel-close" class="close-btn" data-no-drag="true">×</button>
-          </div>
-          <div class="panel-content">
-            <div class="slider-group">
-              <label for="live-side-radius">
-                Side Jaw Radius: <span id="live-side-radius-val">4.0</span>"
-              </label>
-              <input type="range" id="live-side-radius" min="1" max="8" step="0.1" value="4" />
-            </div>
-            
-            <div class="slider-group">
-              <label for="live-side-steepness">
-                Side Steepness: <span id="live-side-steepness-val">2.0</span>"
-              </label>
-              <input type="range" id="live-side-steepness" min="0.5" max="6" step="0.1" value="2" />
-            </div>
-
-            <div class="slider-group">
-              <label for="live-side-offset">
-                Side Pocket Offset: <span id="live-side-offset-val">0.25</span>"
-              </label>
-              <input type="range" id="live-side-offset" min="0" max="1.5" step="0.05" value="0.25" />
-            </div>
-
-            <div class="slider-group">
-              <label for="live-side-straight">
-                Side Straight Y: <span id="live-side-straight-val">23.5</span>"
-              </label>
-              <input type="range" id="live-side-straight" min="22" max="25" step="0.05" value="23.5" />
-            </div>
-
-            <div class="slider-group">
-              <label for="live-side-inner">
-                Side Inner Y: <span id="live-side-inner-val">24.6</span>"
-              </label>
-              <input type="range" id="live-side-inner" min="23" max="26" step="0.05" value="24.6" />
-            </div>
-
-            <div class="slider-group input-group">
-              <label for="live-side-jaw-outer">
-                Side Jaw Outer: <span id="live-side-jaw-outer-val">Auto</span>"
-              </label>
-              <div class="input-row">
-                <input type="range" id="live-side-jaw-outer" min="1" max="48" step="0.05" value="6" />
-                <button id="live-side-jaw-outer-auto" class="panel-mini-btn" data-no-drag="true">Auto</button>
-              </div>
-            </div>
-
-            <div class="slider-group input-group">
-              <label for="live-side-jaw-inner">
-                Side Jaw Inner: <span id="live-side-jaw-inner-val">Auto</span>"
-              </label>
-              <div class="input-row">
-                <input type="range" id="live-side-jaw-inner" min="0.5" max="30" step="0.05" value="4" />
-                <button id="live-side-jaw-inner-auto" class="panel-mini-btn" data-no-drag="true">Auto</button>
-              </div>
-            </div>
-
-            <div class="slider-group input-group">
-              <label for="live-side-throat-width">
-                Side Throat Width: <span id="live-side-throat-width-val">Auto</span>"
-              </label>
-              <div class="input-row">
-                <input
-                  type="range"
-                  id="live-side-throat-width"
-                  min="1"
-                  max="8"
-                  step="0.05"
-                  value="3"
-                  data-default="3"
-                />
-                <button id="live-side-throat-width-auto" class="panel-mini-btn" data-no-drag="true">Auto</button>
-              </div>
-            </div>
-
-            <div class="slider-group input-group">
-              <label for="live-corner-throat-width">
-                Corner Throat Width: <span id="live-corner-throat-width-val">Auto</span>"
-              </label>
-              <div class="input-row">
-                <input
-                  type="range"
-                  id="live-corner-throat-width"
-                  min="1"
-                  max="8"
-                  step="0.05"
-                  value="3.5"
-                  data-default="3.5"
-                />
-                <button id="live-corner-throat-width-auto" class="panel-mini-btn" data-no-drag="true">Auto</button>
-              </div>
-            </div>
-
-            <div class="slider-group">
-              <label for="live-corner-frame">
-                Corner Frame Offset: <span id="live-corner-frame-val">4.0</span>"
-              </label>
-              <input type="range" id="live-corner-frame" min="2" max="6" step="0.1" value="4" />
-            </div>
-
-            <div class="slider-group">
-              <label for="live-corner-radius">
-                Corner Jaw Radius: <span id="live-corner-radius-val">4.0</span>"
-              </label>
-              <input type="range" id="live-corner-radius" min="3" max="8" step="0.1" value="4" />
-            </div>
-
-            <div class="slider-group input-group">
-              <label for="live-corner-jaw-x">
-                Corner Jaw X: <span id="live-corner-jaw-x-val">Auto</span>"
-              </label>
-              <div class="input-row">
-                <input type="range" id="live-corner-jaw-x" min="30" max="50" step="0.05" value="46" />
-                <button id="live-corner-jaw-x-auto" class="panel-mini-btn" data-no-drag="true">Auto</button>
-              </div>
-            </div>
-
-            <div class="slider-group input-group">
-              <label for="live-corner-jaw-y">
-                Corner Jaw Y: <span id="live-corner-jaw-y-val">Auto</span>"
-              </label>
-              <div class="input-row">
-                <input type="range" id="live-corner-jaw-y" min="10" max="25" step="0.05" value="21" />
-                <button id="live-corner-jaw-y-auto" class="panel-mini-btn" data-no-drag="true">Auto</button>
-              </div>
-            </div>
-
-            <div class="slider-group">
-              <label for="live-corner-pocket-capture">
-                Corner Pocket Capture Radius: <span id="live-corner-pocket-capture-val">2.50</span>"
-              </label>
-              <input type="range" id="live-corner-pocket-capture" min="1.5" max="4.0" step="0.05" value="2.5" />
-            </div>
-
-            <div class="slider-group">
-              <label for="live-side-pocket-capture">
-                Side Pocket Capture Radius: <span id="live-side-pocket-capture-val">2.50</span>"
-              </label>
-              <input type="range" id="live-side-pocket-capture" min="1.5" max="4.0" step="0.05" value="2.5" />
-            </div>
-
-            <div class="slider-group">
-              <label for="live-corner-pocket-visual">
-                Corner Pocket Visual Radius: <span id="live-corner-pocket-visual-val">2.50</span>"
-              </label>
-              <input type="range" id="live-corner-pocket-visual" min="1.5" max="4.0" step="0.05" value="2.5" />
-            </div>
-
-            <div class="slider-group">
-              <label for="live-side-pocket-visual">
-                Side Pocket Visual Radius: <span id="live-side-pocket-visual-val">2.50</span>"
-              </label>
-              <input type="range" id="live-side-pocket-visual" min="1.5" max="4.0" step="0.05" value="2.5" />
-            </div>
-
-            <div class="slider-group">
-              <label for="live-pocket-shelf-depth">
-                Pocket Shelf Depth: <span id="live-pocket-shelf-depth-val">0.50</span>"
-              </label>
-              <input type="range" id="live-pocket-shelf-depth" min="0" max="2" step="0.05" value="0.5" />
-            </div>
-
-            <div class="slider-group">
-              <label for="live-jaw-curve-blend">
-                Jaw Curve Blend: <span id="live-jaw-curve-blend-val">0.00</span>
-              </label>
-              <input type="range" id="live-jaw-curve-blend" min="0" max="1" step="0.05" value="0" />
-            </div>
-
-            <div class="slider-group">
-              <label for="live-corner-cut-angle">
-                Corner Cut Angle: <span id="live-corner-cut-angle-val">0.0</span>&deg;
-              </label>
-              <input type="range" id="live-corner-cut-angle" min="-30" max="30" step="0.5" value="0" />
-            </div>
-
-            <div class="slider-group">
-              <label for="live-side-cut-angle">
-                Side Cut Angle: <span id="live-side-cut-angle-val">0.0</span>&deg;
-              </label>
-              <input type="range" id="live-side-cut-angle" min="-30" max="30" step="0.5" value="0" />
-            </div>
-
-            <div class="slider-group">
-              <label for="live-corner-straight">
-                Corner Straight X: <span id="live-corner-straight-val">48.5</span>"
-              </label>
-              <input type="range" id="live-corner-straight" min="46" max="50" step="0.05" value="48.5" />
-            </div>
-
-            <div class="slider-group">
-              <label for="live-corner-target">
-                Corner Target Y: <span id="live-corner-target-val">21.0</span>"
-              </label>
-              <input type="range" id="live-corner-target" min="18" max="24" step="0.05" value="21" />
-            </div>
-            
-            <div class="slider-group">
-              <label for="live-frame-width">
-                Frame Width: <span id="live-frame-width-val">4.0</span>"
-              </label>
-              <input type="range" id="live-frame-width" min="2" max="8" step="0.1" value="4" />
-            </div>
-
-            <div class="slider-group">
-              <label for="live-rail-thickness">
-                Rail Thickness (Inner): <span id="live-rail-thickness-inner-val">0.2</span>"
-              </label>
-              <input type="range" id="live-rail-thickness-inner" min="0.05" max="1" step="0.01" value="0.2" />
-            </div>
-
-            <div class="slider-group">
-              <label for="live-rail-thickness-outer">
-                Rail Thickness (Outer): <span id="live-rail-thickness-outer-val">0.2</span>"
-              </label>
-              <input type="range" id="live-rail-thickness-outer" min="0.05" max="1" step="0.01" value="0.2" />
-            </div>
-            
-            <div class="panel-actions">
-              <button id="geometry-reset-btn" class="panel-btn">Reset Defaults</button>
-            </div>
-            
-            <p class="panel-hint">💡 Changes apply instantly</p>
-          </div>
-        </div>
-
-        <div id="render-layer-panel" class="floating-panel hidden">
-          <div class="panel-header">
-            <h3>👁️ Render Layers</h3>
-            <button id="render-layer-close" class="close-btn" data-no-drag="true">×</button>
-          </div>
-          <div class="panel-content render-layer-content">
-            <label class="layer-checkbox">
-              <input type="checkbox" id="layer-table" checked />
-              Table Felt
-            </label>
-            <label class="layer-checkbox">
-              <input type="checkbox" id="layer-frame" checked />
-              Wooden Frame
-            </label>
-            <label class="layer-checkbox">
-              <input type="checkbox" id="layer-rails" checked />
-              Rails
-            </label>
-            <label class="layer-checkbox">
-              <input type="checkbox" id="layer-pockets" checked />
-              Pockets
-            </label>
-            <label class="layer-checkbox">
-              <input type="checkbox" id="layer-caps" checked />
-              Pocket Caps
-            </label>
-            <label class="layer-checkbox">
-              <input type="checkbox" id="layer-balls" checked />
-              Balls
-            </label>
-            <label class="layer-checkbox">
-              <input type="checkbox" id="layer-ui" checked />
-              UI Overlay
-            </label>
-            <label class="layer-checkbox">
-              <input type="checkbox" id="layer-measure" />
-              Measurement Overlay
-            </label>
-            <label class="layer-checkbox">
-              <input type="checkbox" id="layer-reference" />
-              Reference Overlay
-            </label>
-            <div class="panel-divider"></div>
-            <div class="panel-subtitle">Render Order</div>
-            <div class="slider-group input-group">
-              <label for="order-table">Table</label>
-              <div class="input-row">
-                <input type="number" id="order-table" step="1" min="-1000" max="2000" />
-              </div>
-            </div>
-            <div class="slider-group input-group">
-              <label for="order-frame">Frame</label>
-              <div class="input-row">
-                <input type="number" id="order-frame" step="1" min="-1000" max="2000" />
-              </div>
-            </div>
-            <div class="slider-group input-group">
-              <label for="order-rails">Rails</label>
-              <div class="input-row">
-                <input type="number" id="order-rails" step="1" min="-1000" max="2000" />
-              </div>
-            </div>
-            <div class="slider-group input-group">
-              <label for="order-pockets">Pockets</label>
-              <div class="input-row">
-                <input type="number" id="order-pockets" step="1" min="-1000" max="2000" />
-              </div>
-            </div>
-            <div class="slider-group input-group">
-              <label for="order-caps">Pocket Caps</label>
-              <div class="input-row">
-                <input type="number" id="order-caps" step="1" min="-1000" max="2000" />
-              </div>
-            </div>
-            <div class="slider-group input-group">
-              <label for="order-balls">Balls</label>
-              <div class="input-row">
-                <input type="number" id="order-balls" step="1" min="-1000" max="2000" />
-              </div>
-            </div>
-            <div class="slider-group input-group">
-              <label for="order-ui">UI Overlay</label>
-              <div class="input-row">
-                <input type="number" id="order-ui" step="1" min="-1000" max="2000" />
-              </div>
-            </div>
-            <div class="panel-actions">
-              <button id="render-layer-reset" class="panel-btn">Reset Defaults</button>
-            </div>
-            <p class="panel-hint">Use checkboxes to isolate components while editing geometry.</p>
-          </div>
-        </div>
+        </aside>
       </div>
       <div id="settings-modal" class="modal hidden">
         <div class="modal-content">

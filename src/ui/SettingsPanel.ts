@@ -1,106 +1,118 @@
 // Settings panel for live physics tuning
 import { CONFIG } from '../config';
-import { SettingsManager } from './SettingsManager';
+import { SettingsManager, PhysicsSettings, RenderSettings } from './SettingsManager';
 import { makePanelDraggable } from './drag';
+import { UIPanel } from './panels/UIPanel';
 
 export class SettingsPanel {
   private panel: HTMLElement;
-  private isVisible: boolean = false;
+  private panelController: UIPanel;
   private settingsManager: SettingsManager;
+  private physicsConfig: PhysicsSettings;
 
   constructor(settingsManager: SettingsManager) {
     this.settingsManager = settingsManager;
     this.panel = this.createPanel();
-    document.body.appendChild(this.panel);
     const header = this.panel.querySelector('.panel-header') as HTMLElement | null;
-    if (header) {
+    if (header && !this.panel.closest('#panel-dock')) {
       makePanelDraggable(this.panel, header);
     }
+
+    this.physicsConfig = CONFIG as unknown as PhysicsSettings;
+
+    const focusTarget = this.panel.querySelector<HTMLElement>('input[type="range"], button');
+    this.panelController = new UIPanel({
+      id: 'physics-settings',
+      element: this.panel,
+      focusTarget,
+    });
+    this.panelController.addEventListener('panel:open', () => this.loadSettings());
+
     this.setupEventListeners();
     this.loadSettings();
   }
 
-  private createPanel(): HTMLElement {
-    const panel = document.createElement('div');
-    panel.id = 'settings-panel';
-    panel.className = 'floating-panel hidden';
-    panel.style.cssText = `
-      top: 60px;
-      left: 16px;
-      width: 360px;
-      max-height: calc(100vh - 80px);
-    `;
-
-    panel.innerHTML = `
-      <div class="panel-header">
-        <h3>⚗ Physics & Aim Assist</h3>
-        <button id="settings-close" class="close-btn">×</button>
-      </div>
-      
-      <div class="panel-content" style="max-height: calc(100vh - 160px); overflow-y: auto;">
-        <div class="settings-group">
-          <h4 class="settings-group-title" style="color: #64B5F6;">🎱 Ball Physics</h4>
-          ${this.createSlider('BALL_RESTITUTION', 'Ball-Ball Restitution', 0.5, 1.0, 0.01, CONFIG.BALL_RESTITUTION)}
-          ${this.createSlider('BALL_BALL_FRICTION', 'Ball-Ball Friction', 0.0, 0.3, 0.01, CONFIG.BALL_BALL_FRICTION)}
-          ${this.createSlider('CUSHION_RESTITUTION', 'Cushion Restitution', 0.5, 1.0, 0.01, CONFIG.CUSHION_RESTITUTION)}
-        </div>
-
-        <div class="settings-group">
-          <h4 class="settings-group-title" style="color: #FFB74D;">🎯 Shot Power</h4>
-          ${this.createSlider('CUE_POWER_MAX', 'Max Power', 10, 50, 1, CONFIG.CUE_POWER_MAX)}
-          ${this.createSlider('CUE_POWER_MULTIPLIER', 'Power Multiplier', 5, 20, 0.5, CONFIG.CUE_POWER_MULTIPLIER)}
-        </div>
-
-        <div class="settings-group">
-          <h4 class="settings-group-title" style="color: #81C784;">🌪️ Friction</h4>
-          ${this.createSlider('ROLLING_FRICTION', 'Rolling Friction', 0.1, 2.0, 0.05, CONFIG.ROLLING_FRICTION)}
-          ${this.createSlider('SLIDING_FRICTION', 'Sliding Friction', 0.1, 2.0, 0.05, CONFIG.SLIDING_FRICTION)}
-        </div>
-
-        <div class="settings-group">
-          <h4 class="settings-group-title" style="color: #BA68C8;">⚡ Physics Engine</h4>
-          ${this.createSlider('SOLVER_ITERATIONS', 'Solver Iterations', 1, 30, 1, CONFIG.SOLVER_ITERATIONS)}
-          ${this.createSlider('VELOCITY_EPSILON', 'Sleep Threshold', 0.05, 1.0, 0.05, CONFIG.VELOCITY_EPSILON)}
-        </div>
-
-        <div class="settings-group">
-          <h4 class="settings-group-title" style="color: #F06292;">🎯 Aim Assist Visuals</h4>
-          ${this.createSlider('AIM_LINE_OFFSET', 'Aim Line Offset', 0.0, 2.0, 0.1, CONFIG.AIM_LINE_OFFSET)}
-          ${this.createSlider('GHOST_BALL_OFFSET', 'Ghost Ball Offset', -2.0, 2.0, 0.1, CONFIG.GHOST_BALL_OFFSET)}
-          ${this.createSlider('OBJECT_PATH_PERCENTAGE', 'Object Path Length %', 0.1, 2.0, 0.1, CONFIG.OBJECT_PATH_PERCENTAGE)}
-        </div>
-
-        <div class="settings-group">
-          <h4 class="settings-group-title" style="color: #90CAF9;">🖥️ Display</h4>
-          ${this.createSlider('CANVAS_SCALE_MULTIPLIER', 'Table Scale', 0.6, 1.6, 0.05, CONFIG.CANVAS_SCALE_MULTIPLIER)}
-        </div>
-
-        <div class="panel-actions" style="gap: 8px; margin-top: 16px;">
-          <button id="settings-reset" class="panel-btn" style="background: #FF9800;">Reset</button>
-          <button id="settings-export" class="panel-btn" style="background: #2196F3;">Copy Config</button>
-        </div>
-      </div>
-    `;
-
-    return panel;
-  }
-
-  private createSlider(key: string, label: string, min: number, max: number, step: number, value: number): string {
+  private sliderRow(key: string, label: string, min: number, max: number, step: number, value: number): string {
     return `
       <div class="slider-group">
-        <label>
-          ${label}: <span id="${key}-value">${value}</span>
+        <label class="slider-label" for="${key}">
+          <span class="slider-title">${label}</span>
+          <span class="slider-value" id="${key}-value">${value}</span>
         </label>
-        <input 
-          type="range" 
-          id="${key}" 
-          min="${min}" 
-          max="${max}" 
-          step="${step}" 
+        <input
+          type="range"
+          id="${key}"
+          min="${min}"
+          max="${max}"
+          step="${step}"
           value="${value}"
         />
       </div>
     `;
+  }
+
+  private createPanel(): HTMLElement {
+    let panel = document.getElementById('settings-panel') as HTMLElement | null;
+    if (panel) {
+      return panel;
+    }
+
+    const panelDock = document.getElementById('panel-dock');
+    panel = document.createElement('div');
+    panel.id = 'settings-panel';
+    panel.className = 'panel-dock-card hidden';
+
+    panel.innerHTML = `
+      <div class="panel-header">
+        <h3>⚗ Physics & Aim Assist</h3>
+      </div>
+      <div class="panel-content">
+        <div class="settings-group">
+          <h4 class="settings-group-title">🎱 Ball Physics</h4>
+          ${this.sliderRow('BALL_RESTITUTION', 'Ball-Ball Restitution', 0.5, 1.0, 0.01, CONFIG.BALL_RESTITUTION)}
+          ${this.sliderRow('BALL_BALL_FRICTION', 'Ball-Ball Friction', 0.0, 0.3, 0.01, CONFIG.BALL_BALL_FRICTION)}
+          ${this.sliderRow('CUSHION_RESTITUTION', 'Cushion Restitution', 0.5, 1.0, 0.01, CONFIG.CUSHION_RESTITUTION)}
+        </div>
+        <div class="settings-group">
+          <h4 class="settings-group-title">🎯 Shot Power</h4>
+          ${this.sliderRow('CUE_POWER_MAX', 'Max Power', 10, 50, 1, CONFIG.CUE_POWER_MAX)}
+          ${this.sliderRow('CUE_POWER_MULTIPLIER', 'Power Multiplier', 5, 20, 0.5, CONFIG.CUE_POWER_MULTIPLIER)}
+        </div>
+        <div class="settings-group">
+          <h4 class="settings-group-title">🌪️ Friction</h4>
+          ${this.sliderRow('ROLLING_FRICTION', 'Rolling Friction', 0.1, 2.0, 0.05, CONFIG.ROLLING_FRICTION)}
+          ${this.sliderRow('SLIDING_FRICTION', 'Sliding Friction', 0.1, 2.0, 0.05, CONFIG.SLIDING_FRICTION)}
+        </div>
+        <div class="settings-group">
+          <h4 class="settings-group-title">⚡ Physics Engine</h4>
+          ${this.sliderRow('SOLVER_ITERATIONS', 'Solver Iterations', 1, 30, 1, CONFIG.SOLVER_ITERATIONS)}
+          ${this.sliderRow('VELOCITY_EPSILON', 'Sleep Threshold', 0.05, 1.0, 0.05, CONFIG.VELOCITY_EPSILON)}
+        </div>
+        <div class="settings-group">
+          <h4 class="settings-group-title">🎯 Aim Assist Visuals</h4>
+          ${this.sliderRow('AIM_LINE_OFFSET', 'Aim Line Offset', 0.0, 2.0, 0.1, CONFIG.AIM_LINE_OFFSET)}
+          ${this.sliderRow('GHOST_BALL_OFFSET', 'Ghost Ball Offset', -2.0, 2.0, 0.1, CONFIG.GHOST_BALL_OFFSET)}
+          ${this.sliderRow('OBJECT_PATH_PERCENTAGE', 'Object Path Length %', 0.1, 2.0, 0.1, CONFIG.OBJECT_PATH_PERCENTAGE)}
+        </div>
+        <div class="settings-group">
+          <h4 class="settings-group-title">🖥️ Display</h4>
+          ${this.sliderRow('BALL_VISUAL_SCALE', 'Ball Visual Scale', 0.8, 1.2, 0.01, CONFIG.BALL_VISUAL_SCALE ?? 1)}
+          ${this.sliderRow('CANVAS_SCALE_MULTIPLIER', 'Table Scale', 0.6, 1.6, 0.05, CONFIG.CANVAS_SCALE_MULTIPLIER)}
+        </div>
+        <div class="panel-actions" style="margin-top: 16px; gap: 8px;">
+          <button id="settings-reset" class="panel-btn">Reset Defaults</button>
+          <button id="settings-export" class="panel-btn">Copy Config</button>
+        </div>
+      </div>
+    `;
+
+    if (panelDock) {
+      panelDock.prepend(panel);
+    } else {
+      document.body.appendChild(panel);
+    }
+
+    return panel;
   }
 
   private setupEventListeners() {
@@ -118,7 +130,7 @@ export class SettingsPanel {
     
     // Close on Escape key
     window.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && this.isVisible) {
+      if (e.key === 'Escape' && this.panelController.isOpen()) {
         this.hide();
       }
     });
@@ -126,35 +138,67 @@ export class SettingsPanel {
     // Slider inputs
     const sliders = this.panel.querySelectorAll('input[type="range"]');
     sliders.forEach((slider) => {
-      slider.addEventListener('input', (e) => {
-        const input = e.target as HTMLInputElement;
-        const key = input.id as keyof typeof CONFIG;
+      slider.addEventListener('input', (event) => {
+        const input = event.target as HTMLInputElement;
+        const key = input.id;
         const value = parseFloat(input.value);
 
         const valueDisplay = this.panel.querySelector(`#${key}-value`);
 
-        if (key === 'CANVAS_SCALE_MULTIPLIER') {
-          CONFIG.CANVAS_SCALE_MULTIPLIER = value;
-          if (valueDisplay) {
-            valueDisplay.textContent = value.toFixed(2);
-          }
-          this.settingsManager.saveRenderSettings({ canvasScale: value });
-          console.log(`🖥️ ${key} = ${value}`);
+        if (key === 'CANVAS_SCALE_MULTIPLIER' || key === 'BALL_VISUAL_SCALE') {
+          this.updateRenderSetting(key as 'CANVAS_SCALE_MULTIPLIER' | 'BALL_VISUAL_SCALE', value, valueDisplay);
           return;
         }
 
-        // Update CONFIG for physics settings
-        (CONFIG as any)[key] = value;
-
-        if (valueDisplay) {
-          valueDisplay.textContent = value.toString();
-        }
-
-        this.settingsManager.savePhysicsSettings({ [key]: value } as any);
-
-        console.log(`⚙️ ${key} = ${value}`);
+        this.updatePhysicsSetting(key, value, valueDisplay);
       });
     });
+  }
+
+  private updateRenderSetting(
+    key: 'CANVAS_SCALE_MULTIPLIER' | 'BALL_VISUAL_SCALE',
+    value: number,
+    valueDisplay: Element | null
+  ) {
+    if (key === 'CANVAS_SCALE_MULTIPLIER') {
+      CONFIG.CANVAS_SCALE_MULTIPLIER = value;
+      if (valueDisplay) {
+        valueDisplay.textContent = value.toFixed(2);
+      }
+      const renderUpdate: Partial<RenderSettings> = { canvasScale: value };
+      this.settingsManager.saveRenderSettings(renderUpdate);
+      console.log(`🖥️ CANVAS_SCALE_MULTIPLIER = ${value}`);
+      return;
+    }
+
+    CONFIG.BALL_VISUAL_SCALE = value;
+    if (valueDisplay) {
+      valueDisplay.textContent = value.toFixed(2);
+    }
+    const renderUpdate: Partial<RenderSettings> = { ballVisualScale: value };
+    this.settingsManager.saveRenderSettings(renderUpdate);
+    console.log(`🎱 BALL_VISUAL_SCALE = ${value}`);
+  }
+
+  private updatePhysicsSetting(key: string, value: number, valueDisplay: Element | null) {
+    if (!this.isPhysicsSettingKey(key)) {
+      console.warn(`Ignoring unsupported physics setting key "${key}"`);
+      return;
+    }
+
+    this.physicsConfig[key] = value;
+
+    if (valueDisplay) {
+      valueDisplay.textContent = value.toString();
+    }
+
+    const physicsUpdate: Partial<PhysicsSettings> = { [key]: value } as Partial<PhysicsSettings>;
+    this.settingsManager.savePhysicsSettings(physicsUpdate);
+    console.log(`⚙️ ${key} = ${value}`);
+  }
+
+  private isPhysicsSettingKey(key: string): key is keyof PhysicsSettings {
+    return key in this.settingsManager.getPhysicsSettings();
   }
 
   private loadSettings() {
@@ -178,12 +222,20 @@ export class SettingsPanel {
     if (canvasDisplay) {
       canvasDisplay.textContent = renderSettings.canvasScale.toFixed(2);
     }
+    const ballScaleSlider = this.panel.querySelector('#BALL_VISUAL_SCALE') as HTMLInputElement;
+    if (ballScaleSlider) {
+      ballScaleSlider.value = renderSettings.ballVisualScale.toString();
+    }
+    const ballScaleDisplay = this.panel.querySelector('#BALL_VISUAL_SCALE-value');
+    if (ballScaleDisplay) {
+      ballScaleDisplay.textContent = renderSettings.ballVisualScale.toFixed(2);
+    }
   }
 
   private resetDefaults() {
     // Reset via settings manager (saves to local storage)
     this.settingsManager.resetPhysicsSettings();
-    this.settingsManager.saveRenderSettings({ canvasScale: 1 });
+    this.settingsManager.saveRenderSettings({ canvasScale: 1, ballVisualScale: 1 });
     
     // Reload UI to reflect reset values
     this.loadSettings();
@@ -203,6 +255,7 @@ export class SettingsPanel {
       SOLVER_ITERATIONS: CONFIG.SOLVER_ITERATIONS,
       VELOCITY_EPSILON: CONFIG.VELOCITY_EPSILON,
       CANVAS_SCALE_MULTIPLIER: CONFIG.CANVAS_SCALE_MULTIPLIER,
+      BALL_VISUAL_SCALE: CONFIG.BALL_VISUAL_SCALE,
     };
 
     const configText = JSON.stringify(config, null, 2);
@@ -219,20 +272,18 @@ export class SettingsPanel {
   }
 
   toggle() {
-    if (this.isVisible) {
-      this.hide();
-    } else {
-      this.show();
-    }
+    this.panelController.toggle();
   }
 
   show() {
-    this.panel.classList.remove('hidden');
-    this.isVisible = true;
+    this.panelController.open();
   }
 
   hide() {
-    this.panel.classList.add('hidden');
-    this.isVisible = false;
+    this.panelController.close();
+  }
+
+  getController(): UIPanel {
+    return this.panelController;
   }
 }
