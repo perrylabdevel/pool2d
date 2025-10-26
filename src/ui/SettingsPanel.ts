@@ -96,7 +96,7 @@ export class SettingsPanel {
         </div>
         <div class="settings-group">
           <h4 class="settings-group-title">🖥️ Display</h4>
-          ${this.sliderRow('BALL_VISUAL_SCALE', 'Ball Visual Scale', 0.8, 1.2, 0.01, CONFIG.BALL_VISUAL_SCALE ?? 1)}
+          ${this.sliderRow('BALL_SCALE', 'Ball Scale', 0.8, 1.2, 0.01, CONFIG.BALL_SCALE ?? 1)}
           ${this.sliderRow('CANVAS_SCALE_MULTIPLIER', 'Table Scale', 0.6, 1.6, 0.05, CONFIG.CANVAS_SCALE_MULTIPLIER)}
         </div>
         <div class="panel-actions" style="margin-top: 16px; gap: 8px;">
@@ -145,8 +145,8 @@ export class SettingsPanel {
 
         const valueDisplay = this.panel.querySelector(`#${key}-value`);
 
-        if (key === 'CANVAS_SCALE_MULTIPLIER' || key === 'BALL_VISUAL_SCALE') {
-          this.updateRenderSetting(key as 'CANVAS_SCALE_MULTIPLIER' | 'BALL_VISUAL_SCALE', value, valueDisplay);
+        if (key === 'CANVAS_SCALE_MULTIPLIER' || key === 'BALL_SCALE') {
+          this.updateRenderSetting(key as 'CANVAS_SCALE_MULTIPLIER' | 'BALL_SCALE', value, valueDisplay);
           return;
         }
 
@@ -156,7 +156,7 @@ export class SettingsPanel {
   }
 
   private updateRenderSetting(
-    key: 'CANVAS_SCALE_MULTIPLIER' | 'BALL_VISUAL_SCALE',
+    key: 'CANVAS_SCALE_MULTIPLIER' | 'BALL_SCALE',
     value: number,
     valueDisplay: Element | null
   ) {
@@ -171,13 +171,15 @@ export class SettingsPanel {
       return;
     }
 
-    CONFIG.BALL_VISUAL_SCALE = value;
+    const baseRadius = CONFIG.BALL_BASE_RADIUS ?? CONFIG.BALL_RADIUS;
+    CONFIG.BALL_SCALE = value;
+    CONFIG.BALL_RADIUS = baseRadius * value;
     if (valueDisplay) {
       valueDisplay.textContent = value.toFixed(2);
     }
-    const renderUpdate: Partial<RenderSettings> = { ballVisualScale: value };
+    const renderUpdate: Partial<RenderSettings> = { ballScale: value };
     this.settingsManager.saveRenderSettings(renderUpdate);
-    console.log(`🎱 BALL_VISUAL_SCALE = ${value}`);
+    console.log(`🎱 BALL_SCALE = ${value} (radius ${CONFIG.BALL_RADIUS.toFixed(3)}")`);
   }
 
   private updatePhysicsSetting(key: string, value: number, valueDisplay: Element | null) {
@@ -222,20 +224,20 @@ export class SettingsPanel {
     if (canvasDisplay) {
       canvasDisplay.textContent = renderSettings.canvasScale.toFixed(2);
     }
-    const ballScaleSlider = this.panel.querySelector('#BALL_VISUAL_SCALE') as HTMLInputElement;
+    const ballScaleSlider = this.panel.querySelector('#BALL_SCALE') as HTMLInputElement;
     if (ballScaleSlider) {
-      ballScaleSlider.value = renderSettings.ballVisualScale.toString();
+      ballScaleSlider.value = renderSettings.ballScale.toString();
     }
-    const ballScaleDisplay = this.panel.querySelector('#BALL_VISUAL_SCALE-value');
+    const ballScaleDisplay = this.panel.querySelector('#BALL_SCALE-value');
     if (ballScaleDisplay) {
-      ballScaleDisplay.textContent = renderSettings.ballVisualScale.toFixed(2);
+      ballScaleDisplay.textContent = renderSettings.ballScale.toFixed(2);
     }
   }
 
   private resetDefaults() {
     // Reset via settings manager (saves to local storage)
     this.settingsManager.resetPhysicsSettings();
-    this.settingsManager.saveRenderSettings({ canvasScale: 1, ballVisualScale: 1 });
+    this.settingsManager.saveRenderSettings({ canvasScale: 1, ballScale: 1 });
     
     // Reload UI to reflect reset values
     this.loadSettings();
@@ -255,7 +257,8 @@ export class SettingsPanel {
       SOLVER_ITERATIONS: CONFIG.SOLVER_ITERATIONS,
       VELOCITY_EPSILON: CONFIG.VELOCITY_EPSILON,
       CANVAS_SCALE_MULTIPLIER: CONFIG.CANVAS_SCALE_MULTIPLIER,
-      BALL_VISUAL_SCALE: CONFIG.BALL_VISUAL_SCALE,
+      BALL_SCALE: CONFIG.BALL_SCALE,
+      BALL_RADIUS: CONFIG.BALL_RADIUS,
     };
 
     const configText = JSON.stringify(config, null, 2);

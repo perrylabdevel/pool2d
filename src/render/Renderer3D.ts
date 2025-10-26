@@ -42,7 +42,7 @@ export class Renderer3D {
   ballMeshes: Map<number, THREE.Object3D> = new Map();
   ballModels: Map<number, { geometry: THREE.BufferGeometry; material: THREE.MeshStandardMaterial }> = new Map();
   ballModelsLoaded: boolean = false;
-  ballVisualScale = 1.0; // Visual radius matches physics radius to avoid overlap
+  ballScale = 1.0;
   private fbxBlobUrl: string | null = null;
   tableMesh: THREE.Mesh | null = null;
   frameMesh: THREE.Group | null = null;
@@ -101,7 +101,7 @@ export class Renderer3D {
       this.referenceOverlayVisible = !this.referenceOverlay.classList.contains('overlay-hidden');
     }
     this.layerVisibility.showReferenceOverlay = this.referenceOverlayVisible;
-    this.ballVisualScale = CONFIG.BALL_VISUAL_SCALE ?? 1;
+    this.ballScale = CONFIG.BALL_SCALE ?? 1;
 
     this.observeLayoutChanges();
 
@@ -201,7 +201,7 @@ export class Renderer3D {
     });
 
     window.addEventListener('settings:render-changed', () => {
-      this.setBallVisualScale(CONFIG.BALL_VISUAL_SCALE ?? 1);
+      this.setBallScale(CONFIG.BALL_SCALE ?? 1);
     });
   }
 
@@ -424,7 +424,9 @@ export class Renderer3D {
         geometry.translate(-center.x, -center.y, -center.z);
         geometry.computeBoundingSphere();
         const currentRadius = geometry.boundingSphere!.radius;
-        const targetRadius = CONFIG.BALL_RADIUS;
+        // Scale geometry to base radius (without BALL_SCALE factor)
+        // The mesh will be scaled by ballScale separately
+        const targetRadius = CONFIG.BALL_BASE_RADIUS ?? CONFIG.BALL_RADIUS;
         const scale = targetRadius / currentRadius;
         geometry.scale(scale, scale, scale);
         
@@ -472,6 +474,26 @@ export class Renderer3D {
   replaceBallsWithModels() {
     this.ballMeshes.forEach((mesh) => {
       this.scene.remove(mesh);
+    });
+    this.ballMeshes.clear();
+  }
+
+  clearBalls() {
+    this.ballMeshes.forEach((mesh) => {
+      this.scene.remove(mesh);
+      // Dispose geometries and materials for child meshes (glows, stripes, etc.)
+      mesh.traverse((child) => {
+        if ((child as THREE.Mesh).isMesh) {
+          const childMesh = child as THREE.Mesh;
+          childMesh.geometry?.dispose();
+          const mat = childMesh.material;
+          if (Array.isArray(mat)) {
+            mat.forEach(m => m.dispose());
+          } else if (mat) {
+            mat.dispose();
+          }
+        }
+      });
     });
     this.ballMeshes.clear();
   }
@@ -607,14 +629,14 @@ export class Renderer3D {
     targets.forEach((el) => this.resizeObserver!.observe(el));
   }
 
-  setBallVisualScale(scale: number) {
+  setBallScale(scale: number) {
     const safeScale = Number.isFinite(scale) ? Math.max(0.1, scale) : 1;
-    const previous = this.ballVisualScale || 1;
+    const previous = this.ballScale || 1;
     if (Math.abs(safeScale - previous) < 1e-4) {
       return;
     }
     const ratio = safeScale / previous;
-    this.ballVisualScale = safeScale;
+    this.ballScale = safeScale;
 
     this.ballMeshes.forEach((mesh) => {
       mesh.scale.multiplyScalar(ratio);
@@ -998,7 +1020,7 @@ export class Renderer3D {
   }
   
   createBall(ball: Ball): THREE.Object3D {
-    const baseRadius = CONFIG.BALL_RADIUS;
+    const baseRadius = CONFIG.BALL_BASE_RADIUS ?? CONFIG.BALL_RADIUS / Math.max(0.001, CONFIG.BALL_SCALE ?? 1);
     if (this.ballModelsLoaded) {
       const template = this.ballModels.get(ball.id);
       if (template) {
@@ -1013,7 +1035,7 @@ export class Renderer3D {
         this.applyBallRenderOrder(ballMesh);
         this.enforceRenderOrderControl(ballMesh);
         ballMesh.visible = this.layerVisibility.showBalls;
-        ballMesh.scale.setScalar(this.ballVisualScale);
+        ballMesh.scale.setScalar(this.ballScale);
         this.ballMeshes.set(ball.id, ballMesh);
         return ballMesh;
       }
@@ -1054,7 +1076,7 @@ export class Renderer3D {
     this.applyBallRenderOrder(mesh);
     this.enforceRenderOrderControl(mesh);
     mesh.visible = this.layerVisibility.showBalls;
-    mesh.scale.setScalar(this.ballVisualScale);
+    mesh.scale.setScalar(this.ballScale);
     this.ballMeshes.set(ball.id, mesh);
     
     return mesh;
@@ -1062,11 +1084,12 @@ export class Renderer3D {
   
   addBallGlow(mesh: THREE.Mesh | THREE.Object3D, radius: number) {
     // Create a slightly larger sphere with black outline material
-    const glowGeometry = new THREE.SphereGeometry(radius * 1.12, 32, 32);
+    // Use 1.02x to create subtle outline without overlapping when balls touch
+    const glowGeometry = new THREE.SphereGeometry(radius * 1.02, 32, 32);
     const glowMaterial = new THREE.MeshBasicMaterial({
       color: 0x000000,
       transparent: true,
-      opacity: 0.15,
+      opacity: 0.2, // Increased opacity for visibility with smaller glow
       side: THREE.BackSide, // Render from inside so it appears as an outline
       depthTest: true,
       depthWrite: false
@@ -1194,11 +1217,11 @@ export class Renderer3D {
       mesh.visible = shouldRenderBall;
       if (!shouldRenderBall) {
         // Update transform so ball appears at correct place when re-enabled
-        mesh.position.set(x, y, CONFIG.BALL_RADIUS * this.ballVisualScale);
+        mesh.position.set(x, y, CONFIG.BALL_RADIUS);
         return;
       }
 
-      mesh.position.set(x, y, CONFIG.BALL_RADIUS * this.ballVisualScale);
+      mesh.position.set(x, y, CONFIG.BALL_RADIUS);
       
       mesh.quaternion.set(ball.rotX, ball.rotY, ball.rotZ, ball.rotW);
     });
@@ -1499,7 +1522,7 @@ export class Renderer3D {
     ctx.stroke();
 
     // Ball size reference (top-right corner)
-    const ballRadiusPx = CONFIG.BALL_RADIUS * this.ballVisualScale * this.scale;
+    const ballRadiusPx = CONFIG.BALL_RADIUS * this.scale;
     const sampleX = this.uiCanvas.width - ballRadiusPx * 3;
     const sampleY = ballRadiusPx * 3;
     ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
@@ -1510,7 +1533,8 @@ export class Renderer3D {
     ctx.stroke();
     ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
     ctx.textAlign = 'center';
-    ctx.fillText('Ball 2.25"', sampleX, sampleY + ballRadiusPx + 14);
+    const ballDiameterIn = (CONFIG.BALL_RADIUS * 2).toFixed(2);
+    ctx.fillText(`Ball ${ballDiameterIn}"`, sampleX, sampleY + ballRadiusPx + 14);
 
     ctx.restore();
   }
@@ -1737,7 +1761,7 @@ export class Renderer3D {
       this.uiCtx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
       this.uiCtx.lineWidth = 4;
       this.uiCtx.lineCap = 'round';
-      const ghostRadius = Math.abs(ball.radius * this.ballVisualScale * this.scale);
+      const ghostRadius = Math.abs(ball.radius * this.scale);
       if (ghostRadius > 0) {
         this.uiCtx.beginPath();
         this.uiCtx.arc(ghostScreen.x, ghostScreen.y, ghostRadius, 0, Math.PI * 2);
@@ -1751,7 +1775,7 @@ export class Renderer3D {
         this.uiCtx.arc(ghostScreen.x, ghostScreen.y, ghostRadius, 0, Math.PI * 2);
         this.uiCtx.stroke();
       } else {
-        console.warn('Renderer3D: skipping ghost ball draw due to non-positive radius', ghostRadius, this.scale, this.ballVisualScale);
+        console.warn('Renderer3D: skipping ghost ball draw due to non-positive radius', ghostRadius, this.scale, this.ballScale);
       }
     }
     

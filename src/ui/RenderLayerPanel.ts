@@ -114,10 +114,10 @@ export class RenderLayerPanel {
   }
 
   private applyToRenderer(settings: RenderSettings) {
-    const { canvasScale, ballVisualScale, ...layerSettings } = settings;
+    const { canvasScale, ballScale, ...layerSettings } = settings;
     void canvasScale;
-    if (typeof ballVisualScale === 'number') {
-      this.renderer.setBallVisualScale(ballVisualScale);
+    if (typeof ballScale === 'number') {
+      this.renderer.setBallScale(ballScale);
     }
     this.renderer.applyRenderLayerSettings(layerSettings as RenderLayerSettings);
   }

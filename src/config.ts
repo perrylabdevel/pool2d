@@ -16,7 +16,8 @@ export const CONFIG = {
   RAIL_THICKNESS_OUTER: 0.2, // outward extension toward frame (inches)
   
   // Ball properties
-  BALL_RADIUS: 2.25 / 2, // 2.25" diameter
+  BALL_BASE_RADIUS: 2.25 / 2, // 2.25" diameter baseline
+  BALL_RADIUS: 2.25 / 2,
   BALL_MASS: 1.0,
   BALL_RESTITUTION: 0.93, // Ball-ball
   CUSHION_RESTITUTION: 0.88, // Ball-cushion
@@ -52,7 +53,7 @@ export const CONFIG = {
   // Rendering
   CANVAS_SCALE: 8, // Pixels per game unit
   CANVAS_SCALE_MULTIPLIER: 1,
-  BALL_VISUAL_SCALE: 1,
+  BALL_SCALE: 1,
   TABLE_COLOR: '#0a5f0a',
   FRAME_COLOR: '#3d2413',
   RAIL_COLOR: '#2d1810',

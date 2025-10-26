@@ -49,6 +49,7 @@ export class Game {
   rules: EightBallRules;
   predictor: Predictor;
   mode: GameMode;
+  private lastBallScale: number;
   
   // Game loop
   accumulator: number = 0;
@@ -93,6 +94,7 @@ export class Game {
     this.rules = new EightBallRules();
     this.predictor = new Predictor();
     this.mode = GameMode.PRACTICE;
+    this.lastBallScale = CONFIG.BALL_SCALE ?? 1;
 
     this.registerPanels();
 
@@ -190,7 +192,16 @@ export class Game {
   
   setupEventListeners() {
     window.addEventListener('resize', () => this.resize());
-    window.addEventListener('settings:render-changed', () => this.resize());
+    window.addEventListener('settings:render-changed', (event) => {
+      const detail = (event as CustomEvent<{ settings?: { ballScale?: number } }>).detail;
+      const newScale = detail?.settings?.ballScale ?? CONFIG.BALL_SCALE ?? 1;
+      if (Math.abs(newScale - this.lastBallScale) > 1e-4) {
+        this.lastBallScale = newScale;
+        this.restart();
+        return;
+      }
+      this.resize();
+    });
     
     // Instant geometry apply: rebuild world and renderer without full reload
     window.addEventListener('settings:geometry-apply', () => {
@@ -272,13 +283,31 @@ export class Game {
     randomizeBallOrientation(this.cueBall);
     this.world.addBall(this.cueBall);
 
+    const currentRadius = CONFIG.BALL_RADIUS;
+    const radiusSafe = Math.max(currentRadius, 1e-6);
+    const diameter = radiusSafe * 2;
+    const rowSpacingX =
+      diameter *
+      Math.cos(Math.PI / 6); // Maintain equilateral triangle spacing regardless of base radius rounding
+    const apexX = RACK_POSITIONS[0]?.x ?? 0;
+    const apexY = RACK_POSITIONS[0]?.y ?? 0;
+
     // Create racked balls with randomized initial rotations
-    RACK_POSITIONS.forEach((pos) => {
-      const ball = new Ball(pos.id, pos.x, pos.y, CONFIG.BALL_RADIUS, CONFIG.BALL_MASS);
-      // Randomize initial rotation angle for visual variety
-      ball.angle = Math.random() * Math.PI * 2;
-      randomizeBallOrientation(ball);
-      this.world.addBall(ball);
+    const rowStarts = [0, 1, 3, 6, 10];
+    rowStarts.forEach((startIndex, row) => {
+      const endIndex = rowStarts[row + 1] ?? RACK_POSITIONS.length;
+      const rowBalls = RACK_POSITIONS.slice(startIndex, endIndex);
+      const rowX = apexX + rowSpacingX * row;
+      rowBalls.forEach((pos, index) => {
+        const ordinal = (rowBalls.length - 1) / 2 - index;
+        const rowCenterOffset = ordinal * diameter;
+        const scaledY = apexY + rowCenterOffset;
+        const ball = new Ball(pos.id, rowX, scaledY, currentRadius, CONFIG.BALL_MASS);
+        // Randomize initial rotation angle for visual variety
+        ball.angle = Math.random() * Math.PI * 2;
+        randomizeBallOrientation(ball);
+        this.world.addBall(ball);
+      });
     });
     
     // Initialize 3D scene
@@ -289,20 +318,25 @@ export class Game {
     
     // Connect debug overlay to renderer for coordinate projection
     this.debug.setRenderer(this.renderer);
-    
+
     this.resize();
     this.rules.startGame();
     this.hud.setMode(this.mode === GameMode.PRACTICE ? 'Practice Mode' : '8-Ball');
     this.hud.setTurn(1);
+    this.lastBallScale = CONFIG.BALL_SCALE ?? 1;
   }
   
   restart() {
     // Rebuild physics world (recomputes rails/pockets from current CONFIG)
     this.world = new PhysicsWorld();
     // Reset renderer table and rails to avoid duplicates
-    const maybeClear = (this.renderer as Renderer3D & { clearTableAndRails?: () => void }).clearTableAndRails;
-    if (typeof maybeClear === 'function') {
-      maybeClear.call(this.renderer);
+    const renderer3D = this.renderer as Renderer3D & { clearTableAndRails?: () => void; clearBalls?: () => void };
+    if (typeof renderer3D.clearTableAndRails === 'function') {
+      renderer3D.clearTableAndRails();
+    }
+    // Clear existing ball meshes so they get recreated with current settings
+    if (typeof renderer3D.clearBalls === 'function') {
+      renderer3D.clearBalls();
     }
     this.initializeGame();
   }
