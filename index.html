@@ -23,6 +23,15 @@
             </button>
             <button
               class="panel-launcher-btn"
+              data-panel-id="game-settings"
+              title="Game &amp; UI Settings (O)"
+            >
+              <span class="panel-launcher-icon">⚙</span>
+              <span class="panel-launcher-label">Game</span>
+              <span class="panel-launcher-shortcut">O</span>
+            </button>
+            <button
+              class="panel-launcher-btn"
               data-panel-id="physics-settings"
               title="Physics &amp; Aim Assist (S)"
             >
@@ -264,7 +273,7 @@
                   <label for="live-pocket-shelf-depth">
                     Pocket Shelf Depth: <span id="live-pocket-shelf-depth-val">0.50</span>
                   </label>
-                  <input type="range" id="live-pocket-shelf-depth" min="0" max="2" step="0.05" value="0.5" />
+                  <input type="range" id="live-pocket-shelf-depth" min="0" max="3" step="0.05" value="0.5" />
                 </div>
 
                 <div class="slider-group">
@@ -411,6 +420,45 @@
                   </div>
                 </div>
 
+                <div class="settings-group">
+                  <h4 class="settings-group-title">💡 Lighting</h4>
+                  <div class="slider-group">
+                    <label class="slider-label" for="lighting-ambient">
+                      <span class="slider-title">Ambient Light</span>
+                      <span class="slider-value" id="lighting-ambient-value">1.10</span>
+                    </label>
+                    <input type="range" id="lighting-ambient" min="0" max="3" step="0.05" value="1.1" />
+                  </div>
+                  <div class="slider-group">
+                    <label class="slider-label" for="lighting-directional">
+                      <span class="slider-title">Key Light</span>
+                      <span class="slider-value" id="lighting-directional-value">1.60</span>
+                    </label>
+                    <input type="range" id="lighting-directional" min="0" max="3" step="0.05" value="1.6" />
+                  </div>
+                  <div class="slider-group">
+                    <label class="slider-label" for="lighting-accent">
+                      <span class="slider-title">Accent Spot</span>
+                      <span class="slider-value" id="lighting-accent-value">0.50</span>
+                    </label>
+                    <input type="range" id="lighting-accent" min="0" max="3" step="0.05" value="0.5" />
+                  </div>
+                  <div class="slider-group">
+                    <label class="slider-label" for="lighting-rail-highlight">
+                      <span class="slider-title">Rail Highlight</span>
+                      <span class="slider-value" id="lighting-rail-highlight-value">0.60</span>
+                    </label>
+                    <input type="range" id="lighting-rail-highlight" min="0" max="1.5" step="0.05" value="0.6" />
+                  </div>
+                  <div class="slider-group">
+                    <label class="slider-label" for="lighting-pocket-shadow">
+                      <span class="slider-title">Pocket Shadow</span>
+                      <span class="slider-value" id="lighting-pocket-shadow-value">0.45</span>
+                    </label>
+                    <input type="range" id="lighting-pocket-shadow" min="0" max="1.5" step="0.05" value="0.45" />
+                  </div>
+                </div>
+
                 <div class="panel-actions">
                   <button id="render-layer-reset" class="panel-btn">Reset Defaults</button>
                   <button id="render-layer-sync" class="panel-btn">Sync From Scene</button>
@@ -419,63 +467,6 @@
             </div>
           </div>
         </aside>
-      </div>
-      <div id="settings-modal" class="modal hidden">
-        <div class="modal-content">
-          <div class="modal-header panel-header">
-            <h3>⚙️ Game & UI Settings</h3>
-            <button id="settings-close" class="close-btn" data-no-drag="true">×</button>
-          </div>
-
-          <div class="settings-section">
-            <h3>Game Options</h3>
-            <label>
-              <input type="checkbox" id="aim-assist-toggle" checked />
-              Aim Assist
-            </label>
-            <label>
-              <input type="checkbox" id="call-8-toggle" />
-              Call 8-Ball
-            </label>
-            <label>
-              <input type="checkbox" id="show-fps-toggle" checked />
-              Show FPS/UPS
-            </label>
-          </div>
-
-          <div class="settings-section color-settings">
-            <h3>UI Colors</h3>
-            <div class="color-setting">
-              <label for="table-color">Table Color</label>
-              <input type="color" id="table-color" value="#0a5f0a" />
-            </div>
-            <div class="color-setting">
-              <label for="frame-color">Frame Color</label>
-              <input type="color" id="frame-color" value="#3d2413" />
-            </div>
-            <div class="color-setting">
-              <label for="rail-color">Rail Color</label>
-              <input type="color" id="rail-color" value="#2d1810" />
-            </div>
-            <div class="color-setting">
-              <label for="rail-fill-color">Rail Fill Color</label>
-              <input type="color" id="rail-fill-color" value="#000000" />
-            </div>
-            <div class="color-setting">
-              <label for="active-player-color">Active Player Color</label>
-              <input type="color" id="active-player-color" value="#4CAF50" />
-            </div>
-            <div class="color-setting">
-              <label for="turn-indicator-color">Turn Indicator Color</label>
-              <input type="color" id="turn-indicator-color" value="#FFC107" />
-            </div>
-          </div>
-
-          <div class="modal-actions">
-            <button id="settings-reset-ui">Reset Colors</button>
-            <button id="settings-close-footer">Close</button>
-          </div>
-        </div>
       </div>
     </div>
     <script type="module" src="/src/main.ts"></script>

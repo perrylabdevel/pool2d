@@ -50,6 +50,15 @@ export class Renderer3D {
   pocketMeshes: THREE.Mesh[] = [];
   pocketCapMeshes: THREE.Mesh[] = [];
   railFillMesh: THREE.Mesh | null = null;
+  private tableHighlightMesh: THREE.Mesh | null = null;
+  private tableShadowMesh: THREE.Mesh | null = null;
+  private railHighlightMeshes: THREE.Mesh[] = [];
+  private pocketShadowMeshes: THREE.Mesh[] = [];
+  private railHighlightMaterial: THREE.MeshBasicMaterial | null = null;
+  private pocketShadowMaterial: THREE.MeshBasicMaterial | null = null;
+  private railHighlightTexture: THREE.CanvasTexture | null = null;
+  private pocketShadowTexture: THREE.CanvasTexture | null = null;
+  private accentLight: THREE.SpotLight | null = null;
   showMeasurementOverlay = false;
   private layerVisibility: Record<RenderLayerBooleanKey, boolean> = {
     showTable: defaultRenderLayerSettings.showTable,
@@ -139,10 +148,10 @@ export class Renderer3D {
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     
     // Lighting
-    this.ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
+    this.ambientLight = new THREE.AmbientLight(0xffffff, CONFIG.AMBIENT_INTENSITY ?? 0.85);
     this.scene.add(this.ambientLight);
 
-    this.directionalLight = new THREE.DirectionalLight(0xffffff, 1.35);
+    this.directionalLight = new THREE.DirectionalLight(0xffffff, CONFIG.DIRECTIONAL_INTENSITY ?? 1.35);
     this.directionalLight.position.set(-35, -45, 80);
     this.directionalLight.castShadow = true;
     this.directionalLight.shadow.mapSize.width = 2048;
@@ -160,6 +169,15 @@ export class Renderer3D {
 
     this.fillLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.55);
     this.scene.add(this.fillLight);
+
+    this.accentLight = new THREE.SpotLight(0xffffff, CONFIG.ACCENT_INTENSITY ?? 0.24, 160, Math.PI / 5, 0.45, 1.2);
+    this.accentLight.position.set(28, -18, 70);
+    this.accentLight.castShadow = true;
+    this.accentLight.shadow.mapSize.set(1024, 1024);
+    this.accentLight.shadow.bias = -0.0002;
+    this.scene.add(this.accentLight);
+    this.accentLight.target.position.set(0, 0, 0);
+    this.scene.add(this.accentLight.target);
 
     // Load FBX ball models (async)
     this.loadBallModels();
@@ -200,8 +218,20 @@ export class Renderer3D {
       }
     });
 
-    window.addEventListener('settings:render-changed', () => {
-      this.setBallScale(CONFIG.BALL_SCALE ?? 1);
+    window.addEventListener('settings:render-changed', (event) => {
+      const detail = (event as CustomEvent<{ settings?: { ballScale?: number; ambientIntensity?: number; directionalIntensity?: number; accentIntensity?: number; railHighlightIntensity?: number; pocketShadowIntensity?: number } }>).detail;
+      const settings = detail?.settings;
+      const scale = settings?.ballScale ?? CONFIG.BALL_SCALE ?? 1;
+      this.setBallScale(scale);
+      this.setLightingIntensities({
+        ambient: settings?.ambientIntensity ?? CONFIG.AMBIENT_INTENSITY,
+        directional: settings?.directionalIntensity ?? CONFIG.DIRECTIONAL_INTENSITY,
+        accent: settings?.accentIntensity ?? CONFIG.ACCENT_INTENSITY,
+      });
+      this.setHighlightIntensities({
+        rail: settings?.railHighlightIntensity ?? CONFIG.RAIL_HIGHLIGHT_INTENSITY,
+        pocket: settings?.pocketShadowIntensity ?? CONFIG.POCKET_SHADOW_INTENSITY,
+      });
     });
   }
 
@@ -235,6 +265,19 @@ export class Renderer3D {
       if (Array.isArray(mat)) mat.forEach(mm => mm.dispose()); else mat.dispose();
     });
     this.railMeshes = [];
+    this.railHighlightMeshes.forEach((mesh) => {
+      this.scene.remove(mesh);
+      mesh.geometry.dispose();
+    });
+    this.railHighlightMeshes = [];
+    if (this.railHighlightTexture) {
+      this.railHighlightTexture.dispose();
+      this.railHighlightTexture = null;
+    }
+    if (this.railHighlightMaterial) {
+      this.railHighlightMaterial.dispose();
+      this.railHighlightMaterial = null;
+    }
     this.pocketMeshes.forEach(m => {
       this.scene.remove(m);
       m.geometry.dispose();
@@ -242,6 +285,19 @@ export class Renderer3D {
       if (Array.isArray(mat)) mat.forEach(mm => mm.dispose()); else mat.dispose();
     });
     this.pocketMeshes = [];
+    this.pocketShadowMeshes.forEach((mesh) => {
+      this.scene.remove(mesh);
+      mesh.geometry.dispose();
+    });
+    this.pocketShadowMeshes = [];
+    if (this.pocketShadowTexture) {
+      this.pocketShadowTexture.dispose();
+      this.pocketShadowTexture = null;
+    }
+    if (this.pocketShadowMaterial) {
+      this.pocketShadowMaterial.dispose();
+      this.pocketShadowMaterial = null;
+    }
     this.pocketCapMeshes.forEach((m) => {
       this.scene.remove(m);
       m.geometry.dispose();
@@ -255,6 +311,32 @@ export class Renderer3D {
       const mat = this.railFillMesh.material as THREE.Material | THREE.Material[];
       if (Array.isArray(mat)) mat.forEach(mm => mm.dispose()); else mat.dispose();
       this.railFillMesh = null;
+    }
+    this.disposeTableOverlay(this.tableHighlightMesh);
+    this.tableHighlightMesh = null;
+    this.disposeTableOverlay(this.tableShadowMesh);
+    this.tableShadowMesh = null;
+  }
+
+  private disposeTableOverlay(mesh: THREE.Mesh | null) {
+    if (!mesh) return;
+    this.scene.remove(mesh);
+    mesh.geometry.dispose();
+    const material = mesh.material;
+    if (Array.isArray(material)) {
+      material.forEach((mat) => {
+        const basic = mat as THREE.MeshBasicMaterial;
+        if (basic.map) {
+          basic.map.dispose();
+        }
+        mat.dispose();
+      });
+    } else {
+      const mat = material as THREE.MeshBasicMaterial;
+      if (mat.map) {
+        mat.map.dispose();
+      }
+      mat.dispose();
     }
   }
 
@@ -642,8 +724,83 @@ export class Renderer3D {
       mesh.scale.multiplyScalar(ratio);
     });
   }
+
+  setLightingIntensities(intensities: { ambient?: number; directional?: number; accent?: number }) {
+    const clamp = (value: number, min: number, max: number) =>
+      Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : undefined;
+
+    if (typeof intensities.ambient === 'number' && this.ambientLight) {
+      const value = clamp(intensities.ambient, 0, 5);
+      if (value !== undefined) {
+        this.ambientLight.intensity = value;
+        CONFIG.AMBIENT_INTENSITY = value;
+      }
+    }
+
+    if (typeof intensities.directional === 'number' && this.directionalLight) {
+      const value = clamp(intensities.directional, 0, 5);
+      if (value !== undefined) {
+        this.directionalLight.intensity = value;
+        CONFIG.DIRECTIONAL_INTENSITY = value;
+      }
+    }
+
+    if (typeof intensities.accent === 'number' && this.accentLight) {
+      const value = clamp(intensities.accent, 0, 5);
+      if (value !== undefined) {
+        this.accentLight.intensity = value;
+        CONFIG.ACCENT_INTENSITY = value;
+      }
+    }
+  }
+
+  getLightingIntensities(): {
+    ambientIntensity: number;
+    directionalIntensity: number;
+    accentIntensity: number;
+  } {
+    return {
+      ambientIntensity: this.ambientLight?.intensity ?? CONFIG.AMBIENT_INTENSITY ?? 0,
+      directionalIntensity: this.directionalLight?.intensity ?? CONFIG.DIRECTIONAL_INTENSITY ?? 0,
+      accentIntensity: this.accentLight?.intensity ?? CONFIG.ACCENT_INTENSITY ?? 0,
+    };
+  }
+
+  setHighlightIntensities(intensities: { rail?: number; pocket?: number }) {
+    const clamp = (value: number, min: number, max: number) =>
+      Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : undefined;
+
+    if (typeof intensities.rail === 'number') {
+      const material = this.getRailHighlightMaterial();
+      const value = clamp(intensities.rail, 0, 1.5);
+      if (value !== undefined) {
+        material.opacity = value;
+        CONFIG.RAIL_HIGHLIGHT_INTENSITY = value;
+      }
+    }
+
+    if (typeof intensities.pocket === 'number') {
+      const material = this.getPocketShadowMaterial();
+      const value = clamp(intensities.pocket, 0, 1.5);
+      if (value !== undefined) {
+        material.opacity = value;
+        CONFIG.POCKET_SHADOW_INTENSITY = value;
+      }
+    }
+  }
+
+  getHighlightIntensities(): {
+    railHighlightIntensity: number;
+    pocketShadowIntensity: number;
+  } {
+    return {
+      railHighlightIntensity: this.railHighlightMaterial?.opacity ?? CONFIG.RAIL_HIGHLIGHT_INTENSITY ?? 0,
+      pocketShadowIntensity: this.pocketShadowMaterial?.opacity ?? CONFIG.POCKET_SHADOW_INTENSITY ?? 0,
+    };
+  }
   
   initializeTable() {
+    const tableGeometry = getTableGeometry();
     this.refreshDerivedGeometry();
     const playShape = this.createPlayShape();
 
@@ -661,6 +818,7 @@ export class Renderer3D {
     this.tableMesh.renderOrder = this.layerOrder.orderTable;
     this.enforceRenderOrderControl(this.tableMesh);
     this.scene.add(this.tableMesh);
+    this.createOrUpdateTableOverlays(tableGeometry.playWidthIn, tableGeometry.playHeightIn);
 
     // Wooden frame planks surrounding play surface
     const frameWidth = Math.max(0.1, CONFIG.FRAME_OFFSET_IN);
@@ -746,8 +904,108 @@ export class Renderer3D {
     this.frameMesh = group;
     this.scene.add(group);
     this.applyFrameRenderOrder();
+    group.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (mesh && (mesh as any).isMesh) {
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+      }
+    });
   }
-  
+
+  private createOrUpdateTableOverlays(_playWidth: number, _playHeight: number) {
+    // Clean up old overlays
+    if (this.tableHighlightMesh) {
+      this.disposeTableOverlay(this.tableHighlightMesh);
+      this.tableHighlightMesh = null;
+    }
+    if (this.tableShadowMesh) {
+      this.disposeTableOverlay(this.tableShadowMesh);
+      this.tableShadowMesh = null;
+    }
+
+    // Overlays removed - let the sophisticated Three.js lighting system
+    // (ambient + directional + hemisphere + accent spotlight) handle
+    // all illumination and shadow naturally via PBR materials
+  }
+
+  private getRailHighlightMaterial(): THREE.MeshBasicMaterial {
+    if (this.railHighlightMaterial && this.railHighlightTexture) {
+      return this.railHighlightMaterial;
+    }
+    const sizeX = 32;
+    const sizeY = 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = sizeX;
+    canvas.height = sizeY;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      throw new Error('Renderer3D: rail highlight texture context missing');
+    }
+    const gradient = ctx.createLinearGradient(0, 0, 0, sizeY);
+    gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+    gradient.addColorStop(0.4, 'rgba(255, 255, 255, 0.35)');
+    gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, sizeX, sizeY);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = THREE.ClampToEdgeWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.needsUpdate = true;
+    texture.colorSpace = THREE.SRGBColorSpace;
+    this.railHighlightTexture = texture;
+
+    this.railHighlightMaterial = new THREE.MeshBasicMaterial({
+      map: texture,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthTest: true,
+      depthWrite: false,
+      opacity: CONFIG.RAIL_HIGHLIGHT_INTENSITY ?? 0.6,
+      side: THREE.DoubleSide,
+    });
+    return this.railHighlightMaterial;
+  }
+
+  private getPocketShadowMaterial(): THREE.MeshBasicMaterial {
+    if (this.pocketShadowMaterial && this.pocketShadowTexture) {
+      return this.pocketShadowMaterial;
+    }
+    const size = 512;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      throw new Error('Renderer3D: pocket shadow texture context missing');
+    }
+    const gradient = ctx.createRadialGradient(size / 2, size / 2, size * 0.15, size / 2, size / 2, size / 2);
+    gradient.addColorStop(0, 'rgba(0, 0, 0, 0.45)');
+    gradient.addColorStop(0.6, 'rgba(0, 0, 0, 0.1)');
+    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, size, size);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = THREE.ClampToEdgeWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.needsUpdate = true;
+    texture.colorSpace = THREE.SRGBColorSpace;
+    this.pocketShadowTexture = texture;
+
+    this.pocketShadowMaterial = new THREE.MeshBasicMaterial({
+      map: texture,
+      transparent: true,
+      blending: THREE.MultiplyBlending,
+      depthTest: true,
+      depthWrite: false,
+      opacity: CONFIG.POCKET_SHADOW_INTENSITY ?? 0.45,
+      side: THREE.DoubleSide,
+    });
+    return this.pocketShadowMaterial;
+  }
+
   initializeRails(rails: Rail[]) {
     const railMaterial = new THREE.MeshStandardMaterial({
       color: new THREE.Color(CONFIG.RAIL_COLOR),
@@ -778,17 +1036,30 @@ export class Renderer3D {
         ny = -ny;
       }
 
-      const railGeometry = new THREE.BoxGeometry(length, totalWidth, 1.5);
+      const railGeometry = new THREE.BoxGeometry(length, totalWidth, 0.5);
 
       const railMesh = new THREE.Mesh(railGeometry, railMaterial.clone());
-      railMesh.position.set(midX - nx * centerShift, midY - ny * centerShift, 0.75);
+      railMesh.position.set(midX - nx * centerShift, midY - ny * centerShift, -0.25);
       railMesh.rotation.z = angle;
+      railMesh.castShadow = true;
+      railMesh.receiveShadow = true;
       railMesh.visible = this.layerVisibility.showRails;
       railMesh.renderOrder = this.layerOrder.orderRails;
       this.enforceRenderOrderControl(railMesh);
 
       this.scene.add(railMesh);
       this.railMeshes.push(railMesh);
+
+      const highlightMaterial = this.getRailHighlightMaterial();
+      const highlightWidth = Math.max(0.2, totalWidth * 0.35);
+      const highlightGeometry = new THREE.PlaneGeometry(length, highlightWidth);
+      const highlightMesh = new THREE.Mesh(highlightGeometry, highlightMaterial);
+      highlightMesh.position.set(railMesh.position.x, railMesh.position.y, railMesh.position.z + 0.12);
+      highlightMesh.rotation.z = angle;
+      highlightMesh.visible = this.layerVisibility.showRails;
+      highlightMesh.renderOrder = this.layerOrder.orderRails + 0.1;
+      this.scene.add(highlightMesh);
+      this.railHighlightMeshes.push(highlightMesh);
     });
   }
   
@@ -872,6 +1143,20 @@ export class Renderer3D {
       gradientMesh.visible = this.layerVisibility.showPockets;
       this.scene.add(gradientMesh);
       this.pocketMeshes.push(gradientMesh);
+
+      const pocketShadowMaterial = this.getPocketShadowMaterial();
+      const shadowInner = visualRadius * 0.92;
+      const shadowOuter = visualRadius * 1.2;
+      const shadowGeometry = new THREE.RingGeometry(shadowInner, shadowOuter, 64);
+      const shadowMesh = new THREE.Mesh(shadowGeometry, pocketShadowMaterial);
+      shadowMesh.position.set(pocket.center.x, pocket.center.y, 0.3);
+      shadowMesh.rotation.x = Math.PI / 2;
+      shadowMesh.rotation.z = angleRad;
+      shadowMesh.renderOrder = this.layerOrder.orderPockets + 0.2;
+      shadowMesh.visible = this.layerVisibility.showPockets;
+      this.enforceRenderOrderControl(shadowMesh, { disableDepth: true });
+      this.scene.add(shadowMesh);
+      this.pocketShadowMeshes.push(shadowMesh);
     });
     
     this.initializeRailFillMesh();
@@ -1025,7 +1310,7 @@ export class Renderer3D {
       const template = this.ballModels.get(ball.id);
       if (template) {
         const ballMesh = new THREE.Mesh(template.geometry, template.material);
-        ballMesh.castShadow = false;
+        ballMesh.castShadow = true;
         ballMesh.receiveShadow = false;
         
         // Add black glow outline
@@ -1056,7 +1341,7 @@ export class Renderer3D {
     });
     
     const mesh = new THREE.Mesh(geometry, material);
-    mesh.castShadow = false;
+    mesh.castShadow = true;
     mesh.receiveShadow = false;
     
     // Add number texture for numbered balls
@@ -1083,18 +1368,41 @@ export class Renderer3D {
   }
   
   addBallGlow(mesh: THREE.Mesh | THREE.Object3D, radius: number) {
-    // Create a slightly larger sphere with black outline material
-    // Use 1.02x to create subtle outline without overlapping when balls touch
-    const glowGeometry = new THREE.SphereGeometry(radius * 1.02, 32, 32);
+    const glowRadius = radius * 1.12;
+    const glowOpacity = 0.2;
+    mesh.userData.baseBallRadius = radius;
+    const existing = mesh.children.find((child) => child.name === 'ball-glow') as
+      | THREE.Mesh
+      | undefined;
+    if (existing) {
+      const oldGeometry = existing.geometry;
+      if (oldGeometry) {
+        oldGeometry.dispose();
+      }
+      existing.geometry = new THREE.SphereGeometry(glowRadius, 32, 32);
+      const material = existing.material as THREE.MeshBasicMaterial;
+      material.color = new THREE.Color(0x000000);
+      material.transparent = true;
+      material.opacity = glowOpacity;
+      material.side = THREE.BackSide;
+      material.depthTest = true;
+      material.depthWrite = false;
+      material.needsUpdate = true;
+      existing.renderOrder = this.layerOrder.orderBalls - 1;
+      return;
+    }
+
+    const glowGeometry = new THREE.SphereGeometry(glowRadius, 32, 32);
     const glowMaterial = new THREE.MeshBasicMaterial({
       color: 0x000000,
       transparent: true,
-      opacity: 0.2, // Increased opacity for visibility with smaller glow
+      opacity: glowOpacity,
       side: THREE.BackSide, // Render from inside so it appears as an outline
       depthTest: true,
-      depthWrite: false
+      depthWrite: false,
     });
-    
+    glowMaterial.needsUpdate = true;
+
     const glowMesh = new THREE.Mesh(glowGeometry, glowMaterial);
     glowMesh.name = 'ball-glow';
     glowMesh.renderOrder = this.layerOrder.orderBalls - 1; // Render behind the ball
@@ -1272,11 +1580,17 @@ export class Renderer3D {
     this.railMeshes.forEach((mesh) => {
       mesh.renderOrder = this.layerOrder.orderRails;
     });
+    this.railHighlightMeshes.forEach((mesh) => {
+      mesh.renderOrder = this.layerOrder.orderRails + 0.1;
+    });
     this.pocketMeshes.forEach((mesh) => {
       mesh.renderOrder = this.layerOrder.orderPockets;
     });
     this.pocketCapMeshes.forEach((mesh) => {
       mesh.renderOrder = this.layerOrder.orderCaps;
+    });
+    this.pocketShadowMeshes.forEach((mesh) => {
+      mesh.renderOrder = this.layerOrder.orderPockets + 0.2;
     });
     if (this.railFillMesh) {
       this.railFillMesh.renderOrder = this.layerOrder.orderTable - 1;
@@ -1371,27 +1685,27 @@ export class Renderer3D {
     }
   }
 
-  private enforceRenderOrderControl(object: THREE.Object3D) {
+  private enforceRenderOrderControl(object: THREE.Object3D, options?: { disableDepth?: boolean }) {
+    const disableDepth = options?.disableDepth ?? false;
     object.traverse((child) => {
       const mesh = child as THREE.Mesh & { isMesh?: boolean };
       if (!mesh || !(mesh as any).isMesh) return;
-      // Keep depth testing for the ball glow so it doesn't darken the entire ball surface
       if (mesh.name === 'ball-glow') return;
       const material = mesh.material as THREE.Material | THREE.Material[] | undefined;
       if (Array.isArray(material)) {
-        material.forEach((mat) => this.disableDepth(mat));
+        material.forEach((mat) => this.applyDepthControl(mat, disableDepth));
       } else if (material) {
-        this.disableDepth(material);
+        this.applyDepthControl(material, disableDepth);
       }
     });
   }
 
-  private disableDepth(material: THREE.Material) {
+  private applyDepthControl(material: THREE.Material, disableDepth: boolean) {
     if ('depthTest' in material) {
-      material.depthTest = false;
+      material.depthTest = !disableDepth;
     }
     if ('depthWrite' in material) {
-      material.depthWrite = false;
+      material.depthWrite = !disableDepth;
     }
     material.needsUpdate = true;
   }

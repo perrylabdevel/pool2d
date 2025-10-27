@@ -1,9 +1,9 @@
 // HUD and UI management
 import { SettingsManager } from './SettingsManager';
-import { makePanelDraggable } from './drag';
 import { panelManager } from './panels/panelRegistry';
 import type { PanelRegistrationOptions } from './panels/PanelManager';
 import { UIPanel } from './panels/UIPanel';
+import { GameSettingsPanel } from './GameSettingsPanel';
 
 export class HUD {
   fpsElement: HTMLElement;
@@ -16,6 +16,7 @@ export class HUD {
   statsElement: HTMLElement;
   settingsManager: SettingsManager;
   panelManager = panelManager;
+  private gameSettingsPanel: GameSettingsPanel;
   
   showStats: boolean = true;
   
@@ -30,6 +31,16 @@ export class HUD {
     this.statsElement = document.getElementById('stats')!;
     
     this.settingsManager = new SettingsManager();
+    this.gameSettingsPanel = new GameSettingsPanel(this.settingsManager, {
+      onStatsVisibilityChange: (visible) => {
+        this.showStats = visible;
+        this.statsElement.style.display = visible ? 'flex' : 'none';
+      },
+    });
+    this.registerPanel('game-settings', this.gameSettingsPanel.getController(), {
+      persistState: true,
+      hotkeys: ['o', 'O'],
+    });
     this.setupControls();
     this.loadSettings();
   }
@@ -39,13 +50,6 @@ export class HUD {
     const restartBtn = document.getElementById('restart-btn')!;
     const settingsBtn = document.getElementById('settings-btn')!;
     const debugToggle = document.getElementById('debug-toggle')!;
-    const settingsModal = document.getElementById('settings-modal')!;
-    const settingsClose = document.getElementById('settings-close')!;
-    const settingsModalContent = settingsModal.querySelector('.modal-content') as HTMLElement | null;
-    const settingsModalHeader = settingsModalContent?.querySelector('h2') as HTMLElement | null;
-    if (settingsModalContent) {
-      makePanelDraggable(settingsModalContent, settingsModalHeader ?? settingsModalContent);
-    }
     
     pauseBtn.addEventListener('click', () => {
       // Will be handled by Game class
@@ -57,16 +61,9 @@ export class HUD {
     });
     
     settingsBtn.addEventListener('click', () => {
-      settingsModal.classList.remove('hidden');
-    });
-
-    settingsClose.addEventListener('click', () => {
-      settingsModal.classList.add('hidden');
-    });
-
-    window.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && !settingsModal.classList.contains('hidden')) {
-        settingsModal.classList.add('hidden');
+      const toggled = this.panelManager.togglePanel('game-settings');
+      if (!toggled) {
+        this.panelManager.openPanel('game-settings');
       }
     });
     
@@ -75,114 +72,12 @@ export class HUD {
     });
     
     this.wirePanelLauncher();
-
-    // Game settings toggles
-    const aimAssistToggle = document.getElementById('aim-assist-toggle') as HTMLInputElement;
-    aimAssistToggle.addEventListener('change', (e) => {
-      const checked = (e.target as HTMLInputElement).checked;
-      this.settingsManager.saveGameSettings({ aimAssist: checked });
-      window.dispatchEvent(new CustomEvent('game:aim-assist-toggle', { detail: { enabled: checked } }));
-    });
-
-    const call8Toggle = document.getElementById('call-8-toggle') as HTMLInputElement;
-    call8Toggle.addEventListener('change', (e) => {
-      const checked = (e.target as HTMLInputElement).checked;
-      this.settingsManager.saveGameSettings({ call8Ball: checked });
-    });
-
-    const showFpsToggle = document.getElementById('show-fps-toggle') as HTMLInputElement;
-    showFpsToggle.addEventListener('change', (e) => {
-      const checked = (e.target as HTMLInputElement).checked;
-      this.showStats = checked;
-      this.statsElement.style.display = this.showStats ? 'flex' : 'none';
-      this.settingsManager.saveGameSettings({ showFPS: checked });
-    });
-
-    // UI Color inputs
-    const tableColorInput = document.getElementById('table-color') as HTMLInputElement;
-    tableColorInput.addEventListener('input', (e) => {
-      const color = (e.target as HTMLInputElement).value;
-      this.settingsManager.saveUIColors({ tableColor: color });
-    });
-
-    const railColorInput = document.getElementById('rail-color') as HTMLInputElement;
-    railColorInput.addEventListener('input', (e) => {
-      const color = (e.target as HTMLInputElement).value;
-      this.settingsManager.saveUIColors({ railColor: color });
-    });
-
-    const railFillColorInput = document.getElementById('rail-fill-color') as HTMLInputElement;
-    railFillColorInput.addEventListener('input', (e) => {
-      const color = (e.target as HTMLInputElement).value;
-      this.settingsManager.saveUIColors({ railFillColor: color });
-    });
-
-    const frameColorInput = document.getElementById('frame-color') as HTMLInputElement;
-    if (frameColorInput) {
-      frameColorInput.addEventListener('input', (e) => {
-        const color = (e.target as HTMLInputElement).value;
-        this.settingsManager.saveUIColors({ frameColor: color });
-      });
-    }
-
-    const activePlayerColorInput = document.getElementById('active-player-color') as HTMLInputElement;
-    activePlayerColorInput.addEventListener('input', (e) => {
-      const color = (e.target as HTMLInputElement).value;
-      this.settingsManager.saveUIColors({ activePlayerColor: color });
-    });
-
-    const turnIndicatorColorInput = document.getElementById('turn-indicator-color') as HTMLInputElement;
-    turnIndicatorColorInput.addEventListener('input', (e) => {
-      const color = (e.target as HTMLInputElement).value;
-      this.settingsManager.saveUIColors({ turnIndicatorColor: color });
-    });
-
-    // Reset UI colors button
-    const resetUIBtn = document.getElementById('settings-reset-ui')!;
-    resetUIBtn.addEventListener('click', () => {
-      this.settingsManager.resetUIColors();
-      this.loadSettings(); // Reload UI to reflect reset
-    });
   }
 
   loadSettings() {
     const gameSettings = this.settingsManager.getGameSettings();
-    const uiColors = this.settingsManager.getUIColors();
-
-    // Apply game settings to UI
-    const aimAssistToggle = document.getElementById('aim-assist-toggle') as HTMLInputElement;
-    if (aimAssistToggle) aimAssistToggle.checked = gameSettings.aimAssist;
-
-    const call8Toggle = document.getElementById('call-8-toggle') as HTMLInputElement;
-    if (call8Toggle) call8Toggle.checked = gameSettings.call8Ball;
-
-    const showFpsToggle = document.getElementById('show-fps-toggle') as HTMLInputElement;
-    if (showFpsToggle) {
-      showFpsToggle.checked = gameSettings.showFPS;
-      this.showStats = gameSettings.showFPS;
-      this.statsElement.style.display = this.showStats ? 'flex' : 'none';
-    }
-
-    // Apply UI colors to inputs
-    const tableColorInput = document.getElementById('table-color') as HTMLInputElement;
-    if (tableColorInput) tableColorInput.value = uiColors.tableColor;
-
-    const railColorInput = document.getElementById('rail-color') as HTMLInputElement;
-    if (railColorInput) railColorInput.value = uiColors.railColor;
-
-    const railFillColorInput = document.getElementById('rail-fill-color') as HTMLInputElement;
-    if (railFillColorInput) railFillColorInput.value = uiColors.railFillColor;
-
-    const frameColorInput = document.getElementById('frame-color') as HTMLInputElement;
-    if (frameColorInput) frameColorInput.value = uiColors.frameColor;
-
-    const activePlayerColorInput = document.getElementById('active-player-color') as HTMLInputElement;
-    if (activePlayerColorInput) activePlayerColorInput.value = uiColors.activePlayerColor;
-
-    const turnIndicatorColorInput = document.getElementById('turn-indicator-color') as HTMLInputElement;
-    if (turnIndicatorColorInput) turnIndicatorColorInput.value = uiColors.turnIndicatorColor;
-    
-    // Note: Geometry settings are now in the dedicated Geometry Panel (press G)
+    this.showStats = gameSettings.showFPS;
+    this.statsElement.style.display = this.showStats ? 'flex' : 'none';
   }
   
   updateFPS(fps: number) {

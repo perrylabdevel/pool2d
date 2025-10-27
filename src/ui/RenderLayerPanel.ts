@@ -26,6 +26,16 @@ export class RenderLayerPanel {
   private panelController: UIPanel;
   private settings: RenderSettings;
   private orderInputs: Partial<Record<RenderLayerOrderKey, HTMLInputElement>> = {};
+  private lightingInputs: Record<
+    'ambientIntensity' | 'directionalIntensity' | 'accentIntensity' | 'railHighlightIntensity' | 'pocketShadowIntensity',
+    HTMLInputElement | null
+  > = {
+    ambientIntensity: null,
+    directionalIntensity: null,
+    accentIntensity: null,
+    railHighlightIntensity: null,
+    pocketShadowIntensity: null,
+  };
 
   constructor(
     private settingsManager: SettingsManager,
@@ -95,6 +105,7 @@ export class RenderLayerPanel {
     });
 
     this.bindOrderControls();
+    this.bindLightingControls();
   }
 
   private updateSetting(
@@ -114,12 +125,28 @@ export class RenderLayerPanel {
   }
 
   private applyToRenderer(settings: RenderSettings) {
-    const { canvasScale, ballScale, ...layerSettings } = settings;
+    const {
+      canvasScale,
+      ballScale,
+      ambientIntensity,
+      directionalIntensity,
+      accentIntensity,
+      ...layerSettings
+    } = settings;
     void canvasScale;
     if (typeof ballScale === 'number') {
       this.renderer.setBallScale(ballScale);
     }
     this.renderer.applyRenderLayerSettings(layerSettings as RenderLayerSettings);
+    this.renderer.setLightingIntensities({
+      ambient: ambientIntensity,
+      directional: directionalIntensity,
+      accent: accentIntensity,
+    });
+    this.renderer.setHighlightIntensities({
+      rail: settings.railHighlightIntensity,
+      pocket: settings.pocketShadowIntensity,
+    });
   }
 
   private syncCheckbox(key: RenderLayerBooleanKey, value: boolean) {
@@ -140,6 +167,7 @@ export class RenderLayerPanel {
       }
     });
     this.syncOrders();
+    this.syncLightingSliders();
   }
 
   toggle() {
@@ -160,8 +188,22 @@ export class RenderLayerPanel {
 
   syncFromRenderer() {
     const current = this.renderer.getRenderLayerSettings();
-    this.settings = { ...this.settings, ...current };
-    this.settingsManager.saveRenderSettings(current as Partial<RenderSettings>);
+    const lights = this.renderer.getLightingIntensities();
+    const highlights = this.renderer.getHighlightIntensities();
+    this.settings = {
+      ...this.settings,
+      ...current,
+      ...lights,
+      ...highlights,
+    };
+    this.settingsManager.saveRenderSettings({
+      ...(current as Partial<RenderSettings>),
+      ambientIntensity: lights.ambientIntensity,
+      directionalIntensity: lights.directionalIntensity,
+      accentIntensity: lights.accentIntensity,
+      railHighlightIntensity: highlights.railHighlightIntensity,
+      pocketShadowIntensity: highlights.pocketShadowIntensity,
+    });
     this.syncUI();
   }
 
@@ -176,6 +218,87 @@ export class RenderLayerPanel {
   toggleReferenceOverlay() {
     const current = this.renderer.getReferenceOverlayVisible();
     this.setReferenceOverlayVisible(!current);
+  }
+
+  private bindLightingControls() {
+    type LightingKey =
+      | 'ambientIntensity'
+      | 'directionalIntensity'
+      | 'accentIntensity'
+      | 'railHighlightIntensity'
+      | 'pocketShadowIntensity';
+    const map: Array<{ id: string; key: LightingKey; apply: (value: number) => void }> = [
+      {
+        id: 'lighting-ambient',
+        key: 'ambientIntensity',
+        apply: (value) => this.renderer.setLightingIntensities({ ambient: value }),
+      },
+      {
+        id: 'lighting-directional',
+        key: 'directionalIntensity',
+        apply: (value) => this.renderer.setLightingIntensities({ directional: value }),
+      },
+      {
+        id: 'lighting-accent',
+        key: 'accentIntensity',
+        apply: (value) => this.renderer.setLightingIntensities({ accent: value }),
+      },
+      {
+        id: 'lighting-rail-highlight',
+        key: 'railHighlightIntensity',
+        apply: (value) => this.renderer.setHighlightIntensities({ rail: value }),
+      },
+      {
+        id: 'lighting-pocket-shadow',
+        key: 'pocketShadowIntensity',
+        apply: (value) => this.renderer.setHighlightIntensities({ pocket: value }),
+      },
+    ];
+
+    map.forEach(({ id, key, apply }) => {
+      const input = document.getElementById(id) as HTMLInputElement | null;
+      if (key in this.lightingInputs) {
+        (this.lightingInputs as Record<string, HTMLInputElement | null>)[key] = input;
+      }
+      const valueLabel = document.getElementById(`${id}-value`);
+      if (!input) return;
+
+      input.addEventListener('input', () => {
+        const value = parseFloat(input.value);
+        if (!Number.isFinite(value)) {
+          return;
+        }
+        (this.settings as Record<string, number>)[key] = value;
+        if (valueLabel) {
+          valueLabel.textContent = value.toFixed(2);
+        }
+        this.settingsManager.saveRenderSettings({ [key]: value } as Partial<RenderSettings>);
+        apply(value);
+      });
+    });
+  }
+
+  private syncLightingSliders() {
+    const map: Array<{ key: keyof Pick<RenderSettings, 'ambientIntensity' | 'directionalIntensity' | 'accentIntensity' | 'railHighlightIntensity' | 'pocketShadowIntensity'>; id: string }> = [
+      { key: 'ambientIntensity', id: 'lighting-ambient' },
+      { key: 'directionalIntensity', id: 'lighting-directional' },
+      { key: 'accentIntensity', id: 'lighting-accent' },
+      { key: 'railHighlightIntensity', id: 'lighting-rail-highlight' },
+      { key: 'pocketShadowIntensity', id: 'lighting-pocket-shadow' },
+    ];
+
+    map.forEach(({ key, id }) => {
+      const input = document.getElementById(id) as HTMLInputElement | null;
+      const valueLabel = document.getElementById(`${id}-value`);
+      if (!input) return;
+      const value = this.settings[key];
+      if (Number.isFinite(value)) {
+        input.value = value.toString();
+        if (valueLabel) {
+          valueLabel.textContent = value.toFixed(2);
+        }
+      }
+    });
   }
 
   private bindOrderControls() {

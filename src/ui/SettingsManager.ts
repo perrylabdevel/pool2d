@@ -61,6 +61,11 @@ export interface GeometrySettings {
 export interface RenderSettings extends RenderLayerSettings {
   canvasScale: number;
   ballScale: number;
+  ambientIntensity: number;
+  directionalIntensity: number;
+  accentIntensity: number;
+  railHighlightIntensity: number;
+  pocketShadowIntensity: number;
 }
 
 const STORAGE_KEYS = {
@@ -299,6 +304,11 @@ export class SettingsManager {
       ...defaultRenderLayerSettings,
       canvasScale: CONFIG.CANVAS_SCALE_MULTIPLIER ?? 1,
       ballScale: CONFIG.BALL_SCALE ?? 1,
+      ambientIntensity: CONFIG.AMBIENT_INTENSITY ?? 1.1,
+      directionalIntensity: CONFIG.DIRECTIONAL_INTENSITY ?? 1.6,
+      accentIntensity: CONFIG.ACCENT_INTENSITY ?? 0.5,
+      railHighlightIntensity: CONFIG.RAIL_HIGHLIGHT_INTENSITY ?? 0.6,
+      pocketShadowIntensity: CONFIG.POCKET_SHADOW_INTENSITY ?? 0.45,
     };
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.RENDER_SETTINGS);
@@ -308,6 +318,11 @@ export class SettingsManager {
           parsed.ballScale = parsed.ballVisualScale;
           delete parsed.ballVisualScale;
         }
+        parsed.ambientIntensity = parsed.ambientIntensity ?? defaults.ambientIntensity;
+        parsed.directionalIntensity = parsed.directionalIntensity ?? defaults.directionalIntensity;
+        parsed.accentIntensity = parsed.accentIntensity ?? defaults.accentIntensity;
+        parsed.railHighlightIntensity = parsed.railHighlightIntensity ?? defaults.railHighlightIntensity;
+        parsed.pocketShadowIntensity = parsed.pocketShadowIntensity ?? defaults.pocketShadowIntensity;
         return { ...defaults, ...parsed };
       }
     } catch (e) {
@@ -386,6 +401,9 @@ export class SettingsManager {
       ...defaultRenderLayerSettings,
       canvasScale: 1,
       ballScale: 1,
+      ambientIntensity: CONFIG.AMBIENT_INTENSITY ?? 1.1,
+      directionalIntensity: CONFIG.DIRECTIONAL_INTENSITY ?? 1.6,
+      accentIntensity: CONFIG.ACCENT_INTENSITY ?? 0.5,
     };
     try {
       localStorage.setItem(STORAGE_KEYS.RENDER_SETTINGS, JSON.stringify(this.renderSettings));
@@ -462,6 +480,11 @@ export class SettingsManager {
     const scale = this.renderSettings.ballScale ?? 1;
     CONFIG.BALL_SCALE = scale;
     CONFIG.BALL_RADIUS = (CONFIG.BALL_BASE_RADIUS ?? CONFIG.BALL_RADIUS) * scale;
+    CONFIG.AMBIENT_INTENSITY = this.renderSettings.ambientIntensity ?? CONFIG.AMBIENT_INTENSITY;
+    CONFIG.DIRECTIONAL_INTENSITY = this.renderSettings.directionalIntensity ?? CONFIG.DIRECTIONAL_INTENSITY;
+    CONFIG.ACCENT_INTENSITY = this.renderSettings.accentIntensity ?? CONFIG.ACCENT_INTENSITY;
+    CONFIG.RAIL_HIGHLIGHT_INTENSITY = this.renderSettings.railHighlightIntensity ?? CONFIG.RAIL_HIGHLIGHT_INTENSITY;
+    CONFIG.POCKET_SHADOW_INTENSITY = this.renderSettings.pocketShadowIntensity ?? CONFIG.POCKET_SHADOW_INTENSITY;
     window.dispatchEvent(
       new CustomEvent('settings:render-changed', { detail: { settings: this.renderSettings } })
     );
