@@ -23,6 +23,58 @@ interface AxisColorPalette {
   debugFill: string;
 }
 
+type RGBColor = { r: number; g: number; b: number };
+
+function clampChannel(value: number): number {
+  return Math.max(0, Math.min(255, Math.round(value)));
+}
+
+function parseHexColor(hex: string): RGBColor {
+  const normalized = hex.replace('#', '').trim();
+  const expanded =
+    normalized.length === 3
+      ? normalized
+          .split('')
+          .map((ch) => ch + ch)
+          .join('')
+      : normalized.padEnd(6, '0');
+  const value = parseInt(expanded.slice(0, 6), 16);
+  return {
+    r: (value >> 16) & 0xff,
+    g: (value >> 8) & 0xff,
+    b: value & 0xff,
+  };
+}
+
+function lightenColor(color: RGBColor, amount: number): RGBColor {
+  return {
+    r: clampChannel(color.r + (255 - color.r) * amount),
+    g: clampChannel(color.g + (255 - color.g) * amount),
+    b: clampChannel(color.b + (255 - color.b) * amount),
+  };
+}
+
+function darkenColor(color: RGBColor, amount: number): RGBColor {
+  return {
+    r: clampChannel(color.r * (1 - amount)),
+    g: clampChannel(color.g * (1 - amount)),
+    b: clampChannel(color.b * (1 - amount)),
+  };
+}
+
+function mixColors(colorA: RGBColor, colorB: RGBColor, factor: number): RGBColor {
+  const clamped = Math.max(0, Math.min(1, factor));
+  return {
+    r: clampChannel(colorA.r + (colorB.r - colorA.r) * clamped),
+    g: clampChannel(colorA.g + (colorB.g - colorA.g) * clamped),
+    b: clampChannel(colorA.b + (colorB.b - colorA.b) * clamped),
+  };
+}
+
+function toRgba(color: RGBColor, alpha: number): string {
+  return `rgba(${color.r}, ${color.g}, ${color.b}, ${alpha})`;
+}
+
 export class Renderer3D {
   canvas: HTMLCanvasElement;
   uiCanvas: HTMLCanvasElement;
@@ -53,10 +105,13 @@ export class Renderer3D {
   private tableHighlightMesh: THREE.Mesh | null = null;
   private tableShadowMesh: THREE.Mesh | null = null;
   private railHighlightMeshes: THREE.Mesh[] = [];
+  private pocketHighlightMeshes: THREE.Mesh[] = [];
   private pocketShadowMeshes: THREE.Mesh[] = [];
   private railHighlightMaterial: THREE.MeshBasicMaterial | null = null;
+  private pocketHighlightMaterial: THREE.MeshBasicMaterial | null = null;
   private pocketShadowMaterial: THREE.MeshBasicMaterial | null = null;
   private railHighlightTexture: THREE.CanvasTexture | null = null;
+  private pocketHighlightTexture: THREE.CanvasTexture | null = null;
   private pocketShadowTexture: THREE.CanvasTexture | null = null;
   private accentLight: THREE.SpotLight | null = null;
   showMeasurementOverlay = false;
@@ -116,7 +171,8 @@ export class Renderer3D {
 
     // Create Three.js scene
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x0a0a0a);
+    const initialBg = new THREE.Color(CONFIG.RAIL_COLOR ?? '#2d1810');
+    this.scene.background = initialBg.clone();
     this.refreshDerivedGeometry();
     
     // Create orthographic camera (top-down view)
@@ -146,6 +202,7 @@ export class Renderer3D {
     this.renderer.setPixelRatio(window.devicePixelRatio || 1);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.setClearColor(initialBg, 1);
     
     // Lighting
     this.ambientLight = new THREE.AmbientLight(0xffffff, CONFIG.AMBIENT_INTENSITY ?? 0.85);
@@ -188,6 +245,9 @@ export class Renderer3D {
         this.tableMesh.material.color = new THREE.Color(CONFIG.TABLE_COLOR);
         this.tableMesh.material.needsUpdate = true;
       }
+      const bgColor = new THREE.Color(CONFIG.TABLE_COLOR);
+      this.scene.background = bgColor.clone();
+      this.renderer.setClearColor(bgColor, 1);
       if (this.frameMesh) {
         this.frameMesh.traverse((obj) => {
           if ((obj as THREE.Mesh).isMesh) {
@@ -209,13 +269,12 @@ export class Renderer3D {
       });
       
       // Update corner rectangle fill color
-      if (this.railFillMesh) {
-        const mat = this.railFillMesh.material as THREE.MeshBasicMaterial;
-        if (mat) {
-          mat.color = new THREE.Color(CONFIG.RAIL_FILL_COLOR);
-          mat.needsUpdate = true;
-        }
-      }
+      this.updateRailFillMaterialColor();
+
+      const railColorHex = CONFIG.RAIL_COLOR ?? '#2d1810';
+      const railBgColor = new THREE.Color(railColorHex);
+      this.scene.background = railBgColor.clone();
+      this.renderer.setClearColor(railBgColor, 1);
     });
 
     window.addEventListener('settings:render-changed', (event) => {
@@ -277,6 +336,19 @@ export class Renderer3D {
     if (this.railHighlightMaterial) {
       this.railHighlightMaterial.dispose();
       this.railHighlightMaterial = null;
+    }
+    this.pocketHighlightMeshes.forEach((mesh) => {
+      this.scene.remove(mesh);
+      mesh.geometry.dispose();
+    });
+    this.pocketHighlightMeshes = [];
+    if (this.pocketHighlightTexture) {
+      this.pocketHighlightTexture.dispose();
+      this.pocketHighlightTexture = null;
+    }
+    if (this.pocketHighlightMaterial) {
+      this.pocketHighlightMaterial.dispose();
+      this.pocketHighlightMaterial = null;
     }
     this.pocketMeshes.forEach(m => {
       this.scene.remove(m);
@@ -766,35 +838,54 @@ export class Renderer3D {
     };
   }
 
-  setHighlightIntensities(intensities: { rail?: number; pocket?: number }) {
+  setHighlightIntensities(intensities: {
+    rail?: number;
+    pocketShadow?: number;
+    pocketHighlight?: number;
+  }) {
     const clamp = (value: number, min: number, max: number) =>
       Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : undefined;
 
     if (typeof intensities.rail === 'number') {
-      const material = this.getRailHighlightMaterial();
       const value = clamp(intensities.rail, 0, 1.5);
       if (value !== undefined) {
-        material.opacity = value;
+        const railMaterial = this.getRailHighlightMaterial();
+        const pocketHighlightMaterial = this.getPocketHighlightMaterial();
+        railMaterial.opacity = value;
+        pocketHighlightMaterial.opacity = value;
         CONFIG.RAIL_HIGHLIGHT_INTENSITY = value;
+        CONFIG.POCKET_HIGHLIGHT_INTENSITY = value;
       }
     }
 
-    if (typeof intensities.pocket === 'number') {
+    if (typeof intensities.pocketShadow === 'number') {
       const material = this.getPocketShadowMaterial();
-      const value = clamp(intensities.pocket, 0, 1.5);
+      const value = clamp(intensities.pocketShadow, 0, 1.5);
       if (value !== undefined) {
         material.opacity = value;
         CONFIG.POCKET_SHADOW_INTENSITY = value;
+      }
+    }
+
+    if (typeof intensities.pocketHighlight === 'number') {
+      const material = this.getPocketHighlightMaterial();
+      const value = clamp(intensities.pocketHighlight, 0, 1.5);
+      if (value !== undefined) {
+        material.opacity = value;
+        CONFIG.POCKET_HIGHLIGHT_INTENSITY = value;
       }
     }
   }
 
   getHighlightIntensities(): {
     railHighlightIntensity: number;
+    pocketHighlightIntensity: number;
     pocketShadowIntensity: number;
   } {
     return {
       railHighlightIntensity: this.railHighlightMaterial?.opacity ?? CONFIG.RAIL_HIGHLIGHT_INTENSITY ?? 0,
+      pocketHighlightIntensity:
+        this.pocketHighlightMaterial?.opacity ?? CONFIG.POCKET_HIGHLIGHT_INTENSITY ?? 0,
       pocketShadowIntensity: this.pocketShadowMaterial?.opacity ?? CONFIG.POCKET_SHADOW_INTENSITY ?? 0,
     };
   }
@@ -966,6 +1057,95 @@ export class Renderer3D {
       side: THREE.DoubleSide,
     });
     return this.railHighlightMaterial;
+  }
+
+  private addPocketHighlight(pocket: PocketDef, visualRadius: number, angleRad: number) {
+    const highlightMaterial = this.getPocketHighlightMaterial();
+
+    // Align the arc with the felt lip so the highlight tracks the table edge
+    const towardCenter = new THREE.Vector2(-pocket.center.x, -pocket.center.y);
+    let facingVector: THREE.Vector2 | null = null;
+    if (towardCenter.lengthSq() > 1e-6) {
+      facingVector = towardCenter.normalize();
+    } else if (pocket.cutNormalHint) {
+      facingVector = new THREE.Vector2(-pocket.cutNormalHint.x, -pocket.cutNormalHint.y);
+      if (facingVector.lengthSq() > 1e-6) {
+        facingVector.normalize();
+      } else {
+        facingVector = null;
+      }
+    }
+    if (!facingVector) {
+      facingVector = new THREE.Vector2(Math.cos(angleRad + Math.PI), Math.sin(angleRad + Math.PI));
+    }
+
+    const facingAngle = Math.atan2(facingVector.y, facingVector.x);
+    const isSidePocket = pocket.id.includes('middle');
+    const highlightSpan = isSidePocket ? Math.PI * 1.05 : Math.PI * 0.75;
+    const innerRadius = visualRadius * (isSidePocket ? 1.04 : 1.02);
+    const outerRadius = innerRadius + visualRadius * (isSidePocket ? 0.3 : 0.26);
+
+    const highlightGeometry = new THREE.RingGeometry(
+      innerRadius,
+      outerRadius,
+      96,
+      1,
+      facingAngle - highlightSpan / 2,
+      highlightSpan
+    );
+
+    const highlightMesh = new THREE.Mesh(highlightGeometry, highlightMaterial);
+    highlightMesh.position.set(pocket.center.x, pocket.center.y, 0.2);
+    highlightMesh.renderOrder = this.layerOrder.orderPockets + 0.25;
+    highlightMesh.visible = this.layerVisibility.showPockets;
+    this.enforceRenderOrderControl(highlightMesh, { disableDepth: false });
+    this.scene.add(highlightMesh);
+    this.pocketHighlightMeshes.push(highlightMesh);
+  }
+
+  private getPocketHighlightMaterial(): THREE.MeshBasicMaterial {
+    if (this.pocketHighlightMaterial && this.pocketHighlightTexture) {
+      return this.pocketHighlightMaterial;
+    }
+
+    const size = 512;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      throw new Error('Renderer3D: pocket highlight texture context missing');
+    }
+
+    const base = parseHexColor(CONFIG.TABLE_COLOR ?? '#0a5f0a');
+    const inner = lightenColor(base, 0.55);
+    const mid = mixColors(base, inner, 0.5);
+    const outer = mixColors(base, inner, 0.2);
+    const gradient = ctx.createRadialGradient(size / 2, size / 2, size * 0.18, size / 2, size / 2, size / 2);
+    gradient.addColorStop(0, 'rgba(255, 255, 255, 0.75)');
+    gradient.addColorStop(0.35, toRgba(inner, 0.4));
+    gradient.addColorStop(0.7, toRgba(mid, 0.18));
+    gradient.addColorStop(1, toRgba(outer, 0));
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, size, size);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = THREE.ClampToEdgeWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.needsUpdate = true;
+    texture.colorSpace = THREE.SRGBColorSpace;
+    this.pocketHighlightTexture = texture;
+
+    this.pocketHighlightMaterial = new THREE.MeshBasicMaterial({
+      map: texture,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthTest: true,
+      depthWrite: false,
+      opacity: CONFIG.POCKET_HIGHLIGHT_INTENSITY ?? 0.55,
+      side: THREE.DoubleSide,
+    });
+    return this.pocketHighlightMaterial;
   }
 
   private getPocketShadowMaterial(): THREE.MeshBasicMaterial {
@@ -1157,6 +1337,8 @@ export class Renderer3D {
       this.enforceRenderOrderControl(shadowMesh, { disableDepth: true });
       this.scene.add(shadowMesh);
       this.pocketShadowMeshes.push(shadowMesh);
+
+      this.addPocketHighlight(pocket, visualRadius, angleRad);
     });
     
     this.initializeRailFillMesh();
@@ -1198,13 +1380,12 @@ export class Renderer3D {
     if (!geometry) return;
 
     const material = new THREE.MeshBasicMaterial({
-      color: new THREE.Color(CONFIG.RAIL_FILL_COLOR),
+      color: this.computeRailFillColor(),
       side: THREE.DoubleSide,
-      depthTest: false,
-      depthWrite: false,
       transparent: true,
-      opacity: 1,
+      opacity: 0.96,
     });
+    (material as any).toneMapped = false;
 
     this.railFillMesh = new THREE.Mesh(geometry, material);
     this.railFillMesh.position.z = -0.05;
@@ -1213,6 +1394,39 @@ export class Renderer3D {
     this.enforceRenderOrderControl(this.railFillMesh);
 
     this.scene.add(this.railFillMesh);
+    this.updateRailFillMaterialColor();
+  }
+
+  private computeRailFillColor(): THREE.Color {
+    const feltColor = new THREE.Color(CONFIG.TABLE_COLOR ?? '#0a5f0a');
+    const baseFill = new THREE.Color(CONFIG.RAIL_FILL_COLOR ?? '#000000');
+    const fillColor = baseFill.clone();
+
+    const nearBlack = fillColor.r < 0.1 && fillColor.g < 0.1 && fillColor.b < 0.1;
+    if (nearBlack) {
+      fillColor.copy(feltColor);
+    } else {
+      fillColor.lerp(feltColor, 0.65);
+    }
+
+    const hsl = { h: 0, s: 0, l: 0 };
+    fillColor.getHSL(hsl);
+    const boostedL = Math.min(1, hsl.l + 0.4);
+    const reducedS = Math.max(0, Math.min(1, hsl.s * 0.8));
+    fillColor.setHSL(hsl.h, reducedS, boostedL);
+
+    fillColor.lerp(new THREE.Color('#ffffff'), 0.12);
+    return fillColor;
+  }
+
+  private updateRailFillMaterialColor() {
+    if (!this.railFillMesh) return;
+    const mat = this.railFillMesh.material as THREE.MeshBasicMaterial | undefined;
+    if (!mat) return;
+    const color = this.computeRailFillColor();
+    mat.color.copy(color);
+    mat.opacity = 0.96;
+    mat.needsUpdate = true;
   }
 
   private createRailFillGeometry(): THREE.ShapeGeometry | null {
@@ -1225,10 +1439,10 @@ export class Renderer3D {
     const outer = new THREE.Shape();
     const frameWidth = Math.max(0.1, CONFIG.FRAME_OFFSET_IN);
     const outerOffset = CONFIG.RAIL_THICKNESS_OUTER + frameWidth;
-    outer.moveTo(minX - outerOffset, minY - outerOffset);
-    outer.lineTo(maxX + outerOffset, minY - outerOffset);
+    outer.moveTo(minX - outerOffset, maxY + outerOffset);
     outer.lineTo(maxX + outerOffset, maxY + outerOffset);
-    outer.lineTo(minX - outerOffset, maxY + outerOffset);
+    outer.lineTo(maxX + outerOffset, minY - outerOffset);
+    outer.lineTo(minX - outerOffset, minY - outerOffset);
     outer.closePath();
 
     const inner = new THREE.Path();
@@ -1654,10 +1868,13 @@ export class Renderer3D {
         break;
       case 'showRails':
         this.railMeshes.forEach((mesh) => (mesh.visible = visible));
+        this.railHighlightMeshes.forEach((mesh) => (mesh.visible = visible));
         if (this.railFillMesh) this.railFillMesh.visible = visible;
         break;
       case 'showPockets':
         this.pocketMeshes.forEach((mesh) => (mesh.visible = visible));
+        this.pocketShadowMeshes.forEach((mesh) => (mesh.visible = visible));
+        this.pocketHighlightMeshes.forEach((mesh) => (mesh.visible = visible));
         break;
       case 'showCaps':
         this.pocketCapMeshes.forEach((mesh) => (mesh.visible = visible));

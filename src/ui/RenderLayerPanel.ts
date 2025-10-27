@@ -27,7 +27,7 @@ export class RenderLayerPanel {
   private settings: RenderSettings;
   private orderInputs: Partial<Record<RenderLayerOrderKey, HTMLInputElement>> = {};
   private lightingInputs: Record<
-    'ambientIntensity' | 'directionalIntensity' | 'accentIntensity' | 'railHighlightIntensity' | 'pocketShadowIntensity',
+    'ambientIntensity' | 'directionalIntensity' | 'accentIntensity' | 'railHighlightIntensity' | 'pocketShadowIntensity' | 'pocketHighlightIntensity',
     HTMLInputElement | null
   > = {
     ambientIntensity: null,
@@ -35,6 +35,7 @@ export class RenderLayerPanel {
     accentIntensity: null,
     railHighlightIntensity: null,
     pocketShadowIntensity: null,
+    pocketHighlightIntensity: null,
   };
 
   constructor(
@@ -145,7 +146,8 @@ export class RenderLayerPanel {
     });
     this.renderer.setHighlightIntensities({
       rail: settings.railHighlightIntensity,
-      pocket: settings.pocketShadowIntensity,
+      pocketHighlight: settings.pocketHighlightIntensity,
+      pocketShadow: settings.pocketShadowIntensity,
     });
   }
 
@@ -202,6 +204,7 @@ export class RenderLayerPanel {
       directionalIntensity: lights.directionalIntensity,
       accentIntensity: lights.accentIntensity,
       railHighlightIntensity: highlights.railHighlightIntensity,
+      pocketHighlightIntensity: highlights.pocketHighlightIntensity,
       pocketShadowIntensity: highlights.pocketShadowIntensity,
     });
     this.syncUI();
@@ -221,13 +224,11 @@ export class RenderLayerPanel {
   }
 
   private bindLightingControls() {
-    type LightingKey =
-      | 'ambientIntensity'
-      | 'directionalIntensity'
-      | 'accentIntensity'
-      | 'railHighlightIntensity'
-      | 'pocketShadowIntensity';
-    const map: Array<{ id: string; key: LightingKey; apply: (value: number) => void }> = [
+    const simpleSliders: Array<{
+      id: string;
+      key: 'ambientIntensity' | 'directionalIntensity' | 'accentIntensity' | 'pocketShadowIntensity';
+      apply: (value: number) => void;
+    }> = [
       {
         id: 'lighting-ambient',
         key: 'ambientIntensity',
@@ -244,18 +245,13 @@ export class RenderLayerPanel {
         apply: (value) => this.renderer.setLightingIntensities({ accent: value }),
       },
       {
-        id: 'lighting-rail-highlight',
-        key: 'railHighlightIntensity',
-        apply: (value) => this.renderer.setHighlightIntensities({ rail: value }),
-      },
-      {
         id: 'lighting-pocket-shadow',
         key: 'pocketShadowIntensity',
-        apply: (value) => this.renderer.setHighlightIntensities({ pocket: value }),
+        apply: (value) => this.renderer.setHighlightIntensities({ pocketShadow: value }),
       },
     ];
 
-    map.forEach(({ id, key, apply }) => {
+    simpleSliders.forEach(({ id, key, apply }) => {
       const input = document.getElementById(id) as HTMLInputElement | null;
       if (key in this.lightingInputs) {
         (this.lightingInputs as Record<string, HTMLInputElement | null>)[key] = input;
@@ -276,14 +272,36 @@ export class RenderLayerPanel {
         apply(value);
       });
     });
+
+    const railInput = document.getElementById('lighting-rail-highlight') as HTMLInputElement | null;
+    const railValueLabel = document.getElementById('lighting-rail-highlight-value');
+    if (railInput) {
+      this.lightingInputs.railHighlightIntensity = railInput;
+      this.lightingInputs.pocketHighlightIntensity = railInput;
+      railInput.addEventListener('input', () => {
+        const value = parseFloat(railInput.value);
+        if (!Number.isFinite(value)) {
+          return;
+        }
+        this.settings.railHighlightIntensity = value;
+        this.settings.pocketHighlightIntensity = value;
+        if (railValueLabel) {
+          railValueLabel.textContent = value.toFixed(2);
+        }
+        this.settingsManager.saveRenderSettings({
+          railHighlightIntensity: value,
+          pocketHighlightIntensity: value,
+        });
+        this.renderer.setHighlightIntensities({ rail: value, pocketHighlight: value });
+      });
+    }
   }
 
   private syncLightingSliders() {
-    const map: Array<{ key: keyof Pick<RenderSettings, 'ambientIntensity' | 'directionalIntensity' | 'accentIntensity' | 'railHighlightIntensity' | 'pocketShadowIntensity'>; id: string }> = [
+    const map: Array<{ key: keyof Pick<RenderSettings, 'ambientIntensity' | 'directionalIntensity' | 'accentIntensity' | 'pocketShadowIntensity'>; id: string }> = [
       { key: 'ambientIntensity', id: 'lighting-ambient' },
       { key: 'directionalIntensity', id: 'lighting-directional' },
       { key: 'accentIntensity', id: 'lighting-accent' },
-      { key: 'railHighlightIntensity', id: 'lighting-rail-highlight' },
       { key: 'pocketShadowIntensity', id: 'lighting-pocket-shadow' },
     ];
 
@@ -299,6 +317,16 @@ export class RenderLayerPanel {
         }
       }
     });
+
+    const railInput = document.getElementById('lighting-rail-highlight') as HTMLInputElement | null;
+    const railValueLabel = document.getElementById('lighting-rail-highlight-value');
+    if (railInput) {
+      const value = this.settings.railHighlightIntensity;
+      railInput.value = value.toString();
+      if (railValueLabel) {
+        railValueLabel.textContent = value.toFixed(2);
+      }
+    }
   }
 
   private bindOrderControls() {

@@ -66,6 +66,7 @@ export interface RenderSettings extends RenderLayerSettings {
   accentIntensity: number;
   railHighlightIntensity: number;
   pocketShadowIntensity: number;
+  pocketHighlightIntensity: number;
 }
 
 const STORAGE_KEYS = {
@@ -309,6 +310,7 @@ export class SettingsManager {
       accentIntensity: CONFIG.ACCENT_INTENSITY ?? 0.5,
       railHighlightIntensity: CONFIG.RAIL_HIGHLIGHT_INTENSITY ?? 0.6,
       pocketShadowIntensity: CONFIG.POCKET_SHADOW_INTENSITY ?? 0.45,
+      pocketHighlightIntensity: CONFIG.POCKET_HIGHLIGHT_INTENSITY ?? 0.55,
     };
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.RENDER_SETTINGS);
@@ -323,6 +325,8 @@ export class SettingsManager {
         parsed.accentIntensity = parsed.accentIntensity ?? defaults.accentIntensity;
         parsed.railHighlightIntensity = parsed.railHighlightIntensity ?? defaults.railHighlightIntensity;
         parsed.pocketShadowIntensity = parsed.pocketShadowIntensity ?? defaults.pocketShadowIntensity;
+        parsed.pocketHighlightIntensity =
+          parsed.pocketHighlightIntensity ?? defaults.pocketHighlightIntensity;
         return { ...defaults, ...parsed };
       }
     } catch (e) {
@@ -404,6 +408,9 @@ export class SettingsManager {
       ambientIntensity: CONFIG.AMBIENT_INTENSITY ?? 1.1,
       directionalIntensity: CONFIG.DIRECTIONAL_INTENSITY ?? 1.6,
       accentIntensity: CONFIG.ACCENT_INTENSITY ?? 0.5,
+      railHighlightIntensity: CONFIG.RAIL_HIGHLIGHT_INTENSITY ?? 0.6,
+      pocketShadowIntensity: CONFIG.POCKET_SHADOW_INTENSITY ?? 0.45,
+      pocketHighlightIntensity: CONFIG.POCKET_HIGHLIGHT_INTENSITY ?? 0.55,
     };
     try {
       localStorage.setItem(STORAGE_KEYS.RENDER_SETTINGS, JSON.stringify(this.renderSettings));
@@ -465,7 +472,17 @@ export class SettingsManager {
       this.gameSettings = { ...DEFAULT_GAME_SETTINGS };
       this.uiColors = { ...DEFAULT_UI_COLORS };
       this.physicsSettings = { ...DEFAULT_PHYSICS_SETTINGS };
-      this.renderSettings = { ...defaultRenderLayerSettings, canvasScale: 1, ballScale: 1 };
+      this.renderSettings = {
+        ...defaultRenderLayerSettings,
+        canvasScale: 1,
+        ballScale: 1,
+        ambientIntensity: CONFIG.AMBIENT_INTENSITY ?? 1.1,
+        directionalIntensity: CONFIG.DIRECTIONAL_INTENSITY ?? 1.6,
+        accentIntensity: CONFIG.ACCENT_INTENSITY ?? 0.5,
+        railHighlightIntensity: CONFIG.RAIL_HIGHLIGHT_INTENSITY ?? 0.6,
+        pocketShadowIntensity: CONFIG.POCKET_SHADOW_INTENSITY ?? 0.45,
+        pocketHighlightIntensity: CONFIG.POCKET_HIGHLIGHT_INTENSITY ?? 0.55,
+      };
       
       this.applyPhysicsSettings();
       this.applyUIColors();
@@ -484,7 +501,10 @@ export class SettingsManager {
     CONFIG.DIRECTIONAL_INTENSITY = this.renderSettings.directionalIntensity ?? CONFIG.DIRECTIONAL_INTENSITY;
     CONFIG.ACCENT_INTENSITY = this.renderSettings.accentIntensity ?? CONFIG.ACCENT_INTENSITY;
     CONFIG.RAIL_HIGHLIGHT_INTENSITY = this.renderSettings.railHighlightIntensity ?? CONFIG.RAIL_HIGHLIGHT_INTENSITY;
-    CONFIG.POCKET_SHADOW_INTENSITY = this.renderSettings.pocketShadowIntensity ?? CONFIG.POCKET_SHADOW_INTENSITY;
+    CONFIG.POCKET_SHADOW_INTENSITY =
+      this.renderSettings.pocketShadowIntensity ?? CONFIG.POCKET_SHADOW_INTENSITY;
+    CONFIG.POCKET_HIGHLIGHT_INTENSITY =
+      this.renderSettings.pocketHighlightIntensity ?? CONFIG.POCKET_HIGHLIGHT_INTENSITY;
     window.dispatchEvent(
       new CustomEvent('settings:render-changed', { detail: { settings: this.renderSettings } })
     );
