@@ -171,8 +171,7 @@ export class Renderer3D {
 
     // Create Three.js scene
     this.scene = new THREE.Scene();
-    const initialBg = new THREE.Color(CONFIG.RAIL_COLOR ?? '#2d1810');
-    this.scene.background = initialBg.clone();
+    this.scene.background = null; // Disabled - no background color
     this.refreshDerivedGeometry();
     
     // Create orthographic camera (top-down view)
@@ -202,7 +201,7 @@ export class Renderer3D {
     this.renderer.setPixelRatio(window.devicePixelRatio || 1);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    this.renderer.setClearColor(initialBg, 1);
+    this.renderer.setClearColor(0x000000, 0); // Transparent background
     
     // Lighting
     this.ambientLight = new THREE.AmbientLight(0xffffff, CONFIG.AMBIENT_INTENSITY ?? 0.85);
@@ -245,9 +244,7 @@ export class Renderer3D {
         this.tableMesh.material.color = new THREE.Color(CONFIG.TABLE_COLOR);
         this.tableMesh.material.needsUpdate = true;
       }
-      const bgColor = new THREE.Color(CONFIG.TABLE_COLOR);
-      this.scene.background = bgColor.clone();
-      this.renderer.setClearColor(bgColor, 1);
+      // Background disabled - no scene background color
       if (this.frameMesh) {
         this.frameMesh.traverse((obj) => {
           if ((obj as THREE.Mesh).isMesh) {
@@ -271,10 +268,7 @@ export class Renderer3D {
       // Update corner rectangle fill color
       this.updateRailFillMaterialColor();
 
-      const railColorHex = CONFIG.RAIL_COLOR ?? '#2d1810';
-      const railBgColor = new THREE.Color(railColorHex);
-      this.scene.background = railBgColor.clone();
-      this.renderer.setClearColor(railBgColor, 1);
+      // Background disabled - no scene background color
     });
 
     window.addEventListener('settings:render-changed', (event) => {
@@ -1388,8 +1382,8 @@ export class Renderer3D {
     (material as any).toneMapped = false;
 
     this.railFillMesh = new THREE.Mesh(geometry, material);
-    this.railFillMesh.position.z = -0.05;
-    this.railFillMesh.renderOrder = this.layerOrder.orderTable - 1;
+    this.railFillMesh.position.z = -0.3; // Below rails (which are at -0.25)
+    this.railFillMesh.renderOrder = this.layerOrder.orderRails - 1; // Render before rails
     this.railFillMesh.visible = this.layerVisibility.showRails;
     this.enforceRenderOrderControl(this.railFillMesh);
 
@@ -1398,25 +1392,8 @@ export class Renderer3D {
   }
 
   private computeRailFillColor(): THREE.Color {
-    const feltColor = new THREE.Color(CONFIG.TABLE_COLOR ?? '#0a5f0a');
-    const baseFill = new THREE.Color(CONFIG.RAIL_FILL_COLOR ?? '#000000');
-    const fillColor = baseFill.clone();
-
-    const nearBlack = fillColor.r < 0.1 && fillColor.g < 0.1 && fillColor.b < 0.1;
-    if (nearBlack) {
-      fillColor.copy(feltColor);
-    } else {
-      fillColor.lerp(feltColor, 0.65);
-    }
-
-    const hsl = { h: 0, s: 0, l: 0 };
-    fillColor.getHSL(hsl);
-    const boostedL = Math.min(1, hsl.l + 0.4);
-    const reducedS = Math.max(0, Math.min(1, hsl.s * 0.8));
-    fillColor.setHSL(hsl.h, reducedS, boostedL);
-
-    fillColor.lerp(new THREE.Color('#ffffff'), 0.12);
-    return fillColor;
+    // Use the Corner Fill color directly from CONFIG without any blending or modification
+    return new THREE.Color(CONFIG.RAIL_FILL_COLOR ?? '#000000');
   }
 
   private updateRailFillMaterialColor() {
@@ -1429,6 +1406,55 @@ export class Renderer3D {
     mat.needsUpdate = true;
   }
 
+  private offsetBoundaryOutward(points: Vec2[], offset: number): Vec2[] {
+    // Offset each point outward along its segment normals to account for rail thickness
+    const result: Vec2[] = [];
+    const n = points.length;
+    
+    for (let i = 0; i < n; i++) {
+      const curr = points[i];
+      const prev = points[(i - 1 + n) % n];
+      const next = points[(i + 1) % n];
+      
+      // Calculate normals from adjacent segments (pointing outward from center)
+      const dx1 = curr.x - prev.x;
+      const dy1 = curr.y - prev.y;
+      const len1 = Math.sqrt(dx1 * dx1 + dy1 * dy1) || 1;
+      const nx1 = -dy1 / len1; // Perpendicular
+      const ny1 = dx1 / len1;
+      
+      const dx2 = next.x - curr.x;
+      const dy2 = next.y - curr.y;
+      const len2 = Math.sqrt(dx2 * dx2 + dy2 * dy2) || 1;
+      const nx2 = -dy2 / len2;
+      const ny2 = dx2 / len2;
+      
+      // Average the normals and ensure they point outward (away from center)
+      let avgNx = (nx1 + nx2) / 2;
+      let avgNy = (ny1 + ny2) / 2;
+      const avgLen = Math.sqrt(avgNx * avgNx + avgNy * avgNy) || 1;
+      avgNx /= avgLen;
+      avgNy /= avgLen;
+      
+      // Check if normal points toward center; if so, flip it
+      const toCenterX = -curr.x;
+      const toCenterY = -curr.y;
+      const dot = avgNx * toCenterX + avgNy * toCenterY;
+      if (dot > 0) {
+        avgNx = -avgNx;
+        avgNy = -avgNy;
+      }
+      
+      // Offset point outward
+      result.push({
+        x: curr.x + avgNx * offset,
+        y: curr.y + avgNy * offset
+      });
+    }
+    
+    return result;
+  }
+
   private createRailFillGeometry(): THREE.ShapeGeometry | null {
     if (!this.playBoundaryPoints.length) {
       return null;
@@ -1436,22 +1462,30 @@ export class Renderer3D {
 
     const { minX, maxX, minY, maxY } = this.playBounds;
 
+    // Outer rectangle goes to frame INNER edge (not beyond the frame)
+    // Frame inner edge is at: play area + rail outer thickness
     const outer = new THREE.Shape();
-    const frameWidth = Math.max(0.1, CONFIG.FRAME_OFFSET_IN);
-    const outerOffset = CONFIG.RAIL_THICKNESS_OUTER + frameWidth;
-    outer.moveTo(minX - outerOffset, maxY + outerOffset);
-    outer.lineTo(maxX + outerOffset, maxY + outerOffset);
-    outer.lineTo(maxX + outerOffset, minY - outerOffset);
-    outer.lineTo(minX - outerOffset, minY - outerOffset);
+    const frameInnerOffset = CONFIG.RAIL_THICKNESS_OUTER; // Just the rail thickness, not + frameWidth
+    outer.moveTo(minX - frameInnerOffset, maxY + frameInnerOffset);
+    outer.lineTo(maxX + frameInnerOffset, maxY + frameInnerOffset);
+    outer.lineTo(maxX + frameInnerOffset, minY - frameInnerOffset);
+    outer.lineTo(minX - frameInnerOffset, minY - frameInnerOffset);
     outer.closePath();
 
+    // Inner hole follows cushion OUTER edge (offset outward by rail thickness)
+    // This leaves room for the rail cushions and only fills the gap to the frame
+    const railOuterThickness = CONFIG.RAIL_THICKNESS_OUTER;
+    const offsetPoints = this.offsetBoundaryOutward(this.playBoundaryPoints, railOuterThickness);
+    
     const inner = new THREE.Path();
-    inner.moveTo(minX, minY);
-    inner.lineTo(maxX, minY);
-    inner.lineTo(maxX, maxY);
-    inner.lineTo(minX, maxY);
-    inner.closePath();
-    outer.holes.push(inner);
+    if (offsetPoints.length > 0) {
+      inner.moveTo(offsetPoints[0].x, offsetPoints[0].y);
+      for (let i = 1; i < offsetPoints.length; i++) {
+        inner.lineTo(offsetPoints[i].x, offsetPoints[i].y);
+      }
+      inner.closePath();
+      outer.holes.push(inner);
+    }
 
     return new THREE.ShapeGeometry(outer);
   }
@@ -1807,7 +1841,7 @@ export class Renderer3D {
       mesh.renderOrder = this.layerOrder.orderPockets + 0.2;
     });
     if (this.railFillMesh) {
-      this.railFillMesh.renderOrder = this.layerOrder.orderTable - 1;
+      this.railFillMesh.renderOrder = this.layerOrder.orderRails - 1; // Render before rails
     }
     this.ballMeshes.forEach((mesh) => {
       this.applyBallRenderOrder(mesh);

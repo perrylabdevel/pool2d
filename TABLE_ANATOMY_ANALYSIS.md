@@ -8,33 +8,33 @@ This document details the anatomy of pool table components in the Pool 2D codeba
 
 ## Component Hierarchy (Bottom to Top)
 
-### 1. **Rail Fill Mesh** (Z: -0.05)
+### 1. **Rail Fill Mesh** (Z: -0.3) ✅ FIXED
 
-**File:** `src/render/Renderer3D.ts:1432-1457` (`createRailFillGeometry`)
+**File:** `src/render/Renderer3D.ts:1458-1491` (`createRailFillGeometry`)
 
-**Purpose:** Fills the space between the playing surface boundary and the outer frame.
+**Purpose:** Fills the narrow gaps between the cushion outer edges and the frame inner edge (only visible at pocket openings).
 
 **Geometry:**
 
-- **Outer boundary:** Rectangle at `playBounds ± (RAIL_THICKNESS_OUTER + FRAME_OFFSET_IN)`
-  - For default settings: `±50" ± (0.2" + 4.0") = ±54.2"`
-- **Inner boundary (hole):** Rectangle at `playBounds` (min/max X/Y from rail endpoints)
-  - For default: `±50"` x `±25"`
+- **Outer boundary:** Rectangle at frame inner edge `playBounds ± RAIL_THICKNESS_OUTER`
+  - For default settings: `±50" ± 0.2" = ±50.2"` (contained within frame)
+- **Inner boundary (hole):** Follows exact cushion outer edge (playBoundaryPoints offset outward by 0.2")
+  - Matches complex cushion shape including all pocket cutouts
 
 **Material:**
 
 ```typescript
-color: computeRailFillColor(); // Blends RAIL_FILL_COLOR with TABLE_COLOR
+color: CONFIG.RAIL_FILL_COLOR; // Used directly, no blending
 opacity: 0.96;
-renderOrder: orderTable - 1;
+renderOrder: orderRails - 1; // Renders before/below rails
 ```
 
 **Configuration:**
 
-- `CONFIG.RAIL_FILL_COLOR = '#000000'` (black by default)
-- When near-black, it copies `TABLE_COLOR` instead
+- `CONFIG.RAIL_FILL_COLOR` - User-defined "Corner Fill" color from UI (e.g., red #ff0000)
+- Visible only in tiny gaps at pocket geometry transitions
 
-**THIS IS THE "OUTER PLANE" YOU'RE SEEING** ⭐
+**ISSUE RESOLVED:** No longer shows as visible rectangular border ✅
 
 ---
 
@@ -59,6 +59,8 @@ receiveShadow: true;
 ```
 
 ---
+
+### 2. **Rail Fill Mesh** - See component #1 above (now renders below rails)
 
 ### 3. **Rails / Cushions** (Z: -0.25)
 
@@ -211,42 +213,46 @@ transparent: true
 
 ---
 
-## The "Outer Plane" Issue 🔍
+## The "Outer Plane" Issue - RESOLVED ✅
 
-### What You're Seeing
+### What Was Wrong (Original Issue)
 
-The **Rail Fill Mesh** is creating a visible plane between:
+The **Rail Fill Mesh** was creating a visible rectangular border because:
 
-- **Outer edge:** The frame boundary (±54.2")
-- **Inner edge:** The play boundary (±50" × ±25")
+1. **Position:** Z=-0.05 was too high (above rails at Z=-0.25), making it cover the cushions
+2. **Color:** Was blending `RAIL_FILL_COLOR` with table color, creating unexpected colors
+3. **Geometry:**
+   - Outer boundary extended beyond frame (to ±54.2")
+   - Inner hole was a simple rectangle at play boundary (±50" × ±25")
+   - Did not follow cushion outer edge or complex pocket geometry
 
-This creates a ~4" wide border around the entire table that sits BELOW the felt surface (Z: -0.05).
+### How It Was Fixed
 
-### Why It's Visible
+1. **Position:** Changed to Z=-0.3 (below rails at Z=-0.25)
+2. **Render Order:** Changed to `orderRails - 1` (renders before rails)
+3. **Color:** Now uses `RAIL_FILL_COLOR` directly without blending or modifications
+4. **Geometry:**
+   - **Outer boundary:** Constrained to frame inner edge at ±50.2" (not beyond frame)
+   - **Inner hole:** Follows exact cushion outer edge using `offsetBoundaryOutward()` function
+   - Matches complex cushion geometry including all pocket cutouts
 
-1. **Position:** Z=-0.05 places it slightly below the felt (Z=0), making it visible when looking straight down
-2. **Color:** Currently using `RAIL_FILL_COLOR` (#000000 - black) blended with table color
-3. **Opacity:** 0.96 makes it nearly opaque
-4. **Purpose:** Originally intended to fill gaps between rails and frame, but the geometry creates a visible rectangular border
-
-### Geometry Details
+### Current Geometry (Fixed)
 
 ```typescript
-// Outer rectangle (includes frame)
-minX - outerOffset to maxX + outerOffset
-minY - outerOffset to maxY + outerOffset
-// Where outerOffset = RAIL_THICKNESS_OUTER + FRAME_OFFSET_IN = 0.2 + 4.0 = 4.2"
+// Outer rectangle (frame inner edge only)
+frameInnerOffset = RAIL_THICKNESS_OUTER = 0.2"
+Boundary: ±50.2" × ±25.2"
 
-// Inner rectangle (play boundary hole)
-minX to maxX (from playBounds)
-minY to maxY (from playBounds)
+// Inner hole (cushion outer edge - complex shape)
+playBoundaryPoints + 0.2" outward offset
+Follows exact cushion geometry with pocket openings
 ```
 
 For a standard table:
 
-- Outer: -54.2" to +54.2" (X), -29.2" to +29.2" (Y)
-- Inner: -50" to +50" (X), -25" to +25" (Y)
-- **Visible border width:** 4.2" on all sides
+- Outer: ±50.2" × ±25.2" (frame inner edge) ✅
+- Inner: Complex shape following cushion outer edges ✅
+- **Visible fill:** Only in tiny gaps at pocket geometry transitions ✅
 
 ---
 
@@ -348,9 +354,9 @@ Z:  0.2  - Pocket highlights
 Z:  0.16 - Pocket gradient overlays
 Z:  0.15 - Pocket bottom fills
 Z:  0.0  - Frame planks, Felt surface, Pocket cylinders
-Z: -0.05 - **RAIL FILL MESH** ⭐ (the "outer plane" issue)
 Z: -0.13 - Rail highlights
 Z: -0.25 - Rail/cushion boxes
+Z: -0.30 - **Rail Fill Mesh** ✅ (below rails, properly contained)
 ```
 
-The "outer plane" you're seeing is the **Rail Fill Mesh** - a rectangular plane with a hole cut out for the play area, designed to fill the gap between the frame and the playing surface.
+The **Rail Fill Mesh** is now properly positioned below the rails and constrained within the frame, filling only the narrow gaps between cushion outer edges and frame inner edge at pocket openings.

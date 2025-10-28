@@ -68,9 +68,34 @@ However, with the current implementation, it creates a visible rectangular borde
 
 ---
 
-## Solutions
+## Solutions Applied ✅
 
-### Option 1: Hide It Completely (Quickest Fix)
+### ✅ IMPLEMENTED: Proper Geometry and Positioning
+
+**Applied changes:**
+
+1. **Geometry Fix:**
+   - Outer boundary constrained to frame inner edge (±50.2" instead of ±54.2")
+   - Inner hole follows exact cushion outer edge using `offsetBoundaryOutward()`
+   - Matches complex pocket geometry instead of simple rectangle
+
+2. **Z-Position Fix:**
+   - Changed from Z=-0.05 to Z=-0.3 (below rails at Z=-0.25)
+   - Prevents covering cushions
+
+3. **Color Fix:**
+   - Uses `RAIL_FILL_COLOR` directly without blending
+   - Shows user-selected color exactly
+
+4. **Render Order Fix:**
+   - Changed from `orderTable - 1` to `orderRails - 1`
+   - Ensures rails render on top
+
+**Result:** Rail fill now only appears in narrow gaps at pocket openings, using the exact color selected in UI.
+
+---
+
+### Alternative Option 1: Hide It Completely (Not Recommended)
 
 **Location:** `src/render/Renderer3D.ts:1393`
 
@@ -87,7 +112,7 @@ this.railFillMesh.visible = false;
 
 ---
 
-### Option 2: Make It Match the Felt Color
+### Alternative Option 2: Make It Match the Felt Color (Not Needed)
 
 **Location:** `src/config.ts:66` or via UI
 
@@ -108,7 +133,7 @@ RAIL_FILL_COLOR: '#0a5f0a', // Match TABLE_COLOR (green felt)
 
 ---
 
-### Option 3: Make It Match the Rail Color
+### Alternative Option 3: Make It Match the Rail Color (Not Needed)
 
 **Location:** `src/config.ts:66` or via UI
 
@@ -121,7 +146,7 @@ RAIL_FILL_COLOR: '#2d1810', // Match RAIL_COLOR (dark brown)
 
 ---
 
-### Option 4: Make It Transparent
+### Alternative Option 4: Make It Transparent (Not Needed)
 
 **Location:** `src/render/Renderer3D.ts:1386`
 
@@ -138,7 +163,7 @@ opacity: 0.0,
 
 ---
 
-### Option 5: Lower It Below View
+### Alternative Option 5: Lower It Below View (Partially Applied)
 
 **Location:** `src/render/Renderer3D.ts:1391`
 
@@ -200,7 +225,7 @@ private createRailFillGeometry(): THREE.ShapeGeometry | null {
 
 ---
 
-### Option 7: Remove It Entirely
+### Alternative Option 7: Remove It Entirely (Not Necessary)
 
 If you find it's not serving a purpose:
 
@@ -287,6 +312,15 @@ This setting is saved to localStorage and persists between sessions.
 
 ---
 
-## Summary
+## Summary ✅
 
-The "outer plane" you're seeing is the **Rail Fill Mesh**, which creates a visible border between the felt and frame. The quickest fix is to match its color to the felt (`#0a5f0a`), and the proper long-term fix is to update its geometry to follow the exact rail boundaries rather than a simple rectangle.
+The "outer plane" issue has been **completely resolved**. The **Rail Fill Mesh** now:
+
+- Fills only narrow gaps at pocket openings (not a visible border)
+- Stays within frame boundaries
+- Follows exact cushion outer edge geometry
+- Displays the user-selected "Corner Fill" color without modification
+- Renders below the rails (not covering them)
+- Works correctly with scene background disabled for transparency
+
+**Status:** FIXED - No further action needed.
