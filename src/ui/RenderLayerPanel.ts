@@ -27,15 +27,15 @@ export class RenderLayerPanel {
   private settings: RenderSettings;
   private orderInputs: Partial<Record<RenderLayerOrderKey, HTMLInputElement>> = {};
   private lightingInputs: Record<
-    'ambientIntensity' | 'directionalIntensity' | 'accentIntensity' | 'railHighlightIntensity' | 'pocketShadowIntensity' | 'pocketHighlightIntensity',
+    'ambientIntensity' | 'directionalIntensity' | 'accentIntensity' | 'railHighlightIntensity' | 'pocketHighlightIntensity' | 'pocketShadowIntensity',
     HTMLInputElement | null
   > = {
     ambientIntensity: null,
     directionalIntensity: null,
     accentIntensity: null,
     railHighlightIntensity: null,
-    pocketShadowIntensity: null,
     pocketHighlightIntensity: null,
+    pocketShadowIntensity: null,
   };
 
   constructor(
@@ -226,7 +226,7 @@ export class RenderLayerPanel {
   private bindLightingControls() {
     const simpleSliders: Array<{
       id: string;
-      key: 'ambientIntensity' | 'directionalIntensity' | 'accentIntensity' | 'pocketShadowIntensity';
+      key: 'ambientIntensity' | 'directionalIntensity' | 'accentIntensity' | 'railHighlightIntensity' | 'pocketHighlightIntensity' | 'pocketShadowIntensity';
       apply: (value: number) => void;
     }> = [
       {
@@ -243,6 +243,16 @@ export class RenderLayerPanel {
         id: 'lighting-accent',
         key: 'accentIntensity',
         apply: (value) => this.renderer.setLightingIntensities({ accent: value }),
+      },
+      {
+        id: 'lighting-rail-highlight',
+        key: 'railHighlightIntensity',
+        apply: (value) => this.renderer.setHighlightIntensities({ rail: value }),
+      },
+      {
+        id: 'lighting-pocket-highlight',
+        key: 'pocketHighlightIntensity',
+        apply: (value) => this.renderer.setHighlightIntensities({ pocketHighlight: value }),
       },
       {
         id: 'lighting-pocket-shadow',
@@ -272,36 +282,15 @@ export class RenderLayerPanel {
         apply(value);
       });
     });
-
-    const railInput = document.getElementById('lighting-rail-highlight') as HTMLInputElement | null;
-    const railValueLabel = document.getElementById('lighting-rail-highlight-value');
-    if (railInput) {
-      this.lightingInputs.railHighlightIntensity = railInput;
-      this.lightingInputs.pocketHighlightIntensity = railInput;
-      railInput.addEventListener('input', () => {
-        const value = parseFloat(railInput.value);
-        if (!Number.isFinite(value)) {
-          return;
-        }
-        this.settings.railHighlightIntensity = value;
-        this.settings.pocketHighlightIntensity = value;
-        if (railValueLabel) {
-          railValueLabel.textContent = value.toFixed(2);
-        }
-        this.settingsManager.saveRenderSettings({
-          railHighlightIntensity: value,
-          pocketHighlightIntensity: value,
-        });
-        this.renderer.setHighlightIntensities({ rail: value, pocketHighlight: value });
-      });
-    }
   }
 
   private syncLightingSliders() {
-    const map: Array<{ key: keyof Pick<RenderSettings, 'ambientIntensity' | 'directionalIntensity' | 'accentIntensity' | 'pocketShadowIntensity'>; id: string }> = [
+    const map: Array<{ key: keyof Pick<RenderSettings, 'ambientIntensity' | 'directionalIntensity' | 'accentIntensity' | 'railHighlightIntensity' | 'pocketHighlightIntensity' | 'pocketShadowIntensity'>; id: string }> = [
       { key: 'ambientIntensity', id: 'lighting-ambient' },
       { key: 'directionalIntensity', id: 'lighting-directional' },
       { key: 'accentIntensity', id: 'lighting-accent' },
+      { key: 'railHighlightIntensity', id: 'lighting-rail-highlight' },
+      { key: 'pocketHighlightIntensity', id: 'lighting-pocket-highlight' },
       { key: 'pocketShadowIntensity', id: 'lighting-pocket-shadow' },
     ];
 
@@ -317,16 +306,6 @@ export class RenderLayerPanel {
         }
       }
     });
-
-    const railInput = document.getElementById('lighting-rail-highlight') as HTMLInputElement | null;
-    const railValueLabel = document.getElementById('lighting-rail-highlight-value');
-    if (railInput) {
-      const value = this.settings.railHighlightIntensity;
-      railInput.value = value.toString();
-      if (railValueLabel) {
-        railValueLabel.textContent = value.toFixed(2);
-      }
-    }
   }
 
   private bindOrderControls() {

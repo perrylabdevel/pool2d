@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -18,7 +18,11 @@
       <div id="workspace">
         <aside id="dock-left">
           <nav id="panel-launcher" class="panel-launcher" aria-label="Tool Panels">
-            <button id="panel-launcher-toggle" class="panel-launcher-toggle" aria-label="Toggle Panels">
+            <button
+              id="panel-launcher-toggle"
+              class="panel-launcher-toggle"
+              aria-label="Toggle Panels"
+            >
               <span class="panel-launcher-icon">☰</span>
             </button>
             <button
@@ -127,28 +131,56 @@
                   <label for="live-side-steepness">
                     Side Steepness: <span id="live-side-steepness-val">2.0</span>
                   </label>
-                  <input type="range" id="live-side-steepness" min="0.5" max="6" step="0.1" value="2" />
+                  <input
+                    type="range"
+                    id="live-side-steepness"
+                    min="0.5"
+                    max="6"
+                    step="0.1"
+                    value="2"
+                  />
                 </div>
 
                 <div class="slider-group">
                   <label for="live-side-offset">
                     Side Pocket Offset: <span id="live-side-offset-val">0.25</span>
                   </label>
-                  <input type="range" id="live-side-offset" min="0" max="1.5" step="0.05" value="0.25" />
+                  <input
+                    type="range"
+                    id="live-side-offset"
+                    min="0"
+                    max="1.5"
+                    step="0.05"
+                    value="0.25"
+                  />
                 </div>
 
                 <div class="slider-group">
                   <label for="live-side-straight">
                     Side Straight Y: <span id="live-side-straight-val">23.5</span>
                   </label>
-                  <input type="range" id="live-side-straight" min="22" max="25" step="0.05" value="23.5" />
+                  <input
+                    type="range"
+                    id="live-side-straight"
+                    min="22"
+                    max="25"
+                    step="0.05"
+                    value="23.5"
+                  />
                 </div>
 
                 <div class="slider-group">
                   <label for="live-side-inner">
                     Side Inner Y: <span id="live-side-inner-val">24.6</span>
                   </label>
-                  <input type="range" id="live-side-inner" min="23" max="26" step="0.05" value="24.6" />
+                  <input
+                    type="range"
+                    id="live-side-inner"
+                    min="23"
+                    max="26"
+                    step="0.05"
+                    value="24.6"
+                  />
                 </div>
 
                 <div class="slider-group input-group">
@@ -156,8 +188,21 @@
                     Side Jaw Outer: <span id="live-side-jaw-outer-val">Auto</span>
                   </label>
                   <div class="input-row">
-                    <input type="range" id="live-side-jaw-outer" min="1" max="48" step="0.05" value="6" />
-                    <button id="live-side-jaw-outer-auto" class="panel-mini-btn" data-no-drag="true">Auto</button>
+                    <input
+                      type="range"
+                      id="live-side-jaw-outer"
+                      min="1"
+                      max="48"
+                      step="0.05"
+                      value="6"
+                    />
+                    <button
+                      id="live-side-jaw-outer-auto"
+                      class="panel-mini-btn"
+                      data-no-drag="true"
+                    >
+                      Auto
+                    </button>
                   </div>
                 </div>
 
@@ -166,8 +211,21 @@
                     Side Jaw Inner: <span id="live-side-jaw-inner-val">Auto</span>
                   </label>
                   <div class="input-row">
-                    <input type="range" id="live-side-jaw-inner" min="0.5" max="30" step="0.05" value="4" />
-                    <button id="live-side-jaw-inner-auto" class="panel-mini-btn" data-no-drag="true">Auto</button>
+                    <input
+                      type="range"
+                      id="live-side-jaw-inner"
+                      min="0.5"
+                      max="30"
+                      step="0.05"
+                      value="4"
+                    />
+                    <button
+                      id="live-side-jaw-inner-auto"
+                      class="panel-mini-btn"
+                      data-no-drag="true"
+                    >
+                      Auto
+                    </button>
                   </div>
                 </div>
 
@@ -185,7 +243,13 @@
                       value="3"
                       data-default="3"
                     />
-                    <button id="live-side-throat-width-auto" class="panel-mini-btn" data-no-drag="true">Auto</button>
+                    <button
+                      id="live-side-throat-width-auto"
+                      class="panel-mini-btn"
+                      data-no-drag="true"
+                    >
+                      Auto
+                    </button>
                   </div>
                 </div>
 
@@ -203,7 +267,13 @@
                       value="3.5"
                       data-default="3.5"
                     />
-                    <button id="live-corner-throat-width-auto" class="panel-mini-btn" data-no-drag="true">Auto</button>
+                    <button
+                      id="live-corner-throat-width-auto"
+                      class="panel-mini-btn"
+                      data-no-drag="true"
+                    >
+                      Auto
+                    </button>
                   </div>
                 </div>
 
@@ -218,7 +288,14 @@
                   <label for="live-corner-radius">
                     Corner Jaw Radius: <span id="live-corner-radius-val">4.0</span>
                   </label>
-                  <input type="range" id="live-corner-radius" min="3" max="8" step="0.1" value="4" />
+                  <input
+                    type="range"
+                    id="live-corner-radius"
+                    min="3"
+                    max="8"
+                    step="0.1"
+                    value="4"
+                  />
                 </div>
 
                 <div class="slider-group input-group">
@@ -226,8 +303,17 @@
                     Corner Jaw X: <span id="live-corner-jaw-x-val">Auto</span>
                   </label>
                   <div class="input-row">
-                    <input type="range" id="live-corner-jaw-x" min="30" max="50" step="0.05" value="46" />
-                    <button id="live-corner-jaw-x-auto" class="panel-mini-btn" data-no-drag="true">Auto</button>
+                    <input
+                      type="range"
+                      id="live-corner-jaw-x"
+                      min="30"
+                      max="50"
+                      step="0.05"
+                      value="46"
+                    />
+                    <button id="live-corner-jaw-x-auto" class="panel-mini-btn" data-no-drag="true">
+                      Auto
+                    </button>
                   </div>
                 </div>
 
@@ -236,79 +322,160 @@
                     Corner Jaw Y: <span id="live-corner-jaw-y-val">Auto</span>
                   </label>
                   <div class="input-row">
-                    <input type="range" id="live-corner-jaw-y" min="10" max="25" step="0.05" value="21" />
-                    <button id="live-corner-jaw-y-auto" class="panel-mini-btn" data-no-drag="true">Auto</button>
+                    <input
+                      type="range"
+                      id="live-corner-jaw-y"
+                      min="10"
+                      max="25"
+                      step="0.05"
+                      value="21"
+                    />
+                    <button id="live-corner-jaw-y-auto" class="panel-mini-btn" data-no-drag="true">
+                      Auto
+                    </button>
                   </div>
                 </div>
 
                 <div class="slider-group">
                   <label for="live-corner-pocket-capture">
-                    Corner Pocket Capture Radius: <span id="live-corner-pocket-capture-val">2.50</span>
+                    Corner Pocket Capture Radius:
+                    <span id="live-corner-pocket-capture-val">2.50</span>
                   </label>
-                  <input type="range" id="live-corner-pocket-capture" min="1.5" max="4.0" step="0.05" value="2.5" />
+                  <input
+                    type="range"
+                    id="live-corner-pocket-capture"
+                    min="1.5"
+                    max="4.0"
+                    step="0.05"
+                    value="2.5"
+                  />
                 </div>
 
                 <div class="slider-group">
                   <label for="live-side-pocket-capture">
                     Side Pocket Capture Radius: <span id="live-side-pocket-capture-val">2.50</span>
                   </label>
-                  <input type="range" id="live-side-pocket-capture" min="1.5" max="4.0" step="0.05" value="2.5" />
+                  <input
+                    type="range"
+                    id="live-side-pocket-capture"
+                    min="1.5"
+                    max="4.0"
+                    step="0.05"
+                    value="2.5"
+                  />
                 </div>
 
                 <div class="slider-group">
                   <label for="live-corner-pocket-visual">
-                    Corner Pocket Visual Radius: <span id="live-corner-pocket-visual-val">2.50</span>
+                    Corner Pocket Visual Radius:
+                    <span id="live-corner-pocket-visual-val">2.50</span>
                   </label>
-                  <input type="range" id="live-corner-pocket-visual" min="1.5" max="4.0" step="0.05" value="2.5" />
+                  <input
+                    type="range"
+                    id="live-corner-pocket-visual"
+                    min="1.5"
+                    max="4.0"
+                    step="0.05"
+                    value="2.5"
+                  />
                 </div>
 
                 <div class="slider-group">
                   <label for="live-side-pocket-visual">
                     Side Pocket Visual Radius: <span id="live-side-pocket-visual-val">2.50</span>
                   </label>
-                  <input type="range" id="live-side-pocket-visual" min="1.5" max="4.0" step="0.05" value="2.5" />
+                  <input
+                    type="range"
+                    id="live-side-pocket-visual"
+                    min="1.5"
+                    max="4.0"
+                    step="0.05"
+                    value="2.5"
+                  />
                 </div>
 
                 <div class="slider-group">
                   <label for="live-pocket-shelf-depth">
                     Pocket Shelf Depth: <span id="live-pocket-shelf-depth-val">0.50</span>
                   </label>
-                  <input type="range" id="live-pocket-shelf-depth" min="0" max="3" step="0.05" value="0.5" />
+                  <input
+                    type="range"
+                    id="live-pocket-shelf-depth"
+                    min="0"
+                    max="3"
+                    step="0.05"
+                    value="0.5"
+                  />
                 </div>
 
                 <div class="slider-group">
                   <label for="live-jaw-curve-blend">
                     Jaw Curve Blend: <span id="live-jaw-curve-blend-val">0.00</span>
                   </label>
-                  <input type="range" id="live-jaw-curve-blend" min="0" max="1" step="0.05" value="0" />
+                  <input
+                    type="range"
+                    id="live-jaw-curve-blend"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value="0"
+                  />
                 </div>
 
                 <div class="slider-group">
                   <label for="live-corner-cut-angle">
                     Corner Cut Angle: <span id="live-corner-cut-angle-val">0.0</span>&deg;
                   </label>
-                  <input type="range" id="live-corner-cut-angle" min="-30" max="30" step="0.5" value="0" />
+                  <input
+                    type="range"
+                    id="live-corner-cut-angle"
+                    min="-30"
+                    max="30"
+                    step="0.5"
+                    value="0"
+                  />
                 </div>
 
                 <div class="slider-group">
                   <label for="live-side-cut-angle">
                     Side Cut Angle: <span id="live-side-cut-angle-val">0.0</span>&deg;
                   </label>
-                  <input type="range" id="live-side-cut-angle" min="-30" max="30" step="0.5" value="0" />
+                  <input
+                    type="range"
+                    id="live-side-cut-angle"
+                    min="-30"
+                    max="30"
+                    step="0.5"
+                    value="0"
+                  />
                 </div>
 
                 <div class="slider-group">
                   <label for="live-corner-straight">
                     Corner Straight X: <span id="live-corner-straight-val">48.5</span>
                   </label>
-                  <input type="range" id="live-corner-straight" min="46" max="50" step="0.05" value="48.5" />
+                  <input
+                    type="range"
+                    id="live-corner-straight"
+                    min="46"
+                    max="50"
+                    step="0.05"
+                    value="48.5"
+                  />
                 </div>
 
                 <div class="slider-group">
                   <label for="live-corner-target">
                     Corner Target Y: <span id="live-corner-target-val">21.0</span>
                   </label>
-                  <input type="range" id="live-corner-target" min="18" max="24" step="0.05" value="21" />
+                  <input
+                    type="range"
+                    id="live-corner-target"
+                    min="18"
+                    max="24"
+                    step="0.05"
+                    value="21"
+                  />
                 </div>
 
                 <div class="slider-group">
@@ -322,14 +489,28 @@
                   <label for="live-rail-thickness-inner">
                     Rail Thickness (Inner): <span id="live-rail-thickness-inner-val">0.2</span>
                   </label>
-                  <input type="range" id="live-rail-thickness-inner" min="0.05" max="1" step="0.01" value="0.2" />
+                  <input
+                    type="range"
+                    id="live-rail-thickness-inner"
+                    min="0.05"
+                    max="1"
+                    step="0.01"
+                    value="0.2"
+                  />
                 </div>
 
                 <div class="slider-group">
                   <label for="live-rail-thickness-outer">
                     Rail Thickness (Outer): <span id="live-rail-thickness-outer-val">0.2</span>
                   </label>
-                  <input type="range" id="live-rail-thickness-outer" min="0.05" max="1" step="0.01" value="0.2" />
+                  <input
+                    type="range"
+                    id="live-rail-thickness-outer"
+                    min="0.05"
+                    max="1"
+                    step="0.01"
+                    value="0.2"
+                  />
                 </div>
 
                 <div class="panel-actions">
@@ -391,31 +572,80 @@
                   <div class="panel-order-list">
                     <label class="panel-order-row" for="order-table">
                       <span>Table</span>
-                      <input id="order-table" type="number" value="0" step="1" min="-1000" max="2000" />
+                      <input
+                        id="order-table"
+                        type="number"
+                        value="0"
+                        step="1"
+                        min="-1000"
+                        max="2000"
+                      />
                     </label>
                     <label class="panel-order-row" for="order-frame">
                       <span>Frame</span>
-                      <input id="order-frame" type="number" value="1" step="1" min="-1000" max="2000" />
+                      <input
+                        id="order-frame"
+                        type="number"
+                        value="1"
+                        step="1"
+                        min="-1000"
+                        max="2000"
+                      />
                     </label>
                     <label class="panel-order-row" for="order-rails">
                       <span>Rails</span>
-                      <input id="order-rails" type="number" value="2" step="1" min="-1000" max="2000" />
+                      <input
+                        id="order-rails"
+                        type="number"
+                        value="2"
+                        step="1"
+                        min="-1000"
+                        max="2000"
+                      />
                     </label>
                     <label class="panel-order-row" for="order-pockets">
                       <span>Pockets</span>
-                      <input id="order-pockets" type="number" value="3" step="1" min="-1000" max="2000" />
+                      <input
+                        id="order-pockets"
+                        type="number"
+                        value="3"
+                        step="1"
+                        min="-1000"
+                        max="2000"
+                      />
                     </label>
                     <label class="panel-order-row" for="order-caps">
                       <span>Caps</span>
-                      <input id="order-caps" type="number" value="4" step="1" min="-1000" max="2000" />
+                      <input
+                        id="order-caps"
+                        type="number"
+                        value="4"
+                        step="1"
+                        min="-1000"
+                        max="2000"
+                      />
                     </label>
                     <label class="panel-order-row" for="order-balls">
                       <span>Balls</span>
-                      <input id="order-balls" type="number" value="5" step="1" min="-1000" max="2000" />
+                      <input
+                        id="order-balls"
+                        type="number"
+                        value="5"
+                        step="1"
+                        min="-1000"
+                        max="2000"
+                      />
                     </label>
                     <label class="panel-order-row" for="order-ui">
                       <span>UI Overlay</span>
-                      <input id="order-ui" type="number" value="6" step="1" min="-1000" max="2000" />
+                      <input
+                        id="order-ui"
+                        type="number"
+                        value="6"
+                        step="1"
+                        min="-1000"
+                        max="2000"
+                      />
                     </label>
                   </div>
                 </div>
@@ -427,35 +657,84 @@
                       <span class="slider-title">Ambient Light</span>
                       <span class="slider-value" id="lighting-ambient-value">1.10</span>
                     </label>
-                    <input type="range" id="lighting-ambient" min="0" max="3" step="0.05" value="1.1" />
+                    <input
+                      type="range"
+                      id="lighting-ambient"
+                      min="0"
+                      max="3"
+                      step="0.05"
+                      value="1.1"
+                    />
                   </div>
                   <div class="slider-group">
                     <label class="slider-label" for="lighting-directional">
                       <span class="slider-title">Key Light</span>
                       <span class="slider-value" id="lighting-directional-value">1.60</span>
                     </label>
-                    <input type="range" id="lighting-directional" min="0" max="3" step="0.05" value="1.6" />
+                    <input
+                      type="range"
+                      id="lighting-directional"
+                      min="0"
+                      max="3"
+                      step="0.05"
+                      value="1.6"
+                    />
                   </div>
                   <div class="slider-group">
                     <label class="slider-label" for="lighting-accent">
                       <span class="slider-title">Accent Spot</span>
                       <span class="slider-value" id="lighting-accent-value">0.50</span>
                     </label>
-                    <input type="range" id="lighting-accent" min="0" max="3" step="0.05" value="0.5" />
+                    <input
+                      type="range"
+                      id="lighting-accent"
+                      min="0"
+                      max="3"
+                      step="0.05"
+                      value="0.5"
+                    />
                   </div>
                   <div class="slider-group">
                     <label class="slider-label" for="lighting-rail-highlight">
-                      <span class="slider-title">Rail/Pocket Highlight</span>
-                      <span class="slider-value" id="lighting-rail-highlight-value">0.60</span>
+                      <span class="slider-title">Rail Highlight</span>
+                      <span class="slider-value" id="lighting-rail-highlight-value">0.90</span>
                     </label>
-                    <input type="range" id="lighting-rail-highlight" min="0" max="1.5" step="0.05" value="0.6" />
+                    <input
+                      type="range"
+                      id="lighting-rail-highlight"
+                      min="0"
+                      max="1.5"
+                      step="0.05"
+                      value="0.9"
+                    />
+                  </div>
+                  <div class="slider-group">
+                    <label class="slider-label" for="lighting-pocket-highlight">
+                      <span class="slider-title">Pocket Highlight</span>
+                      <span class="slider-value" id="lighting-pocket-highlight-value">0.55</span>
+                    </label>
+                    <input
+                      type="range"
+                      id="lighting-pocket-highlight"
+                      min="0"
+                      max="1.5"
+                      step="0.05"
+                      value="0.55"
+                    />
                   </div>
                   <div class="slider-group">
                     <label class="slider-label" for="lighting-pocket-shadow">
                       <span class="slider-title">Pocket Shadow</span>
                       <span class="slider-value" id="lighting-pocket-shadow-value">0.45</span>
                     </label>
-                    <input type="range" id="lighting-pocket-shadow" min="0" max="1.5" step="0.05" value="0.45" />
+                    <input
+                      type="range"
+                      id="lighting-pocket-shadow"
+                      min="0"
+                      max="1.5"
+                      step="0.05"
+                      value="0.45"
+                    />
                   </div>
                 </div>
 

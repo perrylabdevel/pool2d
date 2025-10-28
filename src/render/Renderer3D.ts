@@ -321,8 +321,10 @@ export class Renderer3D {
     this.railHighlightMeshes.forEach((mesh) => {
       this.scene.remove(mesh);
       mesh.geometry.dispose();
+      // Don't dispose material here - it's shared, we'll dispose it once below
     });
     this.railHighlightMeshes = [];
+    // Dispose shared rail highlight materials once
     if (this.railHighlightTexture) {
       this.railHighlightTexture.dispose();
       this.railHighlightTexture = null;
@@ -984,6 +986,9 @@ export class Renderer3D {
     rightMesh.position.set(innerX + verticalWidth / 2, 0, 0);
     group.add(rightMesh);
 
+    // Add depth effects to frame planks
+    this.addFrameDepthEffects(group, innerX, innerY, outerX, outerY, frameWidth);
+
     group.position.z = 0;
     group.visible = this.layerVisibility.showFrame;
     this.frameMesh = group;
@@ -995,6 +1000,157 @@ export class Renderer3D {
         mesh.castShadow = true;
         mesh.receiveShadow = true;
       }
+    });
+  }
+
+  private addFrameDepthEffects(
+    group: THREE.Group,
+    innerX: number,
+    innerY: number,
+    outerX: number,
+    outerY: number,
+    frameWidth: number
+  ) {
+    const bevelWidth = Math.min(frameWidth * 0.35, 1.0); // Width of bevel effect
+    const zOffset = 0.38; // Just above frame surface (frame depth/2 = 0.75/2 = 0.375)
+
+    // Calculate dimensions for each plank (excluding corners to avoid overlap)
+    const horizontalPlankWidth = (innerX * 2); // Width of just the horizontal section (between vertical planks)
+    const verticalPlankHeight = (innerY * 2); // Height of just the vertical section (between horizontal planks)
+
+    // Inner shadow (dark edge along inner perimeter - creates recessed look)
+    // Gradient goes from dark (at inner edge) to transparent (outward)
+    
+    // Top plank: inner shadow on bottom edge (facing play area) - only horizontal section
+    const topInnerShadow = new THREE.Mesh(
+      new THREE.PlaneGeometry(horizontalPlankWidth, bevelWidth),
+      this.getFrameInnerShadowMaterial()
+    );
+    topInnerShadow.position.set(0, innerY + bevelWidth / 2, zOffset);
+    group.add(topInnerShadow);
+
+    // Bottom plank: inner shadow on top edge (facing play area) - only horizontal section
+    const bottomInnerShadow = new THREE.Mesh(
+      new THREE.PlaneGeometry(horizontalPlankWidth, bevelWidth),
+      this.getFrameInnerShadowMaterial()
+    );
+    bottomInnerShadow.position.set(0, -(innerY + bevelWidth / 2), zOffset);
+    bottomInnerShadow.rotation.z = Math.PI; // Flip to point inward
+    group.add(bottomInnerShadow);
+
+    // Left plank: inner shadow on right edge (facing play area) - only vertical section
+    const leftInnerShadow = new THREE.Mesh(
+      new THREE.PlaneGeometry(verticalPlankHeight, bevelWidth),
+      this.getFrameInnerShadowMaterial()
+    );
+    leftInnerShadow.position.set(-(innerX + bevelWidth / 2), 0, zOffset);
+    leftInnerShadow.rotation.z = Math.PI / 2; // Rotate to vertical, gradient points right
+    group.add(leftInnerShadow);
+
+    // Right plank: inner shadow on left edge (facing play area) - only vertical section
+    const rightInnerShadow = new THREE.Mesh(
+      new THREE.PlaneGeometry(verticalPlankHeight, bevelWidth),
+      this.getFrameInnerShadowMaterial()
+    );
+    rightInnerShadow.position.set(innerX + bevelWidth / 2, 0, zOffset);
+    rightInnerShadow.rotation.z = -Math.PI / 2; // Rotate to vertical, gradient points left
+    group.add(rightInnerShadow);
+
+    // Outer highlight (bright edge along outer perimeter - creates raised/beveled look)
+    // Gradient goes from transparent (inside) to bright (at outer edge)
+    
+    // Top plank: outer highlight on top edge (away from play area) - full width
+    const topOuterHighlight = new THREE.Mesh(
+      new THREE.PlaneGeometry(outerX * 2, bevelWidth),
+      this.getFrameOuterHighlightMaterial()
+    );
+    topOuterHighlight.position.set(0, outerY - bevelWidth / 2, zOffset);
+    topOuterHighlight.rotation.z = Math.PI; // Flip so gradient points outward
+    group.add(topOuterHighlight);
+
+    // Bottom plank: outer highlight on bottom edge (away from play area) - full width
+    const bottomOuterHighlight = new THREE.Mesh(
+      new THREE.PlaneGeometry(outerX * 2, bevelWidth),
+      this.getFrameOuterHighlightMaterial()
+    );
+    bottomOuterHighlight.position.set(0, -(outerY - bevelWidth / 2), zOffset);
+    // No rotation needed - gradient already points down
+    group.add(bottomOuterHighlight);
+
+    // Left plank: outer highlight on left edge (away from play area) - only vertical section
+    const leftOuterHighlight = new THREE.Mesh(
+      new THREE.PlaneGeometry(verticalPlankHeight + (frameWidth * 2), bevelWidth),
+      this.getFrameOuterHighlightMaterial()
+    );
+    leftOuterHighlight.position.set(-(outerX - bevelWidth / 2), 0, zOffset);
+    leftOuterHighlight.rotation.z = -Math.PI / 2; // Rotate to vertical, gradient points left (outward)
+    group.add(leftOuterHighlight);
+
+    // Right plank: outer highlight on right edge (away from play area) - only vertical section
+    const rightOuterHighlight = new THREE.Mesh(
+      new THREE.PlaneGeometry(verticalPlankHeight + (frameWidth * 2), bevelWidth),
+      this.getFrameOuterHighlightMaterial()
+    );
+    rightOuterHighlight.position.set(outerX - bevelWidth / 2, 0, zOffset);
+    rightOuterHighlight.rotation.z = Math.PI / 2; // Rotate to vertical, gradient points right (outward)
+    group.add(rightOuterHighlight);
+  }
+
+  private getFrameInnerShadowMaterial(): THREE.MeshBasicMaterial {
+    // Create gradient texture for inner shadow (dark at one edge, fades to transparent)
+    // Make it vertical so gradient goes across the height of the plane
+    const canvas = document.createElement('canvas');
+    canvas.width = 1;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d')!;
+    
+    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    gradient.addColorStop(0, 'rgba(0, 0, 0, 0.6)'); // Dark at bottom (inner edge)
+    gradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.3)');
+    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)'); // Fade to transparent at top (outer edge)
+    
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true;
+    
+    return new THREE.MeshBasicMaterial({
+      map: texture,
+      transparent: true,
+      blending: THREE.MultiplyBlending,
+      depthTest: true,
+      depthWrite: false,
+      opacity: 0.7,
+    });
+  }
+
+  private getFrameOuterHighlightMaterial(): THREE.MeshBasicMaterial {
+    // Create gradient texture for outer highlight (bright at one edge, fades inward)
+    // Make it vertical so gradient goes across the height of the plane
+    const canvas = document.createElement('canvas');
+    canvas.width = 1;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d')!;
+    
+    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    gradient.addColorStop(0, 'rgba(255, 255, 255, 0)'); // Transparent at bottom (inner side)
+    gradient.addColorStop(0.5, 'rgba(200, 180, 150, 0.15)'); // Subtle warm highlight
+    gradient.addColorStop(1, 'rgba(255, 235, 200, 0.3)'); // Brighter at top (outer edge)
+    
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true;
+    
+    return new THREE.MeshBasicMaterial({
+      map: texture,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthTest: true,
+      depthWrite: false,
+      opacity: 0.5,
     });
   }
 
@@ -1018,7 +1174,7 @@ export class Renderer3D {
     if (this.railHighlightMaterial && this.railHighlightTexture) {
       return this.railHighlightMaterial;
     }
-    const sizeX = 32;
+    const sizeX = 64;
     const sizeY = 256;
     const canvas = document.createElement('canvas');
     canvas.width = sizeX;
@@ -1027,10 +1183,14 @@ export class Renderer3D {
     if (!ctx) {
       throw new Error('Renderer3D: rail highlight texture context missing');
     }
+    
+    // Enhanced gradient with more prominent highlight (similar to pocket highlights)
     const gradient = ctx.createLinearGradient(0, 0, 0, sizeY);
-    gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
-    gradient.addColorStop(0.4, 'rgba(255, 255, 255, 0.35)');
-    gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    gradient.addColorStop(0, 'rgba(255, 255, 255, 1.0)');    // Bright white at top
+    gradient.addColorStop(0.15, 'rgba(255, 255, 255, 0.85)'); // Strong highlight
+    gradient.addColorStop(0.35, 'rgba(255, 255, 255, 0.5)');  // Medium glow
+    gradient.addColorStop(0.6, 'rgba(255, 255, 255, 0.2)');   // Soft falloff
+    gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');       // Fade to transparent
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, sizeX, sizeY);
 
@@ -1045,9 +1205,9 @@ export class Renderer3D {
       map: texture,
       transparent: true,
       blending: THREE.AdditiveBlending,
-      depthTest: true,
+      depthTest: true, // Re-enabled to respect depth ordering
       depthWrite: false,
-      opacity: CONFIG.RAIL_HIGHLIGHT_INTENSITY ?? 0.6,
+      opacity: CONFIG.RAIL_HIGHLIGHT_INTENSITY ?? 0.9,
       side: THREE.DoubleSide,
     });
     return this.railHighlightMaterial;
@@ -1154,9 +1314,11 @@ export class Renderer3D {
     if (!ctx) {
       throw new Error('Renderer3D: pocket shadow texture context missing');
     }
-    const gradient = ctx.createRadialGradient(size / 2, size / 2, size * 0.15, size / 2, size / 2, size / 2);
-    gradient.addColorStop(0, 'rgba(0, 0, 0, 0.45)');
-    gradient.addColorStop(0.6, 'rgba(0, 0, 0, 0.1)');
+    // Enhanced shadow gradient for more pronounced depth
+    const gradient = ctx.createRadialGradient(size / 2, size / 2, size * 0.1, size / 2, size / 2, size / 2);
+    gradient.addColorStop(0, 'rgba(0, 0, 0, 0.75)');   // Darker center (was 0.45)
+    gradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.35)'); // Darker mid-section
+    gradient.addColorStop(0.8, 'rgba(0, 0, 0, 0.15)'); // Gradual falloff
     gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, size, size);
@@ -1224,16 +1386,45 @@ export class Renderer3D {
       this.scene.add(railMesh);
       this.railMeshes.push(railMesh);
 
-      const highlightMaterial = this.getRailHighlightMaterial();
-      const highlightWidth = Math.max(0.2, totalWidth * 0.35);
+      // Highlight on top surface of rail
+      const highlightMaterial = this.getRailHighlightMaterial(); // Share material (don't clone) so slider can control all
+      const highlightWidth = Math.max(0.3, totalWidth * 0.55); // Wider highlight (was 0.35)
       const highlightGeometry = new THREE.PlaneGeometry(length, highlightWidth);
       const highlightMesh = new THREE.Mesh(highlightGeometry, highlightMaterial);
-      highlightMesh.position.set(railMesh.position.x, railMesh.position.y, railMesh.position.z + 0.12);
+      // Rails are at Z=-0.25 with height 0.5, so top is at 0. Place highlight just above at 0.01
+      highlightMesh.position.set(railMesh.position.x, railMesh.position.y, 0.01);
       highlightMesh.rotation.z = angle;
       highlightMesh.visible = this.layerVisibility.showRails;
-      highlightMesh.renderOrder = this.layerOrder.orderRails + 0.1;
+      highlightMesh.renderOrder = this.layerOrder.orderRails + 0.5; // Higher render order
       this.scene.add(highlightMesh);
       this.railHighlightMeshes.push(highlightMesh);
+
+      // Add subtle shadow along inner edge for depth
+      const shadowWidth = totalWidth * 0.25;
+      const shadowGeometry = new THREE.PlaneGeometry(length, shadowWidth);
+      const shadowMaterial = new THREE.MeshBasicMaterial({
+        color: 0x000000,
+        transparent: true,
+        opacity: 0.15,
+        blending: THREE.MultiplyBlending,
+        depthTest: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+      const shadowMesh = new THREE.Mesh(shadowGeometry, shadowMaterial);
+      // Position shadow on inner edge (toward felt) for depth
+      const shadowOffset = (totalWidth * 0.3) * (nx * -1); // Toward felt side
+      const shadowOffsetY = (totalWidth * 0.3) * (ny * -1);
+      shadowMesh.position.set(
+        railMesh.position.x + shadowOffset,
+        railMesh.position.y + shadowOffsetY,
+        railMesh.position.z + 0.15
+      );
+      shadowMesh.rotation.z = angle;
+      shadowMesh.visible = this.layerVisibility.showRails;
+      shadowMesh.renderOrder = this.layerOrder.orderRails + 0.05;
+      this.scene.add(shadowMesh);
+      this.railHighlightMeshes.push(shadowMesh);
     });
   }
   
@@ -1242,8 +1433,8 @@ export class Renderer3D {
 
     pockets.forEach((pocket) => {
       const visualRadius = pocket.visualRadius ?? pocket.radius;
-      const wallTaperRadius = visualRadius * 0.85;
-      const shelfDepth = Math.max(0.1, pocket.shelfDepth ?? CONFIG.POCKET_SHELF_DEPTH_IN);
+      const wallTaperRadius = visualRadius * 0.75; // Increased taper for more depth (was 0.85)
+      const shelfDepth = Math.max(0.1, pocket.shelfDepth ?? CONFIG.POCKET_SHELF_DEPTH_IN) * 1.5; // 50% deeper
       const angleRad = THREE.MathUtils.degToRad(pocket.cutAngleDeg ?? 0);
       const pocketGeometry = new THREE.CylinderGeometry(
         visualRadius,
@@ -1276,7 +1467,7 @@ export class Renderer3D {
         depthWrite: false,
       });
       const bottomMesh = new THREE.Mesh(bottomGeometry, bottomMaterial);
-      bottomMesh.position.set(pocket.center.x, pocket.center.y, 0.15);
+      bottomMesh.position.set(pocket.center.x, pocket.center.y, 0.05); // Lower for more depth (was 0.15)
       bottomMesh.rotation.z = angleRad;
       bottomMesh.renderOrder = this.layerOrder.orderTable + 5;
       bottomMesh.visible = this.layerVisibility.showPockets;
@@ -1493,7 +1684,7 @@ export class Renderer3D {
   private getPocketSideMaterial(): THREE.MeshBasicMaterial {
     if (!this.pocketSideMaterial) {
       this.pocketSideMaterial = new THREE.MeshBasicMaterial({
-        color: 0x151515,
+        color: 0x0a0a0a, // Darker walls for more depth (was 0x151515)
         depthTest: true,
         depthWrite: false,
         side: THREE.DoubleSide,
@@ -1535,12 +1726,13 @@ export class Renderer3D {
     const center = size / 2;
     const radius = size / 2;
     
-    // Main radial gradient from center to edge of canvas
+    // Enhanced radial gradient with darker center for more depth
     const gradient = ctx.createRadialGradient(center, center, 0, center, center, radius);
-    gradient.addColorStop(0, 'rgba(120, 120, 120, 0.95)');
-    gradient.addColorStop(0.4, 'rgba(70, 70, 70, 0.9)');
-    gradient.addColorStop(0.75, 'rgba(30, 30, 30, 0.7)');
-    gradient.addColorStop(1, 'rgba(5, 5, 5, 0.2)');
+    gradient.addColorStop(0, 'rgba(5, 5, 5, 1.0)');      // Much darker center (near black)
+    gradient.addColorStop(0.2, 'rgba(15, 15, 15, 0.98)'); // Very dark inner area
+    gradient.addColorStop(0.5, 'rgba(40, 40, 40, 0.9)');  // Dark middle
+    gradient.addColorStop(0.75, 'rgba(70, 70, 70, 0.75)'); // Lighter toward edge
+    gradient.addColorStop(1, 'rgba(90, 90, 90, 0.3)');    // Fade out at edge
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, size, size);
 
