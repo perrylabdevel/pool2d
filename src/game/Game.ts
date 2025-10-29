@@ -51,6 +51,7 @@ export class Game {
   predictor: Predictor;
   mode: GameMode;
   private lastBallScale: number;
+  private _lastCanvasScale?: number;
   
   // Game loop
   accumulator: number = 0;
@@ -201,14 +202,24 @@ export class Game {
       this.debug.resize(detail.width, detail.height, detail.scale, detail.offsetX, detail.offsetY);
     });
     window.addEventListener('settings:render-changed', (event) => {
-      const detail = (event as CustomEvent<{ settings?: { ballScale?: number } }>).detail;
-      const newScale = detail?.settings?.ballScale ?? CONFIG.BALL_SCALE ?? 1;
-      if (Math.abs(newScale - this.lastBallScale) > 1e-4) {
-        this.lastBallScale = newScale;
+      const detail = (event as CustomEvent<{ settings?: { ballScale?: number; canvasScale?: number } }>).detail;
+      const newBallScale = detail?.settings?.ballScale ?? CONFIG.BALL_SCALE ?? 1;
+      const newCanvasScale = detail?.settings?.canvasScale ?? CONFIG.CANVAS_SCALE_MULTIPLIER ?? 1;
+
+      // If ball visual scale changes, physics radius changes — restart world/renderer
+      if (Math.abs(newBallScale - this.lastBallScale) > 1e-4) {
+        this.lastBallScale = newBallScale;
         this.restart();
         return;
       }
-      this.resize();
+
+      // Only resize if canvas scale actually changed; color/intensity changes should not trigger a resize
+      this._lastCanvasScale = this._lastCanvasScale ?? (CONFIG.CANVAS_SCALE_MULTIPLIER ?? 1);
+      if (Math.abs(newCanvasScale - this._lastCanvasScale) > 1e-4) {
+        this._lastCanvasScale = newCanvasScale;
+        this.resize();
+      }
+      // No action for pure color/intensity/layer changes
     });
     
     // Instant geometry apply: rebuild world and renderer without full reload

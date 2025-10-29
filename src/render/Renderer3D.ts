@@ -139,6 +139,9 @@ export class Renderer3D {
   private pocketGradientTexture: THREE.CanvasTexture | null = null;
   private pocketCapMaterial: THREE.MeshBasicMaterial | null = null;
   private pocketSideMaterial: THREE.MeshBasicMaterial | null = null;
+  
+  // Resize reentrancy guard
+  private _isResizing: boolean = false;
 
   // UI elements
   cueStick: THREE.Mesh | null = null;
@@ -659,6 +662,8 @@ export class Renderer3D {
   }
   
   resize() {
+    if (this._isResizing) return;
+    this._isResizing = true;
     const stage = this.canvas.closest('#canvas-stage') as HTMLElement | null;
     const container = (this.canvas.parentElement as HTMLElement | null) ?? stage ?? this.canvas;
     const measurementElement = stage ?? container;
@@ -772,6 +777,7 @@ export class Renderer3D {
     this.camera.top = halfWorldH;
     this.camera.bottom = -halfWorldH;
     this.camera.updateProjectionMatrix();
+    this._isResizing = false;
   }
 
   private observeLayoutChanges() {
