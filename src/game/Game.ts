@@ -340,6 +340,21 @@ export class Game {
     }
     this.initializeGame();
   }
+
+  private respawnCueBall() {
+    if (!this.cueBall) return;
+
+    this.cueBall.pocketed = false;
+    this.cueBall.sleeping = true;
+    this.cueBall.vx = 0;
+    this.cueBall.vy = 0;
+    this.cueBall.angularVelocity = 0;
+    this.cueBall.angle = 0;
+    this.cueBall.x = CUE_BALL_POSITION.x;
+    this.cueBall.y = CUE_BALL_POSITION.y;
+    this.cueBall.prevX = this.cueBall.x;
+    this.cueBall.prevY = this.cueBall.y;
+  }
   
   resize() {
     this.renderer.resize();
@@ -416,6 +431,10 @@ export class Game {
       
       if (this.mode === GameMode.EIGHT_BALL) {
         this.rules.endShot(this.world.balls);
+      }
+
+      if (this.cueBall && this.cueBall.pocketed) {
+        this.respawnCueBall();
       }
     }
   }

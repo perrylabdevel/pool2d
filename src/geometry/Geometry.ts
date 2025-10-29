@@ -304,15 +304,6 @@ export function getTableGeometry(): TableGeometry {
   const innerOverride = CONFIG.SIDE_JAW_INNER_OVERRIDE_IN;
   const JAW_X_INNER = clamp(innerOverride ?? throatWidthOverride ?? derivedInner, 0.5, JAW_X_OUTER - 0.25);
 
-  const cornerJawXRaw = deriveCornerJawX(
-    cornerFrameOffset,
-    CONFIG.CORNER_JAW_REF_RADIUS_IN,
-    sideStraight
-  );
-  const cornerJawXDerived = clamp(cornerJawXRaw, 1, cornerStraight - 0.25);
-  const cornerJawXOverride = CONFIG.CORNER_JAW_X_OVERRIDE_IN;
-  const CORNER_JAW_X = clamp(cornerJawXOverride ?? cornerJawXDerived, 1, cornerStraight - 0.25);
-
   const cornerJawYRaw = deriveCornerJawY(
     cornerFrameOffset,
     CONFIG.CORNER_JAW_REF_RADIUS_IN,
@@ -329,6 +320,14 @@ export function getTableGeometry(): TableGeometry {
     1,
     sideStraight - 0.25
   );
+  const cornerJawXRaw = deriveCornerJawX(
+    cornerFrameOffset,
+    CONFIG.CORNER_JAW_REF_RADIUS_IN,
+    sideStraight
+  );
+  const cornerJawXDerived = clamp(cornerJawXRaw, 1, cornerStraight - 0.25);
+  const cornerJawXOverride = CONFIG.CORNER_JAW_X_OVERRIDE_IN;
+  const CORNER_JAW_X = clamp(cornerJawXOverride ?? cornerJawXDerived, 1, cornerStraight - 0.25);
 
   const Y_N_STRAIGHT = sideStraight;
   const Y_S_STRAIGHT = -sideStraight;

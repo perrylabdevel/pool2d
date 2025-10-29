@@ -272,7 +272,7 @@ export class GeometryPanel {
       'live-side-throat-width-val',
       'live-side-throat-width-auto',
       'SIDE_THROAT_WIDTH_IN',
-      (value) => Math.max(1, Math.min(8, value))
+      (value) => Math.max(1, Math.min(30, value))
     );
 
     initNullableSlider(
@@ -280,7 +280,7 @@ export class GeometryPanel {
       'live-corner-throat-width-val',
       'live-corner-throat-width-auto',
       'CORNER_THROAT_WIDTH_IN',
-      (value) => Math.max(1, Math.min(8, value))
+      (value) => Math.max(2, Math.min(50, value))
     );
 
     const initSimpleSlider = (
@@ -493,8 +493,8 @@ export class GeometryPanel {
       }
     };
 
-    setNullableSlider('live-side-throat-width', settings.SIDE_THROAT_WIDTH_IN, 2, (v) => Math.max(1, Math.min(8, v)));
-    setNullableSlider('live-corner-throat-width', settings.CORNER_THROAT_WIDTH_IN, 2, (v) => Math.max(1, Math.min(8, v)));
+    setNullableSlider('live-side-throat-width', settings.SIDE_THROAT_WIDTH_IN, 2, (v) => Math.max(1, Math.min(30, v)));
+    setNullableSlider('live-corner-throat-width', settings.CORNER_THROAT_WIDTH_IN, 2, (v) => Math.max(2, Math.min(50, v)));
 
     const setSimpleSlider = (
       sliderId: string,
