@@ -44,7 +44,14 @@ export const CONFIG = {
   AIM_LINE_LENGTH: 20,
   GHOST_LINE_LENGTH: 30,
   FINE_AIM_SENSITIVITY: 0.1,
-  
+
+  // Debug and diagnostics
+  DEBUG_BIH_LOG: false, // Verbose console logs for ball-in-hand clamping and drag
+
+  // Ball-in-hand placement
+  BALL_IN_HAND_POCKET_MARGIN_IN: 0.1, // Extra clearance outside pocket capture radius while dragging
+  BALL_IN_HAND_ITERATIONS: 7, // Iterations for constraint resolve against rails/endpoints/pockets
+
   // Aim assist visual settings
   AIM_LINE_OFFSET: 0.2, // Distance from cue ball edge to aim line start
   GHOST_BALL_OFFSET: 0.0, // Offset of ghost ball from contact point (negative = toward cue)
@@ -54,9 +61,14 @@ export const CONFIG = {
   CANVAS_SCALE: 8, // Pixels per game unit
   CANVAS_SCALE_MULTIPLIER: 1,
   BALL_SCALE: 1,
+  // Optional extra world padding to guarantee cue visibility around table
+  CUE_VISUAL_PADDING_IN: 0, // additional inches beyond computed cue reach
   AMBIENT_INTENSITY: 1.1,
   DIRECTIONAL_INTENSITY: 1.6,
   ACCENT_INTENSITY: 0.5,
+
+  // Cue visuals
+  CUE_LENGTH_IN: 20,
   RAIL_HIGHLIGHT_INTENSITY: 0.9, // Rail cushion highlight intensity
   POCKET_HIGHLIGHT_INTENSITY: 0.55, // Pocket highlight intensity (separate from rail)
   POCKET_SHADOW_INTENSITY: 0.45,

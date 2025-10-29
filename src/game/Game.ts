@@ -8,6 +8,7 @@ import { DebugDraw } from '../debug/DebugDraw';
 import { HUD } from '../ui/HUD';
 import { CONFIG, CUE_BALL_POSITION, RACK_POSITIONS } from '../config';
 import { getTableGeometry } from '../geometry/Geometry';
+import { clampBallInHand } from '../geometry/Placement';
 import { EightBallRules } from '../rules/EightBall';
 import { physicsRecorder } from '../debug/PhysicsRecorder';
 import { Predictor } from '../physics/Prediction';
@@ -192,6 +193,13 @@ export class Game {
   
   setupEventListeners() {
     window.addEventListener('resize', () => this.resize());
+    window.addEventListener('renderer:resized', (event: Event) => {
+      const detail = (event as CustomEvent<{ width: number; height: number; scale: number; offsetX: number; offsetY: number }>).detail;
+      if (!detail) return;
+      // Keep input and debug overlay aligned with renderer canvas
+      this.input.updateScale(detail.scale);
+      this.debug.resize(detail.width, detail.height, detail.scale, detail.offsetX, detail.offsetY);
+    });
     window.addEventListener('settings:render-changed', (event) => {
       const detail = (event as CustomEvent<{ settings?: { ballScale?: number } }>).detail;
       const newScale = detail?.settings?.ballScale ?? CONFIG.BALL_SCALE ?? 1;
@@ -222,6 +230,26 @@ export class Game {
       if ((e.key === 'o' || e.key === 'O') && e.shiftKey) {
         e.preventDefault();
         this.renderLayersPanel.toggleReferenceOverlay();
+      }
+      if (e.key === 'b' || e.key === 'B') {
+        // Toggle ball-in-hand overlay (enables debug overlay if needed)
+        const next = !this.debug.isBallInHandOverlayEnabled();
+        this.debug.setBallInHandOverlayEnabled(next);
+      }
+      if (e.key === 'l' || e.key === 'L') {
+        // Toggle verbose BIH console logging at runtime via a global flag
+        const w: any = (typeof window !== 'undefined') ? window : {};
+        w.__BIH_LOG__ = !w.__BIH_LOG__;
+        if (w.__BIH_LOG__) {
+          if (!this.debug.isBallInHandOverlayEnabled()) {
+            this.debug.setBallInHandOverlayEnabled(true);
+          }
+          // eslint-disable-next-line no-console
+          console.log('BIH logging ENABLED. Hold SHIFT and drag anywhere to test.');
+        } else {
+          // eslint-disable-next-line no-console
+          console.log('BIH logging disabled.');
+        }
       }
     });
     
@@ -647,20 +675,49 @@ export class Game {
     const mouseX = (screenX - canvasCenterX) / this.renderer.scale;
     const mouseY = -(screenY - canvasCenterY) / this.renderer.scale; // Flip Y
     
-    // Check if clicking on cue ball
+    // Check if clicking on cue ball, or allow free drag when BIH overlay/logging is on
     const dx = mouseX - this.cueBall.x;
     const dy = mouseY - this.cueBall.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    
-    if (dist <= this.cueBall.radius * 1.5) {
+    const allowFreeDrag = CONFIG.DEBUG_BIH_LOG || this.debug.isBallInHandOverlayEnabled();
+
+    if (dist <= this.cueBall.radius * 1.5 || allowFreeDrag) {
       this.isDraggingBall = true;
       this.input.canvas.style.cursor = 'move';
+      // Suppress cue pocketing while dragging
+      this.world.skipCuePocketCheck = true;
+      // If BIH overlay hasn't been enabled explicitly, enable it for this drag session
+      if (!this.debug.isBallInHandOverlayEnabled()) {
+        this.debug.setBallInHandOverlayEnabled(true);
+      }
+      if (allowFreeDrag) {
+        // Immediately place once at start so we can see initial clamp
+        const result = clampBallInHand(
+          { x: mouseX, y: mouseY },
+          this.cueBall.radius,
+          this.world.rails,
+          this.world.pockets,
+          { iterations: CONFIG.BALL_IN_HAND_ITERATIONS, pocketMargin: CONFIG.BALL_IN_HAND_POCKET_MARGIN_IN }
+        );
+        const geom = getTableGeometry();
+        const halfW = (geom.playWidthIn ?? CONFIG.TABLE_WIDTH) / 2;
+        const halfH = (geom.playHeightIn ?? CONFIG.TABLE_HEIGHT) / 2;
+        const margin = this.cueBall.radius;
+        const clampedX = Math.max(-halfW + margin, Math.min(halfW - margin, result.x));
+        const clampedY = Math.max(-halfH + margin, Math.min(halfH - margin, result.y));
+        this.cueBall.x = clampedX;
+        this.cueBall.y = clampedY;
+        if (CONFIG.DEBUG_BIH_LOG) {
+          // eslint-disable-next-line no-console
+          console.log('BIH drag start', { raw: { x: mouseX, y: mouseY }, clamped: { x: clampedX, y: clampedY } });
+        }
+      }
     }
   }
   
   handleBallDrag(e: MouseEvent) {
     if (!this.isDraggingBall || !this.cueBall) return;
-    
+
     // Convert screen coords to game coords (same transform as renderer)
     const rect = this.input.canvas.getBoundingClientRect();
     const canvasCenterX = this.renderer.canvas.width / 2;
@@ -672,20 +729,52 @@ export class Game {
     const mouseX = (screenX - canvasCenterX) / this.renderer.scale;
     const mouseY = -(screenY - canvasCenterY) / this.renderer.scale; // Flip Y
     
-    // Move cue ball to mouse position
-    this.cueBall.x = mouseX;
-    this.cueBall.y = mouseY;
-    
-    // Ensure it stays within table bounds (with margin for ball radius)
+    // If it was flagged pocketed due to a previous step, un-pocket during manual placement
+    // and zero motion so it renders and stays put.
+    if (this.cueBall.pocketed) {
+      this.cueBall.pocketed = false;
+      this.cueBall.vx = 0;
+      this.cueBall.vy = 0;
+      this.cueBall.sleeping = true;
+    }
+
+    // Compute clamped position using authoritative placement helper
+    const result = clampBallInHand(
+      { x: mouseX, y: mouseY },
+      this.cueBall.radius,
+      this.world.rails,
+      this.world.pockets,
+      { iterations: CONFIG.BALL_IN_HAND_ITERATIONS, pocketMargin: CONFIG.BALL_IN_HAND_POCKET_MARGIN_IN }
+    );
+    // Final safety clamp to rectangular play bounds
+    const geom = getTableGeometry();
+    const halfW = (geom.playWidthIn ?? CONFIG.TABLE_WIDTH) / 2;
+    const halfH = (geom.playHeightIn ?? CONFIG.TABLE_HEIGHT) / 2;
     const margin = this.cueBall.radius;
-    this.cueBall.x = Math.max(-50 + margin, Math.min(50 - margin, this.cueBall.x));
-    this.cueBall.y = Math.max(-25 + margin, Math.min(25 - margin, this.cueBall.y));
+    const clampedX = Math.max(-halfW + margin, Math.min(halfW - margin, result.x));
+    const clampedY = Math.max(-halfH + margin, Math.min(halfH - margin, result.y));
+    this.cueBall.x = clampedX;
+    this.cueBall.y = clampedY;
+
+    // Round-trip coordinate check (screen->world->screen)
+    // screenX/screenY defined above; compare with renderer's projection
+    const re = this.renderer.worldToScreen(mouseX, mouseY);
+    const rtErrorPx = Math.hypot(re.x - screenX, re.y - screenY);
+    this.debug.setBallInHandData({ raw: { x: mouseX, y: mouseY }, clamped: { x: clampedX, y: clampedY }, radius: this.cueBall.radius, hits: result.hits.length, rtErrorPx });
+    if (CONFIG.DEBUG_BIH_LOG) {
+      // eslint-disable-next-line no-console
+      console.log('BIH drag', { raw: { x: mouseX, y: mouseY }, clamped: { x: clampedX, y: clampedY }, hits: result.hits.length, rtErrorPx: Number(rtErrorPx.toFixed(2)) });
+    }
   }
+
+  // Push a ball inside the play area defined by rail segments using inward normals.
   
   handleBallDragEnd(_e: MouseEvent) {
     if (this.isDraggingBall) {
       this.isDraggingBall = false;
       this.input.canvas.style.cursor = 'default';
+      // Re-enable pocketing for cue ball
+      this.world.skipCuePocketCheck = false;
     }
   }
 }

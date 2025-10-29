@@ -61,6 +61,8 @@ export class PhysicsWorld {
   balls: Ball[] = [];
   rails: Rail[] = [];
   pockets: Pocket[] = [];
+  // Skip cue ball pocket checks during ball-in-hand dragging
+  skipCuePocketCheck: boolean = false;
   
   constructor() {
     this.initializeRails();
@@ -244,6 +246,8 @@ export class PhysicsWorld {
   checkPockets() {
     this.balls.forEach((ball) => {
       if (ball.pocketed) return;
+      // Skip cue ball pocketing while dragging for stable placement UX
+      if (this.skipCuePocketCheck && ball.id === 0) return;
       
       for (const pocket of this.pockets) {
         if (pocket.contains(ball)) {

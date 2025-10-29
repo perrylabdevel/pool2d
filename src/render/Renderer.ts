@@ -41,7 +41,9 @@ export class Renderer {
     const externalMargin = 40;
     
     // Internal padding within canvas (around table)
-    const internalPadding = 40;
+    // Ensure cue stick is fully visible when the cue ball is near rails
+    const cueReach = (CONFIG.BALL_RADIUS + 25) + (CONFIG.CUE_VISUAL_PADDING_IN ?? 0);
+    const internalPadding = Math.max(40, cueReach);
     
     // Calculate available space for canvas after external margins
     const availableWidth = containerWidth - externalMargin * 2;
@@ -391,13 +393,18 @@ export class Renderer {
     const cueStart = ball.radius + 1;
     const cueLength = 15;
     const cueOffset = (1 - power / CONFIG.CUE_POWER_MAX) * 3;
-    
+
+    // Compute raw endpoints and clamp to play area boundary to avoid clipping at canvas edges
+    const rawNear = { x: x - dx * (cueStart + cueOffset), y: y - dy * (cueStart + cueOffset) };
+    const rawFar = { x: x - dx * (cueStart + cueLength + cueOffset), y: y - dy * (cueStart + cueLength + cueOffset) };
+    const clampedNear = this.clampSegmentToPlayArea({ x, y }, rawNear);
+    const clampedFar = this.clampSegmentToPlayArea({ x, y }, rawFar);
+
     this.ctx.strokeStyle = '#8b4513';
     this.ctx.lineWidth = 0.4;
     this.ctx.beginPath();
-    // Draw cue stick behind the ball (negative direction)
-    this.ctx.moveTo(x - dx * (cueStart + cueOffset), y - dy * (cueStart + cueOffset));
-    this.ctx.lineTo(x - dx * (cueStart + cueLength + cueOffset), y - dy * (cueStart + cueLength + cueOffset));
+    this.ctx.moveTo(clampedNear.x, clampedNear.y);
+    this.ctx.lineTo(clampedFar.x, clampedFar.y);
     this.ctx.stroke();
     
     // Aim line - always stop at contact point (ball or rail) if prediction exists

@@ -693,8 +693,13 @@ export class Renderer3D {
     // External margin around canvas
     const externalMargin = 40;
     
-    // Internal padding within canvas (around table)
-    const internalPadding = 40;
+    // Internal padding within canvas (around table) in PIXELS
+    // Ensure cue stick is fully visible when the cue ball is near rails
+    // Convert cue reach (inches) to pixels using current scale
+    const cueLengthIn = CONFIG.CUE_LENGTH_IN ?? 20; // world inches
+    const cueMaxDistanceIn = (CONFIG.BALL_RADIUS ?? 1.125) + 5; // radius + max backoff (approx)
+    const cueReachWorldIn = cueLengthIn + cueMaxDistanceIn + (CONFIG.CUE_VISUAL_PADDING_IN ?? 0);
+    const internalPadding = Math.max(40, this.scale * cueReachWorldIn);
     
     // Calculate available space for canvas after external margins
     const availableWidth = Math.max(1, horizontalSpace - externalMargin * 2);
@@ -749,15 +754,23 @@ export class Renderer3D {
       this.referenceOverlay.style.height = `${height}px`;
       applyPosition(this.referenceOverlay);
     }
+    // Notify listeners (e.g., DebugDraw overlay) that the renderer resized and moved
+    try {
+      const detail = { width, height, scale: this.scale, offsetX: this.canvasOffsetX, offsetY: this.canvasOffsetY };
+      window.dispatchEvent(new CustomEvent('renderer:resized', { detail }));
+    } catch {}
     this.updateCanvasZIndex();
     
-    // Update camera aspect ratio
-    const aspect = width / height;
-    const frustumSize = CONFIG.TABLE_HEIGHT * 1.2;
-    this.camera.left = -frustumSize * aspect / 2;
-    this.camera.right = frustumSize * aspect / 2;
-    this.camera.top = frustumSize / 2;
-    this.camera.bottom = -frustumSize / 2;
+    // Update orthographic camera to exactly cover table + internal padding in WORLD units
+    // Convert pixel padding to world padding by dividing by scale
+    const padWorldX = internalPadding / Math.max(0.01, this.scale);
+    const padWorldY = internalPadding / Math.max(0.01, this.scale);
+    const halfWorldW = (CONFIG.TABLE_WIDTH / 2) + padWorldX;
+    const halfWorldH = (CONFIG.TABLE_HEIGHT / 2) + padWorldY;
+    this.camera.left = -halfWorldW;
+    this.camera.right = halfWorldW;
+    this.camera.top = halfWorldH;
+    this.camera.bottom = -halfWorldH;
     this.camera.updateProjectionMatrix();
   }
 
@@ -2423,18 +2436,18 @@ export class Renderer3D {
       this.ghostBall = null;
     }
     
-    // Draw cue stick in 2D
-    const cueLength = 20;
+    // Draw cue stick in 2D (clamped to play area so it doesn’t clip off-canvas)
+    const cueLength = CONFIG.CUE_LENGTH_IN ?? 20;
     const cueDistance = ball.radius + 2 + (1 - power / CONFIG.CUE_POWER_MAX) * 3;
-    
-    const cueStartX = ball.x - Math.cos(angle) * cueDistance;
-    const cueStartY = ball.y - Math.sin(angle) * cueDistance;
-    const cueEndX = ball.x - Math.cos(angle) * (cueDistance + cueLength);
-    const cueEndY = ball.y - Math.sin(angle) * (cueDistance + cueLength);
-    
-    const cueStart = this.worldToScreen(cueStartX, cueStartY);
-    const cueEnd = this.worldToScreen(cueEndX, cueEndY);
-    
+
+    // Raw endpoints in world space (behind the ball opposite shot direction)
+    const rawNear = { x: ball.x - Math.cos(angle) * cueDistance, y: ball.y - Math.sin(angle) * cueDistance };
+    const rawFar = { x: ball.x - Math.cos(angle) * (cueDistance + cueLength), y: ball.y - Math.sin(angle) * (cueDistance + cueLength) };
+
+    // Do NOT clamp to rails — allow cue to extend into padded world area without clipping
+    const cueStart = this.worldToScreen(rawNear.x, rawNear.y);
+    const cueEnd = this.worldToScreen(rawFar.x, rawFar.y);
+
     this.uiCtx.strokeStyle = '#8B4513';
     this.uiCtx.lineWidth = 4;
     this.uiCtx.lineCap = 'round';
