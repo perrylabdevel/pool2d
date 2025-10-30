@@ -1451,8 +1451,8 @@ export class Renderer3D {
       this.scene.add(highlightMesh);
       this.railHighlightMeshes.push(highlightMesh);
 
-      // Add a tight shadow band just inside the felt with a soft fade
-      const shadowWidth = Math.max(0.45, inner * 0.6);
+      // Add a very tight shadow band just inside the felt with a soft fade
+      const shadowWidth = Math.max(0.30, inner * 0.45);
       const shadowGeometry = new THREE.PlaneGeometry(length, shadowWidth);
       const shadowMaterial = this.getRailShadowMaterial();
       const shadowMesh = new THREE.Mesh(shadowGeometry, shadowMaterial);
@@ -1485,10 +1485,10 @@ export class Renderer3D {
       throw new Error('Renderer3D: rail shadow texture context missing');
     }
     const g = ctx.createLinearGradient(0, 0, 0, sizeY);
-    // Soft, tight fade: strong at the rail, smooth falloff over the short band
-    g.addColorStop(0.0, 'rgba(0,0,0,0.70)');
-    g.addColorStop(0.40, 'rgba(0,0,0,0.35)');
-    g.addColorStop(0.75, 'rgba(0,0,0,0.12)');
+    // Soft, very tight fade: strong at the rail, quick smooth falloff
+    g.addColorStop(0.0, 'rgba(0,0,0,0.65)');
+    g.addColorStop(0.30, 'rgba(0,0,0,0.30)');
+    g.addColorStop(0.55, 'rgba(0,0,0,0.08)');
     g.addColorStop(1.0, 'rgba(0,0,0,0.0)');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, sizeX, sizeY);
