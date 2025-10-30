@@ -901,6 +901,13 @@ export class Renderer3D {
         shadowMaterial.opacity = value;
         shadowMaterial.needsUpdate = true;
         CONFIG.RAIL_SHADOW_INTENSITY = value;
+        this.railShadowMeshes.forEach((m) => {
+          const mat = m.material as THREE.MeshBasicMaterial;
+          if (mat) {
+            mat.opacity = value;
+            mat.needsUpdate = true;
+          }
+        });
       }
     }
 
