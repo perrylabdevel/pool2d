@@ -1459,9 +1459,10 @@ export class Renderer3D {
       const shadowMesh = new THREE.Mesh(shadowGeometry, shadowMaterial);
       // Position shadow on inner edge (toward felt) for depth
       // Center the shadow band so its near edge kisses the felt edge of the rail
+      // IMPORTANT: nx,ny are inward normals (toward play area). Move ALONG +normal to go onto felt.
       const offsetDist = (inner * 0.5) + (shadowWidth * 0.5) + 0.05;
-      const shadowOffset = offsetDist * (nx * -1); // Toward felt side
-      const shadowOffsetY = offsetDist * (ny * -1);
+      const shadowOffset = offsetDist * nx;   // Toward felt side (inward)
+      const shadowOffsetY = offsetDist * ny;
       shadowMesh.position.set(
         railMesh.position.x + shadowOffset,
         railMesh.position.y + shadowOffsetY,
