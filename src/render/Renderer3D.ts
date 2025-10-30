@@ -1451,23 +1451,18 @@ export class Renderer3D {
       this.scene.add(highlightMesh);
       this.railHighlightMeshes.push(highlightMesh);
 
-      // Add subtle shadow along inner edge for depth with a broad, pocket-like spread
-      // Use inner rail thickness to estimate felt-side falloff width
-      const shadowWidth = Math.max(1.25, inner * 2.0);
+      // Add shadow band just inside the play area (felt side)
+      // Keep a moderate, pocket-like spread entirely on the felt
+      const shadowWidth = Math.max(0.9, inner * 1.2);
       const shadowGeometry = new THREE.PlaneGeometry(length, shadowWidth);
       const shadowMaterial = this.getRailShadowMaterial();
       const shadowMesh = new THREE.Mesh(shadowGeometry, shadowMaterial);
       // Position shadow on inner edge (toward felt) for depth
-      // Center the shadow band so its near edge kisses the felt edge of the rail
-      // IMPORTANT: nx,ny are inward normals (toward play area). Move ALONG +normal to go onto felt.
-      const offsetDist = (inner * 0.5) + (shadowWidth * 0.5) + 0.05;
-      const shadowOffset = offsetDist * nx;   // Toward felt side (inward)
-      const shadowOffsetY = offsetDist * ny;
-      shadowMesh.position.set(
-        railMesh.position.x + shadowOffset,
-        railMesh.position.y + shadowOffsetY,
-        0.005 // just above felt, below highlight
-      );
+      // Place the band entirely inside the play area: center at (midpoint + n * (shadowWidth/2))
+      const centerInward = shadowWidth * 0.5 + 0.02; // slight inset
+      const cx = midX + nx * centerInward;
+      const cy = midY + ny * centerInward;
+      shadowMesh.position.set(cx, cy, 0.005);
       shadowMesh.rotation.z = angle;
       shadowMesh.visible = this.layerVisibility.showRails;
       shadowMesh.renderOrder = this.layerOrder.orderRails + 0.05;
