@@ -700,7 +700,8 @@ export class Renderer3D {
     
     // Desired world padding around table (inches). Keep in WORLD units to avoid divide-by-scale issues.
     const cueLengthIn = CONFIG.CUE_LENGTH_IN ?? 20;
-    const cueMaxDistanceIn = (CONFIG.BALL_RADIUS ?? 1.125) + 5;
+    const baseBallR = (CONFIG as any).BALL_BASE_RADIUS ?? 1.125;
+    const cueMaxDistanceIn = baseBallR + 5;
     const cueReachWorldIn = cueLengthIn + cueMaxDistanceIn + (CONFIG.CUE_VISUAL_PADDING_IN ?? 0);
     const padWorldIn = Math.max(CONFIG.MIN_WORLD_PADDING_IN ?? 6, cueReachWorldIn);
     
@@ -709,8 +710,8 @@ export class Renderer3D {
     const availableHeight = Math.max(1, verticalSpace - externalMargin * 2);
     
     const scaleMultiplier = CONFIG.CANVAS_SCALE_MULTIPLIER ?? 1;
-    const adjustedWidth = availableWidth / Math.max(0.01, scaleMultiplier);
-    const adjustedHeight = availableHeight / Math.max(0.01, scaleMultiplier);
+    const adjustedWidth = availableWidth; // do not pre-divide by multiplier; apply only once at the end
+    const adjustedHeight = availableHeight;
 
     // Calculate scale to fit table with internal padding, then apply multiplier
     // Compute scale to fit table + world padding inside available pixels
