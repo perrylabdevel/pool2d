@@ -79,16 +79,16 @@ export const CONFIG = {
   RAIL_FILL_COLOR: '#000000', // Fill color for area between corner pockets
   POCKET_COLOR: '#000000',
   CUE_BALL_COLOR: '#ffffff',
+  // Cue ball measles: default to standard "Pro Cup" 6-dot pattern
+  // Six dots centered on the faces of a cube mapped to the sphere: ±X, ±Y, ±Z
+  // Values are treated as direction vectors and normalized.
   CUE_BALL_MEASLES: [
-    { x: 0, y: 0 },
-    { x: 0.45, y: 0 },
-    { x: -0.45, y: 0 },
-    { x: 0, y: 0.45 },
-    { x: 0, y: -0.45 },
-    { x: 0.32, y: 0.32 },
-    { x: -0.32, y: 0.32 },
-    { x: 0.32, y: -0.32 },
-    { x: -0.32, y: -0.32 },
+    { x: 1, y: 0, z: 0 },
+    { x: -1, y: 0, z: 0 },
+    { x: 0, y: 1, z: 0 },
+    { x: 0, y: -1, z: 0 },
+    { x: 0, y: 0, z: 1 },
+    { x: 0, y: 0, z: -1 },
   ],
   CUE_BALL_MEASLE_RADIUS_RATIO: 0.12,
   CUE_BALL_MEASLE_COLOR: '#c62828',

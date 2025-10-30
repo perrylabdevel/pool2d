@@ -1880,19 +1880,31 @@ export class Renderer3D {
       }
     });
 
+    // Use thin circular decals oriented to the surface normal, slightly above the sphere
+    const up = new THREE.Vector3(0, 0, 1);
     normals.forEach((normal, index) => {
-      const spotGeometry = new THREE.SphereGeometry(spotRadius, 16, 16);
+      const spotGeometry = new THREE.CircleGeometry(spotRadius, 32);
       const spotMaterial = new THREE.MeshStandardMaterial({
         color: spotColor,
         roughness: 0.35,
         metalness: 0.15,
-      });
+        side: THREE.DoubleSide,
+        polygonOffset: true,
+        polygonOffsetFactor: -1,
+        polygonOffsetUnits: -1,
+        depthWrite: false,
+      } as any);
 
       const spotMesh = new THREE.Mesh(spotGeometry, spotMaterial);
       spotMesh.name = `cue-measle-${index}`;
-      const offset = radius - spotRadius * 0.4;
+      // Orient the disk so its normal matches the sphere normal at this point
+      const quat = new THREE.Quaternion().setFromUnitVectors(up, normal);
+      spotMesh.quaternion.copy(quat);
+      // Place the disk just above the sphere surface to avoid z-fighting
+      const epsilon = Math.max(0.002, radius * 0.002);
+      const offset = radius + epsilon;
       spotMesh.position.copy(normal.clone().multiplyScalar(offset));
-      spotMesh.renderOrder = this.layerOrder.orderBalls;
+      spotMesh.renderOrder = (this.layerOrder.orderBalls || 0) + 0.5;
       mesh.add(spotMesh);
     });
   }
