@@ -1451,14 +1451,17 @@ export class Renderer3D {
       this.scene.add(highlightMesh);
       this.railHighlightMeshes.push(highlightMesh);
 
-      // Add subtle shadow along inner edge for depth (wider so it is visible)
-      const shadowWidth = Math.max(0.2, totalWidth * 0.6);
+      // Add subtle shadow along inner edge for depth with a broad, pocket-like spread
+      // Use inner rail thickness to estimate felt-side falloff width
+      const shadowWidth = Math.max(1.25, inner * 2.0);
       const shadowGeometry = new THREE.PlaneGeometry(length, shadowWidth);
       const shadowMaterial = this.getRailShadowMaterial();
       const shadowMesh = new THREE.Mesh(shadowGeometry, shadowMaterial);
       // Position shadow on inner edge (toward felt) for depth
-      const shadowOffset = (totalWidth * 0.35) * (nx * -1); // Toward felt side
-      const shadowOffsetY = (totalWidth * 0.35) * (ny * -1);
+      // Center the shadow band so its near edge kisses the felt edge of the rail
+      const offsetDist = (inner * 0.5) + (shadowWidth * 0.5) + 0.05;
+      const shadowOffset = offsetDist * (nx * -1); // Toward felt side
+      const shadowOffsetY = offsetDist * (ny * -1);
       shadowMesh.position.set(
         railMesh.position.x + shadowOffset,
         railMesh.position.y + shadowOffsetY,
