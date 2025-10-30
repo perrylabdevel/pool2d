@@ -65,6 +65,7 @@ export interface RenderSettings extends RenderLayerSettings {
   directionalIntensity: number;
   accentIntensity: number;
   railHighlightIntensity: number;
+  railShadowIntensity: number;
   pocketShadowIntensity: number;
   pocketHighlightIntensity: number;
 }
@@ -309,6 +310,7 @@ export class SettingsManager {
       directionalIntensity: CONFIG.DIRECTIONAL_INTENSITY ?? 1.6,
       accentIntensity: CONFIG.ACCENT_INTENSITY ?? 0.5,
       railHighlightIntensity: CONFIG.RAIL_HIGHLIGHT_INTENSITY ?? 0.6,
+      railShadowIntensity: CONFIG.RAIL_SHADOW_INTENSITY ?? 0.25,
       pocketShadowIntensity: CONFIG.POCKET_SHADOW_INTENSITY ?? 0.45,
       pocketHighlightIntensity: CONFIG.POCKET_HIGHLIGHT_INTENSITY ?? 0.55,
     };
@@ -409,6 +411,7 @@ export class SettingsManager {
       directionalIntensity: CONFIG.DIRECTIONAL_INTENSITY ?? 1.6,
       accentIntensity: CONFIG.ACCENT_INTENSITY ?? 0.5,
       railHighlightIntensity: CONFIG.RAIL_HIGHLIGHT_INTENSITY ?? 0.6,
+      railShadowIntensity: CONFIG.RAIL_SHADOW_INTENSITY ?? 0.25,
       pocketShadowIntensity: CONFIG.POCKET_SHADOW_INTENSITY ?? 0.45,
       pocketHighlightIntensity: CONFIG.POCKET_HIGHLIGHT_INTENSITY ?? 0.55,
     };
@@ -480,6 +483,7 @@ export class SettingsManager {
         directionalIntensity: CONFIG.DIRECTIONAL_INTENSITY ?? 1.6,
         accentIntensity: CONFIG.ACCENT_INTENSITY ?? 0.5,
         railHighlightIntensity: CONFIG.RAIL_HIGHLIGHT_INTENSITY ?? 0.6,
+        railShadowIntensity: CONFIG.RAIL_SHADOW_INTENSITY ?? 0.25,
         pocketShadowIntensity: CONFIG.POCKET_SHADOW_INTENSITY ?? 0.45,
         pocketHighlightIntensity: CONFIG.POCKET_HIGHLIGHT_INTENSITY ?? 0.55,
       };
@@ -501,6 +505,7 @@ export class SettingsManager {
     CONFIG.DIRECTIONAL_INTENSITY = this.renderSettings.directionalIntensity ?? CONFIG.DIRECTIONAL_INTENSITY;
     CONFIG.ACCENT_INTENSITY = this.renderSettings.accentIntensity ?? CONFIG.ACCENT_INTENSITY;
     CONFIG.RAIL_HIGHLIGHT_INTENSITY = this.renderSettings.railHighlightIntensity ?? CONFIG.RAIL_HIGHLIGHT_INTENSITY;
+    CONFIG.RAIL_SHADOW_INTENSITY = this.renderSettings.railShadowIntensity ?? CONFIG.RAIL_SHADOW_INTENSITY;
     CONFIG.POCKET_SHADOW_INTENSITY =
       this.renderSettings.pocketShadowIntensity ?? CONFIG.POCKET_SHADOW_INTENSITY;
     CONFIG.POCKET_HIGHLIGHT_INTENSITY =

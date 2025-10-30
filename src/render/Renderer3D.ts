@@ -105,9 +105,11 @@ export class Renderer3D {
   private tableHighlightMesh: THREE.Mesh | null = null;
   private tableShadowMesh: THREE.Mesh | null = null;
   private railHighlightMeshes: THREE.Mesh[] = [];
+  private railShadowMeshes: THREE.Mesh[] = [];
   private pocketHighlightMeshes: THREE.Mesh[] = [];
   private pocketShadowMeshes: THREE.Mesh[] = [];
   private railHighlightMaterial: THREE.MeshBasicMaterial | null = null;
+  private railShadowMaterial: THREE.MeshBasicMaterial | null = null;
   private pocketHighlightMaterial: THREE.MeshBasicMaterial | null = null;
   private pocketShadowMaterial: THREE.MeshBasicMaterial | null = null;
   private railHighlightTexture: THREE.CanvasTexture | null = null;
@@ -275,7 +277,7 @@ export class Renderer3D {
     });
 
     window.addEventListener('settings:render-changed', (event) => {
-      const detail = (event as CustomEvent<{ settings?: { ballScale?: number; ambientIntensity?: number; directionalIntensity?: number; accentIntensity?: number; railHighlightIntensity?: number; pocketShadowIntensity?: number } }>).detail;
+      const detail = (event as CustomEvent<{ settings?: { ballScale?: number; ambientIntensity?: number; directionalIntensity?: number; accentIntensity?: number; railHighlightIntensity?: number; railShadowIntensity?: number; pocketShadowIntensity?: number; pocketHighlightIntensity?: number } }>).detail;
       const settings = detail?.settings;
       const scale = settings?.ballScale ?? CONFIG.BALL_SCALE ?? 1;
       this.setBallScale(scale);
@@ -286,7 +288,9 @@ export class Renderer3D {
       });
       this.setHighlightIntensities({
         rail: settings?.railHighlightIntensity ?? CONFIG.RAIL_HIGHLIGHT_INTENSITY,
-        pocket: settings?.pocketShadowIntensity ?? CONFIG.POCKET_SHADOW_INTENSITY,
+        railShadow: settings?.railShadowIntensity ?? CONFIG.RAIL_SHADOW_INTENSITY,
+        pocketShadow: settings?.pocketShadowIntensity ?? CONFIG.POCKET_SHADOW_INTENSITY,
+        pocketHighlight: settings?.pocketHighlightIntensity ?? CONFIG.POCKET_HIGHLIGHT_INTENSITY,
       });
     });
   }
@@ -327,6 +331,12 @@ export class Renderer3D {
       // Don't dispose material here - it's shared, we'll dispose it once below
     });
     this.railHighlightMeshes = [];
+    this.railShadowMeshes.forEach((mesh) => {
+      this.scene.remove(mesh);
+      mesh.geometry.dispose();
+      // shared material disposed below
+    });
+    this.railShadowMeshes = [];
     // Dispose shared rail highlight materials once
     if (this.railHighlightTexture) {
       this.railHighlightTexture.dispose();
@@ -335,6 +345,14 @@ export class Renderer3D {
     if (this.railHighlightMaterial) {
       this.railHighlightMaterial.dispose();
       this.railHighlightMaterial = null;
+    }
+    if (this.railShadowMaterial) {
+      this.railShadowMaterial.dispose();
+      this.railShadowMaterial = null;
+    }
+    if (this.railShadowMaterial) {
+      this.railShadowMaterial.dispose();
+      this.railShadowMaterial = null;
     }
     this.pocketHighlightMeshes.forEach((mesh) => {
       this.scene.remove(mesh);
@@ -852,6 +870,7 @@ export class Renderer3D {
 
   setHighlightIntensities(intensities: {
     rail?: number;
+    railShadow?: number;
     pocketShadow?: number;
     pocketHighlight?: number;
   }) {
@@ -891,11 +910,13 @@ export class Renderer3D {
 
   getHighlightIntensities(): {
     railHighlightIntensity: number;
+    railShadowIntensity: number;
     pocketHighlightIntensity: number;
     pocketShadowIntensity: number;
   } {
     return {
       railHighlightIntensity: this.railHighlightMaterial?.opacity ?? CONFIG.RAIL_HIGHLIGHT_INTENSITY ?? 0,
+      railShadowIntensity: this.railShadowMaterial?.opacity ?? CONFIG.RAIL_SHADOW_INTENSITY ?? 0,
       pocketHighlightIntensity:
         this.pocketHighlightMaterial?.opacity ?? CONFIG.POCKET_HIGHLIGHT_INTENSITY ?? 0,
       pocketShadowIntensity: this.pocketShadowMaterial?.opacity ?? CONFIG.POCKET_SHADOW_INTENSITY ?? 0,
@@ -1418,15 +1439,7 @@ export class Renderer3D {
       // Add subtle shadow along inner edge for depth
       const shadowWidth = totalWidth * 0.25;
       const shadowGeometry = new THREE.PlaneGeometry(length, shadowWidth);
-      const shadowMaterial = new THREE.MeshBasicMaterial({
-        color: 0x000000,
-        transparent: true,
-        opacity: 0.15,
-        blending: THREE.MultiplyBlending,
-        depthTest: true,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-      });
+      const shadowMaterial = this.getRailShadowMaterial();
       const shadowMesh = new THREE.Mesh(shadowGeometry, shadowMaterial);
       // Position shadow on inner edge (toward felt) for depth
       const shadowOffset = (totalWidth * 0.3) * (nx * -1); // Toward felt side
@@ -1440,8 +1453,26 @@ export class Renderer3D {
       shadowMesh.visible = this.layerVisibility.showRails;
       shadowMesh.renderOrder = this.layerOrder.orderRails + 0.05;
       this.scene.add(shadowMesh);
-      this.railHighlightMeshes.push(shadowMesh);
+      this.railShadowMeshes.push(shadowMesh);
     });
+  }
+
+  private getRailShadowMaterial(): THREE.MeshBasicMaterial {
+    if (this.railShadowMaterial) {
+      return this.railShadowMaterial;
+    }
+    const material = new THREE.MeshBasicMaterial({
+      color: 0x000000,
+      transparent: true,
+      opacity: CONFIG.RAIL_SHADOW_INTENSITY ?? 0.25,
+      blending: THREE.MultiplyBlending,
+      depthTest: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    (material as any).toneMapped = false;
+    this.railShadowMaterial = material;
+    return material;
   }
   
   initializePockets(pockets: PocketDef[]) {
@@ -1657,6 +1688,15 @@ export class Renderer3D {
         x: curr.x + avgNx * offset,
         y: curr.y + avgNy * offset
       });
+    }
+
+    if (typeof intensities.railShadow === 'number') {
+      const material = this.getRailShadowMaterial();
+      const value = clamp(intensities.railShadow, 0, 1.5);
+      if (value !== undefined) {
+        material.opacity = value;
+        CONFIG.RAIL_SHADOW_INTENSITY = value;
+      }
     }
     
     return result;
@@ -2213,6 +2253,7 @@ export class Renderer3D {
       case 'showRails':
         this.railMeshes.forEach((mesh) => (mesh.visible = visible));
         this.railHighlightMeshes.forEach((mesh) => (mesh.visible = visible));
+        this.railShadowMeshes.forEach((mesh) => (mesh.visible = visible));
         if (this.railFillMesh) this.railFillMesh.visible = visible;
         break;
       case 'showPockets':

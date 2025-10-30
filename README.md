@@ -110,7 +110,9 @@ All tunables live in `src/config.ts` and can be overridden live via the settings
 - **Display**
   - `CANVAS_SCALE_MULTIPLIER`: 1.0 (live slider in Settings → Display)
 
-For coordinate details, pocket derivations, and naming conventions, see [`geometry.md`](geometry.md).
+For coordinate details, pocket derivations, and naming conventions, see `geometry.md`.
+
+Display and scaling internals: see `docs/display-architecture.md` for how canvases, camera framing, and scaling work together.
 
 ## Shot Analysis Workflow
 

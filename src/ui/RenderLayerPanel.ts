@@ -27,13 +27,14 @@ export class RenderLayerPanel {
   private settings: RenderSettings;
   private orderInputs: Partial<Record<RenderLayerOrderKey, HTMLInputElement>> = {};
   private lightingInputs: Record<
-    'ambientIntensity' | 'directionalIntensity' | 'accentIntensity' | 'railHighlightIntensity' | 'pocketHighlightIntensity' | 'pocketShadowIntensity',
+    'ambientIntensity' | 'directionalIntensity' | 'accentIntensity' | 'railHighlightIntensity' | 'railShadowIntensity' | 'pocketHighlightIntensity' | 'pocketShadowIntensity',
     HTMLInputElement | null
   > = {
     ambientIntensity: null,
     directionalIntensity: null,
     accentIntensity: null,
     railHighlightIntensity: null,
+    railShadowIntensity: null,
     pocketHighlightIntensity: null,
     pocketShadowIntensity: null,
   };
@@ -204,6 +205,7 @@ export class RenderLayerPanel {
       directionalIntensity: lights.directionalIntensity,
       accentIntensity: lights.accentIntensity,
       railHighlightIntensity: highlights.railHighlightIntensity,
+      railShadowIntensity: highlights.railShadowIntensity,
       pocketHighlightIntensity: highlights.pocketHighlightIntensity,
       pocketShadowIntensity: highlights.pocketShadowIntensity,
     });
@@ -226,7 +228,7 @@ export class RenderLayerPanel {
   private bindLightingControls() {
     const simpleSliders: Array<{
       id: string;
-      key: 'ambientIntensity' | 'directionalIntensity' | 'accentIntensity' | 'railHighlightIntensity' | 'pocketHighlightIntensity' | 'pocketShadowIntensity';
+      key: 'ambientIntensity' | 'directionalIntensity' | 'accentIntensity' | 'railHighlightIntensity' | 'railShadowIntensity' | 'pocketHighlightIntensity' | 'pocketShadowIntensity';
       apply: (value: number) => void;
     }> = [
       {
@@ -248,6 +250,11 @@ export class RenderLayerPanel {
         id: 'lighting-rail-highlight',
         key: 'railHighlightIntensity',
         apply: (value) => this.renderer.setHighlightIntensities({ rail: value }),
+      },
+      {
+        id: 'lighting-rail-shadow',
+        key: 'railShadowIntensity',
+        apply: (value) => this.renderer.setHighlightIntensities({ railShadow: value }),
       },
       {
         id: 'lighting-pocket-highlight',
@@ -285,11 +292,12 @@ export class RenderLayerPanel {
   }
 
   private syncLightingSliders() {
-    const map: Array<{ key: keyof Pick<RenderSettings, 'ambientIntensity' | 'directionalIntensity' | 'accentIntensity' | 'railHighlightIntensity' | 'pocketHighlightIntensity' | 'pocketShadowIntensity'>; id: string }> = [
+    const map: Array<{ key: keyof Pick<RenderSettings, 'ambientIntensity' | 'directionalIntensity' | 'accentIntensity' | 'railHighlightIntensity' | 'railShadowIntensity' | 'pocketHighlightIntensity' | 'pocketShadowIntensity'>; id: string }> = [
       { key: 'ambientIntensity', id: 'lighting-ambient' },
       { key: 'directionalIntensity', id: 'lighting-directional' },
       { key: 'accentIntensity', id: 'lighting-accent' },
       { key: 'railHighlightIntensity', id: 'lighting-rail-highlight' },
+      { key: 'railShadowIntensity', id: 'lighting-rail-shadow' },
       { key: 'pocketHighlightIntensity', id: 'lighting-pocket-highlight' },
       { key: 'pocketShadowIntensity', id: 'lighting-pocket-shadow' },
     ];

@@ -71,6 +71,7 @@ export const CONFIG = {
   CUE_LENGTH_IN: 20,
   MIN_WORLD_PADDING_IN: 6, // Minimum world padding around table for camera framing
   RAIL_HIGHLIGHT_INTENSITY: 0.9, // Rail cushion highlight intensity
+  RAIL_SHADOW_INTENSITY: 0.25, // Subtle shadow under rails (inner edge)
   POCKET_HIGHLIGHT_INTENSITY: 0.55, // Pocket highlight intensity (separate from rail)
   POCKET_SHADOW_INTENSITY: 0.45,
   TABLE_COLOR: '#0a5f0a',
