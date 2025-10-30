@@ -1513,7 +1513,7 @@ export class Renderer3D {
       color: new THREE.Color(0xff00ff),
       transparent: true,
       opacity: CONFIG.RAIL_SHADOW_INTENSITY ?? 0.6,
-      blending: THREE.NormalBlending,
+      blending: THREE.MultiplyBlending,
       depthTest: true,
       depthWrite: false,
       side: THREE.DoubleSide,
