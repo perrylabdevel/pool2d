@@ -110,6 +110,7 @@ export class Renderer3D {
   private pocketShadowMeshes: THREE.Mesh[] = [];
   private railHighlightMaterial: THREE.MeshBasicMaterial | null = null;
   private railShadowMaterial: THREE.MeshBasicMaterial | null = null;
+  private railShadowTexture: THREE.Texture | null = null;
   private pocketHighlightMaterial: THREE.MeshBasicMaterial | null = null;
   private pocketShadowMaterial: THREE.MeshBasicMaterial | null = null;
   private railHighlightTexture: THREE.CanvasTexture | null = null;
@@ -349,6 +350,10 @@ export class Renderer3D {
     if (this.railShadowMaterial) {
       this.railShadowMaterial.dispose();
       this.railShadowMaterial = null;
+    }
+    if (this.railShadowTexture) {
+      this.railShadowTexture.dispose();
+      this.railShadowTexture = null;
     }
     if (this.railShadowMaterial) {
       this.railShadowMaterial.dispose();
@@ -1468,11 +1473,37 @@ export class Renderer3D {
   }
 
   private getRailShadowMaterial(): THREE.MeshBasicMaterial {
-    if (this.railShadowMaterial) {
+    if (this.railShadowMaterial && this.railShadowTexture) {
       return this.railShadowMaterial;
     }
+    // Create a vertical gradient (Y direction) that fades from dark near the rail to transparent over felt
+    const sizeX = 64;
+    const sizeY = 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = sizeX;
+    canvas.height = sizeY;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      throw new Error('Renderer3D: rail shadow texture context missing');
+    }
+    const g = ctx.createLinearGradient(0, 0, 0, sizeY);
+    // Strongest near rail (top), ease to transparent toward felt
+    g.addColorStop(0.0, 'rgba(0,0,0,0.85)');
+    g.addColorStop(0.25, 'rgba(0,0,0,0.45)');
+    g.addColorStop(0.55, 'rgba(0,0,0,0.18)');
+    g.addColorStop(1.0, 'rgba(0,0,0,0.0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, sizeX, sizeY);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = THREE.ClampToEdgeWrapping;
+    tex.wrapT = THREE.ClampToEdgeWrapping;
+    tex.needsUpdate = true;
+    tex.colorSpace = THREE.SRGBColorSpace;
+    this.railShadowTexture = tex;
+
     const material = new THREE.MeshBasicMaterial({
-      color: 0x000000,
+      map: tex,
       transparent: true,
       opacity: CONFIG.RAIL_SHADOW_INTENSITY ?? 0.25,
       blending: THREE.MultiplyBlending,
