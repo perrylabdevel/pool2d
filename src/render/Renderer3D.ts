@@ -895,17 +895,18 @@ export class Renderer3D {
     }
 
     if (typeof intensities.railShadow === 'number') {
-      // For Multiply blending, drive intensity via color (white=none, magenta=strong in debug)
+      // For Multiply blending, drive intensity via grayscale color (white=none, black=strong)
       const value = clamp(intensities.railShadow, 0, 1.0);
       const t = Math.max(0, Math.min(1, value));
       const shadowMaterial = this.getRailShadowMaterial();
-      shadowMaterial.color.setRGB(1, 1 - t, 1);
+      const g = 1 - t;
+      shadowMaterial.color.setRGB(g, g, g);
       shadowMaterial.needsUpdate = true;
       CONFIG.RAIL_SHADOW_INTENSITY = value;
       this.railShadowMeshes.forEach((m) => {
         const mat = m.material as THREE.MeshBasicMaterial;
         if (mat) {
-          mat.color.setRGB(1, 1 - t, 1);
+          mat.color.setRGB(g, g, g);
           mat.needsUpdate = true;
         }
       });
@@ -1511,7 +1512,7 @@ export class Renderer3D {
     // TEMP: vivid magenta to verify slider wiring and placement visibly
     const material = new THREE.MeshBasicMaterial({
       map: tex,
-      color: new THREE.Color(0xff00ff), // debug hue; intensity controlled via color, not opacity
+      color: new THREE.Color(0xffffff), // neutral for Multiply; intensity darkens via grayscale color
       transparent: true,
       opacity: 1.0,
       blending: THREE.MultiplyBlending,
@@ -1519,9 +1520,9 @@ export class Renderer3D {
       depthWrite: false,
       side: THREE.DoubleSide,
     });
-    // Initialize color based on current intensity: t in [0,1] => color = (1, 1-t, 1)
-    const t0 = Math.max(0, Math.min(1, (CONFIG.RAIL_SHADOW_INTENSITY ?? 0.25) / 1.0));
-    material.color.setRGB(1, 1 - t0, 1);
+    // Initialize color based on current intensity: t in [0,1] => grayscale (1-t)
+    const t0 = Math.max(0, Math.min(1, (CONFIG.RAIL_SHADOW_INTENSITY ?? 0.25)));
+    material.color.setRGB(1 - t0, 1 - t0, 1 - t0);
     (material as any).toneMapped = false;
     this.railShadowMaterial = material;
     return material;
