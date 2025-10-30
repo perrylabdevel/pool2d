@@ -1507,11 +1507,13 @@ export class Renderer3D {
     tex.colorSpace = THREE.SRGBColorSpace;
     this.railShadowTexture = tex;
 
+    // TEMP: vivid magenta to verify slider wiring and placement visibly
     const material = new THREE.MeshBasicMaterial({
       map: tex,
+      color: new THREE.Color(0xff00ff),
       transparent: true,
-      opacity: CONFIG.RAIL_SHADOW_INTENSITY ?? 0.25,
-      blending: THREE.MultiplyBlending,
+      opacity: CONFIG.RAIL_SHADOW_INTENSITY ?? 0.6,
+      blending: THREE.NormalBlending,
       depthTest: true,
       depthWrite: false,
       side: THREE.DoubleSide,
