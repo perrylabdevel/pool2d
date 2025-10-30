@@ -895,20 +895,20 @@ export class Renderer3D {
     }
 
     if (typeof intensities.railShadow === 'number') {
-      const value = clamp(intensities.railShadow, 0, 1.5);
-      if (value !== undefined) {
-        const shadowMaterial = this.getRailShadowMaterial();
-        shadowMaterial.opacity = value;
-        shadowMaterial.needsUpdate = true;
-        CONFIG.RAIL_SHADOW_INTENSITY = value;
-        this.railShadowMeshes.forEach((m) => {
-          const mat = m.material as THREE.MeshBasicMaterial;
-          if (mat) {
-            mat.opacity = value;
-            mat.needsUpdate = true;
-          }
-        });
-      }
+      // For Multiply blending, drive intensity via color (white=none, magenta=strong in debug)
+      const value = clamp(intensities.railShadow, 0, 1.0);
+      const t = Math.max(0, Math.min(1, value));
+      const shadowMaterial = this.getRailShadowMaterial();
+      shadowMaterial.color.setRGB(1, 1 - t, 1);
+      shadowMaterial.needsUpdate = true;
+      CONFIG.RAIL_SHADOW_INTENSITY = value;
+      this.railShadowMeshes.forEach((m) => {
+        const mat = m.material as THREE.MeshBasicMaterial;
+        if (mat) {
+          mat.color.setRGB(1, 1 - t, 1);
+          mat.needsUpdate = true;
+        }
+      });
     }
 
     if (typeof intensities.pocketShadow === 'number') {
@@ -1492,11 +1492,12 @@ export class Renderer3D {
       throw new Error('Renderer3D: rail shadow texture context missing');
     }
     const g = ctx.createLinearGradient(0, 0, 0, sizeY);
-    // Soft, very tight fade: strong at the rail, quick smooth falloff
-    g.addColorStop(0.0, 'rgba(0,0,0,0.65)');
-    g.addColorStop(0.30, 'rgba(0,0,0,0.30)');
-    g.addColorStop(0.55, 'rgba(0,0,0,0.08)');
-    g.addColorStop(1.0, 'rgba(0,0,0,0.0)');
+    // For Multiply blending, use grayscale (RGB) so alpha isn't required.
+    // Near rail: darker gray (<1). Toward felt: white (1 = no change).
+    g.addColorStop(0.0, 'rgb(170,170,170)');  // ~0.67
+    g.addColorStop(0.35, 'rgb(205,205,205)'); // ~0.80
+    g.addColorStop(0.65, 'rgb(235,235,235)'); // ~0.92
+    g.addColorStop(1.0, 'rgb(255,255,255)');  // 1.0
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, sizeX, sizeY);
 
@@ -1510,14 +1511,17 @@ export class Renderer3D {
     // TEMP: vivid magenta to verify slider wiring and placement visibly
     const material = new THREE.MeshBasicMaterial({
       map: tex,
-      color: new THREE.Color(0xff00ff),
+      color: new THREE.Color(0xff00ff), // debug hue; intensity controlled via color, not opacity
       transparent: true,
-      opacity: CONFIG.RAIL_SHADOW_INTENSITY ?? 0.6,
+      opacity: 1.0,
       blending: THREE.MultiplyBlending,
       depthTest: true,
       depthWrite: false,
       side: THREE.DoubleSide,
     });
+    // Initialize color based on current intensity: t in [0,1] => color = (1, 1-t, 1)
+    const t0 = Math.max(0, Math.min(1, (CONFIG.RAIL_SHADOW_INTENSITY ?? 0.25) / 1.0));
+    material.color.setRGB(1, 1 - t0, 1);
     (material as any).toneMapped = false;
     this.railShadowMaterial = material;
     return material;
