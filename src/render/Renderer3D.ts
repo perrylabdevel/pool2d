@@ -1447,7 +1447,7 @@ export class Renderer3D {
       shadowMesh.position.set(
         railMesh.position.x + shadowOffset,
         railMesh.position.y + shadowOffsetY,
-        railMesh.position.z + 0.15
+        0.005 // just above felt, below highlight
       );
       shadowMesh.rotation.z = angle;
       shadowMesh.visible = this.layerVisibility.showRails;
@@ -1690,15 +1690,6 @@ export class Renderer3D {
       });
     }
 
-    if (typeof intensities.railShadow === 'number') {
-      const material = this.getRailShadowMaterial();
-      const value = clamp(intensities.railShadow, 0, 1.5);
-      if (value !== undefined) {
-        material.opacity = value;
-        CONFIG.RAIL_SHADOW_INTENSITY = value;
-      }
-    }
-    
     return result;
   }
 
