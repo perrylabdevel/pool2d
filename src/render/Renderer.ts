@@ -306,14 +306,15 @@ export class Renderer {
     // Interpolate position for smooth rendering
     const x = ball.prevX + (ball.x - ball.prevX) * alpha;
     const y = ball.prevY + (ball.y - ball.prevY) * alpha;
-    
+
     // Shadow
     this.ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
     this.ctx.beginPath();
     this.ctx.ellipse(x + 0.2, y + 0.2, ball.radius * 0.9, ball.radius * 0.7, 0, 0, Math.PI * 2);
     this.ctx.fill();
-    
-    // Ball body
+
+    const isCueBall = ball.id === BALL_CUE;
+
     const gradient = this.ctx.createRadialGradient(
       x - ball.radius * 0.3,
       y - ball.radius * 0.3,
@@ -322,27 +323,42 @@ export class Renderer {
       y,
       ball.radius
     );
-    
-    const color = ball.id === BALL_CUE ? CONFIG.CUE_BALL_COLOR : CONFIG.BALL_COLORS[ball.id - 1];
-    
+
+    const color = isCueBall ? CONFIG.CUE_BALL_COLOR : CONFIG.BALL_COLORS[ball.id - 1];
+
     gradient.addColorStop(0, this.lightenColor(color, 0.4));
     gradient.addColorStop(0.7, color);
     gradient.addColorStop(1, this.darkenColor(color, 0.3));
-    
+
     this.ctx.fillStyle = gradient;
     this.ctx.beginPath();
     this.ctx.arc(x, y, ball.radius, 0, Math.PI * 2);
     this.ctx.fill();
-    
+
     // Save context for rotation
     this.ctx.save();
     this.ctx.translate(x, y);
-    
+
     // Calculate rotation angle based on velocity direction
     // The ball rotates perpendicular to its direction of travel
     const rotationAngle = ball.angle;
     this.ctx.rotate(rotationAngle);
-    
+
+    if (isCueBall) {
+      const measles = CONFIG.CUE_BALL_MEASLES ?? [];
+      const measleRadius = ball.radius * (CONFIG.CUE_BALL_MEASLE_RADIUS_RATIO ?? 0);
+      if (measles.length > 0 && measleRadius > 0) {
+        this.ctx.fillStyle = CONFIG.CUE_BALL_MEASLE_COLOR;
+        for (const measle of measles) {
+          const mx = measle.x * ball.radius;
+          const my = measle.y * ball.radius;
+          this.ctx.beginPath();
+          this.ctx.arc(mx, my, measleRadius, 0, Math.PI * 2);
+          this.ctx.fill();
+        }
+      }
+    }
+
     // Stripe for striped balls (9-15) - now rotates with ball
     if (ball.id >= 9 && ball.id <= 15) {
       this.ctx.fillStyle = '#ffffff';
@@ -350,9 +366,9 @@ export class Renderer {
       this.ctx.arc(0, 0, ball.radius * 0.6, 0, Math.PI * 2);
       this.ctx.fill();
     }
-    
+
     // Ball number (need to flip Y back for text to be readable)
-    if (ball.id !== BALL_CUE) {
+    if (!isCueBall) {
       this.ctx.scale(1, -1); // Flip Y back to normal for text
       this.ctx.fillStyle = ball.id >= 9 && ball.id <= 15 ? '#000000' : '#ffffff';
       this.ctx.font = `bold ${ball.radius * 0.8}px Arial`;
@@ -360,9 +376,9 @@ export class Renderer {
       this.ctx.textBaseline = 'middle';
       this.ctx.fillText(ball.id.toString(), 0, 0);
     }
-    
+
     this.ctx.restore();
-    
+
     // Highlight (doesn't rotate - stays at light source position)
     this.ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
     this.ctx.beginPath();

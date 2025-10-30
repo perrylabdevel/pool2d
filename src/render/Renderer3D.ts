@@ -698,13 +698,11 @@ export class Renderer3D {
     // External margin around canvas
     const externalMargin = 40;
     
-    // Internal padding within canvas (around table) in PIXELS
-    // Ensure cue stick is fully visible when the cue ball is near rails
-    // Convert cue reach (inches) to pixels using current scale
-    const cueLengthIn = CONFIG.CUE_LENGTH_IN ?? 20; // world inches
-    const cueMaxDistanceIn = (CONFIG.BALL_RADIUS ?? 1.125) + 5; // radius + max backoff (approx)
+    // Desired world padding around table (inches). Keep in WORLD units to avoid divide-by-scale issues.
+    const cueLengthIn = CONFIG.CUE_LENGTH_IN ?? 20;
+    const cueMaxDistanceIn = (CONFIG.BALL_RADIUS ?? 1.125) + 5;
     const cueReachWorldIn = cueLengthIn + cueMaxDistanceIn + (CONFIG.CUE_VISUAL_PADDING_IN ?? 0);
-    const internalPadding = Math.max(40, this.scale * cueReachWorldIn);
+    const padWorldIn = Math.max(CONFIG.MIN_WORLD_PADDING_IN ?? 6, cueReachWorldIn);
     
     // Calculate available space for canvas after external margins
     const availableWidth = Math.max(1, horizontalSpace - externalMargin * 2);
@@ -715,14 +713,15 @@ export class Renderer3D {
     const adjustedHeight = availableHeight / Math.max(0.01, scaleMultiplier);
 
     // Calculate scale to fit table with internal padding, then apply multiplier
-    const scaleX = (adjustedWidth - internalPadding * 2) / CONFIG.TABLE_WIDTH;
-    const scaleY = (adjustedHeight - internalPadding * 2) / CONFIG.TABLE_HEIGHT;
+    // Compute scale to fit table + world padding inside available pixels
+    const scaleX = adjustedWidth / (CONFIG.TABLE_WIDTH + padWorldIn * 2);
+    const scaleY = adjustedHeight / (CONFIG.TABLE_HEIGHT + padWorldIn * 2);
     const baseScale = Math.max(0.01, Math.min(scaleX, scaleY));
     this.scale = Math.max(0.01, baseScale * scaleMultiplier);
     
     // Set canvas size
-    const width = Math.max(1, CONFIG.TABLE_WIDTH * this.scale + internalPadding * 2);
-    const height = Math.max(1, CONFIG.TABLE_HEIGHT * this.scale + internalPadding * 2);
+    const width = Math.max(1, (CONFIG.TABLE_WIDTH + padWorldIn * 2) * this.scale);
+    const height = Math.max(1, (CONFIG.TABLE_HEIGHT + padWorldIn * 2) * this.scale);
     
     this.renderer.setSize(width, height);
     this.canvas.style.width = `${width}px`;
@@ -766,12 +765,9 @@ export class Renderer3D {
     } catch {}
     this.updateCanvasZIndex();
     
-    // Update orthographic camera to exactly cover table + internal padding in WORLD units
-    // Convert pixel padding to world padding by dividing by scale
-    const padWorldX = internalPadding / Math.max(0.01, this.scale);
-    const padWorldY = internalPadding / Math.max(0.01, this.scale);
-    const halfWorldW = (CONFIG.TABLE_WIDTH / 2) + padWorldX;
-    const halfWorldH = (CONFIG.TABLE_HEIGHT / 2) + padWorldY;
+    // Update orthographic camera to exactly cover table + world padding
+    const halfWorldW = (CONFIG.TABLE_WIDTH / 2) + padWorldIn;
+    const halfWorldH = (CONFIG.TABLE_HEIGHT / 2) + padWorldIn;
     this.camera.left = -halfWorldW;
     this.camera.right = halfWorldW;
     this.camera.top = halfWorldH;
@@ -1772,6 +1768,10 @@ export class Renderer3D {
         ballMesh.castShadow = true;
         ballMesh.receiveShadow = false;
         
+        if (ball.id === BALL_CUE) {
+          this.addCueBallMeasles(ballMesh, baseRadius);
+        }
+
         // Add black glow outline
         this.addBallGlow(ballMesh, baseRadius);
         
@@ -1812,7 +1812,11 @@ export class Renderer3D {
     if (ball.id >= 9 && ball.id <= 15) {
       this.addBallStripe(mesh, baseRadius);
     }
-    
+
+    if (ball.id === BALL_CUE) {
+      this.addCueBallMeasles(mesh, baseRadius);
+    }
+
     // Add black glow outline
     this.addBallGlow(mesh, baseRadius);
     
@@ -1826,7 +1830,89 @@ export class Renderer3D {
     return mesh;
   }
   
-  addBallGlow(mesh: THREE.Mesh | THREE.Object3D, radius: number) {
+  private addCueBallMeasles(mesh: THREE.Mesh, radius: number) {
+    const measles = CONFIG.CUE_BALL_MEASLES ?? [];
+    const measleRatio = CONFIG.CUE_BALL_MEASLE_RADIUS_RATIO ?? 0;
+    if (measles.length === 0 || measleRatio <= 0) {
+      this.removeCueBallMeasles(mesh);
+      return;
+    }
+
+    this.removeCueBallMeasles(mesh);
+
+    const spotRadius = radius * measleRatio;
+    if (spotRadius <= 0) return;
+
+    const spotColor = new THREE.Color(CONFIG.CUE_BALL_MEASLE_COLOR ?? '#c62828');
+    const uniqueNormals = new Set<string>();
+    const normals: THREE.Vector3[] = [];
+
+    const registerNormal = (nx: number, ny: number, nz: number) => {
+      const lengthSq = nx * nx + ny * ny + nz * nz;
+      if (lengthSq <= 1e-6) return;
+      const length = Math.sqrt(lengthSq);
+      const normalized = new THREE.Vector3(nx / length, ny / length, nz / length);
+      const key = `${normalized.x.toFixed(4)}:${normalized.y.toFixed(4)}:${normalized.z.toFixed(4)}`;
+      if (uniqueNormals.has(key)) return;
+      uniqueNormals.add(key);
+      normals.push(normalized);
+    };
+
+    measles.forEach((measle) => {
+      const mx = measle.x ?? 0;
+      const my = measle.y ?? 0;
+      const hasZ = typeof (measle as { z?: number }).z === 'number';
+      if (hasZ) {
+        const mz = (measle as { z?: number }).z ?? 0;
+        registerNormal(mx, my, mz);
+        return;
+      }
+
+      const xySq = mx * mx + my * my;
+      if (xySq > 1 + 1e-4) {
+        return;
+      }
+      const mz = Math.sqrt(Math.max(0, 1 - xySq));
+      registerNormal(mx, my, mz);
+      if (mz > 1e-5) {
+        registerNormal(mx, my, -mz);
+      }
+    });
+
+    normals.forEach((normal, index) => {
+      const spotGeometry = new THREE.SphereGeometry(spotRadius, 16, 16);
+      const spotMaterial = new THREE.MeshStandardMaterial({
+        color: spotColor,
+        roughness: 0.35,
+        metalness: 0.15,
+      });
+
+      const spotMesh = new THREE.Mesh(spotGeometry, spotMaterial);
+      spotMesh.name = `cue-measle-${index}`;
+      const offset = radius - spotRadius * 0.4;
+      spotMesh.position.copy(normal.clone().multiplyScalar(offset));
+      spotMesh.renderOrder = this.layerOrder.orderBalls;
+      mesh.add(spotMesh);
+    });
+  }
+
+  private removeCueBallMeasles(mesh: THREE.Mesh) {
+    const measleChildren = mesh.children.filter((child) => child.name.startsWith('cue-measle'));
+    measleChildren.forEach((child) => {
+      mesh.remove(child);
+      if ((child as THREE.Mesh).geometry) {
+        ((child as THREE.Mesh).geometry as THREE.BufferGeometry).dispose();
+      }
+      const material = (child as THREE.Mesh).material;
+      if (Array.isArray(material)) {
+        material.forEach((mat) => mat.dispose());
+      } else if (material) {
+        material.dispose();
+      }
+    });
+  }
+
+  private addBallGlow(mesh: THREE.Mesh | THREE.Object3D, radius: number) {
     const glowRadius = radius * 1.12;
     const glowOpacity = 0.2;
     mesh.userData.baseBallRadius = radius;

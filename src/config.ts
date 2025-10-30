@@ -69,6 +69,7 @@ export const CONFIG = {
 
   // Cue visuals
   CUE_LENGTH_IN: 20,
+  MIN_WORLD_PADDING_IN: 6, // Minimum world padding around table for camera framing
   RAIL_HIGHLIGHT_INTENSITY: 0.9, // Rail cushion highlight intensity
   POCKET_HIGHLIGHT_INTENSITY: 0.55, // Pocket highlight intensity (separate from rail)
   POCKET_SHADOW_INTENSITY: 0.45,
@@ -78,6 +79,20 @@ export const CONFIG = {
   RAIL_FILL_COLOR: '#000000', // Fill color for area between corner pockets
   POCKET_COLOR: '#000000',
   CUE_BALL_COLOR: '#ffffff',
+  CUE_BALL_MEASLES: [
+    { x: 0, y: 0 },
+    { x: 0.45, y: 0 },
+    { x: -0.45, y: 0 },
+    { x: 0, y: 0.45 },
+    { x: 0, y: -0.45 },
+    { x: 0.32, y: 0.32 },
+    { x: -0.32, y: 0.32 },
+    { x: 0.32, y: -0.32 },
+    { x: -0.32, y: -0.32 },
+  ],
+  CUE_BALL_MEASLE_RADIUS_RATIO: 0.12,
+  CUE_BALL_MEASLE_COLOR: '#c62828',
+  
   BALL_COLORS: [
     '#ffff00', // 1 - yellow (solid)
     '#0000ff', // 2 - blue (solid)
