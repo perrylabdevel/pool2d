@@ -889,6 +889,16 @@ export class Renderer3D {
       }
     }
 
+    if (typeof intensities.railShadow === 'number') {
+      const value = clamp(intensities.railShadow, 0, 1.5);
+      if (value !== undefined) {
+        const shadowMaterial = this.getRailShadowMaterial();
+        shadowMaterial.opacity = value;
+        shadowMaterial.needsUpdate = true;
+        CONFIG.RAIL_SHADOW_INTENSITY = value;
+      }
+    }
+
     if (typeof intensities.pocketShadow === 'number') {
       const material = this.getPocketShadowMaterial();
       const value = clamp(intensities.pocketShadow, 0, 1.5);
@@ -1436,14 +1446,14 @@ export class Renderer3D {
       this.scene.add(highlightMesh);
       this.railHighlightMeshes.push(highlightMesh);
 
-      // Add subtle shadow along inner edge for depth
-      const shadowWidth = totalWidth * 0.25;
+      // Add subtle shadow along inner edge for depth (wider so it is visible)
+      const shadowWidth = Math.max(0.2, totalWidth * 0.6);
       const shadowGeometry = new THREE.PlaneGeometry(length, shadowWidth);
       const shadowMaterial = this.getRailShadowMaterial();
       const shadowMesh = new THREE.Mesh(shadowGeometry, shadowMaterial);
       // Position shadow on inner edge (toward felt) for depth
-      const shadowOffset = (totalWidth * 0.3) * (nx * -1); // Toward felt side
-      const shadowOffsetY = (totalWidth * 0.3) * (ny * -1);
+      const shadowOffset = (totalWidth * 0.35) * (nx * -1); // Toward felt side
+      const shadowOffsetY = (totalWidth * 0.35) * (ny * -1);
       shadowMesh.position.set(
         railMesh.position.x + shadowOffset,
         railMesh.position.y + shadowOffsetY,
