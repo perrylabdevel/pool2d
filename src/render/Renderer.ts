@@ -171,24 +171,29 @@ export class Renderer {
       Math.min(cornerRadiusRaw, frameWidth, outerX, outerY)
     );
 
-    const traceRoundedRect = (halfWidth: number, halfHeight: number, radius: number) => {
-      const r = Math.max(0, Math.min(radius, halfWidth, halfHeight));
-      this.ctx.moveTo(halfWidth, halfHeight - r);
-      this.ctx.arcTo(halfWidth, halfHeight, halfWidth - r, halfHeight, r);
-      this.ctx.lineTo(-halfWidth + r, halfHeight);
-      this.ctx.arcTo(-halfWidth, halfHeight, -halfWidth, halfHeight - r, r);
-      this.ctx.lineTo(-halfWidth, -halfHeight + r);
-      this.ctx.arcTo(-halfWidth, -halfHeight, -halfWidth + r, -halfHeight, r);
-      this.ctx.lineTo(halfWidth - r, -halfHeight);
-      this.ctx.arcTo(halfWidth, -halfHeight, halfWidth, -halfHeight + r, r);
-      this.ctx.closePath();
-    };
-
     this.ctx.fillStyle = CONFIG.FRAME_COLOR ?? '#3d2413';
     this.ctx.beginPath();
-    traceRoundedRect(outerX, outerY, cornerRadius);
+    this.traceRoundedRectPath(this.ctx, outerX, outerY, cornerRadius);
     this.ctx.rect(-innerX, -innerY, innerX * 2, innerY * 2);
     this.ctx.fill('evenodd');
+  }
+
+  private traceRoundedRectPath(
+    ctx: CanvasRenderingContext2D,
+    halfWidth: number,
+    halfHeight: number,
+    radius: number
+  ) {
+    const r = Math.max(0, Math.min(radius, halfWidth, halfHeight));
+    ctx.moveTo(halfWidth, halfHeight - r);
+    ctx.arcTo(halfWidth, halfHeight, halfWidth - r, halfHeight, r);
+    ctx.lineTo(-halfWidth + r, halfHeight);
+    ctx.arcTo(-halfWidth, halfHeight, -halfWidth, halfHeight - r, r);
+    ctx.lineTo(-halfWidth, -halfHeight + r);
+    ctx.arcTo(-halfWidth, -halfHeight, -halfWidth + r, -halfHeight, r);
+    ctx.lineTo(halfWidth - r, -halfHeight);
+    ctx.arcTo(halfWidth, -halfHeight, halfWidth, -halfHeight + r, r);
+    ctx.closePath();
   }
 
   private beginBoundaryPath(points: Vec2[], close: boolean = true) {
@@ -260,7 +265,34 @@ export class Renderer {
   }
   
   drawRails(rails: Rail[]) {
+    const frameWidth = Math.max(0.1, CONFIG.FRAME_OFFSET_IN);
+    const boundary = this.playBoundaryPoints;
+    const cornerRadiusRaw = CONFIG.FRAME_CORNER_RADIUS_IN ?? 0;
+    const outerOffset = frameWidth + CONFIG.RAIL_THICKNESS_OUTER;
+
+    let playHalfWidth: number;
+    let playHalfHeight: number;
+    if (boundary.length >= 3) {
+      playHalfWidth = (this.playBounds.maxX - this.playBounds.minX) / 2;
+      playHalfHeight = (this.playBounds.maxY - this.playBounds.minY) / 2;
+    } else {
+      const geom = getTableGeometry();
+      playHalfWidth = geom.playWidthIn / 2;
+      playHalfHeight = geom.playHeightIn / 2;
+    }
+
+    const outerX = playHalfWidth + outerOffset;
+    const outerY = playHalfHeight + outerOffset;
+    const cornerRadius = Math.max(0, Math.min(cornerRadiusRaw, frameWidth, outerX, outerY));
+
+    this.ctx.save();
+    if (cornerRadius > 0) {
+      this.ctx.beginPath();
+      this.traceRoundedRectPath(this.ctx, outerX, outerY, cornerRadius);
+      this.ctx.clip();
+    }
     rails.forEach((rail) => this.drawRail(rail));
+    this.ctx.restore();
   }
   
   drawBalls(balls: Ball[], alpha: number) {
@@ -274,44 +306,10 @@ export class Renderer {
   drawRail(rail: Rail) {
     // Draw simple cushion with consistent thickness
     const width = CONFIG.RAIL_THICKNESS_INNER + CONFIG.RAIL_THICKNESS_OUTER;
-    const cornerRadius = CONFIG.FRAME_CORNER_RADIUS_IN ?? 0;
-    const hasRoundedFrame = cornerRadius > 1e-4;
-    const isCornerTaper = (rail.id ?? '').endsWith('_taper');
-
-    let x1 = rail.x1;
-    let y1 = rail.y1;
-    let x2 = rail.x2;
-    let y2 = rail.y2;
-
-    if (hasRoundedFrame && isCornerTaper) {
-      const abs1 = Math.max(Math.abs(x1), Math.abs(y1));
-      const abs2 = Math.max(Math.abs(x2), Math.abs(y2));
-      const inner = abs1 <= abs2 ? { x: x1, y: y1 } : { x: x2, y: y2 };
-      const outer = abs1 <= abs2 ? { x: x2, y: y2 } : { x: x1, y: y1 };
-      const dx = outer.x - inner.x;
-      const dy = outer.y - inner.y;
-      const length = Math.sqrt(dx * dx + dy * dy);
-      const trim = Math.min(cornerRadius, length - 0.05);
-      if (length > 1e-4 && trim > 0) {
-        const scale = (length - trim) / length;
-        const trimmedOuter = {
-          x: inner.x + dx * scale,
-          y: inner.y + dy * scale,
-        };
-        if (abs1 > abs2) {
-          x1 = trimmedOuter.x;
-          y1 = trimmedOuter.y;
-        } else {
-          x2 = trimmedOuter.x;
-          y2 = trimmedOuter.y;
-        }
-      }
-    }
-
     let nx = rail.nx;
     let ny = rail.ny;
-    const midX = (x1 + x2) / 2;
-    const midY = (y1 + y2) / 2;
+    const midX = (rail.x1 + rail.x2) / 2;
+    const midY = (rail.y1 + rail.y2) / 2;
     const toCenterX = -midX;
     const toCenterY = -midY;
     const dot = nx * toCenterX + ny * toCenterY;
