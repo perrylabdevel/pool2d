@@ -209,12 +209,12 @@ export class Renderer {
     signX: number,
     signY: number,
     clip: FrameClipInfo
-  ): number | null {
+  ): { t: number; point: Vec2 } | null {
     const a = dir.x * dir.x + dir.y * dir.y;
     if (a < 1e-8) return null;
 
-    const centerX = (signX >= 0 ? 1 : -1) * clip.outerX;
-    const centerY = (signY >= 0 ? 1 : -1) * clip.outerY;
+    const centerX = (signX >= 0 ? 1 : -1) * (clip.outerX - clip.radius);
+    const centerY = (signY >= 0 ? 1 : -1) * (clip.outerY - clip.radius);
 
     const ox = start.x - centerX;
     const oy = start.y - centerY;
@@ -239,7 +239,12 @@ export class Renderer {
       }
     }
 
-    return t;
+    const t = Math.min(...candidates);
+    const point = {
+      x: start.x + dir.x * t,
+      y: start.y + dir.y * t,
+    };
+    return { t, point };
   }
 
   private beginBoundaryPath(points: Vec2[], close: boolean = true) {
@@ -389,12 +394,18 @@ export class Renderer {
         x: inner.x - nx * (centerShift + halfWidth),
         y: inner.y - ny * (centerShift + halfWidth),
       };
-      const t = this.intersectLineWithCornerArc(startOuter, dir, signX, signY, clip);
-      if (t !== null) {
+      const result = this.intersectLineWithCornerArc(startOuter, dir, signX, signY, clip);
+      if (result) {
         const trimmed = {
-          x: inner.x + dir.x * t,
-          y: inner.y + dir.y * t,
+          x: result.point.x,
+          y: result.point.y,
         };
+        const dirLen = Math.sqrt(dir.x * dir.x + dir.y * dir.y) || 1;
+        const ux = dir.x / dirLen;
+        const uy = dir.y / dirLen;
+        const epsilon = 1e-3;
+        trimmed.x -= ux * epsilon;
+        trimmed.y -= uy * epsilon;
         if (abs1 > abs2) {
           x1 = trimmed.x;
           y1 = trimmed.y;

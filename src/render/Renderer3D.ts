@@ -1500,10 +1500,8 @@ export class Renderer3D {
       const innerPoint = absA <= absB ? pointA : pointB;
       const outerPoint = absA <= absB ? pointB : pointA;
 
-      const dirX = outerPoint.x - innerPoint.x;
-      const dirY = outerPoint.y - innerPoint.y;
-
       let trimmedOuter = outerPoint;
+      const dir = { x: outerPoint.x - innerPoint.x, y: outerPoint.y - innerPoint.y };
       if (hasRoundedFrame && isCornerTaper && clipInfo.radius > 1e-4) {
         const signX = Math.sign(outerPoint.x) || Math.sign(innerPoint.x) || 1;
         const signY = Math.sign(outerPoint.y) || Math.sign(innerPoint.y) || 1;
@@ -1512,11 +1510,15 @@ export class Renderer3D {
           x: innerPoint.x - nx * outerDistance,
           y: innerPoint.y - ny * outerDistance,
         };
-        const t = this.intersectLineWithCornerArc3D(startOuter, { x: dirX, y: dirY }, signX, signY, clipInfo);
-        if (t !== null) {
+        const result = this.intersectLineWithCornerArc3D(startOuter, dir, signX, signY, clipInfo);
+        if (result) {
+          const dirLen = Math.sqrt(dir.x * dir.x + dir.y * dir.y) || 1;
+          const ux = dir.x / dirLen;
+          const uy = dir.y / dirLen;
+          const epsilon = 1e-3;
           trimmedOuter = {
-            x: innerPoint.x + dirX * t,
-            y: innerPoint.y + dirY * t,
+            x: result.point.x - ux * epsilon,
+            y: result.point.y - uy * epsilon,
           };
         }
       }
@@ -1596,12 +1598,12 @@ export class Renderer3D {
     signX: number,
     signY: number,
     clip: FrameClipInfo
-  ): number | null {
+  ): { t: number; point: Vec2 } | null {
     const a = dir.x * dir.x + dir.y * dir.y;
     if (a < 1e-8) return null;
 
-    const centerX = (signX >= 0 ? 1 : -1) * clip.outerX;
-    const centerY = (signY >= 0 ? 1 : -1) * clip.outerY;
+    const centerX = (signX >= 0 ? 1 : -1) * (clip.outerX - clip.radius);
+    const centerY = (signY >= 0 ? 1 : -1) * (clip.outerY - clip.radius);
 
     const ox = start.x - centerX;
     const oy = start.y - centerY;
@@ -1617,16 +1619,16 @@ export class Renderer3D {
       (-b + sqrt) / (2 * a),
     ];
 
-    let t: number | null = null;
-    for (const candidate of tCandidates) {
-      if (candidate > 1e-4 && candidate <= 1.5) {
-        if (t == null || candidate < t) {
-          t = candidate;
-        }
-      }
-    }
-
-    return t;
+    const valid = tCandidates.filter((candidate) => candidate > 1e-4 && candidate <= 1.5);
+    if (!valid.length) return null;
+    const t = Math.min(...valid);
+    return {
+      t,
+      point: {
+        x: start.x + dir.x * t,
+        y: start.y + dir.y * t,
+      },
+    };
   }
 
   private getRailShadowMaterial(): THREE.MeshBasicMaterial {
