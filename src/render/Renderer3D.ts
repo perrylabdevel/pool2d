@@ -4,7 +4,7 @@ import { FBXLoader } from 'three-stdlib';
 import { Ball, Rail } from '../physics/Shapes';
 import { PhysicsWorld } from '../physics/Physics';
 import { CONFIG, BALL_CUE } from '../config';
-import { getTableGeometry, computePlayBoundaryPoints, computeBoundaryBounds, type Vec2, type BoundaryBounds, type PocketDef, type RailDef } from '../geometry/Geometry';
+import { getTableGeometry, computePlayBoundaryPoints, computeBoundaryBounds, type Vec2, type BoundaryBounds, type PocketDef } from '../geometry/Geometry';
 import { PredictionResult, ShotPreviewPaths } from '../physics/Prediction';
 import { fetchWithCache } from './AssetCache';
 import {
@@ -1158,88 +1158,6 @@ export class Renderer3D {
     return path;
   }
 
-
-  private getRailInnerOuterFromDef(def: RailDef): { inner: Vec2; outer: Vec2 } {
-    const fromDist = Math.max(Math.abs(def.from.x), Math.abs(def.from.y));
-    const toDist = Math.max(Math.abs(def.to.x), Math.abs(def.to.y));
-    if (fromDist <= toDist) {
-      return { inner: { ...def.from }, outer: { ...def.to } };
-    }
-    return { inner: { ...def.to }, outer: { ...def.from } };
-  }
-
-  private createCornerRailPatches(
-    clipInfo: FrameClipInfo,
-    totalWidth: number,
-    centerShift: number,
-    baseMaterial: THREE.MeshStandardMaterial
-  ) {
-    if (clipInfo.radius <= 1e-4) return;
-
-    const geom = getTableGeometry();
-    const railsById = new Map<string, RailDef>();
-    geom.rails.forEach((rail) => railsById.set(rail.id, rail));
-
-    const configs = [
-      { signX: -1 as 1 | -1, signY: 1 as 1 | -1, horizontal: 'N_west_taper', vertical: 'W_north_taper' },
-      { signX: 1 as 1 | -1, signY: 1 as 1 | -1, horizontal: 'N_east_taper', vertical: 'E_north_taper' },
-      { signX: 1 as 1 | -1, signY: -1 as 1 | -1, horizontal: 'S_east_taper', vertical: 'E_south_taper' },
-      { signX: -1 as 1 | -1, signY: -1 as 1 | -1, horizontal: 'S_west_taper', vertical: 'W_south_taper' },
-    ];
-
-    configs.forEach(({ signX, signY, horizontal, vertical }) => {
-      const horizontalRail = railsById.get(horizontal);
-      const verticalRail = railsById.get(vertical);
-      if (!horizontalRail || !verticalRail) return;
-
-      const h = this.getRailInnerOuterFromDef(horizontalRail);
-      const v = this.getRailInnerOuterFromDef(verticalRail);
-
-      const trimH = this.intersectLineWithCornerArc3D(
-        h.inner,
-        { x: h.outer.x - h.inner.x, y: h.outer.y - h.inner.y },
-        signX,
-        signY,
-        clipInfo
-      );
-      const trimV = this.intersectLineWithCornerArc3D(
-        v.inner,
-        { x: v.outer.x - v.inner.x, y: v.outer.y - v.inner.y },
-        signX,
-        signY,
-        clipInfo
-      );
-      if (!trimH || !trimV) return;
-
-      const center = {
-        x: (signX >= 0 ? 1 : -1) * (clipInfo.outerX - clipInfo.radius),
-        y: (signY >= 0 ? 1 : -1) * (clipInfo.outerY - clipInfo.radius),
-      };
-      const counterClockwise = signX !== signY;
-      const startAngle = Math.atan2(trimH.point.y - center.y, trimH.point.x - center.x);
-      const endAngle = Math.atan2(trimV.point.y - center.y, trimV.point.x - center.x);
-
-      const shape = new THREE.Shape();
-      shape.moveTo(trimH.point.x, trimH.point.y);
-      shape.absarc(center.x, center.y, clipInfo.radius, startAngle, endAngle, counterClockwise);
-      shape.lineTo(v.outer.x, v.outer.y);
-      shape.lineTo(h.outer.x, h.outer.y);
-      shape.closePath();
-
-      const patchGeometry = new THREE.ShapeGeometry(shape);
-      const patchMaterial = baseMaterial.clone();
-      const patchMesh = new THREE.Mesh(patchGeometry, patchMaterial);
-      patchMesh.position.z = -0.25;
-      patchMesh.castShadow = true;
-      patchMesh.receiveShadow = true;
-      patchMesh.visible = this.layerVisibility.showRails;
-      patchMesh.renderOrder = this.layerOrder.orderRails;
-      this.enforceRenderOrderControl(patchMesh);
-      this.scene.add(patchMesh);
-      this.railMeshes.push(patchMesh);
-    });
-  }
-
   private traceRoundedRect(
     target: THREE.Path,
     halfWidth: number,
@@ -1584,16 +1502,33 @@ export class Renderer3D {
       const innerPoint = absA <= absB ? pointA : pointB;
       const outerPoint = absA <= absB ? pointB : pointA;
 
+      let trimmedOuter = outerPoint;
       const dir = { x: outerPoint.x - innerPoint.x, y: outerPoint.y - innerPoint.y };
       let trimmedData: { t: number; point: Vec2 } | null = null;
       if (hasRoundedFrame && isCornerTaper && clipInfo.radius > 1e-4) {
         const signX = Math.sign(outerPoint.x) || Math.sign(innerPoint.x) || 1;
         const signY = Math.sign(outerPoint.y) || Math.sign(innerPoint.y) || 1;
-        trimmedData = this.intersectLineWithCornerArc3D(innerPoint, dir, signX, signY, clipInfo);
+        const outerDistance = centerShift + totalWidth / 2;
+        const startOuter = {
+          x: innerPoint.x - nx * outerDistance,
+          y: innerPoint.y - ny * outerDistance,
+        };
+        trimmedData = this.intersectLineWithCornerArc3D(startOuter, dir, signX, signY, clipInfo);
+        const result = trimmedData;
+        if (result) {
+          const dirLen = Math.sqrt(dir.x * dir.x + dir.y * dir.y) || 1;
+          const ux = dir.x / dirLen;
+          const uy = dir.y / dirLen;
+          const epsilon = 1e-3;
+          trimmedOuter = {
+            x: result.point.x - ux * epsilon,
+            y: result.point.y - uy * epsilon,
+          };
+        }
       }
 
-      const adjMidX = (innerPoint.x + outerPoint.x) / 2;
-      const adjMidY = (innerPoint.y + outerPoint.y) / 2;
+      const adjMidX = (innerPoint.x + trimmedOuter.x) / 2;
+      const adjMidY = (innerPoint.y + trimmedOuter.y) / 2;
       const adjToCenterX = -adjMidX;
       const adjToCenterY = -adjMidY;
       const adjDot = nx * adjToCenterX + ny * adjToCenterY;
@@ -1602,8 +1537,8 @@ export class Renderer3D {
         ny = -ny;
       }
 
-      const renderDirX = outerPoint.x - innerPoint.x;
-      const renderDirY = outerPoint.y - innerPoint.y;
+      const renderDirX = trimmedOuter.x - innerPoint.x;
+      const renderDirY = trimmedOuter.y - innerPoint.y;
       const renderLength = Math.sqrt(renderDirX * renderDirX + renderDirY * renderDirY) || 1;
       const angle = Math.atan2(renderDirY, renderDirX);
       const renderCenterX = innerPoint.x + renderDirX * 0.5;
@@ -1622,8 +1557,11 @@ export class Renderer3D {
 
       this.scene.add(railMesh);
       this.railMeshes.push(railMesh);
-      const debugStartOuter = outerPoint;
-      const debugTrimmed = trimmedData ? trimmedData.point : outerPoint;
+      const debugStartOuter = {
+        x: innerPoint.x - nx * (centerShift + totalWidth / 2),
+        y: innerPoint.y - ny * (centerShift + totalWidth / 2),
+      };
+      const debugTrimmed = trimmedData ? trimmedData.point : trimmedOuter;
       this.debugRailSegments.push({
         id: rail.id ?? `rail-${this.railMeshes.length - 1}`,
         inner: innerPoint,
@@ -1667,8 +1605,6 @@ export class Renderer3D {
       this.scene.add(shadowMesh);
       this.railShadowMeshes.push(shadowMesh);
     });
-
-    this.createCornerRailPatches(clipInfo, totalWidth, centerShift, railMaterial);
   }
 
   private intersectLineWithCornerArc3D(
