@@ -203,21 +203,23 @@ export class Renderer {
     ctx.closePath();
   }
 
-  private projectToCornerArc(inner: Vec2, outer: Vec2, clip: FrameClipInfo): Vec2 | null {
-    const dx = outer.x - inner.x;
-    const dy = outer.y - inner.y;
-    const a = dx * dx + dy * dy;
+  private intersectLineWithCornerArc(
+    start: Vec2,
+    dir: Vec2,
+    signX: number,
+    signY: number,
+    clip: FrameClipInfo
+  ): number | null {
+    const a = dir.x * dir.x + dir.y * dir.y;
     if (a < 1e-8) return null;
 
-    const signX = Math.sign(outer.x) || 1;
-    const signY = Math.sign(outer.y) || 1;
-    const centerX = signX * clip.outerX;
-    const centerY = signY * clip.outerY;
+    const centerX = (signX >= 0 ? 1 : -1) * clip.outerX;
+    const centerY = (signY >= 0 ? 1 : -1) * clip.outerY;
 
-    const ox = inner.x - centerX;
-    const oy = inner.y - centerY;
+    const ox = start.x - centerX;
+    const oy = start.y - centerY;
 
-    const b = 2 * (dx * ox + dy * oy);
+    const b = 2 * (dir.x * ox + dir.y * oy);
     const c = ox * ox + oy * oy - clip.radius * clip.radius;
     const discriminant = b * b - 4 * a * c;
     if (discriminant < 0) return null;
@@ -230,19 +232,14 @@ export class Renderer {
 
     let t: number | null = null;
     for (const candidate of tCandidates) {
-      if (candidate > 1e-4 && candidate <= 1.0001) {
+      if (candidate > 1e-4 && candidate <= 1.5) {
         if (t == null || candidate < t) {
           t = candidate;
         }
       }
     }
 
-    if (t == null) return null;
-
-    return {
-      x: inner.x + dx * t,
-      y: inner.y + dy * t,
-    };
+    return t;
   }
 
   private beginBoundaryPath(points: Vec2[], close: boolean = true) {
@@ -367,13 +364,37 @@ export class Renderer {
     let x2 = rail.x2;
     let y2 = rail.y2;
 
+    let nx = rail.nx;
+    let ny = rail.ny;
+    const origMidX = (x1 + x2) / 2;
+    const origMidY = (y1 + y2) / 2;
+    const origDot = nx * -origMidX + ny * -origMidY;
+    if (origDot < 0) {
+      nx = -nx;
+      ny = -ny;
+    }
+
+    const centerShift = (CONFIG.RAIL_THICKNESS_OUTER - CONFIG.RAIL_THICKNESS_INNER) / 2;
+    const halfWidth = width / 2;
+
     if (hasRoundedFrame && isCornerTaper && clip) {
       const abs1 = Math.max(Math.abs(x1), Math.abs(y1));
       const abs2 = Math.max(Math.abs(x2), Math.abs(y2));
       const inner = abs1 <= abs2 ? { x: x1, y: y1 } : { x: x2, y: y2 };
       const outer = abs1 <= abs2 ? { x: x2, y: y2 } : { x: x1, y: y1 };
-      const trimmed = this.projectToCornerArc(inner, outer, clip);
-      if (trimmed) {
+      const dir = { x: outer.x - inner.x, y: outer.y - inner.y };
+      const signX = Math.sign(outer.x) || Math.sign(inner.x) || 1;
+      const signY = Math.sign(outer.y) || Math.sign(inner.y) || 1;
+      const startOuter = {
+        x: inner.x - nx * (centerShift + halfWidth),
+        y: inner.y - ny * (centerShift + halfWidth),
+      };
+      const t = this.intersectLineWithCornerArc(startOuter, dir, signX, signY, clip);
+      if (t !== null) {
+        const trimmed = {
+          x: inner.x + dir.x * t,
+          y: inner.y + dir.y * t,
+        };
         if (abs1 > abs2) {
           x1 = trimmed.x;
           y1 = trimmed.y;
@@ -384,8 +405,6 @@ export class Renderer {
       }
     }
 
-    let nx = rail.nx;
-    let ny = rail.ny;
     const midX = (x1 + x2) / 2;
     const midY = (y1 + y2) / 2;
     const toCenterX = -midX;
@@ -396,13 +415,10 @@ export class Renderer {
       ny = -ny;
     }
 
-    const centerShift = (CONFIG.RAIL_THICKNESS_OUTER - CONFIG.RAIL_THICKNESS_INNER) / 2;
     const startX = x1 - nx * centerShift;
     const startY = y1 - ny * centerShift;
     const endX = x2 - nx * centerShift;
     const endY = y2 - ny * centerShift;
-
-    const halfWidth = width / 2;
 
     const startInnerX = startX + nx * halfWidth;
     const startInnerY = startY + ny * halfWidth;
