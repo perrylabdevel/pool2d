@@ -1481,10 +1481,37 @@ export class Renderer3D {
         ny = -ny;
       }
 
-      const railGeometry = new THREE.BoxGeometry(length, totalWidth, 0.5);
+      const hasRoundedFrame = (CONFIG.FRAME_CORNER_RADIUS_IN ?? 0) > 1e-4;
+      const isCornerTaper = (rail.id ?? '').endsWith('_taper');
+      const pointA = { x: rail.x1, y: rail.y1 };
+      const pointB = { x: rail.x2, y: rail.y2 };
+      const absA = Math.max(Math.abs(pointA.x), Math.abs(pointA.y));
+      const absB = Math.max(Math.abs(pointB.x), Math.abs(pointB.y));
+      const innerPoint = absA <= absB ? pointA : pointB;
+      const outerPoint = absA <= absB ? pointB : pointA;
+
+      const dirBaseX = outerPoint.x - innerPoint.x;
+      const dirBaseY = outerPoint.y - innerPoint.y;
+      const baseLen = Math.sqrt(dirBaseX * dirBaseX + dirBaseY * dirBaseY) || 1;
+      const unitDirX = dirBaseX / baseLen;
+      const unitDirY = dirBaseY / baseLen;
+
+      let renderLength = baseLen;
+      if (hasRoundedFrame && isCornerTaper) {
+        const trim = Math.min(CONFIG.FRAME_CORNER_RADIUS_IN ?? 0, baseLen - 0.05);
+        renderLength = Math.max(0.05, baseLen - trim);
+      }
+      const trimmedOuter = {
+        x: innerPoint.x + unitDirX * renderLength,
+        y: innerPoint.y + unitDirY * renderLength,
+      };
+      const renderCenterX = innerPoint.x + unitDirX * (renderLength / 2);
+      const renderCenterY = innerPoint.y + unitDirY * (renderLength / 2);
+
+      const railGeometry = new THREE.BoxGeometry(renderLength, totalWidth, 0.5);
 
       const railMesh = new THREE.Mesh(railGeometry, railMaterial.clone());
-      railMesh.position.set(midX - nx * centerShift, midY - ny * centerShift, -0.25);
+      railMesh.position.set(renderCenterX - nx * centerShift, renderCenterY - ny * centerShift, -0.25);
       railMesh.rotation.z = angle;
       railMesh.castShadow = true;
       railMesh.receiveShadow = true;
@@ -1498,7 +1525,7 @@ export class Renderer3D {
       // Highlight on top surface of rail
       const highlightMaterial = this.getRailHighlightMaterial(); // Share material (don't clone) so slider can control all
       const highlightWidth = Math.max(0.3, totalWidth * 0.55); // Wider highlight (was 0.35)
-      const highlightGeometry = new THREE.PlaneGeometry(length, highlightWidth);
+      const highlightGeometry = new THREE.PlaneGeometry(renderLength, highlightWidth);
       const highlightMesh = new THREE.Mesh(highlightGeometry, highlightMaterial);
       // Rails are at Z=-0.25 with height 0.5, so top is at 0. Place highlight just above at 0.01
       highlightMesh.position.set(railMesh.position.x, railMesh.position.y, 0.01);
@@ -1510,27 +1537,9 @@ export class Renderer3D {
 
       // Add a very tight shadow band just inside the felt with a soft fade
       const shadowWidth = Math.max(0.30, inner * 0.45);
-      const hasRoundedFrame = (CONFIG.FRAME_CORNER_RADIUS_IN ?? 0) > 1e-4;
-      const isCornerTaper = (rail.id ?? '').endsWith('_taper');
-      let shadowLength = length;
-      let shadowCenterX = railMesh.position.x;
-      let shadowCenterY = railMesh.position.y;
-
-      if (hasRoundedFrame && isCornerTaper) {
-        const abs1 = Math.max(Math.abs(rail.x1), Math.abs(rail.y1));
-        const abs2 = Math.max(Math.abs(rail.x2), Math.abs(rail.y2));
-        const innerPoint = abs1 <= abs2 ? { x: rail.x1, y: rail.y1 } : { x: rail.x2, y: rail.y2 };
-        const outerPoint = abs1 <= abs2 ? { x: rail.x2, y: rail.y2 } : { x: rail.x1, y: rail.y1 };
-        const dirX = outerPoint.x - innerPoint.x;
-        const dirY = outerPoint.y - innerPoint.y;
-        const baseLen = Math.sqrt(dirX * dirX + dirY * dirY) || 1;
-        const unitX = dirX / baseLen;
-        const unitY = dirY / baseLen;
-        const trim = Math.min(CONFIG.FRAME_CORNER_RADIUS_IN ?? 0, baseLen - 0.1);
-        shadowLength = Math.max(0.1, baseLen - trim);
-        shadowCenterX = innerPoint.x + unitX * (shadowLength / 2);
-        shadowCenterY = innerPoint.y + unitY * (shadowLength / 2);
-      }
+      const shadowLength = renderLength;
+      const shadowCenterX = renderCenterX;
+      const shadowCenterY = renderCenterY;
 
       const shadowGeometry = new THREE.PlaneGeometry(shadowLength, shadowWidth);
       const shadowMaterial = this.getRailShadowMaterial();
@@ -1538,8 +1547,8 @@ export class Renderer3D {
       // Position shadow on inner edge (toward felt) for depth
       // Place the band entirely inside the play area: center at (midpoint + n * (shadowWidth/2))
       const centerInward = shadowWidth * 0.5 + 0.02; // slight inset
-      const centerBaseX = shadowCenterX;
-      const centerBaseY = shadowCenterY;
+      const centerBaseX = shadowCenterX - nx * centerShift;
+      const centerBaseY = shadowCenterY - ny * centerShift;
       const cx = centerBaseX + nx * centerInward;
       const cy = centerBaseY + ny * centerInward;
       shadowMesh.position.set(cx, cy, 0.005);
