@@ -1510,14 +1510,38 @@ export class Renderer3D {
 
       // Add a very tight shadow band just inside the felt with a soft fade
       const shadowWidth = Math.max(0.30, inner * 0.45);
-      const shadowGeometry = new THREE.PlaneGeometry(length, shadowWidth);
+      const hasRoundedFrame = (CONFIG.FRAME_CORNER_RADIUS_IN ?? 0) > 1e-4;
+      const isCornerTaper = rail.id.endsWith('_taper');
+      let shadowLength = length;
+      let shadowCenterX = railMesh.position.x;
+      let shadowCenterY = railMesh.position.y;
+
+      if (hasRoundedFrame && isCornerTaper) {
+        const abs1 = Math.max(Math.abs(rail.x1), Math.abs(rail.y1));
+        const abs2 = Math.max(Math.abs(rail.x2), Math.abs(rail.y2));
+        const innerPoint = abs1 <= abs2 ? { x: rail.x1, y: rail.y1 } : { x: rail.x2, y: rail.y2 };
+        const outerPoint = abs1 <= abs2 ? { x: rail.x2, y: rail.y2 } : { x: rail.x1, y: rail.y1 };
+        const dirX = outerPoint.x - innerPoint.x;
+        const dirY = outerPoint.y - innerPoint.y;
+        const baseLen = Math.sqrt(dirX * dirX + dirY * dirY) || 1;
+        const unitX = dirX / baseLen;
+        const unitY = dirY / baseLen;
+        const trim = Math.min(CONFIG.FRAME_CORNER_RADIUS_IN ?? 0, baseLen - 0.1);
+        shadowLength = Math.max(0.1, baseLen - trim);
+        shadowCenterX = innerPoint.x + unitX * (shadowLength / 2);
+        shadowCenterY = innerPoint.y + unitY * (shadowLength / 2);
+      }
+
+      const shadowGeometry = new THREE.PlaneGeometry(shadowLength, shadowWidth);
       const shadowMaterial = this.getRailShadowMaterial();
       const shadowMesh = new THREE.Mesh(shadowGeometry, shadowMaterial);
       // Position shadow on inner edge (toward felt) for depth
       // Place the band entirely inside the play area: center at (midpoint + n * (shadowWidth/2))
       const centerInward = shadowWidth * 0.5 + 0.02; // slight inset
-      const cx = midX + nx * centerInward;
-      const cy = midY + ny * centerInward;
+      const centerBaseX = shadowCenterX;
+      const centerBaseY = shadowCenterY;
+      const cx = centerBaseX + nx * centerInward;
+      const cy = centerBaseY + ny * centerInward;
       shadowMesh.position.set(cx, cy, 0.005);
       shadowMesh.rotation.z = angle;
       shadowMesh.visible = this.layerVisibility.showRails;
@@ -1802,15 +1826,23 @@ export class Renderer3D {
 
     const { minX, maxX, minY, maxY } = this.playBounds;
 
-    // Outer rectangle goes to frame INNER edge (not beyond the frame)
-    // Frame inner edge is at: play area + rail outer thickness
-    const outer = new THREE.Shape();
-    const frameInnerOffset = CONFIG.RAIL_THICKNESS_OUTER; // Just the rail thickness, not + frameWidth
-    outer.moveTo(minX - frameInnerOffset, maxY + frameInnerOffset);
-    outer.lineTo(maxX + frameInnerOffset, maxY + frameInnerOffset);
-    outer.lineTo(maxX + frameInnerOffset, minY - frameInnerOffset);
-    outer.lineTo(minX - frameInnerOffset, minY - frameInnerOffset);
-    outer.closePath();
+    const playHalfWidth = (maxX - minX) / 2;
+    const playHalfHeight = (maxY - minY) / 2;
+    const frameInset = CONFIG.RAIL_THICKNESS_OUTER;
+    const outerHalfWidth = playHalfWidth + frameInset;
+    const outerHalfHeight = playHalfHeight + frameInset;
+
+    const frameOffset = CONFIG.FRAME_OFFSET_IN;
+    const cornerFrameOffset = CONFIG.CORNER_FRAME_OFFSET_IN ?? frameOffset;
+    const outerCornerRadius = Math.min(
+      CONFIG.FRAME_CORNER_RADIUS_IN ?? 0,
+      frameOffset,
+      cornerFrameOffset
+    );
+    const maxCornerRadius = Math.max(0, outerCornerRadius);
+    const innerCornerRadius = Math.max(0, maxCornerRadius - frameInset);
+
+    const outer = this.createRoundedRectShape(outerHalfWidth, outerHalfHeight, innerCornerRadius);
 
     // Inner hole follows cushion OUTER edge (offset outward by rail thickness)
     // This leaves room for the rail cushions and only fills the gap to the frame
@@ -1827,7 +1859,7 @@ export class Renderer3D {
       outer.holes.push(inner);
     }
 
-    return new THREE.ShapeGeometry(outer);
+    return new THREE.ShapeGeometry(outer, 64);
   }
 
   private getPocketSideMaterial(): THREE.MeshBasicMaterial {
