@@ -1508,7 +1508,12 @@ export class Renderer3D {
       if (hasRoundedFrame && isCornerTaper && clipInfo.radius > 1e-4) {
         const signX = Math.sign(outerPoint.x) || Math.sign(innerPoint.x) || 1;
         const signY = Math.sign(outerPoint.y) || Math.sign(innerPoint.y) || 1;
-        trimmedData = this.intersectLineWithCornerArc3D(innerPoint, dir, signX, signY, clipInfo);
+        const outerDistance = centerShift + totalWidth / 2;
+        const startOuter = {
+          x: innerPoint.x - nx * outerDistance,
+          y: innerPoint.y - ny * outerDistance,
+        };
+        trimmedData = this.intersectLineWithCornerArc3D(startOuter, dir, signX, signY, clipInfo);
         const result = trimmedData;
         if (result) {
           const dirLen = Math.sqrt(dir.x * dir.x + dir.y * dir.y) || 1;
