@@ -384,37 +384,38 @@ export class Renderer {
     const centerShift = (CONFIG.RAIL_THICKNESS_OUTER - CONFIG.RAIL_THICKNESS_INNER) / 2;
     const halfWidth = width / 2;
 
+    let trimmedRecord: { inner: Vec2; trimmed: Vec2; startOuter: Vec2 } | null = null;
     if (hasRoundedFrame && isCornerTaper && clip) {
       const abs1 = Math.max(Math.abs(x1), Math.abs(y1));
       const abs2 = Math.max(Math.abs(x2), Math.abs(y2));
-      const inner = abs1 <= abs2 ? { x: x1, y: y1 } : { x: x2, y: y2 };
-      const outer = abs1 <= abs2 ? { x: x2, y: y2 } : { x: x1, y: y1 };
+      const innerIsStart = abs1 <= abs2;
+      const inner = innerIsStart ? { x: x1, y: y1 } : { x: x2, y: y2 };
+      const outer = innerIsStart ? { x: x2, y: y2 } : { x: x1, y: y1 };
       const dir = { x: outer.x - inner.x, y: outer.y - inner.y };
       const signX = Math.sign(outer.x) || Math.sign(inner.x) || 1;
       const signY = Math.sign(outer.y) || Math.sign(inner.y) || 1;
-      const startOuter = {
-        x: inner.x - nx * (centerShift + halfWidth),
-        y: inner.y - ny * (centerShift + halfWidth),
-      };
-      const result = this.intersectLineWithCornerArc(startOuter, dir, signX, signY, clip);
+      const result = this.intersectLineWithCornerArc(inner, dir, signX, signY, clip);
       if (result) {
-        const trimmed = {
-          x: result.point.x,
-          y: result.point.y,
-        };
         const dirLen = Math.sqrt(dir.x * dir.x + dir.y * dir.y) || 1;
         const ux = dir.x / dirLen;
         const uy = dir.y / dirLen;
         const epsilon = 1e-3;
-        trimmed.x -= ux * epsilon;
-        trimmed.y -= uy * epsilon;
-        if (abs1 > abs2) {
-          x1 = trimmed.x;
-          y1 = trimmed.y;
-        } else {
+        const trimmed = {
+          x: result.point.x - ux * epsilon,
+          y: result.point.y - uy * epsilon,
+        };
+        if (innerIsStart) {
           x2 = trimmed.x;
           y2 = trimmed.y;
+        } else {
+          x1 = trimmed.x;
+          y1 = trimmed.y;
         }
+        const startOuter = {
+          x: inner.x - nx * (centerShift + halfWidth),
+          y: inner.y - ny * (centerShift + halfWidth),
+        };
+        trimmedRecord = { inner, trimmed, startOuter };
       }
     }
 
@@ -478,22 +479,24 @@ export class Renderer {
     this.ctx.closePath();
     this.ctx.fill();
 
-    const trimmedOuterPoint =
-      hasRoundedFrame && isCornerTaper
-        ? Math.max(Math.abs(x1), Math.abs(y1)) > Math.max(Math.abs(x2), Math.abs(y2))
-          ? { x: x1, y: y1 }
-          : { x: x2, y: y2 }
-        : { x: x2, y: y2 };
-
-    this.debugRailSegments.push({
-      id: rail.id ?? 'rail',
-      inner: { x: x1, y: y1 },
-      trimmed: trimmedOuterPoint,
-      startOuter: {
-        x: startX - nx * halfWidth,
-        y: startY - ny * halfWidth,
-      },
-    });
+    if (trimmedRecord) {
+      this.debugRailSegments.push({
+        id: rail.id ?? 'rail',
+        inner: trimmedRecord.inner,
+        trimmed: trimmedRecord.trimmed,
+        startOuter: trimmedRecord.startOuter,
+      });
+    } else {
+      this.debugRailSegments.push({
+        id: rail.id ?? 'rail',
+        inner: { x: x1, y: y1 },
+        trimmed: { x: x2, y: y2 },
+        startOuter: {
+          x: startX - nx * halfWidth,
+          y: startY - ny * halfWidth,
+        },
+      });
+    }
   }
 
   drawBall(ball: Ball, alpha: number) {
