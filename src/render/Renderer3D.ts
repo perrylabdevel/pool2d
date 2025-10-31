@@ -1511,7 +1511,7 @@ export class Renderer3D {
       // Add a very tight shadow band just inside the felt with a soft fade
       const shadowWidth = Math.max(0.30, inner * 0.45);
       const hasRoundedFrame = (CONFIG.FRAME_CORNER_RADIUS_IN ?? 0) > 1e-4;
-      const isCornerTaper = rail.id.endsWith('_taper');
+      const isCornerTaper = (rail.id ?? '').endsWith('_taper');
       let shadowLength = length;
       let shadowCenterX = railMesh.position.x;
       let shadowCenterY = railMesh.position.y;

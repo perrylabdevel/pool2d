@@ -72,7 +72,7 @@ export class PhysicsWorld {
   initializeRails() {
     const GEOM = getTableGeometry();
     GEOM.rails.forEach((railDef) => {
-      const rail = new Rail(railDef.from.x, railDef.from.y, railDef.to.x, railDef.to.y);
+      const rail = new Rail(railDef.from.x, railDef.from.y, railDef.to.x, railDef.to.y, railDef.id);
       const dot = rail.nx * railDef.normal.x + rail.ny * railDef.normal.y;
       if (dot < 0) {
         rail.flipNormal();

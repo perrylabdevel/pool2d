@@ -95,6 +95,7 @@ export class Ball {
 }
 
 export class Rail {
+  id?: string;
   x1: number;
   y1: number;
   x2: number;
@@ -102,11 +103,12 @@ export class Rail {
   nx: number; // Normal pointing inward
   ny: number;
   
-  constructor(x1: number, y1: number, x2: number, y2: number) {
+  constructor(x1: number, y1: number, x2: number, y2: number, id?: string) {
     this.x1 = x1;
     this.y1 = y1;
     this.x2 = x2;
     this.y2 = y2;
+    this.id = id;
     
     // Calculate normal (perpendicular to rail, pointing inward)
     const dx = x2 - x1;
@@ -125,7 +127,7 @@ export class Rail {
   }
   
   clone(): Rail {
-    const copy = new Rail(this.x1, this.y1, this.x2, this.y2);
+    const copy = new Rail(this.x1, this.y1, this.x2, this.y2, this.id);
     copy.nx = this.nx;
     copy.ny = this.ny;
     return copy;
