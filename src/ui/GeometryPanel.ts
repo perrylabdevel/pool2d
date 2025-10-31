@@ -352,6 +352,18 @@ export class GeometryPanel {
       });
     }
 
+    const frameCornerRadiusSlider = document.getElementById(
+      'live-frame-corner-radius'
+    ) as HTMLInputElement;
+    const frameCornerRadiusVal = document.getElementById('live-frame-corner-radius-val');
+    if (frameCornerRadiusSlider && frameCornerRadiusVal) {
+      frameCornerRadiusSlider.addEventListener('input', (e) => {
+        const value = parseFloat((e.target as HTMLInputElement).value);
+        frameCornerRadiusVal.textContent = formatNumber(value, 1);
+        notify({ FRAME_CORNER_RADIUS_IN: value });
+      });
+    }
+
     const railThicknessInnerSlider = document.getElementById('live-rail-thickness-inner') as HTMLInputElement;
     const railThicknessInnerVal = document.getElementById('live-rail-thickness-inner-val');
     if (railThicknessInnerSlider && railThicknessInnerVal) {
@@ -523,6 +535,7 @@ export class GeometryPanel {
     setSlider('live-corner-straight', settings.CORNER_STRAIGHT_X_IN);
     setSlider('live-corner-target', settings.CORNER_TARGET_Y_IN);
     setSlider('live-frame-width', settings.FRAME_OFFSET_IN, (v) => formatNumber(v, 1), 1);
+    setSlider('live-frame-corner-radius', settings.FRAME_CORNER_RADIUS_IN, (v) => formatNumber(v, 1), 1);
     setSlider('live-rail-thickness-inner', settings.RAIL_THICKNESS_INNER);
     setSlider('live-rail-thickness-outer', settings.RAIL_THICKNESS_OUTER);
 

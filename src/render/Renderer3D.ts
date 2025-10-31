@@ -1022,32 +1022,30 @@ export class Renderer3D {
     const outerY = innerY + frameWidth;
     const depth = 0.75;
 
-    const horizontalWidth = outerX * 2;
-    const horizontalHeight = frameWidth;
-    const verticalWidth = frameWidth;
-    const verticalHeight = outerY * 2;
+    const cornerRadius = Math.max(
+      0,
+      Math.min(CONFIG.FRAME_CORNER_RADIUS_IN ?? 0, frameWidth)
+    );
 
-    const topGeom = new THREE.BoxGeometry(horizontalWidth, horizontalHeight, depth);
-    const topMesh = new THREE.Mesh(topGeom, material.clone());
-    topMesh.position.set(0, innerY + horizontalHeight / 2, 0);
-    group.add(topMesh);
+    const frameShape = this.createRoundedRectShape(outerX, outerY, cornerRadius);
+    frameShape.holes.push(this.createRoundedRectPath(innerX, innerY, 0, true));
 
-    const bottomMesh = new THREE.Mesh(topGeom.clone(), material.clone());
-    bottomMesh.position.set(0, -(innerY + horizontalHeight / 2), 0);
-    group.add(bottomMesh);
+    const extrudeSettings: THREE.ExtrudeGeometryOptions = {
+      depth,
+      bevelEnabled: false,
+      steps: 1,
+      curveSegments: 48,
+    };
 
-    const verticalGeom = new THREE.BoxGeometry(verticalWidth, verticalHeight, depth);
+    const frameGeometry = new THREE.ExtrudeGeometry(frameShape, extrudeSettings);
+    frameGeometry.translate(0, 0, -depth / 2);
 
-    const leftMesh = new THREE.Mesh(verticalGeom.clone(), material.clone());
-    leftMesh.position.set(-(innerX + verticalWidth / 2), 0, 0);
-    group.add(leftMesh);
+    const frameBody = new THREE.Mesh(frameGeometry, material.clone());
+    frameBody.name = 'frame-body';
+    group.add(frameBody);
 
-    const rightMesh = new THREE.Mesh(verticalGeom.clone(), material.clone());
-    rightMesh.position.set(innerX + verticalWidth / 2, 0, 0);
-    group.add(rightMesh);
-
-    // Add depth effects to frame planks
-    this.addFrameDepthEffects(group, innerX, innerY, outerX, outerY, frameWidth);
+    // Add depth effects that follow the rounded perimeter
+    this.addFrameDepthEffects(group, innerX, innerY, outerX, outerY, frameWidth, cornerRadius);
 
     group.position.z = 0;
     group.visible = this.layerVisibility.showFrame;
@@ -1057,8 +1055,13 @@ export class Renderer3D {
     group.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
       if (mesh && (mesh as any).isMesh) {
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
+        if ((mesh.userData && mesh.userData.frameOverlay) === true) {
+          mesh.castShadow = false;
+          mesh.receiveShadow = false;
+        } else {
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+        }
       }
     });
   }
@@ -1069,91 +1072,135 @@ export class Renderer3D {
     innerY: number,
     outerX: number,
     outerY: number,
-    frameWidth: number
+    frameWidth: number,
+    cornerRadius: number
   ) {
-    const bevelWidth = Math.min(frameWidth * 0.35, 1.0); // Width of bevel effect
+    const bevelWidth = Math.min(frameWidth * 0.35, 1.0);
+    if (bevelWidth <= 0) return;
+
     const zOffset = 0.38; // Just above frame surface (frame depth/2 = 0.75/2 = 0.375)
+    const horizontalSpan = innerX * 2;
+    const verticalSpan = innerY * 2;
 
-    // Calculate dimensions for each plank (excluding corners to avoid overlap)
-    const horizontalPlankWidth = (innerX * 2); // Width of just the horizontal section (between vertical planks)
-    const verticalPlankHeight = (innerY * 2); // Height of just the vertical section (between horizontal planks)
-
-    // Inner shadow (dark edge along inner perimeter - creates recessed look)
-    // Gradient goes from dark (at inner edge) to transparent (outward)
-    
-    // Top plank: inner shadow on bottom edge (facing play area) - only horizontal section
+    // Inner shadows along the straight inner perimeter
     const topInnerShadow = new THREE.Mesh(
-      new THREE.PlaneGeometry(horizontalPlankWidth, bevelWidth),
+      new THREE.PlaneGeometry(horizontalSpan, bevelWidth),
       this.getFrameInnerShadowMaterial()
     );
     topInnerShadow.position.set(0, innerY + bevelWidth / 2, zOffset);
+    topInnerShadow.userData.frameOverlay = true;
     group.add(topInnerShadow);
 
-    // Bottom plank: inner shadow on top edge (facing play area) - only horizontal section
     const bottomInnerShadow = new THREE.Mesh(
-      new THREE.PlaneGeometry(horizontalPlankWidth, bevelWidth),
+      new THREE.PlaneGeometry(horizontalSpan, bevelWidth),
       this.getFrameInnerShadowMaterial()
     );
     bottomInnerShadow.position.set(0, -(innerY + bevelWidth / 2), zOffset);
-    bottomInnerShadow.rotation.z = Math.PI; // Flip to point inward
+    bottomInnerShadow.rotation.z = Math.PI;
+    bottomInnerShadow.userData.frameOverlay = true;
     group.add(bottomInnerShadow);
 
-    // Left plank: inner shadow on right edge (facing play area) - only vertical section
     const leftInnerShadow = new THREE.Mesh(
-      new THREE.PlaneGeometry(verticalPlankHeight, bevelWidth),
+      new THREE.PlaneGeometry(verticalSpan, bevelWidth),
       this.getFrameInnerShadowMaterial()
     );
     leftInnerShadow.position.set(-(innerX + bevelWidth / 2), 0, zOffset);
-    leftInnerShadow.rotation.z = Math.PI / 2; // Rotate to vertical, gradient points right
+    leftInnerShadow.rotation.z = Math.PI / 2;
+    leftInnerShadow.userData.frameOverlay = true;
     group.add(leftInnerShadow);
 
-    // Right plank: inner shadow on left edge (facing play area) - only vertical section
     const rightInnerShadow = new THREE.Mesh(
-      new THREE.PlaneGeometry(verticalPlankHeight, bevelWidth),
+      new THREE.PlaneGeometry(verticalSpan, bevelWidth),
       this.getFrameInnerShadowMaterial()
     );
     rightInnerShadow.position.set(innerX + bevelWidth / 2, 0, zOffset);
-    rightInnerShadow.rotation.z = -Math.PI / 2; // Rotate to vertical, gradient points left
+    rightInnerShadow.rotation.z = -Math.PI / 2;
+    rightInnerShadow.userData.frameOverlay = true;
     group.add(rightInnerShadow);
 
-    // Outer highlight (bright edge along outer perimeter - creates raised/beveled look)
-    // Gradient goes from transparent (inside) to bright (at outer edge)
-    
-    // Top plank: outer highlight on top edge (away from play area) - full width
-    const topOuterHighlight = new THREE.Mesh(
-      new THREE.PlaneGeometry(outerX * 2, bevelWidth),
-      this.getFrameOuterHighlightMaterial()
+    // Outer highlight ring follows the rounded profile
+    const highlightShape = this.createRoundedRectShape(outerX, outerY, cornerRadius);
+    const highlightInnerHalfX = Math.max(innerX, outerX - bevelWidth);
+    const highlightInnerHalfY = Math.max(innerY, outerY - bevelWidth);
+    const innerRadius = Math.max(0, cornerRadius - bevelWidth);
+    highlightShape.holes.push(
+      this.createRoundedRectPath(highlightInnerHalfX, highlightInnerHalfY, innerRadius, true)
     );
-    topOuterHighlight.position.set(0, outerY - bevelWidth / 2, zOffset);
-    topOuterHighlight.rotation.z = Math.PI; // Flip so gradient points outward
-    group.add(topOuterHighlight);
 
-    // Bottom plank: outer highlight on bottom edge (away from play area) - full width
-    const bottomOuterHighlight = new THREE.Mesh(
-      new THREE.PlaneGeometry(outerX * 2, bevelWidth),
-      this.getFrameOuterHighlightMaterial()
-    );
-    bottomOuterHighlight.position.set(0, -(outerY - bevelWidth / 2), zOffset);
-    // No rotation needed - gradient already points down
-    group.add(bottomOuterHighlight);
+    const highlightGeometry = new THREE.ShapeGeometry(highlightShape);
+    const outerHighlight = new THREE.Mesh(highlightGeometry, this.getFrameOuterHighlightMaterial());
+    outerHighlight.position.z = zOffset;
+    outerHighlight.userData.frameOverlay = true;
+    group.add(outerHighlight);
+  }
 
-    // Left plank: outer highlight on left edge (away from play area) - only vertical section
-    const leftOuterHighlight = new THREE.Mesh(
-      new THREE.PlaneGeometry(verticalPlankHeight + (frameWidth * 2), bevelWidth),
-      this.getFrameOuterHighlightMaterial()
-    );
-    leftOuterHighlight.position.set(-(outerX - bevelWidth / 2), 0, zOffset);
-    leftOuterHighlight.rotation.z = -Math.PI / 2; // Rotate to vertical, gradient points left (outward)
-    group.add(leftOuterHighlight);
+  private createRoundedRectShape(
+    halfWidth: number,
+    halfHeight: number,
+    radius: number
+  ): THREE.Shape {
+    const shape = new THREE.Shape();
+    this.traceRoundedRect(shape, halfWidth, halfHeight, radius, false);
+    return shape;
+  }
 
-    // Right plank: outer highlight on right edge (away from play area) - only vertical section
-    const rightOuterHighlight = new THREE.Mesh(
-      new THREE.PlaneGeometry(verticalPlankHeight + (frameWidth * 2), bevelWidth),
-      this.getFrameOuterHighlightMaterial()
-    );
-    rightOuterHighlight.position.set(outerX - bevelWidth / 2, 0, zOffset);
-    rightOuterHighlight.rotation.z = Math.PI / 2; // Rotate to vertical, gradient points right (outward)
-    group.add(rightOuterHighlight);
+  private createRoundedRectPath(
+    halfWidth: number,
+    halfHeight: number,
+    radius: number,
+    clockwise: boolean
+  ): THREE.Path {
+    const path = new THREE.Path();
+    this.traceRoundedRect(path, halfWidth, halfHeight, radius, clockwise);
+    return path;
+  }
+
+  private traceRoundedRect(
+    target: THREE.Path,
+    halfWidth: number,
+    halfHeight: number,
+    radius: number,
+    clockwise: boolean
+  ) {
+    const r = Math.max(0, Math.min(radius, halfWidth, halfHeight));
+    if (r <= 0.0001) {
+      if (clockwise) {
+        target.moveTo(halfWidth, -halfHeight);
+        target.lineTo(-halfWidth, -halfHeight);
+        target.lineTo(-halfWidth, halfHeight);
+        target.lineTo(halfWidth, halfHeight);
+      } else {
+        target.moveTo(halfWidth, halfHeight);
+        target.lineTo(-halfWidth, halfHeight);
+        target.lineTo(-halfWidth, -halfHeight);
+        target.lineTo(halfWidth, -halfHeight);
+      }
+      target.closePath();
+      return;
+    }
+
+    if (!clockwise) {
+      target.moveTo(halfWidth, halfHeight - r);
+      target.absarc(halfWidth - r, halfHeight - r, r, 0, Math.PI / 2, false);
+      target.lineTo(-halfWidth + r, halfHeight);
+      target.absarc(-halfWidth + r, halfHeight - r, r, Math.PI / 2, Math.PI, false);
+      target.lineTo(-halfWidth, -halfHeight + r);
+      target.absarc(-halfWidth + r, -halfHeight + r, r, Math.PI, Math.PI * 1.5, false);
+      target.lineTo(halfWidth - r, -halfHeight);
+      target.absarc(halfWidth - r, -halfHeight + r, r, Math.PI * 1.5, Math.PI * 2, false);
+      target.lineTo(halfWidth, halfHeight - r);
+    } else {
+      target.moveTo(halfWidth, -halfHeight + r);
+      target.absarc(halfWidth - r, -halfHeight + r, r, 0, -Math.PI / 2, true);
+      target.lineTo(-halfWidth + r, -halfHeight);
+      target.absarc(-halfWidth + r, -halfHeight + r, r, -Math.PI / 2, -Math.PI, true);
+      target.lineTo(-halfWidth, halfHeight - r);
+      target.absarc(-halfWidth + r, halfHeight - r, r, -Math.PI, -Math.PI * 1.5, true);
+      target.lineTo(halfWidth - r, halfHeight);
+      target.absarc(halfWidth - r, halfHeight - r, r, -Math.PI * 1.5, -Math.PI * 2, true);
+      target.lineTo(halfWidth, -halfHeight + r);
+    }
+    target.closePath();
   }
 
   private getFrameInnerShadowMaterial(): THREE.MeshBasicMaterial {
@@ -1182,6 +1229,7 @@ export class Renderer3D {
       depthTest: true,
       depthWrite: false,
       opacity: 0.7,
+      side: THREE.DoubleSide,
     });
   }
 
@@ -1211,6 +1259,7 @@ export class Renderer3D {
       depthTest: true,
       depthWrite: false,
       opacity: 0.5,
+      side: THREE.DoubleSide,
     });
   }
 

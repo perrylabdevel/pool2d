@@ -146,39 +146,49 @@ export class Renderer {
   drawFrame() {
     const frameWidth = Math.max(0.1, CONFIG.FRAME_OFFSET_IN);
     const boundary = this.playBoundaryPoints;
-    if (boundary.length < 3) {
-      const geom = getTableGeometry();
-      const halfW = geom.playWidthIn / 2;
-      const halfH = geom.playHeightIn / 2;
-      this.ctx.fillStyle = '#3d2413';
-      this.ctx.fillRect(
-        -halfW - frameWidth,
-        -halfH - frameWidth,
-        geom.playWidthIn + frameWidth * 2,
-        geom.playHeightIn + frameWidth * 2
-      );
-      return;
-    }
-
+    const cornerRadiusRaw = CONFIG.FRAME_CORNER_RADIUS_IN ?? 0;
     const outerOffset = frameWidth + CONFIG.RAIL_THICKNESS_OUTER;
     const innerOffset = CONFIG.RAIL_THICKNESS_OUTER;
-    const playHalfWidth = (this.playBounds.maxX - this.playBounds.minX) / 2;
-    const playHalfHeight = (this.playBounds.maxY - this.playBounds.minY) / 2;
+
+    let playHalfWidth: number;
+    let playHalfHeight: number;
+    if (boundary.length >= 3) {
+      playHalfWidth = (this.playBounds.maxX - this.playBounds.minX) / 2;
+      playHalfHeight = (this.playBounds.maxY - this.playBounds.minY) / 2;
+    } else {
+      const geom = getTableGeometry();
+      playHalfWidth = geom.playWidthIn / 2;
+      playHalfHeight = geom.playHeightIn / 2;
+    }
 
     const outerX = playHalfWidth + outerOffset;
     const outerY = playHalfHeight + outerOffset;
     const innerX = playHalfWidth + innerOffset;
     const innerY = playHalfHeight + innerOffset;
 
-    this.ctx.fillStyle = '#3d2413';
-    // Top plank
-    this.ctx.fillRect(-innerX, innerY, innerX * 2, frameWidth);
-    // Bottom plank
-    this.ctx.fillRect(-innerX, -(innerY + frameWidth), innerX * 2, frameWidth);
-    // Left plank
-    this.ctx.fillRect(-outerX, -outerY, frameWidth, outerY * 2);
-    // Right plank
-    this.ctx.fillRect(innerX, -outerY, frameWidth, outerY * 2);
+    const cornerRadius = Math.max(
+      0,
+      Math.min(cornerRadiusRaw, frameWidth, outerX, outerY)
+    );
+
+    const traceRoundedRect = (halfWidth: number, halfHeight: number, radius: number) => {
+      const r = Math.max(0, Math.min(radius, halfWidth, halfHeight));
+      this.ctx.moveTo(halfWidth, halfHeight - r);
+      this.ctx.arcTo(halfWidth, halfHeight, halfWidth - r, halfHeight, r);
+      this.ctx.lineTo(-halfWidth + r, halfHeight);
+      this.ctx.arcTo(-halfWidth, halfHeight, -halfWidth, halfHeight - r, r);
+      this.ctx.lineTo(-halfWidth, -halfHeight + r);
+      this.ctx.arcTo(-halfWidth, -halfHeight, -halfWidth + r, -halfHeight, r);
+      this.ctx.lineTo(halfWidth - r, -halfHeight);
+      this.ctx.arcTo(halfWidth, -halfHeight, halfWidth, -halfHeight + r, r);
+      this.ctx.closePath();
+    };
+
+    this.ctx.fillStyle = CONFIG.FRAME_COLOR ?? '#3d2413';
+    this.ctx.beginPath();
+    traceRoundedRect(outerX, outerY, cornerRadius);
+    this.ctx.rect(-innerX, -innerY, innerX * 2, innerY * 2);
+    this.ctx.fill('evenodd');
   }
 
   private beginBoundaryPath(points: Vec2[], close: boolean = true) {

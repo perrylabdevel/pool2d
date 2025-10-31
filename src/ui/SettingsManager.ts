@@ -31,6 +31,7 @@ export interface PhysicsSettings {
 
 export interface GeometrySettings {
   FRAME_OFFSET_IN: number;
+  FRAME_CORNER_RADIUS_IN: number;
   SIDE_FRAME_OFFSET_IN: number;
   SIDE_POCKET_OUTWARD_OFFSET_IN: number;
   CORNER_FRAME_OFFSET_IN: number;
@@ -258,6 +259,7 @@ export class SettingsManager {
   loadGeometrySettings(): GeometrySettings {
     const defaults: GeometrySettings = {
       FRAME_OFFSET_IN: CONFIG.FRAME_OFFSET_IN,
+      FRAME_CORNER_RADIUS_IN: CONFIG.FRAME_CORNER_RADIUS_IN,
       SIDE_FRAME_OFFSET_IN: CONFIG.SIDE_FRAME_OFFSET_IN,
       SIDE_POCKET_OUTWARD_OFFSET_IN: CONFIG.SIDE_POCKET_OUTWARD_OFFSET_IN,
       CORNER_FRAME_OFFSET_IN: CONFIG.CORNER_FRAME_OFFSET_IN,
@@ -368,6 +370,7 @@ export class SettingsManager {
   resetGeometrySettings() {
     this.geometrySettings = {
       FRAME_OFFSET_IN: 4.0,
+      FRAME_CORNER_RADIUS_IN: 0.0,
       SIDE_FRAME_OFFSET_IN: 2.0,
       SIDE_POCKET_OUTWARD_OFFSET_IN: 0.25,
       CORNER_FRAME_OFFSET_IN: 4.0,
@@ -425,6 +428,7 @@ export class SettingsManager {
 
   private applyGeometrySettings() {
     CONFIG.FRAME_OFFSET_IN = this.geometrySettings.FRAME_OFFSET_IN;
+    CONFIG.FRAME_CORNER_RADIUS_IN = this.geometrySettings.FRAME_CORNER_RADIUS_IN;
     CONFIG.SIDE_FRAME_OFFSET_IN = this.geometrySettings.SIDE_FRAME_OFFSET_IN;
     CONFIG.SIDE_POCKET_OUTWARD_OFFSET_IN = this.geometrySettings.SIDE_POCKET_OUTWARD_OFFSET_IN;
     CONFIG.CORNER_FRAME_OFFSET_IN = this.geometrySettings.CORNER_FRAME_OFFSET_IN;
