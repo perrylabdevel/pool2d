@@ -5,7 +5,7 @@
 import { Ball, Rail } from '../physics/Shapes';
 import { PhysicsWorld } from '../physics/Physics';
 import { CONFIG, BALL_CUE } from '../config';
-import { getTableGeometry, computeBoundaryBounds, computePlayBoundaryPoints, type Vec2, type BoundaryBounds, type PocketDef } from '../geometry/Geometry';
+import { getTableGeometry, computeBoundaryBounds, computePlayBoundaryPoints, type Vec2, type BoundaryBounds, type PocketDef, type TableGeometry, type RailDef } from '../geometry/Geometry';
 
 import { PredictionResult } from '../physics/Prediction';
 
@@ -347,6 +347,9 @@ export class Renderer {
       this.ctx.clip();
     }
     rails.forEach((rail) => this.drawRail(rail));
+    if (cornerRadius > 0) {
+      this.fillCornerPatches(clip, tableGeom);
+    }
     this.ctx.restore();
     this.frameClipInfo = null;
   }
@@ -493,6 +496,72 @@ export class Renderer {
         x: startX - nx * halfWidth,
         y: startY - ny * halfWidth,
       },
+    });
+  }
+
+
+  private getRailInnerOuterFromDef(def: RailDef): { inner: Vec2; outer: Vec2 } {
+    const fromDist = Math.max(Math.abs(def.from.x), Math.abs(def.from.y));
+    const toDist = Math.max(Math.abs(def.to.x), Math.abs(def.to.y));
+    if (fromDist <= toDist) {
+      return { inner: { ...def.from }, outer: { ...def.to } };
+    }
+    return { inner: { ...def.to }, outer: { ...def.from } };
+  }
+
+  private fillCornerPatches(clip: FrameClipInfo, geometry: TableGeometry) {
+    const railsById = new Map<string, RailDef>();
+    geometry.rails.forEach((rail) => railsById.set(rail.id, rail));
+
+    const configs = [
+      { signX: -1 as 1 | -1, signY: 1 as 1 | -1, horizontal: 'N_west_taper', vertical: 'W_north_taper' },
+      { signX: 1 as 1 | -1, signY: 1 as 1 | -1, horizontal: 'N_east_taper', vertical: 'E_north_taper' },
+      { signX: 1 as 1 | -1, signY: -1 as 1 | -1, horizontal: 'S_east_taper', vertical: 'E_south_taper' },
+      { signX: -1 as 1 | -1, signY: -1 as 1 | -1, horizontal: 'S_west_taper', vertical: 'W_south_taper' },
+    ];
+
+    const baseColor = CONFIG.RAIL_COLOR ?? '#2d1810';
+    configs.forEach(({ signX, signY, horizontal, vertical }) => {
+      const horizontalRail = railsById.get(horizontal);
+      const verticalRail = railsById.get(vertical);
+      if (!horizontalRail || !verticalRail) return;
+
+      const h = this.getRailInnerOuterFromDef(horizontalRail);
+      const v = this.getRailInnerOuterFromDef(verticalRail);
+
+      const trimH = this.intersectLineWithCornerArc(
+        h.inner,
+        { x: h.outer.x - h.inner.x, y: h.outer.y - h.inner.y },
+        signX,
+        signY,
+        clip
+      );
+      const trimV = this.intersectLineWithCornerArc(
+        v.inner,
+        { x: v.outer.x - v.inner.x, y: v.outer.y - v.inner.y },
+        signX,
+        signY,
+        clip
+      );
+      if (!trimH || !trimV) return;
+
+      const center = {
+        x: (signX >= 0 ? 1 : -1) * (clip.outerX - clip.radius),
+        y: (signY >= 0 ? 1 : -1) * (clip.outerY - clip.radius),
+      };
+
+      const counterClockwise = signX !== signY;
+      const startAngle = Math.atan2(trimH.point.y - center.y, trimH.point.x - center.x);
+      const endAngle = Math.atan2(trimV.point.y - center.y, trimV.point.x - center.x);
+
+      this.ctx.beginPath();
+      this.ctx.moveTo(trimH.point.x, trimH.point.y);
+      this.ctx.arc(center.x, center.y, clip.radius, startAngle, endAngle, counterClockwise);
+      this.ctx.lineTo(v.outer.x, v.outer.y);
+      this.ctx.lineTo(h.outer.x, h.outer.y);
+      this.ctx.closePath();
+      this.ctx.fillStyle = baseColor;
+      this.ctx.fill();
     });
   }
 
