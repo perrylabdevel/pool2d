@@ -344,6 +344,7 @@ export class Renderer {
     }
     rails.forEach((rail) => this.drawRail(rail));
     this.ctx.restore();
+    this.frameClipInfo = null;
   }
   
   drawBalls(balls: Ball[], alpha: number) {
@@ -401,26 +402,54 @@ export class Renderer {
     const endX = x2 - nx * centerShift;
     const endY = y2 - ny * centerShift;
 
-    this.ctx.strokeStyle = '#0d3d0d';
-    this.ctx.lineWidth = width;
-    this.ctx.lineCap = 'butt';
-    
+    const halfWidth = width / 2;
+
+    const startInnerX = startX + nx * halfWidth;
+    const startInnerY = startY + ny * halfWidth;
+    const startOuterX = startX - nx * halfWidth;
+    const startOuterY = startY - ny * halfWidth;
+    const endInnerX = endX + nx * halfWidth;
+    const endInnerY = endY + ny * halfWidth;
+    const endOuterX = endX - nx * halfWidth;
+    const endOuterY = endY - ny * halfWidth;
+
+    this.ctx.fillStyle = '#0d3d0d';
     this.ctx.beginPath();
-    this.ctx.moveTo(startX, startY);
-    this.ctx.lineTo(endX, endY);
-    this.ctx.stroke();
-    
-    // Add inner highlight
-    this.ctx.strokeStyle = '#1a5d1a';
-    this.ctx.lineWidth = width * 0.6;
-    this.ctx.lineCap = 'butt';
-    
+    this.ctx.moveTo(startInnerX, startInnerY);
+    this.ctx.lineTo(endInnerX, endInnerY);
+    this.ctx.lineTo(endOuterX, endOuterY);
+    this.ctx.lineTo(startOuterX, startOuterY);
+    this.ctx.closePath();
+    this.ctx.fill();
+
+    // Inner highlight band
+    const highlightWidth = Math.min(width * 0.6, width);
+    const highlightHalf = highlightWidth / 2;
+    const highlightShift = halfWidth - highlightHalf;
+    const highlightStartX = startX + nx * highlightShift;
+    const highlightStartY = startY + ny * highlightShift;
+    const highlightEndX = endX + nx * highlightShift;
+    const highlightEndY = endY + ny * highlightShift;
+
+    const startHighlightInnerX = highlightStartX + nx * highlightHalf;
+    const startHighlightInnerY = highlightStartY + ny * highlightHalf;
+    const startHighlightOuterX = highlightStartX - nx * highlightHalf;
+    const startHighlightOuterY = highlightStartY - ny * highlightHalf;
+    const endHighlightInnerX = highlightEndX + nx * highlightHalf;
+    const endHighlightInnerY = highlightEndY + ny * highlightHalf;
+    const endHighlightOuterX = highlightEndX - nx * highlightHalf;
+    const endHighlightOuterY = highlightEndY - ny * highlightHalf;
+
+    this.ctx.fillStyle = '#1a5d1a';
     this.ctx.beginPath();
-    this.ctx.moveTo(startX, startY);
-    this.ctx.lineTo(endX, endY);
-    this.ctx.stroke();
+    this.ctx.moveTo(startHighlightInnerX, startHighlightInnerY);
+    this.ctx.lineTo(endHighlightInnerX, endHighlightInnerY);
+    this.ctx.lineTo(endHighlightOuterX, endHighlightOuterY);
+    this.ctx.lineTo(startHighlightOuterX, startHighlightOuterY);
+    this.ctx.closePath();
+    this.ctx.fill();
   }
-  
+
   drawBall(ball: Ball, alpha: number) {
     // Interpolate position for smooth rendering
     const x = ball.prevX + (ball.x - ball.prevX) * alpha;
