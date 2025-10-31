@@ -31,6 +31,7 @@ export class Renderer {
   private playBoundaryPoints: Vec2[] = [];
   private playBounds: BoundaryBounds = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
   private frameClipInfo: FrameClipInfo | null = null;
+  debugRailSegments: Array<{ id: string; inner: Vec2; trimmed: Vec2; startOuter: Vec2 }> = [];
   
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -337,6 +338,7 @@ export class Renderer {
     const cornerRadius = Math.max(0, Math.min(cornerRadiusRaw, frameWidth, outerX, outerY));
 
     this.frameClipInfo = { outerX, outerY, radius: cornerRadius };
+    this.debugRailSegments = [];
 
     this.ctx.save();
     if (cornerRadius > 0) {
@@ -475,6 +477,23 @@ export class Renderer {
     this.ctx.lineTo(startHighlightOuterX, startHighlightOuterY);
     this.ctx.closePath();
     this.ctx.fill();
+
+    const trimmedOuterPoint =
+      hasRoundedFrame && isCornerTaper
+        ? Math.max(Math.abs(x1), Math.abs(y1)) > Math.max(Math.abs(x2), Math.abs(y2))
+          ? { x: x1, y: y1 }
+          : { x: x2, y: y2 }
+        : { x: x2, y: y2 };
+
+    this.debugRailSegments.push({
+      id: rail.id ?? 'rail',
+      inner: { x: x1, y: y1 },
+      trimmed: trimmedOuterPoint,
+      startOuter: {
+        x: startX - nx * halfWidth,
+        y: startY - ny * halfWidth,
+      },
+    });
   }
 
   drawBall(ball: Ball, alpha: number) {

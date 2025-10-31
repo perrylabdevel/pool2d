@@ -119,6 +119,7 @@ export class Renderer3D {
   private pocketHighlightTexture: THREE.CanvasTexture | null = null;
   private pocketShadowTexture: THREE.CanvasTexture | null = null;
   private accentLight: THREE.SpotLight | null = null;
+  debugRailSegments: Array<{ id: string; inner: Vec2; trimmed: Vec2; startOuter: Vec2 }> = [];
   showMeasurementOverlay = false;
   private layerVisibility: Record<RenderLayerBooleanKey, boolean> = {
     showTable: defaultRenderLayerSettings.showTable,
@@ -1454,6 +1455,7 @@ export class Renderer3D {
   }
 
   initializeRails(rails: Rail[]) {
+    this.debugRailSegments = [];
     const railMaterial = new THREE.MeshStandardMaterial({
       color: new THREE.Color(CONFIG.RAIL_COLOR),
       roughness: 0.5,
@@ -1502,6 +1504,7 @@ export class Renderer3D {
 
       let trimmedOuter = outerPoint;
       const dir = { x: outerPoint.x - innerPoint.x, y: outerPoint.y - innerPoint.y };
+      let trimmedData: { t: number; point: Vec2 } | null = null;
       if (hasRoundedFrame && isCornerTaper && clipInfo.radius > 1e-4) {
         const signX = Math.sign(outerPoint.x) || Math.sign(innerPoint.x) || 1;
         const signY = Math.sign(outerPoint.y) || Math.sign(innerPoint.y) || 1;
@@ -1510,7 +1513,8 @@ export class Renderer3D {
           x: innerPoint.x - nx * outerDistance,
           y: innerPoint.y - ny * outerDistance,
         };
-        const result = this.intersectLineWithCornerArc3D(startOuter, dir, signX, signY, clipInfo);
+        trimmedData = this.intersectLineWithCornerArc3D(startOuter, dir, signX, signY, clipInfo);
+        const result = trimmedData;
         if (result) {
           const dirLen = Math.sqrt(dir.x * dir.x + dir.y * dir.y) || 1;
           const ux = dir.x / dirLen;
@@ -1553,6 +1557,17 @@ export class Renderer3D {
 
       this.scene.add(railMesh);
       this.railMeshes.push(railMesh);
+      const debugStartOuter = {
+        x: innerPoint.x - nx * (centerShift + totalWidth / 2),
+        y: innerPoint.y - ny * (centerShift + totalWidth / 2),
+      };
+      const debugTrimmed = trimmedData ? trimmedData.point : trimmedOuter;
+      this.debugRailSegments.push({
+        id: rail.id ?? `rail-${this.railMeshes.length - 1}`,
+        inner: innerPoint,
+        trimmed: debugTrimmed,
+        startOuter: debugStartOuter,
+      });
 
       // Highlight on top surface of rail
       const highlightMaterial = this.getRailHighlightMaterial(); // Share material (don't clone) so slider can control all
