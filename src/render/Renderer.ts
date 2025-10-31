@@ -473,13 +473,6 @@ export class Renderer {
     const endHighlightOuterY = highlightEndY - ny * highlightHalf;
 
     this.ctx.fillStyle = '#1a5d1a';
-    this.ctx.beginPath();
-    this.ctx.moveTo(startHighlightInnerX, startHighlightInnerY);
-    this.ctx.lineTo(endHighlightInnerX, endHighlightInnerY);
-    this.ctx.lineTo(endHighlightOuterX, endHighlightOuterY);
-    this.ctx.lineTo(startHighlightOuterX, startHighlightOuterY);
-    this.ctx.closePath();
-    this.ctx.fill();
 
     const trimmedOuterPoint =
       hasRoundedFrame && isCornerTaper
@@ -562,6 +555,24 @@ export class Renderer {
       this.ctx.closePath();
       this.ctx.fillStyle = baseColor;
       this.ctx.fill();
+
+
+    const startIn = Math.atan2(trimH.point.y - center.y, trimH.point.x - center.x);
+    const endIn = Math.atan2(trimV.point.y - center.y, trimV.point.x - center.x);
+    const span = counterClockwise
+      ? startIn - endIn
+      : endIn - startIn;
+    const trimRatio = 0.7;
+    const offset = span * trimRatio;
+    const highlightStart = counterClockwise ? startIn - offset : startIn + offset;
+    const highlightEnd = counterClockwise ? endIn + offset : endIn - offset;
+    this.ctx.beginPath();
+    this.ctx.arc(center.x, center.y, clip.radius + CONFIG.RAIL_THICKNESS_OUTER, highlightStart, highlightEnd, counterClockwise);
+    this.ctx.arc(center.x, center.y, clip.radius, highlightEnd, highlightStart, !counterClockwise);
+    this.ctx.closePath();
+    this.ctx.fillStyle = '#1a5d1a';
+    this.ctx.fill();
+
     });
   }
 
