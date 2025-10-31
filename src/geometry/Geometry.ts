@@ -90,40 +90,6 @@ export function computeBoundaryBounds(points: Vec2[]): BoundaryBounds {
 const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
 const clamp01 = (value: number): number => clamp(value, 0, 1);
 const degToRad = (deg: number): number => (deg * Math.PI) / 180;
-const EPSILON = 1e-6;
-
-function intersectWithArc(inner: Vec2, outer: Vec2, center: Vec2, radius: number): Vec2 | null {
-  const dx = outer.x - inner.x;
-  const dy = outer.y - inner.y;
-  const a = dx * dx + dy * dy;
-  if (a < EPSILON) {
-    return null;
-  }
-
-  const ox = inner.x - center.x;
-  const oy = inner.y - center.y;
-  const b = 2 * (dx * ox + dy * oy);
-  const c = ox * ox + oy * oy - radius * radius;
-  const discriminant = b * b - 4 * a * c;
-  if (discriminant < 0) {
-    return null;
-  }
-
-  const sqrt = Math.sqrt(discriminant);
-  const t1 = (-b - sqrt) / (2 * a);
-  const t2 = (-b + sqrt) / (2 * a);
-  let t: number | null = null;
-  if (t1 > EPSILON && t1 <= 1) t = t1;
-  if (t2 > EPSILON && t2 <= 1) {
-    t = t == null ? t2 : Math.min(t, t2);
-  }
-  if (t == null) return null;
-
-  return {
-    x: inner.x + dx * t,
-    y: inner.y + dy * t,
-  };
-}
 
 function rotatePoint(point: Vec2, pivot: Vec2, angleRad: number): Vec2 {
   if (angleRad === 0) return { x: point.x, y: point.y };
@@ -414,14 +380,14 @@ export function getTableGeometry(): TableGeometry {
     return { x: baseX, y: baseY - signY * frameCornerRadius };
   };
 
-  let northWestOuterTop = cornerPoint(-1, 1, 'horizontal');
-  let northWestOuterWest = cornerPoint(-1, 1, 'vertical');
-  let northEastOuterTop = cornerPoint(1, 1, 'horizontal');
-  let northEastOuterEast = cornerPoint(1, 1, 'vertical');
-  let southEastOuterBottom = cornerPoint(1, -1, 'horizontal');
-  let southEastOuterEast = cornerPoint(1, -1, 'vertical');
-  let southWestOuterBottom = cornerPoint(-1, -1, 'horizontal');
-  let southWestOuterWest = cornerPoint(-1, -1, 'vertical');
+  const northWestOuterTop = cornerPoint(-1, 1, 'horizontal');
+  const northWestOuterWest = cornerPoint(-1, 1, 'vertical');
+  const northEastOuterTop = cornerPoint(1, 1, 'horizontal');
+  const northEastOuterEast = cornerPoint(1, 1, 'vertical');
+  const southEastOuterBottom = cornerPoint(1, -1, 'horizontal');
+  const southEastOuterEast = cornerPoint(1, -1, 'vertical');
+  const southWestOuterBottom = cornerPoint(-1, -1, 'horizontal');
+  const southWestOuterWest = cornerPoint(-1, -1, 'vertical');
 
   const baseNorthCornerWest: Vec2 = { x: -CORNER_JAW_X, y: Y_N_STRAIGHT };
   const baseNorthCornerEast: Vec2 = { x: CORNER_JAW_X, y: Y_N_STRAIGHT };
@@ -562,41 +528,6 @@ export function getTableGeometry(): TableGeometry {
     eastVerticalBottom = { ...baseEastVerticalBottom };
     southCornerWest = { ...baseSouthCornerWest };
     westVerticalBottom = { ...baseWestVerticalBottom };
-  }
-
-  const effectiveFrameCornerRadius = Math.max(0, Math.min(CONFIG.FRAME_CORNER_RADIUS_IN ?? 0, CONFIG.FRAME_OFFSET_IN));
-  if (effectiveFrameCornerRadius > EPSILON) {
-    const cornerCenters = {
-      NW: {
-        x: -(PLAY_HALF_W_IN + cornerFrameOffset) + effectiveFrameCornerRadius,
-        y: PLAY_HALF_H_IN + cornerFrameOffset - effectiveFrameCornerRadius,
-      },
-      NE: {
-        x: PLAY_HALF_W_IN + cornerFrameOffset - effectiveFrameCornerRadius,
-        y: PLAY_HALF_H_IN + cornerFrameOffset - effectiveFrameCornerRadius,
-      },
-      SE: {
-        x: PLAY_HALF_W_IN + cornerFrameOffset - effectiveFrameCornerRadius,
-        y: -(PLAY_HALF_H_IN + cornerFrameOffset) + effectiveFrameCornerRadius,
-      },
-      SW: {
-        x: -(PLAY_HALF_W_IN + cornerFrameOffset) + effectiveFrameCornerRadius,
-        y: -(PLAY_HALF_H_IN + cornerFrameOffset) + effectiveFrameCornerRadius,
-      },
-    };
-    const trim = (inner: Vec2, outer: Vec2, center: Vec2): Vec2 => {
-      const hit = intersectWithArc(inner, outer, center, effectiveFrameCornerRadius);
-      return hit ?? outer;
-    };
-
-    northWestOuterTop = trim(northCornerWest, northWestOuterTop, cornerCenters.NW);
-    northWestOuterWest = trim(westVerticalTop, northWestOuterWest, cornerCenters.NW);
-    northEastOuterTop = trim(northCornerEast, northEastOuterTop, cornerCenters.NE);
-    northEastOuterEast = trim(eastVerticalTop, northEastOuterEast, cornerCenters.NE);
-    southEastOuterBottom = trim(southCornerEast, southEastOuterBottom, cornerCenters.SE);
-    southEastOuterEast = trim(eastVerticalBottom, southEastOuterEast, cornerCenters.SE);
-    southWestOuterBottom = trim(southCornerWest, southWestOuterBottom, cornerCenters.SW);
-    southWestOuterWest = trim(westVerticalBottom, southWestOuterWest, cornerCenters.SW);
   }
 
   addRail('N_west_taper', northWestOuterTop, northCornerWest);
