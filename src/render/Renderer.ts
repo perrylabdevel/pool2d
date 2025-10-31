@@ -18,12 +18,19 @@ interface AxisColorPalette {
   debugFill: string;
 }
 
+type FrameClipInfo = {
+  outerX: number;
+  outerY: number;
+  radius: number;
+};
+
 export class Renderer {
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
   scale: number;
   private playBoundaryPoints: Vec2[] = [];
   private playBounds: BoundaryBounds = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+  private frameClipInfo: FrameClipInfo | null = null;
   
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -196,6 +203,48 @@ export class Renderer {
     ctx.closePath();
   }
 
+  private projectToCornerArc(inner: Vec2, outer: Vec2, clip: FrameClipInfo): Vec2 | null {
+    const dx = outer.x - inner.x;
+    const dy = outer.y - inner.y;
+    const a = dx * dx + dy * dy;
+    if (a < 1e-8) return null;
+
+    const signX = Math.sign(outer.x) || 1;
+    const signY = Math.sign(outer.y) || 1;
+    const centerX = signX * clip.outerX;
+    const centerY = signY * clip.outerY;
+
+    const ox = inner.x - centerX;
+    const oy = inner.y - centerY;
+
+    const b = 2 * (dx * ox + dy * oy);
+    const c = ox * ox + oy * oy - clip.radius * clip.radius;
+    const discriminant = b * b - 4 * a * c;
+    if (discriminant < 0) return null;
+    const sqrt = Math.sqrt(discriminant);
+
+    const tCandidates = [
+      (-b - sqrt) / (2 * a),
+      (-b + sqrt) / (2 * a),
+    ];
+
+    let t: number | null = null;
+    for (const candidate of tCandidates) {
+      if (candidate > 1e-4 && candidate <= 1.0001) {
+        if (t == null || candidate < t) {
+          t = candidate;
+        }
+      }
+    }
+
+    if (t == null) return null;
+
+    return {
+      x: inner.x + dx * t,
+      y: inner.y + dy * t,
+    };
+  }
+
   private beginBoundaryPath(points: Vec2[], close: boolean = true) {
     if (points.length === 0) return;
     this.ctx.beginPath();
@@ -285,6 +334,8 @@ export class Renderer {
     const outerY = playHalfHeight + outerOffset;
     const cornerRadius = Math.max(0, Math.min(cornerRadiusRaw, frameWidth, outerX, outerY));
 
+    this.frameClipInfo = { outerX, outerY, radius: cornerRadius };
+
     this.ctx.save();
     if (cornerRadius > 0) {
       this.ctx.beginPath();
@@ -306,10 +357,36 @@ export class Renderer {
   drawRail(rail: Rail) {
     // Draw simple cushion with consistent thickness
     const width = CONFIG.RAIL_THICKNESS_INNER + CONFIG.RAIL_THICKNESS_OUTER;
+    const clip = this.frameClipInfo;
+    const hasRoundedFrame = !!clip && clip.radius > 1e-4;
+    const isCornerTaper = (rail.id ?? '').endsWith('_taper');
+
+    let x1 = rail.x1;
+    let y1 = rail.y1;
+    let x2 = rail.x2;
+    let y2 = rail.y2;
+
+    if (hasRoundedFrame && isCornerTaper && clip) {
+      const abs1 = Math.max(Math.abs(x1), Math.abs(y1));
+      const abs2 = Math.max(Math.abs(x2), Math.abs(y2));
+      const inner = abs1 <= abs2 ? { x: x1, y: y1 } : { x: x2, y: y2 };
+      const outer = abs1 <= abs2 ? { x: x2, y: y2 } : { x: x1, y: y1 };
+      const trimmed = this.projectToCornerArc(inner, outer, clip);
+      if (trimmed) {
+        if (abs1 > abs2) {
+          x1 = trimmed.x;
+          y1 = trimmed.y;
+        } else {
+          x2 = trimmed.x;
+          y2 = trimmed.y;
+        }
+      }
+    }
+
     let nx = rail.nx;
     let ny = rail.ny;
-    const midX = (rail.x1 + rail.x2) / 2;
-    const midY = (rail.y1 + rail.y2) / 2;
+    const midX = (x1 + x2) / 2;
+    const midY = (y1 + y2) / 2;
     const toCenterX = -midX;
     const toCenterY = -midY;
     const dot = nx * toCenterX + ny * toCenterY;

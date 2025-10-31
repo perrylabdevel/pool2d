@@ -24,6 +24,7 @@ interface AxisColorPalette {
 }
 
 type RGBColor = { r: number; g: number; b: number };
+type FrameClipInfo = { outerX: number; outerY: number; radius: number };
 
 function clampChannel(value: number): number {
   return Math.max(0, Math.min(255, Math.round(value)));
@@ -89,6 +90,7 @@ export class Renderer3D {
   private resizeObserver: ResizeObserver | null = null;
   private playBoundaryPoints: Vec2[] = [];
   private playBounds: BoundaryBounds = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+  private frameClipInfo: FrameClipInfo | null = null;
   
   // 3D objects
   ballMeshes: Map<number, THREE.Object3D> = new Map();
@@ -1463,23 +1465,23 @@ export class Renderer3D {
     const totalWidth = inner + outer;
     const centerShift = (outer - inner) / 2;
 
-    rails.forEach((rail) => {
-      const dx = rail.x2 - rail.x1;
-      const dy = rail.y2 - rail.y1;
-      const length = Math.sqrt(dx * dx + dy * dy);
-      const angle = Math.atan2(dy, dx);
+    const geom = getTableGeometry();
+    const playHalfW = geom.playWidthIn / 2;
+    const playHalfH = geom.playHeightIn / 2;
+    const frameWidth = Math.max(0.1, CONFIG.FRAME_OFFSET_IN);
+    const outerOffset = frameWidth + CONFIG.RAIL_THICKNESS_OUTER;
+    const outerX = playHalfW + outerOffset;
+    const outerY = playHalfH + outerOffset;
+    const cornerRadius = Math.max(
+      0,
+      Math.min(CONFIG.FRAME_CORNER_RADIUS_IN ?? 0, frameWidth, outerX, outerY)
+    );
+    const clipInfo: FrameClipInfo = { outerX, outerY, radius: cornerRadius };
+    this.frameClipInfo = clipInfo;
 
+    rails.forEach((rail) => {
       let nx = rail.nx;
       let ny = rail.ny;
-      const midX = (rail.x1 + rail.x2) / 2;
-      const midY = (rail.y1 + rail.y2) / 2;
-      const toCenterX = -midX;
-      const toCenterY = -midY;
-      const dot = nx * toCenterX + ny * toCenterY;
-      if (dot < 0) {
-        nx = -nx;
-        ny = -ny;
-      }
 
       const hasRoundedFrame = (CONFIG.FRAME_CORNER_RADIUS_IN ?? 0) > 1e-4;
       const isCornerTaper = (rail.id ?? '').endsWith('_taper');
@@ -1490,23 +1492,28 @@ export class Renderer3D {
       const innerPoint = absA <= absB ? pointA : pointB;
       const outerPoint = absA <= absB ? pointB : pointA;
 
-      const dirBaseX = outerPoint.x - innerPoint.x;
-      const dirBaseY = outerPoint.y - innerPoint.y;
-      const baseLen = Math.sqrt(dirBaseX * dirBaseX + dirBaseY * dirBaseY) || 1;
-      const unitDirX = dirBaseX / baseLen;
-      const unitDirY = dirBaseY / baseLen;
-
-      let renderLength = baseLen;
-      if (hasRoundedFrame && isCornerTaper) {
-        const trim = Math.min(CONFIG.FRAME_CORNER_RADIUS_IN ?? 0, baseLen - 0.05);
-        renderLength = Math.max(0.05, baseLen - trim);
+      let trimmedOuter = outerPoint;
+      if (hasRoundedFrame && isCornerTaper && clipInfo.radius > 1e-4) {
+        const projected = this.projectToCornerArc3D(innerPoint, outerPoint, clipInfo);
+        if (projected) trimmedOuter = projected;
       }
-      const trimmedOuter = {
-        x: innerPoint.x + unitDirX * renderLength,
-        y: innerPoint.y + unitDirY * renderLength,
-      };
-      const renderCenterX = innerPoint.x + unitDirX * (renderLength / 2);
-      const renderCenterY = innerPoint.y + unitDirY * (renderLength / 2);
+
+      const adjMidX = (innerPoint.x + trimmedOuter.x) / 2;
+      const adjMidY = (innerPoint.y + trimmedOuter.y) / 2;
+      const adjToCenterX = -adjMidX;
+      const adjToCenterY = -adjMidY;
+      const adjDot = nx * adjToCenterX + ny * adjToCenterY;
+      if (adjDot < 0) {
+        nx = -nx;
+        ny = -ny;
+      }
+
+      const dirX = trimmedOuter.x - innerPoint.x;
+      const dirY = trimmedOuter.y - innerPoint.y;
+      const renderLength = Math.sqrt(dirX * dirX + dirY * dirY) || 1;
+      const angle = Math.atan2(dirY, dirX);
+      const renderCenterX = innerPoint.x + dirX * 0.5;
+      const renderCenterY = innerPoint.y + dirY * 0.5;
 
       const railGeometry = new THREE.BoxGeometry(renderLength, totalWidth, 0.5);
 
@@ -1558,6 +1565,48 @@ export class Renderer3D {
       this.scene.add(shadowMesh);
       this.railShadowMeshes.push(shadowMesh);
     });
+  }
+
+  private projectToCornerArc3D(inner: Vec2, outer: Vec2, clip: FrameClipInfo): Vec2 | null {
+    const dx = outer.x - inner.x;
+    const dy = outer.y - inner.y;
+    const a = dx * dx + dy * dy;
+    if (a < 1e-8) return null;
+
+    const signX = Math.sign(outer.x) || 1;
+    const signY = Math.sign(outer.y) || 1;
+    const centerX = signX * clip.outerX;
+    const centerY = signY * clip.outerY;
+
+    const ox = inner.x - centerX;
+    const oy = inner.y - centerY;
+
+    const b = 2 * (dx * ox + dy * oy);
+    const c = ox * ox + oy * oy - clip.radius * clip.radius;
+    const discriminant = b * b - 4 * a * c;
+    if (discriminant < 0) return null;
+    const sqrt = Math.sqrt(discriminant);
+
+    const tCandidates = [
+      (-b - sqrt) / (2 * a),
+      (-b + sqrt) / (2 * a),
+    ];
+
+    let t: number | null = null;
+    for (const candidate of tCandidates) {
+      if (candidate > 1e-4 && candidate <= 1.0001) {
+        if (t == null || candidate < t) {
+          t = candidate;
+        }
+      }
+    }
+
+    if (t == null) return null;
+
+    return {
+      x: inner.x + dx * t,
+      y: inner.y + dy * t,
+    };
   }
 
   private getRailShadowMaterial(): THREE.MeshBasicMaterial {
