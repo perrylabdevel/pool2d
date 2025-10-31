@@ -274,10 +274,44 @@ export class Renderer {
   drawRail(rail: Rail) {
     // Draw simple cushion with consistent thickness
     const width = CONFIG.RAIL_THICKNESS_INNER + CONFIG.RAIL_THICKNESS_OUTER;
+    const cornerRadius = CONFIG.FRAME_CORNER_RADIUS_IN ?? 0;
+    const hasRoundedFrame = cornerRadius > 1e-4;
+    const isCornerTaper = (rail.id ?? '').endsWith('_taper');
+
+    let x1 = rail.x1;
+    let y1 = rail.y1;
+    let x2 = rail.x2;
+    let y2 = rail.y2;
+
+    if (hasRoundedFrame && isCornerTaper) {
+      const abs1 = Math.max(Math.abs(x1), Math.abs(y1));
+      const abs2 = Math.max(Math.abs(x2), Math.abs(y2));
+      const inner = abs1 <= abs2 ? { x: x1, y: y1 } : { x: x2, y: y2 };
+      const outer = abs1 <= abs2 ? { x: x2, y: y2 } : { x: x1, y: y1 };
+      const dx = outer.x - inner.x;
+      const dy = outer.y - inner.y;
+      const length = Math.sqrt(dx * dx + dy * dy);
+      const trim = Math.min(cornerRadius, length - 0.05);
+      if (length > 1e-4 && trim > 0) {
+        const scale = (length - trim) / length;
+        const trimmedOuter = {
+          x: inner.x + dx * scale,
+          y: inner.y + dy * scale,
+        };
+        if (abs1 > abs2) {
+          x1 = trimmedOuter.x;
+          y1 = trimmedOuter.y;
+        } else {
+          x2 = trimmedOuter.x;
+          y2 = trimmedOuter.y;
+        }
+      }
+    }
+
     let nx = rail.nx;
     let ny = rail.ny;
-    const midX = (rail.x1 + rail.x2) / 2;
-    const midY = (rail.y1 + rail.y2) / 2;
+    const midX = (x1 + x2) / 2;
+    const midY = (y1 + y2) / 2;
     const toCenterX = -midX;
     const toCenterY = -midY;
     const dot = nx * toCenterX + ny * toCenterY;
@@ -287,10 +321,10 @@ export class Renderer {
     }
 
     const centerShift = (CONFIG.RAIL_THICKNESS_OUTER - CONFIG.RAIL_THICKNESS_INNER) / 2;
-    const startX = rail.x1 - nx * centerShift;
-    const startY = rail.y1 - ny * centerShift;
-    const endX = rail.x2 - nx * centerShift;
-    const endY = rail.y2 - ny * centerShift;
+    const startX = x1 - nx * centerShift;
+    const startY = y1 - ny * centerShift;
+    const endX = x2 - nx * centerShift;
+    const endY = y2 - ny * centerShift;
 
     this.ctx.strokeStyle = '#0d3d0d';
     this.ctx.lineWidth = width;
