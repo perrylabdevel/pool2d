@@ -362,10 +362,32 @@ export function getTableGeometry(): TableGeometry {
     });
   };
 
-  let northWestOuter: Vec2 = { x: -(PLAY_HALF_W_IN + cornerFrameOffset), y: PLAY_HALF_H_IN + cornerFrameOffset };
-  let northEastOuter: Vec2 = { x: PLAY_HALF_W_IN + cornerFrameOffset, y: PLAY_HALF_H_IN + cornerFrameOffset };
-  let southEastOuter: Vec2 = { x: PLAY_HALF_W_IN + cornerFrameOffset, y: -(PLAY_HALF_H_IN + cornerFrameOffset) };
-  let southWestOuter: Vec2 = { x: -(PLAY_HALF_W_IN + cornerFrameOffset), y: -(PLAY_HALF_H_IN + cornerFrameOffset) };
+  const outerX = PLAY_HALF_W_IN + cornerFrameOffset;
+  const outerY = PLAY_HALF_H_IN + cornerFrameOffset;
+  const frameCornerRadius = Math.max(
+    0,
+    Math.min(CONFIG.FRAME_CORNER_RADIUS_IN ?? 0, CONFIG.FRAME_OFFSET_IN, cornerFrameOffset)
+  );
+  const cornerPoint = (signX: 1 | -1, signY: 1 | -1, axis: 'horizontal' | 'vertical'): Vec2 => {
+    const baseX = signX * outerX;
+    const baseY = signY * outerY;
+    if (frameCornerRadius <= 0) {
+      return { x: baseX, y: baseY };
+    }
+    if (axis === 'horizontal') {
+      return { x: baseX - signX * frameCornerRadius, y: baseY };
+    }
+    return { x: baseX, y: baseY - signY * frameCornerRadius };
+  };
+
+  const northWestOuterTop = cornerPoint(-1, 1, 'horizontal');
+  const northWestOuterWest = cornerPoint(-1, 1, 'vertical');
+  const northEastOuterTop = cornerPoint(1, 1, 'horizontal');
+  const northEastOuterEast = cornerPoint(1, 1, 'vertical');
+  const southEastOuterBottom = cornerPoint(1, -1, 'horizontal');
+  const southEastOuterEast = cornerPoint(1, -1, 'vertical');
+  const southWestOuterBottom = cornerPoint(-1, -1, 'horizontal');
+  const southWestOuterWest = cornerPoint(-1, -1, 'vertical');
 
   const baseNorthCornerWest: Vec2 = { x: -CORNER_JAW_X, y: Y_N_STRAIGHT };
   const baseNorthCornerEast: Vec2 = { x: CORNER_JAW_X, y: Y_N_STRAIGHT };
@@ -508,31 +530,31 @@ export function getTableGeometry(): TableGeometry {
     westVerticalBottom = { ...baseWestVerticalBottom };
   }
 
-  addRail('N_west_taper', northWestOuter, northCornerWest);
+  addRail('N_west_taper', northWestOuterTop, northCornerWest);
   addRail('N_west_straight', northCornerWest, northStraightWestEnd);
   addRail('N_left_throat_outer', northStraightWestEnd, northThroatLeftJoint);
   addRail('N_left_throat_inner', northThroatLeftJoint, northMouth);
   addRail('N_right_throat_inner', northMouth, northThroatRightJoint);
   addRail('N_right_throat_outer', northThroatRightJoint, northStraightEastStart);
   addRail('N_east_straight', northStraightEastStart, northCornerEast);
-  addRail('N_east_taper', northCornerEast, northEastOuter);
+  addRail('N_east_taper', northCornerEast, northEastOuterTop);
 
-  addRail('E_north_taper', northEastOuter, eastVerticalTop);
+  addRail('E_north_taper', northEastOuterEast, eastVerticalTop);
   addRail('E_center', eastVerticalTop, eastVerticalBottom);
-  addRail('E_south_taper', eastVerticalBottom, southEastOuter);
+  addRail('E_south_taper', eastVerticalBottom, southEastOuterEast);
 
-  addRail('S_east_taper', southEastOuter, southCornerEast);
+  addRail('S_east_taper', southEastOuterBottom, southCornerEast);
   addRail('S_east_straight', southCornerEast, southStraightEastStart);
   addRail('S_right_throat_outer', southStraightEastStart, southThroatRightJoint);
   addRail('S_right_throat_inner', southThroatRightJoint, southMouth);
   addRail('S_left_throat_inner', southMouth, southThroatLeftJoint);
   addRail('S_left_throat_outer', southThroatLeftJoint, southStraightWestEnd);
   addRail('S_west_straight', southStraightWestEnd, southCornerWest);
-  addRail('S_west_taper', southCornerWest, southWestOuter);
+  addRail('S_west_taper', southCornerWest, southWestOuterBottom);
 
-  addRail('W_south_taper', southWestOuter, westVerticalBottom);
+  addRail('W_south_taper', southWestOuterWest, westVerticalBottom);
   addRail('W_center', westVerticalBottom, westVerticalTop);
-  addRail('W_north_taper', westVerticalTop, northWestOuter);
+  addRail('W_north_taper', westVerticalTop, northWestOuterWest);
 
   const pocketCenterNW: Vec2 = { x: -PLAY_HALF_W_IN, y: PLAY_HALF_H_IN };
   const pocketCenterNE: Vec2 = { x: PLAY_HALF_W_IN, y: PLAY_HALF_H_IN };
