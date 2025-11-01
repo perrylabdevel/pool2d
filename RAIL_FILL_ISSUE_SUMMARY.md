@@ -75,9 +75,9 @@ However, with the current implementation, it creates a visible rectangular borde
 **Applied changes:**
 
 1. **Geometry Fix:**
-   - Outer boundary constrained to frame inner edge (±50.2" instead of ±54.2")
-   - Inner hole follows exact cushion outer edge using `offsetBoundaryOutward()`
-   - Matches complex pocket geometry instead of simple rectangle
+   - Outer boundary now sourced from `frameOutline.innerHalfWidth/Height`, respecting rounded frame corners
+   - Inner hole follows the exact cushion outer edge via `playBoundaryPoints`
+   - Matches complex pocket geometry instead of a simple rectangle
 
 2. **Z-Position Fix:**
    - Changed from Z=-0.05 to Z=-0.3 (below rails at Z=-0.25)

@@ -27,6 +27,7 @@ Pool 2D is a tournament-accurate billiards sandbox built with TypeScript, Vite
   - Practice mode with cue-ball drag (SHIFT + drag)
   - 8-ball mode with fouls, ball-in-hand, and win handling
   - Geometry panel to tweak jaw offsets, capture radii, and throat angles without code changes
+  - Frame radius slider shapes a dedicated frame outline so rail physics stay constant while visuals curve
 
 ## Quick Start
 
@@ -53,7 +54,7 @@ npm run test
 
 ### Practice & Debug
 - **SHIFT + drag**: Reposition cue ball (practice mode)
-- **S**: Physics settings (friction, power, solver, table scale)
+- **S**: Physics settings (friction, power, aim-line offsets, solver, table scale)
 - **D**: Debug overlay (normals, velocities, contacts)
 - **G**: Geometry editor (pocket/jaw tuning)
 - **M**: Measurement overlay toggle
@@ -61,7 +62,7 @@ npm run test
 - **R**: Restart table
 
 ### HUD Buttons
-- **⚙️ Physics**: Live physics/display tuning
+- **⚙️ Physics**: Live physics/display tuning (includes aim-line/ghost-ball offset controls)
 - **🎛️ Geometry**: Jaw, pocket, and frame editor
 - **🐛 Debug / 📸 Capture / ↻ Restart**: Toggle overlays, capture shots, reset
 
@@ -107,6 +108,7 @@ All tunables live in `src/config.ts` and can be overridden live via the settings
   - `POCKET_RADIUS_CORNER`: 2.5" (capture radius, user-adjustable)
   - `POCKET_RADIUS_SIDE`: 2.5" (capture radius, user-adjustable)
   - Jaw offsets/angles derived from `GeometryPanel` parameters at runtime
+  - `frameOutline` exposes frame inner/outer bounds so rounded corners never move rail endpoints
 - **Display**
   - `CANVAS_SCALE_MULTIPLIER`: 1.0 (live slider in Settings → Display)
 

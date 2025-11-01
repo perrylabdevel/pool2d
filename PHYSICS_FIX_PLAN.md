@@ -27,6 +27,7 @@ This file captures the key corrections and tuning decisions that shaped the curr
 - **Slow cloth**: Increase `ROLLING_FRICTION` or reduce cue power multiplier.
 - **Runaway overlaps**: Increase `SOLVER_ITERATIONS` or tweak Baumgarte coefficient (currently hard-coded in `resolveBallBall`).
 - **High-speed tunnelling**: Adaptive sub-stepping scales with `CONFIG.MAX_SUBSTEPS` and `BALL_RADIUS * 0.4` travel per substep.
+- **Aim visuals**: Adjust `AIM_LINE_OFFSET`, `GHOST_BALL_OFFSET`, and `OBJECT_PATH_PERCENTAGE` in the Physics panel; settings persist via `SettingsManager`.
 
 ## Debugging Workflow
 

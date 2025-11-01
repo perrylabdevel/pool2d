@@ -110,6 +110,7 @@ export class Renderer3D {
   private railShadowMeshes: THREE.Mesh[] = [];
   private pocketHighlightMeshes: THREE.Mesh[] = [];
   private pocketShadowMeshes: THREE.Mesh[] = [];
+  private railLines: Array<{ start: Vec2; end: Vec2; nx: number; ny: number }> = [];
   private railHighlightMaterial: THREE.MeshBasicMaterial | null = null;
   private railShadowMaterial: THREE.MeshBasicMaterial | null = null;
   private railShadowTexture: THREE.Texture | null = null;
@@ -971,8 +972,7 @@ export class Renderer3D {
     this.createOrUpdateTableOverlays(tableGeometry.playWidthIn, tableGeometry.playHeightIn);
 
     // Wooden frame planks surrounding play surface
-    const frameWidth = Math.max(0.1, CONFIG.FRAME_OFFSET_IN);
-    this.initializeFrame(frameWidth);
+    this.initializeFrame();
   }
 
   private refreshDerivedGeometry() {
@@ -995,7 +995,7 @@ export class Renderer3D {
     return shape;
   }
 
-  private initializeFrame(frameWidth: number) {
+  private initializeFrame() {
     if (this.frameMesh) {
       this.scene.remove(this.frameMesh);
       this.frameMesh.traverse((obj) => {
@@ -1017,18 +1017,15 @@ export class Renderer3D {
 
     const group = new THREE.Group();
     const geom = getTableGeometry();
-    const playHalfW = geom.playWidthIn / 2;
-    const playHalfH = geom.playHeightIn / 2;
-    const innerX = playHalfW + CONFIG.RAIL_THICKNESS_OUTER;
-    const innerY = playHalfH + CONFIG.RAIL_THICKNESS_OUTER;
-    const outerX = innerX + frameWidth;
-    const outerY = innerY + frameWidth;
+    const { frameOutline } = geom;
+    const innerX = frameOutline.innerHalfWidth;
+    const innerY = frameOutline.innerHalfHeight;
+    const outerX = frameOutline.outerHalfWidth;
+    const outerY = frameOutline.outerHalfHeight;
+    const frameWidth = Math.max(0, outerX - innerX);
     const depth = 0.75;
 
-    const cornerRadius = Math.max(
-      0,
-      Math.min(CONFIG.FRAME_CORNER_RADIUS_IN ?? 0, frameWidth)
-    );
+    const cornerRadius = Math.max(0, Math.min(frameOutline.cornerRadius, frameWidth));
 
     const frameShape = this.createRoundedRectShape(outerX, outerY, cornerRadius);
     frameShape.holes.push(this.createRoundedRectPath(innerX, innerY, 0, true));
@@ -1237,31 +1234,40 @@ export class Renderer3D {
   }
 
   private getFrameOuterHighlightMaterial(): THREE.MeshBasicMaterial {
-    // Create gradient texture for outer highlight (bright at one edge, fades inward)
-    // Make it vertical so gradient goes across the height of the plane
+    // Radial falloff so highlight hugs the outer edge on every side
+    const size = 128;
     const canvas = document.createElement('canvas');
-    canvas.width = 1;
-    canvas.height = 64;
-    const ctx = canvas.getContext('2d')!;
-    
-    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    gradient.addColorStop(0, 'rgba(255, 255, 255, 0)'); // Transparent at bottom (inner side)
-    gradient.addColorStop(0.5, 'rgba(200, 180, 150, 0.15)'); // Subtle warm highlight
-    gradient.addColorStop(1, 'rgba(255, 235, 200, 0.3)'); // Brighter at top (outer edge)
-    
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      throw new Error('Renderer3D: frame highlight texture context missing');
+    }
+
+    const cx = size / 2;
+    const cy = size / 2;
+    const innerRadius = size * 0.35;
+    const outerRadius = size * 0.5;
+    const gradient = ctx.createRadialGradient(cx, cy, innerRadius, cx, cy, outerRadius);
+    gradient.addColorStop(0, 'rgba(255, 255, 255, 0)');
+    gradient.addColorStop(0.65, 'rgba(255, 230, 190, 0.05)');
+    gradient.addColorStop(1, 'rgba(255, 240, 210, 0.35)');
+
     ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
+    ctx.fillRect(0, 0, size, size);
+
     const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = THREE.ClampToEdgeWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
     texture.needsUpdate = true;
-    
+
     return new THREE.MeshBasicMaterial({
       map: texture,
       transparent: true,
       blending: THREE.AdditiveBlending,
-      depthTest: true,
+      depthTest: false,
       depthWrite: false,
-      opacity: 0.5,
+      opacity: 0.6,
       side: THREE.DoubleSide,
     });
   }
@@ -1468,16 +1474,10 @@ export class Renderer3D {
     const centerShift = (outer - inner) / 2;
 
     const geom = getTableGeometry();
-    const playHalfW = geom.playWidthIn / 2;
-    const playHalfH = geom.playHeightIn / 2;
-    const frameWidth = Math.max(0.1, CONFIG.FRAME_OFFSET_IN);
-    const outerOffset = frameWidth + CONFIG.RAIL_THICKNESS_OUTER;
-    const outerX = playHalfW + outerOffset;
-    const outerY = playHalfH + outerOffset;
-    const cornerRadius = Math.max(
-      0,
-      Math.min(CONFIG.FRAME_CORNER_RADIUS_IN ?? 0, frameWidth, outerX, outerY)
-    );
+    const { frameOutline } = geom;
+    const outerX = frameOutline.outerHalfWidth;
+    const outerY = frameOutline.outerHalfHeight;
+    const cornerRadius = Math.max(0, Math.min(frameOutline.cornerRadius, outerX, outerY));
     const clipInfo: FrameClipInfo = { outerX, outerY, radius: cornerRadius };
     this.frameClipInfo = clipInfo;
 
@@ -1493,7 +1493,6 @@ export class Renderer3D {
         ny = -ny;
       }
 
-      const hasRoundedFrame = (CONFIG.FRAME_CORNER_RADIUS_IN ?? 0) > 1e-4;
       const isCornerTaper = (rail.id ?? '').endsWith('_taper');
       const pointA = { x: rail.x1, y: rail.y1 };
       const pointB = { x: rail.x2, y: rail.y2 };
@@ -1503,9 +1502,11 @@ export class Renderer3D {
       const outerPoint = absA <= absB ? pointB : pointA;
 
       let trimmedOuter = outerPoint;
-      const dir = { x: outerPoint.x - innerPoint.x, y: outerPoint.y - innerPoint.y };
       let trimmedData: { t: number; point: Vec2 } | null = null;
-      if (hasRoundedFrame && isCornerTaper && clipInfo.radius > 1e-4) {
+      const dir = { x: outerPoint.x - innerPoint.x, y: outerPoint.y - innerPoint.y };
+      const allowFrameClipping = false;
+      const shouldClipRails = allowFrameClipping && isCornerTaper && clipInfo.radius > 1e-4;
+      if (shouldClipRails) {
         const signX = Math.sign(outerPoint.x) || Math.sign(innerPoint.x) || 1;
         const signY = Math.sign(outerPoint.y) || Math.sign(innerPoint.y) || 1;
         const outerDistance = centerShift + totalWidth / 2;
@@ -1919,42 +1920,57 @@ export class Renderer3D {
       return null;
     }
 
-    const { minX, maxX, minY, maxY } = this.playBounds;
-
-    const playHalfWidth = (maxX - minX) / 2;
-    const playHalfHeight = (maxY - minY) / 2;
+    const geom = getTableGeometry();
+    const { frameOutline } = geom;
     const frameInset = CONFIG.RAIL_THICKNESS_OUTER;
-    const outerHalfWidth = playHalfWidth + frameInset;
-    const outerHalfHeight = playHalfHeight + frameInset;
-
-    const frameOffset = CONFIG.FRAME_OFFSET_IN;
-    const cornerFrameOffset = CONFIG.CORNER_FRAME_OFFSET_IN ?? frameOffset;
-    const outerCornerRadius = Math.min(
-      CONFIG.FRAME_CORNER_RADIUS_IN ?? 0,
-      frameOffset,
-      cornerFrameOffset
-    );
-    const maxCornerRadius = Math.max(0, outerCornerRadius);
-    const innerCornerRadius = Math.max(0, maxCornerRadius - frameInset);
+    const outerHalfWidth = frameOutline.innerHalfWidth;
+    const outerHalfHeight = frameOutline.innerHalfHeight;
+    const innerCornerRadius = Math.max(0, frameOutline.cornerRadius - frameInset);
 
     const outer = this.createRoundedRectShape(outerHalfWidth, outerHalfHeight, innerCornerRadius);
 
-    // Inner hole follows cushion OUTER edge (offset outward by rail thickness)
-    // This leaves room for the rail cushions and only fills the gap to the frame
-    const railOuterThickness = CONFIG.RAIL_THICKNESS_OUTER;
-    const offsetPoints = this.offsetBoundaryOutward(this.playBoundaryPoints, railOuterThickness);
-    
-    const inner = new THREE.Path();
-    if (offsetPoints.length > 0) {
-      inner.moveTo(offsetPoints[0].x, offsetPoints[0].y);
-      for (let i = 1; i < offsetPoints.length; i++) {
-        inner.lineTo(offsetPoints[i].x, offsetPoints[i].y);
+    const railPerimeter = this.buildRailOuterPerimeter();
+    if (railPerimeter && railPerimeter.length >= 3) {
+      const inner = new THREE.Path();
+      inner.moveTo(railPerimeter[0].x, railPerimeter[0].y);
+      for (let i = 1; i < railPerimeter.length; i++) {
+        inner.lineTo(railPerimeter[i].x, railPerimeter[i].y);
       }
       inner.closePath();
       outer.holes.push(inner);
     }
 
     return new THREE.ShapeGeometry(outer, 64);
+  }
+
+  private buildRailOuterPerimeter(): Vec2[] | null {
+    if (!this.railLines.length) {
+      return null;
+    }
+
+    const offset = CONFIG.RAIL_THICKNESS_OUTER ?? 0;
+    if (offset <= 0) {
+      return null;
+    }
+
+    const points: Vec2[] = [];
+    this.railLines.forEach((line, index) => {
+      if (!line) return;
+      const startOuter = {
+        x: (line.start?.x ?? 0) - (line.nx ?? 0) * offset,
+        y: (line.start?.y ?? 0) - (line.ny ?? 0) * offset,
+      };
+      const endOuter = {
+        x: (line.end?.x ?? 0) - (line.nx ?? 0) * offset,
+        y: (line.end?.y ?? 0) - (line.ny ?? 0) * offset,
+      };
+      if (index === 0) {
+        points.push(startOuter);
+      }
+      points.push(endOuter);
+    });
+
+    return this.ensureClockwise(points);
   }
 
   private getPocketSideMaterial(): THREE.MeshBasicMaterial {

@@ -15,6 +15,25 @@ export interface RailDef {
   normal: Vec2; // Points inward to play area
 }
 
+export interface FrameCorner {
+  horizontal: Vec2;
+  vertical: Vec2;
+}
+
+export interface FrameOutline {
+  outerHalfWidth: number;
+  outerHalfHeight: number;
+  innerHalfWidth: number;
+  innerHalfHeight: number;
+  cornerRadius: number;
+  corners: {
+    northWest: FrameCorner;
+    northEast: FrameCorner;
+    southEast: FrameCorner;
+    southWest: FrameCorner;
+  };
+}
+
 export interface PocketDef {
   id: string;
   center: Vec2;
@@ -37,6 +56,7 @@ export interface TableGeometry {
   sidePocketVisualRadiusIn: number;
   pocketShelfDepthIn: number;
   rails: RailDef[];
+  frameOutline: FrameOutline;
   pockets: PocketDef[];
 }
 
@@ -362,15 +382,26 @@ export function getTableGeometry(): TableGeometry {
     });
   };
 
-  const outerX = PLAY_HALF_W_IN + cornerFrameOffset;
-  const outerY = PLAY_HALF_H_IN + cornerFrameOffset;
+  const railOuterX = PLAY_HALF_W_IN + cornerFrameOffset;
+  const railOuterY = PLAY_HALF_H_IN + cornerFrameOffset;
+  const frameWidth = Math.max(0.1, CONFIG.FRAME_OFFSET_IN);
+  const frameOuterOffset = frameWidth + CONFIG.RAIL_THICKNESS_OUTER;
+  const frameInnerOffset = CONFIG.RAIL_THICKNESS_OUTER;
+  const frameOuterX = PLAY_HALF_W_IN + frameOuterOffset;
+  const frameOuterY = PLAY_HALF_H_IN + frameOuterOffset;
+  const frameInnerX = PLAY_HALF_W_IN + frameInnerOffset;
+  const frameInnerY = PLAY_HALF_H_IN + frameInnerOffset;
   const frameCornerRadius = Math.max(
     0,
-    Math.min(CONFIG.FRAME_CORNER_RADIUS_IN ?? 0, CONFIG.FRAME_OFFSET_IN, cornerFrameOffset)
+    Math.min(CONFIG.FRAME_CORNER_RADIUS_IN ?? 0, frameWidth, frameOuterX, frameOuterY)
   );
-  const cornerPoint = (signX: 1 | -1, signY: 1 | -1, axis: 'horizontal' | 'vertical'): Vec2 => {
-    const baseX = signX * outerX;
-    const baseY = signY * outerY;
+  const frameCornerPoint = (
+    signX: 1 | -1,
+    signY: 1 | -1,
+    axis: 'horizontal' | 'vertical'
+  ): Vec2 => {
+    const baseX = signX * frameOuterX;
+    const baseY = signY * frameOuterY;
     if (frameCornerRadius <= 0) {
       return { x: baseX, y: baseY };
     }
@@ -379,15 +410,38 @@ export function getTableGeometry(): TableGeometry {
     }
     return { x: baseX, y: baseY - signY * frameCornerRadius };
   };
+  const railOuterCorner = (signX: 1 | -1, signY: 1 | -1): Vec2 => ({
+    x: signX * railOuterX,
+    y: signY * railOuterY,
+  });
 
-  const northWestOuterTop = cornerPoint(-1, 1, 'horizontal');
-  const northWestOuterWest = cornerPoint(-1, 1, 'vertical');
-  const northEastOuterTop = cornerPoint(1, 1, 'horizontal');
-  const northEastOuterEast = cornerPoint(1, 1, 'vertical');
-  const southEastOuterBottom = cornerPoint(1, -1, 'horizontal');
-  const southEastOuterEast = cornerPoint(1, -1, 'vertical');
-  const southWestOuterBottom = cornerPoint(-1, -1, 'horizontal');
-  const southWestOuterWest = cornerPoint(-1, -1, 'vertical');
+  const frameCorners = {
+    northWest: {
+      horizontal: frameCornerPoint(-1, 1, 'horizontal'),
+      vertical: frameCornerPoint(-1, 1, 'vertical'),
+    },
+    northEast: {
+      horizontal: frameCornerPoint(1, 1, 'horizontal'),
+      vertical: frameCornerPoint(1, 1, 'vertical'),
+    },
+    southEast: {
+      horizontal: frameCornerPoint(1, -1, 'horizontal'),
+      vertical: frameCornerPoint(1, -1, 'vertical'),
+    },
+    southWest: {
+      horizontal: frameCornerPoint(-1, -1, 'horizontal'),
+      vertical: frameCornerPoint(-1, -1, 'vertical'),
+    },
+  };
+
+  const northWestOuterTop = railOuterCorner(-1, 1);
+  const northWestOuterWest = railOuterCorner(-1, 1);
+  const northEastOuterTop = railOuterCorner(1, 1);
+  const northEastOuterEast = railOuterCorner(1, 1);
+  const southEastOuterBottom = railOuterCorner(1, -1);
+  const southEastOuterEast = railOuterCorner(1, -1);
+  const southWestOuterBottom = railOuterCorner(-1, -1);
+  const southWestOuterWest = railOuterCorner(-1, -1);
 
   const baseNorthCornerWest: Vec2 = { x: -CORNER_JAW_X, y: Y_N_STRAIGHT };
   const baseNorthCornerEast: Vec2 = { x: CORNER_JAW_X, y: Y_N_STRAIGHT };
@@ -603,7 +657,21 @@ export function getTableGeometry(): TableGeometry {
     // Rails approximating WPA throat geometry, normals point inward
     // Corner rails stop short of pocket centers to leave openings
     rails,
-    
+    frameOutline: {
+      // Frame-only envelope (rendering). Rails stay fixed regardless of rounded corners.
+      outerHalfWidth: frameOuterX,
+      outerHalfHeight: frameOuterY,
+      innerHalfWidth: frameInnerX,
+      innerHalfHeight: frameInnerY,
+      cornerRadius: frameCornerRadius,
+      corners: {
+        northWest: { ...frameCorners.northWest },
+        northEast: { ...frameCorners.northEast },
+        southEast: { ...frameCorners.southEast },
+        southWest: { ...frameCorners.southWest },
+      },
+    },
+
     // Pockets at corners and midpoints
     pockets: [
       {

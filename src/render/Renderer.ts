@@ -152,33 +152,16 @@ export class Renderer {
   }
 
   drawFrame() {
-    const frameWidth = Math.max(0.1, CONFIG.FRAME_OFFSET_IN);
-    const boundary = this.playBoundaryPoints;
-    const cornerRadiusRaw = CONFIG.FRAME_CORNER_RADIUS_IN ?? 0;
-    const outerOffset = frameWidth + CONFIG.RAIL_THICKNESS_OUTER;
-    const innerOffset = CONFIG.RAIL_THICKNESS_OUTER;
-
-    let playHalfWidth: number;
-    let playHalfHeight: number;
-    if (boundary.length >= 3) {
-      playHalfWidth = (this.playBounds.maxX - this.playBounds.minX) / 2;
-      playHalfHeight = (this.playBounds.maxY - this.playBounds.minY) / 2;
-    } else {
-      const geom = getTableGeometry();
-      playHalfWidth = geom.playWidthIn / 2;
-      playHalfHeight = geom.playHeightIn / 2;
-    }
-
-    const outerX = playHalfWidth + outerOffset;
-    const outerY = playHalfHeight + outerOffset;
-    const innerX = playHalfWidth + innerOffset;
-    const innerY = playHalfHeight + innerOffset;
-
+    const geom = getTableGeometry();
+    const { frameOutline } = geom;
+    const outerX = frameOutline.outerHalfWidth;
+    const outerY = frameOutline.outerHalfHeight;
+    const innerX = frameOutline.innerHalfWidth;
+    const innerY = frameOutline.innerHalfHeight;
     const cornerRadius = Math.max(
       0,
-      Math.min(cornerRadiusRaw, frameWidth, outerX, outerY)
+      Math.min(frameOutline.cornerRadius, outerX, outerY)
     );
-
     this.ctx.fillStyle = CONFIG.FRAME_COLOR ?? '#3d2413';
     this.ctx.beginPath();
     this.traceRoundedRectPath(this.ctx, outerX, outerY, cornerRadius);
@@ -317,35 +300,10 @@ export class Renderer {
   }
   
   drawRails(rails: Rail[]) {
-    const frameWidth = Math.max(0.1, CONFIG.FRAME_OFFSET_IN);
-    const boundary = this.playBoundaryPoints;
-    const cornerRadiusRaw = CONFIG.FRAME_CORNER_RADIUS_IN ?? 0;
-    const outerOffset = frameWidth + CONFIG.RAIL_THICKNESS_OUTER;
-
-    let playHalfWidth: number;
-    let playHalfHeight: number;
-    if (boundary.length >= 3) {
-      playHalfWidth = (this.playBounds.maxX - this.playBounds.minX) / 2;
-      playHalfHeight = (this.playBounds.maxY - this.playBounds.minY) / 2;
-    } else {
-      const geom = getTableGeometry();
-      playHalfWidth = geom.playWidthIn / 2;
-      playHalfHeight = geom.playHeightIn / 2;
-    }
-
-    const outerX = playHalfWidth + outerOffset;
-    const outerY = playHalfHeight + outerOffset;
-    const cornerRadius = Math.max(0, Math.min(cornerRadiusRaw, frameWidth, outerX, outerY));
-
-    this.frameClipInfo = { outerX, outerY, radius: cornerRadius };
+    this.frameClipInfo = null;
     this.debugRailSegments = [];
 
     this.ctx.save();
-    if (cornerRadius > 0) {
-      this.ctx.beginPath();
-      this.traceRoundedRectPath(this.ctx, outerX, outerY, cornerRadius);
-      this.ctx.clip();
-    }
     rails.forEach((rail) => this.drawRail(rail));
     this.ctx.restore();
     this.frameClipInfo = null;

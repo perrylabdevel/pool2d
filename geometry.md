@@ -31,6 +31,12 @@ world.y = -(screenY - rect.height / 2) / scale;
   - `POCKET_RADIUS_CORNER` – default 2.5" (adjustable live)
   - `POCKET_RADIUS_SIDE`   – default 2.5" (adjustable live)
 
+### Frame Outline vs Rails
+
+- `getTableGeometry().rails` now remains purely square/rectilinear in the rail domain; tuning `FRAME_CORNER_RADIUS_IN` only affects the decorative frame.
+- `getTableGeometry().frameOutline` exposes the outer/inner half-widths and rounded corner points the renderers need to draw curved frame edges without sampling rail endpoints.
+- Renderers must use `frameOutline` for any rounded-frame visuals. Physics, placement, and collision logic should stay anchored to `rails` so ball motion remains unchanged when the frame radius changes.
+
 ## Derived Jaw Geometry
 
 Geometry derivation lives in `src/geometry/Geometry.ts`. The panel sliders map directly to the following tunables:

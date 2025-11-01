@@ -10,16 +10,15 @@ This document details the anatomy of pool table components in the Pool 2D codeba
 
 ### 1. **Rail Fill Mesh** (Z: -0.3) ✅ FIXED
 
-**File:** `src/render/Renderer3D.ts:1458-1491` (`createRailFillGeometry`)
+**File:** `Renderer3D.initializeRailFillMesh → createRailFillGeometry`
 
 **Purpose:** Fills the narrow gaps between the cushion outer edges and the frame inner edge (only visible at pocket openings).
 
 **Geometry:**
 
-- **Outer boundary:** Rectangle at frame inner edge `playBounds ± RAIL_THICKNESS_OUTER`
-  - For default settings: `±50" ± 0.2" = ±50.2"` (contained within frame)
-- **Inner boundary (hole):** Follows exact cushion outer edge (playBoundaryPoints offset outward by 0.2")
-  - Matches complex cushion shape including all pocket cutouts
+- **Outer boundary:** Rounded rectangle using `frameOutline.innerHalfWidth/Height` (defaults: ±50.2" × ±25.2")
+- **Inner boundary (hole):** Matches the exact cushion outline derived from `playBoundaryPoints`
+- **Corner radius:** `max(0, frameOutline.cornerRadius - RAIL_THICKNESS_OUTER)` so it hugs curved frames
 
 **Material:**
 
@@ -64,7 +63,7 @@ receiveShadow: true;
 
 ### 3. **Rails / Cushions** (Z: -0.25)
 
-**File:** `src/render/Renderer3D.ts:1189-1244` (`initializeRails`)
+**File:** `Renderer3D.initializeRails`
 
 **Purpose:** The cushions that balls bounce off of.
 
@@ -90,9 +89,9 @@ receiveShadow: true
 
 **Highlight overlay:** (Z: -0.13)
 
-- White gradient plane on top of each rail
-- Width: 35% of rail width
-- Additive blending for shine effect
+- Additive plane shared across rails (`getRailHighlightMaterial`)
+- Width: `max(0.3", railWidth × 0.55)` for a broader sheen
+- Positioned at Z ≈ 0.01 so it floats above the cushion top
 
 **Rail Segments (from Geometry.ts):**
 
@@ -117,30 +116,18 @@ Mirrors north rail pattern
 
 ---
 
-### 4. **Frame Planks** (Z: 0)
+### 4. **Frame Extrusion** (Z: 0 ± 0.375")
 
-**File:** `src/render/Renderer3D.ts:939-1005` (`initializeFrame`)
+**File:** `Renderer3D.initializeFrame`
 
-**Purpose:** Wooden border around the table (decorative/structural).
+**Purpose:** Wooden border around the table (decorative/structural) now derived from `frameOutline` so it can curve independently of the rails.
 
 **Geometry:**
 
-- **4 rectangular planks** (top, bottom, left, right)
-- **Dimensions:**
-
-  ```typescript
-  frameWidth = CONFIG.FRAME_OFFSET_IN (4.0")
-  innerX = playHalfW + RAIL_THICKNESS_OUTER (50 + 0.2 = 50.2")
-  innerY = playHalfH + RAIL_THICKNESS_OUTER (25 + 0.2 = 25.2")
-  outerX = innerX + frameWidth (50.2 + 4.0 = 54.2")
-  outerY = innerY + frameWidth (25.2 + 4.0 = 29.2")
-  depth = 0.75" (Z-height)
-  ```
-
-- **Top plank:** width=108.4", height=4", centered at Y=27.2"
-- **Bottom plank:** Same dimensions, centered at Y=-27.2"
-- **Left plank:** width=4", height=58.4", centered at X=-52.2"
-- **Right plank:** width=4", height=58.4", centered at X=52.2"
+- Extruded shape with an outer rounded rectangle (`frameOutline.outerHalfWidth/Height`, default 54.2" × 29.2")
+- Inner hole carved from `frameOutline.innerHalfWidth/Height` (50.2" × 25.2")
+- Depth: 0.75", centered on Z=0
+- Corner radius clamps to `min(frameOutline.cornerRadius, frameWidth)`
 
 **Material:**
 
@@ -150,11 +137,16 @@ roughness: 0.6
 metalness: 0.2
 ```
 
+**Overlays:**
+
+- Inner shadow planes (top/bottom/left/right) positioned at Z≈0.38 for visual depth
+- Outer highlight ring built from a rounded rectangle mask and a radial gradient texture so the glow wraps every side evenly
+
 ---
 
 ### 5. **Pockets** (Z: 0 to 0.3)
 
-**File:** `src/render/Renderer3D.ts:1246-1346` (`initializePockets`)
+**File:** `Renderer3D.initializePockets`
 
 **Components per pocket:**
 

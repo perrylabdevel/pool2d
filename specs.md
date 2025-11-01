@@ -30,9 +30,11 @@ Deliver a tournament-grade billiards sandbox that can double as a physics labora
 | Tooling     | Scenario manager, physics recorder, debug overlay, local-storage persistence               | ✅     |
 | Automation  | Vitest unit tests for key math utilities                                                   | ⚙️ planned |
 
+> Note: Rounded frame corners are now handled via `frameOutline`, keeping rail endpoints fixed so physics stay deterministic regardless of frame styling.
+
 ## Control Surfaces
 
-- **Settings Panel (S)**: friction, restitution, solver iterations, table scale, physics reset/export.
+- **Settings Panel (S)**: friction, restitution, solver iterations, aim-line offsets, table scale, physics reset/export.
 - **Geometry Panel (G)**: frame offsets, jaw radii, capture radii, throat positions; emits restarts.
 - **Render Layer Panel**: toggle table/frame/pockets/overlays and adjust render order.
 - **Scenario Manager** (`shotScenarios.*`): scripted shot setups for regression testing.
