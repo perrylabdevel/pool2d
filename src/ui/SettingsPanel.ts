@@ -3,6 +3,7 @@ import { CONFIG } from '../config';
 import { SettingsManager, PhysicsSettings, RenderSettings } from './SettingsManager';
 import { makePanelDraggable } from './drag';
 import { UIPanel } from './panels/UIPanel';
+import { bindSliders, type SliderBindConfig } from './controls/SliderBinder';
 
 export class SettingsPanel {
   private panel: HTMLElement;
@@ -135,36 +136,34 @@ export class SettingsPanel {
       }
     });
 
-    // Slider inputs
-    const sliders = this.panel.querySelectorAll('input[type="range"]');
-    sliders.forEach((slider) => {
-      slider.addEventListener('input', (event) => {
-        const input = event.target as HTMLInputElement;
-        const key = input.id;
-        const value = parseFloat(input.value);
+    // Bind all physics sliders
+    const physicsSliderConfigs: SliderBindConfig<PhysicsSettings>[] = [
+      { sliderId: 'BALL_RESTITUTION', labelId: 'BALL_RESTITUTION-value', onChange: (v) => this.updatePhysicsSetting('BALL_RESTITUTION', v!) },
+      { sliderId: 'BALL_BALL_FRICTION', labelId: 'BALL_BALL_FRICTION-value', onChange: (v) => this.updatePhysicsSetting('BALL_BALL_FRICTION', v!) },
+      { sliderId: 'CUSHION_RESTITUTION', labelId: 'CUSHION_RESTITUTION-value', onChange: (v) => this.updatePhysicsSetting('CUSHION_RESTITUTION', v!) },
+      { sliderId: 'CUE_POWER_MAX', labelId: 'CUE_POWER_MAX-value', onChange: (v) => this.updatePhysicsSetting('CUE_POWER_MAX', v!), formatDigits: 0 },
+      { sliderId: 'CUE_POWER_MULTIPLIER', labelId: 'CUE_POWER_MULTIPLIER-value', onChange: (v) => this.updatePhysicsSetting('CUE_POWER_MULTIPLIER', v!) },
+      { sliderId: 'ROLLING_FRICTION', labelId: 'ROLLING_FRICTION-value', onChange: (v) => this.updatePhysicsSetting('ROLLING_FRICTION', v!) },
+      { sliderId: 'SLIDING_FRICTION', labelId: 'SLIDING_FRICTION-value', onChange: (v) => this.updatePhysicsSetting('SLIDING_FRICTION', v!) },
+      { sliderId: 'SOLVER_ITERATIONS', labelId: 'SOLVER_ITERATIONS-value', onChange: (v) => this.updatePhysicsSetting('SOLVER_ITERATIONS', v!), formatDigits: 0 },
+      { sliderId: 'VELOCITY_EPSILON', labelId: 'VELOCITY_EPSILON-value', onChange: (v) => this.updatePhysicsSetting('VELOCITY_EPSILON', v!) },
+      { sliderId: 'AIM_LINE_OFFSET', labelId: 'AIM_LINE_OFFSET-value', onChange: (v) => this.updatePhysicsSetting('AIM_LINE_OFFSET', v!) },
+      { sliderId: 'GHOST_BALL_OFFSET', labelId: 'GHOST_BALL_OFFSET-value', onChange: (v) => this.updatePhysicsSetting('GHOST_BALL_OFFSET', v!) },
+      { sliderId: 'OBJECT_PATH_PERCENTAGE', labelId: 'OBJECT_PATH_PERCENTAGE-value', onChange: (v) => this.updatePhysicsSetting('OBJECT_PATH_PERCENTAGE', v!) },
+    ];
 
-        const valueDisplay = this.panel.querySelector(`#${key}-value`);
+    // Bind render setting sliders
+    const renderSliderConfigs: SliderBindConfig<RenderSettings>[] = [
+      { sliderId: 'CANVAS_SCALE_MULTIPLIER', labelId: 'CANVAS_SCALE_MULTIPLIER-value', onChange: (v) => this.updateRenderSetting('CANVAS_SCALE_MULTIPLIER', v!) },
+      { sliderId: 'BALL_SCALE', labelId: 'BALL_SCALE-value', onChange: (v) => this.updateRenderSetting('BALL_SCALE', v!) },
+    ];
 
-        if (key === 'CANVAS_SCALE_MULTIPLIER' || key === 'BALL_SCALE') {
-          this.updateRenderSetting(key as 'CANVAS_SCALE_MULTIPLIER' | 'BALL_SCALE', value, valueDisplay);
-          return;
-        }
-
-        this.updatePhysicsSetting(key, value, valueDisplay);
-      });
-    });
+    bindSliders([...physicsSliderConfigs, ...renderSliderConfigs]);
   }
 
-  private updateRenderSetting(
-    key: 'CANVAS_SCALE_MULTIPLIER' | 'BALL_SCALE',
-    value: number,
-    valueDisplay: Element | null
-  ) {
+  private updateRenderSetting(key: 'CANVAS_SCALE_MULTIPLIER' | 'BALL_SCALE', value: number) {
     if (key === 'CANVAS_SCALE_MULTIPLIER') {
       CONFIG.CANVAS_SCALE_MULTIPLIER = value;
-      if (valueDisplay) {
-        valueDisplay.textContent = value.toFixed(2);
-      }
       const renderUpdate: Partial<RenderSettings> = { canvasScale: value };
       this.settingsManager.saveRenderSettings(renderUpdate);
       console.log(`🖥️ CANVAS_SCALE_MULTIPLIER = ${value}`);
@@ -174,26 +173,18 @@ export class SettingsPanel {
     const baseRadius = CONFIG.BALL_BASE_RADIUS ?? CONFIG.BALL_RADIUS;
     CONFIG.BALL_SCALE = value;
     CONFIG.BALL_RADIUS = baseRadius * value;
-    if (valueDisplay) {
-      valueDisplay.textContent = value.toFixed(2);
-    }
     const renderUpdate: Partial<RenderSettings> = { ballScale: value };
     this.settingsManager.saveRenderSettings(renderUpdate);
     console.log(`🎱 BALL_SCALE = ${value} (radius ${CONFIG.BALL_RADIUS.toFixed(3)}")`);
   }
 
-  private updatePhysicsSetting(key: string, value: number, valueDisplay: Element | null) {
+  private updatePhysicsSetting(key: string, value: number) {
     if (!this.isPhysicsSettingKey(key)) {
       console.warn(`Ignoring unsupported physics setting key "${key}"`);
       return;
     }
 
     this.physicsConfig[key] = value;
-
-    if (valueDisplay) {
-      valueDisplay.textContent = value.toString();
-    }
-
     const physicsUpdate: Partial<PhysicsSettings> = { [key]: value } as Partial<PhysicsSettings>;
     this.settingsManager.savePhysicsSettings(physicsUpdate);
     console.log(`⚙️ ${key} = ${value}`);
