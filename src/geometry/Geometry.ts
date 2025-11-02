@@ -297,8 +297,44 @@ function deriveCornerJawY(
   return yClamped;
 }
 
-export function getTableGeometry(): TableGeometry {
-  // Recompute on demand from current CONFIG values
+/**
+ * Jaw position calculations for side and corner pockets
+ */
+interface JawPositions {
+  JAW_X_OUTER: number;
+  JAW_X_INNER: number;
+  CORNER_JAW_Y: number;
+  CORNER_JAW_X: number;
+  sideStraight: number;
+  sideInner: number;
+  cornerStraight: number;
+  cornerFrameOffset: number;
+}
+
+/**
+ * Base coordinate constants derived from jaw positions
+ */
+interface BaseCoordinates {
+  Y_N_STRAIGHT: number;
+  Y_S_STRAIGHT: number;
+  Y_N_INNER: number;
+  Y_S_INNER: number;
+  X_E_STRAIGHT: number;
+  X_W_STRAIGHT: number;
+  SIDE_POCKET_OFFSET: number;
+  curveBlend: number;
+  mouthYNorth: number;
+  mouthYSouth: number;
+  throatJoinX: number;
+  throatJoinYNorth: number;
+  throatJoinYSouth: number;
+}
+
+/**
+ * Compute jaw positions for side and corner pockets.
+ * Applies derivation functions, overrides, and clamping constraints.
+ */
+function computeJawPositions(): JawPositions {
   const sideStraight = Math.max(0, CONFIG.SIDE_STRAIGHT_Y_IN);
   const sideInner = Math.max(sideStraight + 0.05, CONFIG.SIDE_INNER_Y_IN);
   const cornerStraight = Math.max(0, CONFIG.CORNER_STRAIGHT_X_IN);
@@ -349,41 +385,23 @@ export function getTableGeometry(): TableGeometry {
   const cornerJawXOverride = CONFIG.CORNER_JAW_X_OVERRIDE_IN;
   const CORNER_JAW_X = clamp(cornerJawXOverride ?? cornerJawXDerived, 1, cornerStraight - 0.25);
 
-  const Y_N_STRAIGHT = sideStraight;
-  const Y_S_STRAIGHT = -sideStraight;
-  const Y_N_INNER = sideInner;
-  const Y_S_INNER = -sideInner;
-  const X_E_STRAIGHT = cornerStraight;
-  const X_W_STRAIGHT = -cornerStraight;
-  const SIDE_POCKET_OFFSET = CONFIG.SIDE_POCKET_OUTWARD_OFFSET_IN;
-  const curveBlend = clamp01(CONFIG.JAW_CURVE_BLEND ?? 0);
-  const mouthYNorth = PLAY_HALF_H_IN;
-  const mouthYSouth = -PLAY_HALF_H_IN;
-  const throatJoinX = clamp(
-    JAW_X_INNER * (1 - 0.35 * curveBlend),
-    0.5,
-    Math.max(0.5, JAW_X_OUTER - 0.1)
-  );
-  const throatMaxYNorth = Math.max(Y_N_INNER, mouthYNorth - 0.05);
-  const throatJoinYNorth = clamp(
-    Y_N_INNER + (mouthYNorth - Y_N_INNER) * (0.5 * curveBlend),
-    Y_N_INNER,
-    throatMaxYNorth
-  );
-  const throatJoinYSouth = -throatJoinYNorth;
-
-  const rails: RailDef[] = [];
-  const addRail = (id: string, from: Vec2, to: Vec2) => {
-    rails.push({
-      id,
-      from,
-      to,
-      normal: computeInwardNormal(from, to),
-    });
+  return {
+    JAW_X_OUTER,
+    JAW_X_INNER,
+    CORNER_JAW_Y,
+    CORNER_JAW_X,
+    sideStraight,
+    sideInner,
+    cornerStraight,
+    cornerFrameOffset,
   };
+}
 
-  const railOuterX = PLAY_HALF_W_IN + cornerFrameOffset;
-  const railOuterY = PLAY_HALF_H_IN + cornerFrameOffset;
+/**
+ * Compute frame outline geometry.
+ * Calculates frame dimensions and corner points with optional rounding.
+ */
+function computeFrameOutline(): FrameOutline {
   const frameWidth = Math.max(0.1, CONFIG.FRAME_OFFSET_IN);
   const frameOuterOffset = frameWidth + CONFIG.RAIL_THICKNESS_OUTER;
   const frameInnerOffset = CONFIG.RAIL_THICKNESS_OUTER;
@@ -410,10 +428,6 @@ export function getTableGeometry(): TableGeometry {
     }
     return { x: baseX, y: baseY - signY * frameCornerRadius };
   };
-  const railOuterCorner = (signX: 1 | -1, signY: 1 | -1): Vec2 => ({
-    x: signX * railOuterX,
-    y: signY * railOuterY,
-  });
 
   const frameCorners = {
     northWest: {
@@ -433,6 +447,115 @@ export function getTableGeometry(): TableGeometry {
       vertical: frameCornerPoint(-1, -1, 'vertical'),
     },
   };
+
+  return {
+    outerHalfWidth: frameOuterX,
+    outerHalfHeight: frameOuterY,
+    innerHalfWidth: frameInnerX,
+    innerHalfHeight: frameInnerY,
+    cornerRadius: frameCornerRadius,
+    corners: frameCorners,
+  };
+}
+
+/**
+ * Compute base coordinate constants from jaw positions.
+ * These named constants are used throughout rail and pocket calculations.
+ */
+function computeBaseCoordinates(jawPositions: JawPositions): BaseCoordinates {
+  const { sideStraight, sideInner, JAW_X_INNER, JAW_X_OUTER } = jawPositions;
+
+  const Y_N_STRAIGHT = sideStraight;
+  const Y_S_STRAIGHT = -sideStraight;
+  const Y_N_INNER = sideInner;
+  const Y_S_INNER = -sideInner;
+  const X_E_STRAIGHT = jawPositions.cornerStraight;
+  const X_W_STRAIGHT = -jawPositions.cornerStraight;
+  const SIDE_POCKET_OFFSET = CONFIG.SIDE_POCKET_OUTWARD_OFFSET_IN;
+  const curveBlend = clamp01(CONFIG.JAW_CURVE_BLEND ?? 0);
+  const mouthYNorth = PLAY_HALF_H_IN;
+  const mouthYSouth = -PLAY_HALF_H_IN;
+  const throatJoinX = clamp(
+    JAW_X_INNER * (1 - 0.35 * curveBlend),
+    0.5,
+    Math.max(0.5, JAW_X_OUTER - 0.1)
+  );
+  const throatMaxYNorth = Math.max(Y_N_INNER, mouthYNorth - 0.05);
+  const throatJoinYNorth = clamp(
+    Y_N_INNER + (mouthYNorth - Y_N_INNER) * (0.5 * curveBlend),
+    Y_N_INNER,
+    throatMaxYNorth
+  );
+  const throatJoinYSouth = -throatJoinYNorth;
+
+  return {
+    Y_N_STRAIGHT,
+    Y_S_STRAIGHT,
+    Y_N_INNER,
+    Y_S_INNER,
+    X_E_STRAIGHT,
+    X_W_STRAIGHT,
+    SIDE_POCKET_OFFSET,
+    curveBlend,
+    mouthYNorth,
+    mouthYSouth,
+    throatJoinX,
+    throatJoinYNorth,
+    throatJoinYSouth,
+  };
+}
+
+export function getTableGeometry(): TableGeometry {
+  // Compute jaw positions for side and corner pockets
+  const jawPositions = computeJawPositions();
+  const {
+    JAW_X_OUTER,
+    JAW_X_INNER,
+    CORNER_JAW_Y,
+    CORNER_JAW_X,
+    sideStraight,
+    sideInner,
+    cornerStraight,
+    cornerFrameOffset,
+  } = jawPositions;
+
+  // Compute base coordinate constants
+  const {
+    Y_N_STRAIGHT,
+    Y_S_STRAIGHT,
+    Y_N_INNER,
+    Y_S_INNER,
+    X_E_STRAIGHT,
+    X_W_STRAIGHT,
+    SIDE_POCKET_OFFSET,
+    curveBlend,
+    mouthYNorth,
+    mouthYSouth,
+    throatJoinX,
+    throatJoinYNorth,
+    throatJoinYSouth,
+  } = computeBaseCoordinates(jawPositions);
+
+  const rails: RailDef[] = [];
+  const addRail = (id: string, from: Vec2, to: Vec2) => {
+    rails.push({
+      id,
+      from,
+      to,
+      normal: computeInwardNormal(from, to),
+    });
+  };
+
+  // Compute frame outline geometry
+  const frameOutline = computeFrameOutline();
+
+  // Rail outer corners for rail generation
+  const railOuterX = PLAY_HALF_W_IN + cornerFrameOffset;
+  const railOuterY = PLAY_HALF_H_IN + cornerFrameOffset;
+  const railOuterCorner = (signX: 1 | -1, signY: 1 | -1): Vec2 => ({
+    x: signX * railOuterX,
+    y: signY * railOuterY,
+  });
 
   const northWestOuterTop = railOuterCorner(-1, 1);
   const northWestOuterWest = railOuterCorner(-1, 1);

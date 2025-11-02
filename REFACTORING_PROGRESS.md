@@ -195,6 +195,205 @@ These renderer-specific utilities serve different rendering paradigms and should
 
 4. **Documentation is critical** - Clear JSDoc comments on shared utilities make it obvious how to use them correctly
 
+## Geometry.ts Function Decomposition
+
+**Branch:** `refactor/geometry-function-breakup`
+**Status:** 🚧 In Progress
+
+### Problem
+
+The `getTableGeometry()` function in `src/geometry/Geometry.ts` is 439 lines long (lines 300-739), making it difficult to:
+- Understand the logic flow
+- Test individual calculations
+- Debug geometry issues
+- Modify specific sections safely
+
+### Function Structure Analysis
+
+The monolithic function performs 7 distinct logical operations:
+
+1. **Jaw Position Calculations** (lines 302-350, ~48 lines)
+   - Derives `JAW_X_OUTER`, `JAW_X_INNER` (side pockets)
+   - Derives `CORNER_JAW_Y`, `CORNER_JAW_X` (corner pockets)
+   - Applies overrides and clamping
+   - Complex geometry derivation based on rail thickness, frame offset, etc.
+
+2. **Base Coordinate Constants** (lines 352-373, ~21 lines)
+   - Named position constants: `Y_N_STRAIGHT`, `X_E_STRAIGHT`, etc.
+   - Throat join calculations: `throatJoinX`, `throatJoinYNorth`
+   - Mouth positions for side pockets
+
+3. **Frame Outline Calculations** (lines 385-435, ~50 lines)
+   - Frame dimensions (outer/inner)
+   - Corner radius handling
+   - Frame corner point generation (with/without rounded corners)
+
+4. **Rail Point Calculations** (lines 437-585, ~148 lines)
+   - Corner outer points (8 points)
+   - Base corner/vertical points (12 points)
+   - Straight section endpoints (8 points)
+   - Throat joint points (6 points)
+   - **Side cut angle transformations** (lines 476-502)
+   - **Corner cut angle transformations** (lines 504-585)
+
+5. **Rail Generation** (lines 587-611, ~24 lines)
+   - 24 `addRail()` calls creating rails array
+   - North rails (8), East rails (3), South rails (8), West rails (3)
+
+6. **Pocket Definitions** (lines 613-645, ~32 lines)
+   - 6 pocket centers (4 corners + 2 sides)
+   - Cut normal hints for each pocket
+
+7. **Return Statement** (lines 646-738, ~92 lines)
+   - Assembles final `TableGeometry` object
+   - Includes all calculated rails, frame, pockets
+
+### Refactoring Plan
+
+Extract 6 helper functions, leaving the main function as a clean orchestrator:
+
+```typescript
+// BEFORE: 439 lines
+export function getTableGeometry(): TableGeometry {
+  // ... 439 lines of mixed calculations ...
+}
+
+// AFTER: ~20-30 lines
+export function getTableGeometry(): TableGeometry {
+  const jawPositions = computeJawPositions();
+  const baseCoords = computeBaseCoordinates(jawPositions);
+  const frameOutline = computeFrameOutline();
+  const railPoints = computeRailPoints(baseCoords);
+  const rails = generateRails(railPoints);
+  const pockets = computePockets(railPoints, baseCoords);
+
+  return {
+    playWidthIn: PLAY_WIDTH_IN,
+    playHeightIn: PLAY_HEIGHT_IN,
+    cushionProfileIn: CUSHION_PROFILE_IN,
+    pocketCaptureRadiusIn: CONFIG.POCKET_CAPTURE_RADIUS_CORNER,
+    cornerPocketCaptureRadiusIn: CONFIG.POCKET_CAPTURE_RADIUS_CORNER,
+    sidePocketCaptureRadiusIn: CONFIG.POCKET_CAPTURE_RADIUS_SIDE,
+    cornerPocketVisualRadiusIn: CONFIG.POCKET_VISUAL_RADIUS_CORNER,
+    sidePocketVisualRadiusIn: CONFIG.POCKET_VISUAL_RADIUS_SIDE,
+    pocketShelfDepthIn: CONFIG.POCKET_SHELF_DEPTH_IN,
+    rails,
+    frameOutline,
+    pockets,
+  };
+}
+```
+
+#### Helper Function 1: `computeJawPositions()`
+**Lines:** 302-350 (~48 lines)
+**Purpose:** Calculate jaw positions for side and corner pockets
+**Returns:**
+```typescript
+interface JawPositions {
+  JAW_X_OUTER: number;
+  JAW_X_INNER: number;
+  CORNER_JAW_Y: number;
+  CORNER_JAW_X: number;
+  sideStraight: number;
+  sideInner: number;
+  cornerStraight: number;
+}
+```
+
+#### Helper Function 2: `computeBaseCoordinates()`
+**Lines:** 352-373 (~21 lines)
+**Purpose:** Calculate named coordinate constants
+**Input:** `JawPositions`
+**Returns:**
+```typescript
+interface BaseCoordinates {
+  Y_N_STRAIGHT: number;
+  Y_S_STRAIGHT: number;
+  Y_N_INNER: number;
+  Y_S_INNER: number;
+  X_E_STRAIGHT: number;
+  X_W_STRAIGHT: number;
+  mouthYNorth: number;
+  mouthYSouth: number;
+  throatJoinX: number;
+  throatJoinYNorth: number;
+  throatJoinYSouth: number;
+  // ... other constants
+}
+```
+
+#### Helper Function 3: `computeFrameOutline()`
+**Lines:** 385-435 (~50 lines)
+**Purpose:** Calculate frame outline geometry
+**Returns:** `FrameOutline` (already defined type)
+
+#### Helper Function 4: `computeRailPoints()`
+**Lines:** 437-585 (~148 lines)
+**Purpose:** Calculate all rail endpoint positions with cut angle transformations
+**Input:** `BaseCoordinates`
+**Returns:**
+```typescript
+interface RailPoints {
+  // North pocket
+  northCornerWest: Vec2;
+  northCornerEast: Vec2;
+  northStraightWestEnd: Vec2;
+  northStraightEastStart: Vec2;
+  northThroatLeftJoint: Vec2;
+  northThroatRightJoint: Vec2;
+  northMouth: Vec2;
+
+  // South pocket (mirrored)
+  // East/West verticals
+  // Corner outer points
+  // ... etc
+}
+```
+
+#### Helper Function 5: `generateRails()`
+**Lines:** 587-611 (~24 lines)
+**Purpose:** Generate rails array from calculated points
+**Input:** `RailPoints`
+**Returns:** `RailDef[]`
+
+#### Helper Function 6: `computePockets()`
+**Lines:** 613-645 (~32 lines)
+**Purpose:** Generate pocket definitions with cut hints
+**Input:** `RailPoints`, `BaseCoordinates`
+**Returns:** `PocketDef[]`
+
+### Expected Impact
+
+**Before:**
+- `getTableGeometry()`: 439 lines
+- Difficult to understand what each section does
+- Hard to test individual calculations
+- Risky to modify
+
+**After:**
+- `getTableGeometry()`: ~25 lines (orchestrator)
+- `computeJawPositions()`: ~50 lines
+- `computeBaseCoordinates()`: ~25 lines
+- `computeFrameOutline()`: ~52 lines
+- `computeRailPoints()`: ~150 lines
+- `generateRails()`: ~26 lines
+- `computePockets()`: ~35 lines
+
+**Total:** ~363 lines (116 lines saved from clearer structure + removed duplication)
+
+**Benefits:**
+- ✅ Each function has a single, clear responsibility
+- ✅ Individual calculations can be unit tested
+- ✅ Easier to debug geometry issues
+- ✅ Safer to modify specific sections
+- ✅ Better documentation via function names and types
+
+### Testing Strategy
+
+1. **Before refactoring:** Capture baseline geometry output
+2. **After each extraction:** Verify geometry output is identical
+3. **Final verification:** Run full build and visual inspection in dev server
+
 ## Branch
 
 This work is on the `refactor/renderer-deduplication` branch. Merge into `main` when ready.
