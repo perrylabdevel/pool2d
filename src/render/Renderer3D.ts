@@ -20,16 +20,11 @@ import {
   darkenColor,
   mixColors,
   toRgba,
+  classifyAxisAlignmentFromVector,
+  getAxisPalette,
+  type AxisAlignment,
+  type AxisColorPalette,
 } from './RenderUtils';
-
-type AxisAlignment = 'horizontal' | 'vertical' | null;
-
-interface AxisColorPalette {
-  line: string;
-  glow: string;
-  debugStroke: string;
-  debugFill: string;
-}
 
 type FrameClipInfo = { outerX: number; outerY: number; radius: number };
 
@@ -2712,51 +2707,11 @@ export class Renderer3D {
     };
   }
 
-  private classifyAxisAlignmentFromVector(dx: number, dy: number, tolerance: number = 0.02): AxisAlignment {
-    const len = Math.sqrt(dx * dx + dy * dy);
-    if (len < 1e-4) return null;
-    const nx = dx / len;
-    const ny = dy / len;
-    if (Math.abs(ny) <= tolerance && Math.abs(nx) > tolerance) {
-      return 'horizontal';
-    }
-    if (Math.abs(nx) <= tolerance && Math.abs(ny) > tolerance) {
-      return 'vertical';
-    }
-    return null;
-  }
-
   private classifyAxisAlignmentFromPath(path: Vec2[]): AxisAlignment {
     if (path.length < 2) return null;
     const start = path[0];
     const end = path[path.length - 1];
-    return this.classifyAxisAlignmentFromVector(end.x - start.x, end.y - start.y);
-  }
-
-  private getAxisPalette(alignment: AxisAlignment): AxisColorPalette {
-    switch (alignment) {
-      case 'horizontal':
-        return {
-          line: 'rgba(80, 255, 180, 0.95)',
-          glow: 'rgba(0, 120, 90, 0.85)',
-          debugStroke: 'rgba(80, 255, 180, 0.7)',
-          debugFill: 'rgba(80, 255, 180, 0.9)',
-        };
-      case 'vertical':
-        return {
-          line: 'rgba(255, 170, 80, 0.95)',
-          glow: 'rgba(140, 70, 0, 0.85)',
-          debugStroke: 'rgba(255, 170, 80, 0.7)',
-          debugFill: 'rgba(255, 170, 80, 0.9)',
-        };
-      default:
-        return {
-          line: 'rgba(255, 255, 255, 0.95)',
-          glow: 'rgba(0, 0, 0, 0.8)',
-          debugStroke: 'rgba(255, 230, 120, 0.7)',
-          debugFill: 'rgba(255, 230, 120, 0.9)',
-        };
-    }
+    return classifyAxisAlignmentFromVector(end.x - start.x, end.y - start.y);
   }
   
   // Compatibility methods for existing code
@@ -2974,8 +2929,8 @@ export class Renderer3D {
         const startScreen = this.worldToScreen(start.x, start.y);
         const endScreen = this.worldToScreen(end.x, end.y);
         
-        const orientation = this.classifyAxisAlignmentFromVector(normX, normY);
-        const palette = this.getAxisPalette(orientation);
+        const orientation = classifyAxisAlignmentFromVector(normX, normY);
+        const palette = getAxisPalette(orientation);
 
         // Draw line
         this.uiCtx.strokeStyle = palette.debugStroke;
@@ -3273,7 +3228,7 @@ export class Renderer3D {
       }
 
       const orientation = this.classifyAxisAlignmentFromPath(displayPath);
-      const palette = this.getAxisPalette(orientation);
+      const palette = getAxisPalette(orientation);
       
       if (debugMode) {
         // Debug mode: yellow/orange dashed lines
@@ -3497,8 +3452,8 @@ export class Renderer3D {
         const endRaw = { x: start.x + normX * adjustedLength, y: start.y + normY * adjustedLength };
         const end = this.clipLineAtRails(start, endRaw);
         
-        const orientation = this.classifyAxisAlignmentFromVector(normX, normY);
-        const palette = this.getAxisPalette(orientation);
+        const orientation = classifyAxisAlignmentFromVector(normX, normY);
+        const palette = getAxisPalette(orientation);
 
         drawLineWithGlow(
           start,

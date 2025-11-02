@@ -97,3 +97,66 @@ export function darkenHexColor(hex: string, amount: number): string {
   const darkened = darkenColor(rgb, amount);
   return `rgb(${darkened.r}, ${darkened.g}, ${darkened.b})`;
 }
+
+// Trajectory rendering utilities
+
+export type AxisAlignment = 'horizontal' | 'vertical' | null;
+
+export interface AxisColorPalette {
+  line: string;
+  glow: string;
+  debugStroke: string;
+  debugFill: string;
+}
+
+/**
+ * Classify a vector as horizontal, vertical, or neither
+ * Used for trajectory line coloring
+ */
+export function classifyAxisAlignmentFromVector(
+  dx: number,
+  dy: number,
+  tolerance: number = 0.02
+): AxisAlignment {
+  const len = Math.sqrt(dx * dx + dy * dy);
+  if (len < 1e-4) return null;
+  const nx = dx / len;
+  const ny = dy / len;
+  if (Math.abs(ny) <= tolerance && Math.abs(nx) > tolerance) {
+    return 'horizontal';
+  }
+  if (Math.abs(nx) <= tolerance && Math.abs(ny) > tolerance) {
+    return 'vertical';
+  }
+  return null;
+}
+
+/**
+ * Get color palette for trajectory lines based on axis alignment
+ * Horizontal: cyan/teal, Vertical: orange, Diagonal: yellow/white
+ */
+export function getAxisPalette(alignment: AxisAlignment): AxisColorPalette {
+  switch (alignment) {
+    case 'horizontal':
+      return {
+        line: 'rgba(80, 255, 180, 0.95)',
+        glow: 'rgba(0, 120, 90, 0.85)',
+        debugStroke: 'rgba(80, 255, 180, 0.7)',
+        debugFill: 'rgba(80, 255, 180, 0.9)',
+      };
+    case 'vertical':
+      return {
+        line: 'rgba(255, 170, 80, 0.95)',
+        glow: 'rgba(140, 70, 0, 0.85)',
+        debugStroke: 'rgba(255, 170, 80, 0.7)',
+        debugFill: 'rgba(255, 170, 80, 0.9)',
+      };
+    default:
+      return {
+        line: 'rgba(255, 255, 255, 0.95)',
+        glow: 'rgba(0, 0, 0, 0.8)',
+        debugStroke: 'rgba(255, 230, 120, 0.7)',
+        debugFill: 'rgba(255, 230, 120, 0.9)',
+      };
+  }
+}

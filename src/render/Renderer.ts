@@ -6,18 +6,16 @@ import { Ball, Rail } from '../physics/Shapes';
 import { PhysicsWorld } from '../physics/Physics';
 import { CONFIG, BALL_CUE } from '../config';
 import { getTableGeometry, computeBoundaryBounds, computePlayBoundaryPoints, type Vec2, type BoundaryBounds, type PocketDef } from '../geometry/Geometry';
-import { lightenHexColor, darkenHexColor } from './RenderUtils';
+import {
+  lightenHexColor,
+  darkenHexColor,
+  classifyAxisAlignmentFromVector,
+  getAxisPalette,
+  type AxisAlignment,
+  type AxisColorPalette,
+} from './RenderUtils';
 
 import { PredictionResult } from '../physics/Prediction';
-
-type AxisAlignment = 'horizontal' | 'vertical' | null;
-
-interface AxisColorPalette {
-  line: string;
-  glow: string;
-  debugStroke: string;
-  debugFill: string;
-}
 
 type FrameClipInfo = {
   outerX: number;
@@ -703,8 +701,8 @@ export class Renderer {
       if (length > 0.0001) {
         const normX = dirX / length;
         const normY = dirY / length;
-        const orientation = this.classifyAxisAlignmentFromVector(normX, normY);
-        const palette = this.getAxisPalette(orientation);
+        const orientation = classifyAxisAlignmentFromVector(normX, normY);
+        const palette = getAxisPalette(orientation);
         const lineLength = 15; // Match the length passed to predictTrajectories
         const start = ghostCenter;
         const end = { x: start.x + normX * lineLength, y: start.y + normY * lineLength };
@@ -835,8 +833,8 @@ export class Renderer {
       if (length > 0.0001) {
         const normX = dirX / length;
         const normY = dirY / length;
-        const orientation = this.classifyAxisAlignmentFromVector(normX, normY);
-        const palette = this.getAxisPalette(orientation);
+        const orientation = classifyAxisAlignmentFromVector(normX, normY);
+        const palette = getAxisPalette(orientation);
         const start = ghostCenter;
         const end = { x: start.x + normX * 50, y: start.y + normY * 50 };
         const result = drawSolidLineWithGlow(start, end, palette.glow, palette.line);
@@ -952,45 +950,6 @@ export class Renderer {
   }
   
 
-  private classifyAxisAlignmentFromVector(dx: number, dy: number, tolerance: number = 0.02): AxisAlignment {
-    const len = Math.sqrt(dx * dx + dy * dy);
-    if (len < 1e-4) return null;
-    const nx = dx / len;
-    const ny = dy / len;
-    if (Math.abs(ny) <= tolerance && Math.abs(nx) > tolerance) {
-      return 'horizontal';
-    }
-    if (Math.abs(nx) <= tolerance && Math.abs(ny) > tolerance) {
-      return 'vertical';
-    }
-    return null;
-  }
-
-  private getAxisPalette(alignment: AxisAlignment): AxisColorPalette {
-    switch (alignment) {
-      case 'horizontal':
-        return {
-          line: 'rgba(80, 255, 180, 0.95)',
-          glow: 'rgba(0, 120, 90, 0.85)',
-          debugStroke: 'rgba(80, 255, 180, 0.7)',
-          debugFill: 'rgba(80, 255, 180, 0.9)',
-        };
-      case 'vertical':
-        return {
-          line: 'rgba(255, 170, 80, 0.95)',
-          glow: 'rgba(140, 70, 0, 0.85)',
-          debugStroke: 'rgba(255, 170, 80, 0.7)',
-          debugFill: 'rgba(255, 170, 80, 0.9)',
-        };
-      default:
-        return {
-          line: 'rgba(255, 255, 255, 0.95)',
-          glow: 'rgba(0, 0, 0, 0.8)',
-          debugStroke: 'rgba(255, 230, 120, 0.7)',
-          debugFill: 'rgba(255, 230, 120, 0.9)',
-        };
-    }
-  }
   
   drawPowerBar(power: number, isAimMode: boolean) {
     this.ctx.restore(); // Exit game space
