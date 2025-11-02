@@ -8,6 +8,7 @@ import {
   RenderLayerOrderKey,
   defaultRenderLayerSettings,
 } from '../render/RenderLayers';
+import { bindSliders, type SliderBindConfig } from './controls/SliderBinder';
 
 const LAYER_CHECKBOX_MAP: Record<string, RenderLayerBooleanKey> = {
   'layer-table': 'showTable',
@@ -25,19 +26,8 @@ export class RenderLayerPanel {
   private panel: HTMLElement;
   private panelController: UIPanel;
   private settings: RenderSettings;
+  private lightingBinders = new Map<string, any>();
   private orderInputs: Partial<Record<RenderLayerOrderKey, HTMLInputElement>> = {};
-  private lightingInputs: Record<
-    'ambientIntensity' | 'directionalIntensity' | 'accentIntensity' | 'railHighlightIntensity' | 'railShadowIntensity' | 'pocketHighlightIntensity' | 'pocketShadowIntensity',
-    HTMLInputElement | null
-  > = {
-    ambientIntensity: null,
-    directionalIntensity: null,
-    accentIntensity: null,
-    railHighlightIntensity: null,
-    railShadowIntensity: null,
-    pocketHighlightIntensity: null,
-    pocketShadowIntensity: null,
-  };
 
   constructor(
     private settingsManager: SettingsManager,
@@ -226,69 +216,53 @@ export class RenderLayerPanel {
   }
 
   private bindLightingControls() {
-    const simpleSliders: Array<{
-      id: string;
-      key: 'ambientIntensity' | 'directionalIntensity' | 'accentIntensity' | 'railHighlightIntensity' | 'railShadowIntensity' | 'pocketHighlightIntensity' | 'pocketShadowIntensity';
-      apply: (value: number) => void;
-    }> = [
+    type LightingKey = 'ambientIntensity' | 'directionalIntensity' | 'accentIntensity' | 'railHighlightIntensity' | 'railShadowIntensity' | 'pocketHighlightIntensity' | 'pocketShadowIntensity';
+
+    const updateLightingSetting = (key: LightingKey, value: number, apply: (v: number) => void) => {
+      (this.settings as Record<string, number>)[key] = value;
+      this.settingsManager.saveRenderSettings({ [key]: value } as Partial<RenderSettings>);
+      apply(value);
+    };
+
+    const lightingSliderConfigs: SliderBindConfig<RenderSettings>[] = [
       {
-        id: 'lighting-ambient',
-        key: 'ambientIntensity',
-        apply: (value) => this.renderer.setLightingIntensities({ ambient: value }),
+        sliderId: 'lighting-ambient',
+        labelId: 'lighting-ambient-value',
+        onChange: (v) => updateLightingSetting('ambientIntensity', v!, (value) => this.renderer.setLightingIntensities({ ambient: value }))
       },
       {
-        id: 'lighting-directional',
-        key: 'directionalIntensity',
-        apply: (value) => this.renderer.setLightingIntensities({ directional: value }),
+        sliderId: 'lighting-directional',
+        labelId: 'lighting-directional-value',
+        onChange: (v) => updateLightingSetting('directionalIntensity', v!, (value) => this.renderer.setLightingIntensities({ directional: value }))
       },
       {
-        id: 'lighting-accent',
-        key: 'accentIntensity',
-        apply: (value) => this.renderer.setLightingIntensities({ accent: value }),
+        sliderId: 'lighting-accent',
+        labelId: 'lighting-accent-value',
+        onChange: (v) => updateLightingSetting('accentIntensity', v!, (value) => this.renderer.setLightingIntensities({ accent: value }))
       },
       {
-        id: 'lighting-rail-highlight',
-        key: 'railHighlightIntensity',
-        apply: (value) => this.renderer.setHighlightIntensities({ rail: value }),
+        sliderId: 'lighting-rail-highlight',
+        labelId: 'lighting-rail-highlight-value',
+        onChange: (v) => updateLightingSetting('railHighlightIntensity', v!, (value) => this.renderer.setHighlightIntensities({ rail: value }))
       },
       {
-        id: 'lighting-rail-shadow',
-        key: 'railShadowIntensity',
-        apply: (value) => this.renderer.setHighlightIntensities({ railShadow: value }),
+        sliderId: 'lighting-rail-shadow',
+        labelId: 'lighting-rail-shadow-value',
+        onChange: (v) => updateLightingSetting('railShadowIntensity', v!, (value) => this.renderer.setHighlightIntensities({ railShadow: value }))
       },
       {
-        id: 'lighting-pocket-highlight',
-        key: 'pocketHighlightIntensity',
-        apply: (value) => this.renderer.setHighlightIntensities({ pocketHighlight: value }),
+        sliderId: 'lighting-pocket-highlight',
+        labelId: 'lighting-pocket-highlight-value',
+        onChange: (v) => updateLightingSetting('pocketHighlightIntensity', v!, (value) => this.renderer.setHighlightIntensities({ pocketHighlight: value }))
       },
       {
-        id: 'lighting-pocket-shadow',
-        key: 'pocketShadowIntensity',
-        apply: (value) => this.renderer.setHighlightIntensities({ pocketShadow: value }),
+        sliderId: 'lighting-pocket-shadow',
+        labelId: 'lighting-pocket-shadow-value',
+        onChange: (v) => updateLightingSetting('pocketShadowIntensity', v!, (value) => this.renderer.setHighlightIntensities({ pocketShadow: value }))
       },
     ];
 
-    simpleSliders.forEach(({ id, key, apply }) => {
-      const input = document.getElementById(id) as HTMLInputElement | null;
-      if (key in this.lightingInputs) {
-        (this.lightingInputs as Record<string, HTMLInputElement | null>)[key] = input;
-      }
-      const valueLabel = document.getElementById(`${id}-value`);
-      if (!input) return;
-
-      input.addEventListener('input', () => {
-        const value = parseFloat(input.value);
-        if (!Number.isFinite(value)) {
-          return;
-        }
-        (this.settings as Record<string, number>)[key] = value;
-        if (valueLabel) {
-          valueLabel.textContent = value.toFixed(2);
-        }
-        this.settingsManager.saveRenderSettings({ [key]: value } as Partial<RenderSettings>);
-        apply(value);
-      });
-    });
+    this.lightingBinders = bindSliders(lightingSliderConfigs);
   }
 
   private syncLightingSliders() {
@@ -303,15 +277,9 @@ export class RenderLayerPanel {
     ];
 
     map.forEach(({ key, id }) => {
-      const input = document.getElementById(id) as HTMLInputElement | null;
-      const valueLabel = document.getElementById(`${id}-value`);
-      if (!input) return;
-      const value = this.settings[key];
-      if (Number.isFinite(value)) {
-        input.value = value.toString();
-        if (valueLabel) {
-          valueLabel.textContent = value.toFixed(2);
-        }
+      const binder = this.lightingBinders.get(id);
+      if (binder && Number.isFinite(this.settings[key])) {
+        binder.setValue(this.settings[key]);
       }
     });
   }
