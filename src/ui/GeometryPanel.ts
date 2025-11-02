@@ -46,45 +46,7 @@ export class GeometryPanel {
       this.onGeometryChange();
     };
 
-    const initNullableSlider = (
-      sliderId: string,
-      labelId: string,
-      autoBtnId: string,
-      key: keyof GeometrySettings,
-      clamp: (value: number) => number,
-      formatDigits: number = 2
-    ) => {
-      const slider = document.getElementById(sliderId) as HTMLInputElement | null;
-      const label = document.getElementById(labelId);
-      const autoBtn = document.getElementById(autoBtnId);
-      if (!slider || !label || !autoBtn) return;
-
-      const defaultValue = slider.dataset.default ? parseFloat(slider.dataset.default) : parseFloat(slider.value);
-
-      const updateLabel = (value: number | null) => {
-        if (value == null) {
-          label.textContent = 'Auto';
-        } else {
-          label.textContent = formatNumber(value, formatDigits);
-        }
-      };
-
-      slider.addEventListener('input', (e) => {
-        const raw = parseFloat((e.target as HTMLInputElement).value);
-        const clamped = clamp(raw);
-        slider.value = clamped.toFixed(formatDigits);
-        updateLabel(clamped);
-        notify({ [key]: clamped } as Partial<GeometrySettings>);
-      });
-
-      autoBtn.addEventListener('click', () => {
-        slider.value = (defaultValue ?? 0).toFixed(formatDigits);
-        updateLabel(null);
-        notify({ [key]: null } as Partial<GeometrySettings>);
-      });
-
-      return { updateLabel };
-    };
+    // Nullable sliders handled by SliderBinder with autoButtonId
 
     // Bind basic side sliders and corner radius
     const basicSideSliderConfigs: SliderBindConfig<GeometrySettings>[] = [
@@ -237,21 +199,24 @@ export class GeometryPanel {
       }
     );
 
-    initNullableSlider(
-      'live-side-throat-width',
-      'live-side-throat-width-val',
-      'live-side-throat-width-auto',
-      'SIDE_THROAT_WIDTH_IN',
-      (value) => Math.max(1, Math.min(30, value))
-    );
-
-    initNullableSlider(
-      'live-corner-throat-width',
-      'live-corner-throat-width-val',
-      'live-corner-throat-width-auto',
-      'CORNER_THROAT_WIDTH_IN',
-      (value) => Math.max(2, Math.min(50, value))
-    );
+    // Bind nullable sliders (with "Auto" button)
+    const nullableSliderConfigs: SliderBindConfig<GeometrySettings>[] = [
+      {
+        sliderId: 'live-side-throat-width',
+        labelId: 'live-side-throat-width-val',
+        autoButtonId: 'live-side-throat-width-auto',
+        onChange: (v) => notify({ SIDE_THROAT_WIDTH_IN: v }),
+        clampValue: (v) => Math.max(1, Math.min(30, v))
+      },
+      {
+        sliderId: 'live-corner-throat-width',
+        labelId: 'live-corner-throat-width-val',
+        autoButtonId: 'live-corner-throat-width-auto',
+        onChange: (v) => notify({ CORNER_THROAT_WIDTH_IN: v }),
+        clampValue: (v) => Math.max(2, Math.min(50, v))
+      },
+    ];
+    bindSliders(nullableSliderConfigs);
 
     // Bind simple sliders using SliderBinder
     const simpleSliderConfigs: SliderBindConfig<GeometrySettings>[] = [
