@@ -4,15 +4,18 @@ import { SettingsManager, PhysicsSettings, RenderSettings } from './SettingsMana
 import { makePanelDraggable } from './drag';
 import { UIPanel } from './panels/UIPanel';
 import { bindSliders, type SliderBindConfig } from './controls/SliderBinder';
+import { SettingsIO } from './SettingsIO';
 
 export class SettingsPanel {
   private panel: HTMLElement;
   private panelController: UIPanel;
   private settingsManager: SettingsManager;
   private physicsConfig: PhysicsSettings;
+  private settingsIO: SettingsIO;
 
   constructor(settingsManager: SettingsManager) {
     this.settingsManager = settingsManager;
+    this.settingsIO = new SettingsIO(settingsManager);
     this.panel = this.createPanel();
     const header = this.panel.querySelector('.panel-header') as HTMLElement | null;
     if (header && !this.panel.closest('#panel-dock')) {
@@ -100,9 +103,16 @@ export class SettingsPanel {
           ${this.sliderRow('BALL_SCALE', 'Ball Scale', 0.8, 1.2, 0.01, CONFIG.BALL_SCALE ?? 1)}
           ${this.sliderRow('CANVAS_SCALE_MULTIPLIER', 'Table Scale', 0.6, 1.6, 0.05, CONFIG.CANVAS_SCALE_MULTIPLIER)}
         </div>
-        <div class="panel-actions" style="margin-top: 16px; gap: 8px;">
+        <div class="panel-actions" style="margin-top: 16px; gap: 8px; display: flex; flex-direction: column;">
           <button id="settings-reset" class="panel-btn">Reset Defaults</button>
-          <button id="settings-export" class="panel-btn">Copy Config</button>
+          <div style="display: flex; gap: 8px;">
+            <button id="settings-export-file" class="panel-btn">💾 Save to File</button>
+            <button id="settings-export-clipboard" class="panel-btn">📋 Copy JSON</button>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button id="settings-import-file" class="panel-btn">📂 Load from File</button>
+            <button id="settings-import-clipboard" class="panel-btn">📥 Paste JSON</button>
+          </div>
         </div>
       </div>
     `;
@@ -125,9 +135,29 @@ export class SettingsPanel {
     const resetBtn = this.panel.querySelector('#settings-reset');
     resetBtn?.addEventListener('click', () => this.resetDefaults());
 
-    // Export button
-    const exportBtn = this.panel.querySelector('#settings-export');
-    exportBtn?.addEventListener('click', () => this.exportConfig());
+    // Export buttons
+    const exportFileBtn = this.panel.querySelector('#settings-export-file');
+    exportFileBtn?.addEventListener('click', () => this.settingsIO.downloadAsFile());
+
+    const exportClipboardBtn = this.panel.querySelector('#settings-export-clipboard');
+    exportClipboardBtn?.addEventListener('click', () => this.settingsIO.copyToClipboard());
+
+    // Import buttons
+    const importFileBtn = this.panel.querySelector('#settings-import-file');
+    importFileBtn?.addEventListener('click', async () => {
+      const success = await this.settingsIO.importFromFile();
+      if (success) {
+        this.loadSettings(); // Refresh UI
+      }
+    });
+
+    const importClipboardBtn = this.panel.querySelector('#settings-import-clipboard');
+    importClipboardBtn?.addEventListener('click', async () => {
+      const success = await this.settingsIO.importFromClipboard();
+      if (success) {
+        this.loadSettings(); // Refresh UI
+      }
+    });
     
     // Close on Escape key
     window.addEventListener('keydown', (e) => {
@@ -236,34 +266,6 @@ export class SettingsPanel {
     console.log('⚙️ Settings reset to defaults');
   }
 
-  private exportConfig() {
-    const config = {
-      BALL_RESTITUTION: CONFIG.BALL_RESTITUTION,
-      BALL_BALL_FRICTION: CONFIG.BALL_BALL_FRICTION,
-      CUSHION_RESTITUTION: CONFIG.CUSHION_RESTITUTION,
-      CUE_POWER_MAX: CONFIG.CUE_POWER_MAX,
-      CUE_POWER_MULTIPLIER: CONFIG.CUE_POWER_MULTIPLIER,
-      ROLLING_FRICTION: CONFIG.ROLLING_FRICTION,
-      SLIDING_FRICTION: CONFIG.SLIDING_FRICTION,
-      SOLVER_ITERATIONS: CONFIG.SOLVER_ITERATIONS,
-      VELOCITY_EPSILON: CONFIG.VELOCITY_EPSILON,
-      CANVAS_SCALE_MULTIPLIER: CONFIG.CANVAS_SCALE_MULTIPLIER,
-      BALL_SCALE: CONFIG.BALL_SCALE,
-      BALL_RADIUS: CONFIG.BALL_RADIUS,
-    };
-
-    const configText = JSON.stringify(config, null, 2);
-    
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(configText).then(() => {
-        console.log('✅ Config copied to clipboard!');
-        console.log(configText);
-      });
-    } else {
-      console.log('📋 Current Config:');
-      console.log(configText);
-    }
-  }
 
   toggle() {
     this.panelController.toggle();
