@@ -1,6 +1,7 @@
 import { SettingsManager, GeometrySettings } from './SettingsManager';
 import { makePanelDraggable } from './drag';
 import { UIPanel } from './panels/UIPanel';
+import { bindSliders, type SliderBindConfig } from './controls/SliderBinder';
 
 const formatNumber = (value: number, digits: number = 2): string =>
   value.toFixed(digits).replace(/\.0+$|\.([0-9]*[1-9])0+$/, '.$1').replace(/\.$/, '');
@@ -85,35 +86,14 @@ export class GeometryPanel {
       return { updateLabel };
     };
 
-    const sideRadiusSlider = document.getElementById('live-side-radius') as HTMLInputElement;
-    const sideRadiusVal = document.getElementById('live-side-radius-val');
-    if (sideRadiusSlider && sideRadiusVal) {
-      sideRadiusSlider.addEventListener('input', (e) => {
-        const value = parseFloat((e.target as HTMLInputElement).value);
-        sideRadiusVal.textContent = formatNumber(value, 1);
-        notify({ JAW_REF_RADIUS_IN: value });
-      });
-    }
-
-    const sideSteepnessSlider = document.getElementById('live-side-steepness') as HTMLInputElement;
-    const sideSteepnessVal = document.getElementById('live-side-steepness-val');
-    if (sideSteepnessSlider && sideSteepnessVal) {
-      sideSteepnessSlider.addEventListener('input', (e) => {
-        const value = parseFloat((e.target as HTMLInputElement).value);
-        sideSteepnessVal.textContent = formatNumber(value, 1);
-        notify({ SIDE_FRAME_OFFSET_IN: value });
-      });
-    }
-
-    const sideOffsetSlider = document.getElementById('live-side-offset') as HTMLInputElement;
-    const sideOffsetVal = document.getElementById('live-side-offset-val');
-    if (sideOffsetSlider && sideOffsetVal) {
-      sideOffsetSlider.addEventListener('input', (e) => {
-        const value = parseFloat((e.target as HTMLInputElement).value);
-        sideOffsetVal.textContent = formatNumber(value);
-        notify({ SIDE_POCKET_OUTWARD_OFFSET_IN: value });
-      });
-    }
+    // Bind basic side sliders and corner radius
+    const basicSideSliderConfigs: SliderBindConfig<GeometrySettings>[] = [
+      { sliderId: 'live-side-radius', labelId: 'live-side-radius-val', onChange: (v) => notify({ JAW_REF_RADIUS_IN: v! }), formatDigits: 1 },
+      { sliderId: 'live-side-steepness', labelId: 'live-side-steepness-val', onChange: (v) => notify({ SIDE_FRAME_OFFSET_IN: v! }), formatDigits: 1 },
+      { sliderId: 'live-side-offset', labelId: 'live-side-offset-val', onChange: (v) => notify({ SIDE_POCKET_OUTWARD_OFFSET_IN: v! }) },
+      { sliderId: 'live-corner-radius', labelId: 'live-corner-radius-val', onChange: (v) => notify({ CORNER_JAW_REF_RADIUS_IN: v! }), formatDigits: 1 },
+    ];
+    bindSliders(basicSideSliderConfigs);
 
     const sideStraightSlider = document.getElementById('live-side-straight') as HTMLInputElement;
     const sideStraightVal = document.getElementById('live-side-straight-val');
@@ -235,16 +215,6 @@ export class GeometryPanel {
       }
     );
 
-    const cornerRadiusSlider = document.getElementById('live-corner-radius') as HTMLInputElement;
-    const cornerRadiusVal = document.getElementById('live-corner-radius-val');
-    if (cornerRadiusSlider && cornerRadiusVal) {
-      cornerRadiusSlider.addEventListener('input', (e) => {
-        const value = parseFloat((e.target as HTMLInputElement).value);
-        cornerRadiusVal.textContent = formatNumber(value, 1);
-        notify({ CORNER_JAW_REF_RADIUS_IN: value });
-      });
-    }
-
     initOverrideSlider(
       'live-corner-jaw-x',
       'live-corner-jaw-x-val',
@@ -283,106 +253,30 @@ export class GeometryPanel {
       (value) => Math.max(2, Math.min(50, value))
     );
 
-    const initSimpleSlider = (
-      sliderId: string,
-      labelId: string,
-      key: keyof GeometrySettings,
-      formatDigits: number = 2,
-      clamp?: (value: number) => number
-    ) => {
-      const slider = document.getElementById(sliderId) as HTMLInputElement | null;
-      const label = document.getElementById(labelId);
-      if (!slider || !label) return;
+    // Bind simple sliders using SliderBinder
+    const simpleSliderConfigs: SliderBindConfig<GeometrySettings>[] = [
+      { sliderId: 'live-corner-pocket-capture', labelId: 'live-corner-pocket-capture-val', onChange: (v) => notify({ CORNER_POCKET_CAPTURE_RADIUS_IN: v! }) },
+      { sliderId: 'live-side-pocket-capture', labelId: 'live-side-pocket-capture-val', onChange: (v) => notify({ SIDE_POCKET_CAPTURE_RADIUS_IN: v! }) },
+      { sliderId: 'live-corner-pocket-visual', labelId: 'live-corner-pocket-visual-val', onChange: (v) => notify({ CORNER_POCKET_VISUAL_RADIUS_IN: v! }) },
+      { sliderId: 'live-side-pocket-visual', labelId: 'live-side-pocket-visual-val', onChange: (v) => notify({ SIDE_POCKET_VISUAL_RADIUS_IN: v! }) },
+      { sliderId: 'live-pocket-shelf-depth', labelId: 'live-pocket-shelf-depth-val', onChange: (v) => notify({ POCKET_SHELF_DEPTH_IN: v! }) },
+      { sliderId: 'live-jaw-curve-blend', labelId: 'live-jaw-curve-blend-val', onChange: (v) => notify({ JAW_CURVE_BLEND: v! }), clampValue: (v) => Math.max(0, Math.min(1, v)) },
+      { sliderId: 'live-corner-cut-angle', labelId: 'live-corner-cut-angle-val', onChange: (v) => notify({ CORNER_CUT_ANGLE_DEG: v! }), formatDigits: 1 },
+      { sliderId: 'live-side-cut-angle', labelId: 'live-side-cut-angle-val', onChange: (v) => notify({ SIDE_CUT_ANGLE_DEG: v! }), formatDigits: 1 },
+    ];
+    bindSliders(simpleSliderConfigs);
 
-      slider.addEventListener('input', (e) => {
-        const raw = parseFloat((e.target as HTMLInputElement).value);
-        const value = clamp ? clamp(raw) : raw;
-        slider.value = value.toFixed(formatDigits);
-        label.textContent = formatNumber(value, formatDigits);
-        notify({ [key]: value } as Partial<GeometrySettings>);
-      });
-    };
-
-    initSimpleSlider('live-corner-pocket-capture', 'live-corner-pocket-capture-val', 'CORNER_POCKET_CAPTURE_RADIUS_IN');
-    initSimpleSlider('live-side-pocket-capture', 'live-side-pocket-capture-val', 'SIDE_POCKET_CAPTURE_RADIUS_IN');
-    initSimpleSlider('live-corner-pocket-visual', 'live-corner-pocket-visual-val', 'CORNER_POCKET_VISUAL_RADIUS_IN');
-    initSimpleSlider('live-side-pocket-visual', 'live-side-pocket-visual-val', 'SIDE_POCKET_VISUAL_RADIUS_IN');
-    initSimpleSlider('live-pocket-shelf-depth', 'live-pocket-shelf-depth-val', 'POCKET_SHELF_DEPTH_IN');
-    initSimpleSlider('live-jaw-curve-blend', 'live-jaw-curve-blend-val', 'JAW_CURVE_BLEND', 2, (v) => Math.max(0, Math.min(1, v)));
-    initSimpleSlider('live-corner-cut-angle', 'live-corner-cut-angle-val', 'CORNER_CUT_ANGLE_DEG', 1);
-    initSimpleSlider('live-side-cut-angle', 'live-side-cut-angle-val', 'SIDE_CUT_ANGLE_DEG', 1);
-
-    const cornerFrameSlider = document.getElementById('live-corner-frame') as HTMLInputElement;
-    const cornerFrameVal = document.getElementById('live-corner-frame-val');
-    if (cornerFrameSlider && cornerFrameVal) {
-      cornerFrameSlider.addEventListener('input', (e) => {
-        const value = parseFloat((e.target as HTMLInputElement).value);
-        cornerFrameVal.textContent = formatNumber(value, 1);
-        notify({ CORNER_FRAME_OFFSET_IN: value });
-      });
-    }
-
-    const cornerStraightSlider = document.getElementById('live-corner-straight') as HTMLInputElement;
-    const cornerStraightVal = document.getElementById('live-corner-straight-val');
-    if (cornerStraightSlider && cornerStraightVal) {
-      cornerStraightSlider.addEventListener('input', (e) => {
-        const value = parseFloat((e.target as HTMLInputElement).value);
-        cornerStraightVal.textContent = formatNumber(value);
-        notify({ CORNER_STRAIGHT_X_IN: value });
-      });
-    }
-
-    const cornerTargetSlider = document.getElementById('live-corner-target') as HTMLInputElement;
-    const cornerTargetVal = document.getElementById('live-corner-target-val');
-    if (cornerTargetSlider && cornerTargetVal) {
-      cornerTargetSlider.addEventListener('input', (e) => {
-        const value = parseFloat((e.target as HTMLInputElement).value);
-        cornerTargetVal.textContent = formatNumber(value);
-        notify({ CORNER_TARGET_Y_IN: value });
-      });
-    }
-
-    const frameWidthSlider = document.getElementById('live-frame-width') as HTMLInputElement;
-    const frameWidthVal = document.getElementById('live-frame-width-val');
-    if (frameWidthSlider && frameWidthVal) {
-      frameWidthSlider.addEventListener('input', (e) => {
-        const value = parseFloat((e.target as HTMLInputElement).value);
-        frameWidthVal.textContent = formatNumber(value, 1);
-        notify({ FRAME_OFFSET_IN: value });
-      });
-    }
-
-    const frameCornerRadiusSlider = document.getElementById(
-      'live-frame-corner-radius'
-    ) as HTMLInputElement;
-    const frameCornerRadiusVal = document.getElementById('live-frame-corner-radius-val');
-    if (frameCornerRadiusSlider && frameCornerRadiusVal) {
-      frameCornerRadiusSlider.addEventListener('input', (e) => {
-        const value = parseFloat((e.target as HTMLInputElement).value);
-        frameCornerRadiusVal.textContent = formatNumber(value, 1);
-        notify({ FRAME_CORNER_RADIUS_IN: value });
-      });
-    }
-
-    const railThicknessInnerSlider = document.getElementById('live-rail-thickness-inner') as HTMLInputElement;
-    const railThicknessInnerVal = document.getElementById('live-rail-thickness-inner-val');
-    if (railThicknessInnerSlider && railThicknessInnerVal) {
-      railThicknessInnerSlider.addEventListener('input', (e) => {
-        const value = parseFloat((e.target as HTMLInputElement).value);
-        railThicknessInnerVal.textContent = formatNumber(value);
-        notify({ RAIL_THICKNESS_INNER: value });
-      });
-    }
-
-    const railThicknessOuterSlider = document.getElementById('live-rail-thickness-outer') as HTMLInputElement;
-    const railThicknessOuterVal = document.getElementById('live-rail-thickness-outer-val');
-    if (railThicknessOuterSlider && railThicknessOuterVal) {
-      railThicknessOuterSlider.addEventListener('input', (e) => {
-        const value = parseFloat((e.target as HTMLInputElement).value);
-        railThicknessOuterVal.textContent = formatNumber(value);
-        notify({ RAIL_THICKNESS_OUTER: value });
-      });
-    }
+    // Bind additional manual sliders
+    const manualSliderConfigs: SliderBindConfig<GeometrySettings>[] = [
+      { sliderId: 'live-corner-frame', labelId: 'live-corner-frame-val', onChange: (v) => notify({ CORNER_FRAME_OFFSET_IN: v! }), formatDigits: 1 },
+      { sliderId: 'live-corner-straight', labelId: 'live-corner-straight-val', onChange: (v) => notify({ CORNER_STRAIGHT_X_IN: v! }) },
+      { sliderId: 'live-corner-target', labelId: 'live-corner-target-val', onChange: (v) => notify({ CORNER_TARGET_Y_IN: v! }) },
+      { sliderId: 'live-frame-width', labelId: 'live-frame-width-val', onChange: (v) => notify({ FRAME_OFFSET_IN: v! }), formatDigits: 1 },
+      { sliderId: 'live-frame-corner-radius', labelId: 'live-frame-corner-radius-val', onChange: (v) => notify({ FRAME_CORNER_RADIUS_IN: v! }), formatDigits: 1 },
+      { sliderId: 'live-rail-thickness-inner', labelId: 'live-rail-thickness-inner-val', onChange: (v) => notify({ RAIL_THICKNESS_INNER: v! }) },
+      { sliderId: 'live-rail-thickness-outer', labelId: 'live-rail-thickness-outer-val', onChange: (v) => notify({ RAIL_THICKNESS_OUTER: v! }) },
+    ];
+    bindSliders(manualSliderConfigs);
 
     const resetBtn = document.getElementById('geometry-reset-btn');
     if (resetBtn) {
