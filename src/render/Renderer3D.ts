@@ -13,6 +13,14 @@ import {
   RenderLayerBooleanKey,
   RenderLayerOrderKey,
 } from './RenderLayers';
+import {
+  type RGBColor,
+  parseHexColor,
+  lightenColor,
+  darkenColor,
+  mixColors,
+  toRgba,
+} from './RenderUtils';
 
 type AxisAlignment = 'horizontal' | 'vertical' | null;
 
@@ -23,58 +31,7 @@ interface AxisColorPalette {
   debugFill: string;
 }
 
-type RGBColor = { r: number; g: number; b: number };
 type FrameClipInfo = { outerX: number; outerY: number; radius: number };
-
-function clampChannel(value: number): number {
-  return Math.max(0, Math.min(255, Math.round(value)));
-}
-
-function parseHexColor(hex: string): RGBColor {
-  const normalized = hex.replace('#', '').trim();
-  const expanded =
-    normalized.length === 3
-      ? normalized
-          .split('')
-          .map((ch) => ch + ch)
-          .join('')
-      : normalized.padEnd(6, '0');
-  const value = parseInt(expanded.slice(0, 6), 16);
-  return {
-    r: (value >> 16) & 0xff,
-    g: (value >> 8) & 0xff,
-    b: value & 0xff,
-  };
-}
-
-function lightenColor(color: RGBColor, amount: number): RGBColor {
-  return {
-    r: clampChannel(color.r + (255 - color.r) * amount),
-    g: clampChannel(color.g + (255 - color.g) * amount),
-    b: clampChannel(color.b + (255 - color.b) * amount),
-  };
-}
-
-function darkenColor(color: RGBColor, amount: number): RGBColor {
-  return {
-    r: clampChannel(color.r * (1 - amount)),
-    g: clampChannel(color.g * (1 - amount)),
-    b: clampChannel(color.b * (1 - amount)),
-  };
-}
-
-function mixColors(colorA: RGBColor, colorB: RGBColor, factor: number): RGBColor {
-  const clamped = Math.max(0, Math.min(1, factor));
-  return {
-    r: clampChannel(colorA.r + (colorB.r - colorA.r) * clamped),
-    g: clampChannel(colorA.g + (colorB.g - colorA.g) * clamped),
-    b: clampChannel(colorA.b + (colorB.b - colorA.b) * clamped),
-  };
-}
-
-function toRgba(color: RGBColor, alpha: number): string {
-  return `rgba(${color.r}, ${color.g}, ${color.b}, ${alpha})`;
-}
 
 export class Renderer3D {
   canvas: HTMLCanvasElement;

@@ -6,6 +6,7 @@ import { Ball, Rail } from '../physics/Shapes';
 import { PhysicsWorld } from '../physics/Physics';
 import { CONFIG, BALL_CUE } from '../config';
 import { getTableGeometry, computeBoundaryBounds, computePlayBoundaryPoints, type Vec2, type BoundaryBounds, type PocketDef } from '../geometry/Geometry';
+import { lightenHexColor, darkenHexColor } from './RenderUtils';
 
 import { PredictionResult } from '../physics/Prediction';
 
@@ -478,9 +479,9 @@ export class Renderer {
 
     const color = isCueBall ? CONFIG.CUE_BALL_COLOR : CONFIG.BALL_COLORS[ball.id - 1];
 
-    gradient.addColorStop(0, this.lightenColor(color, 0.4));
+    gradient.addColorStop(0, lightenHexColor(color, 0.4));
     gradient.addColorStop(0.7, color);
-    gradient.addColorStop(1, this.darkenColor(color, 0.3));
+    gradient.addColorStop(1, darkenHexColor(color, 0.3));
 
     this.ctx.fillStyle = gradient;
     this.ctx.beginPath();
@@ -950,21 +951,6 @@ export class Renderer {
     return closestPoint;
   }
   
-  lightenColor(color: string, amount: number): string {
-    const hex = color.replace('#', '');
-    const r = Math.min(255, parseInt(hex.slice(0, 2), 16) + amount * 255);
-    const g = Math.min(255, parseInt(hex.slice(2, 4), 16) + amount * 255);
-    const b = Math.min(255, parseInt(hex.slice(4, 6), 16) + amount * 255);
-    return `rgb(${r}, ${g}, ${b})`;
-  }
-  
-  darkenColor(color: string, amount: number): string {
-    const hex = color.replace('#', '');
-    const r = Math.max(0, parseInt(hex.slice(0, 2), 16) - amount * 255);
-    const g = Math.max(0, parseInt(hex.slice(2, 4), 16) - amount * 255);
-    const b = Math.max(0, parseInt(hex.slice(4, 6), 16) - amount * 255);
-    return `rgb(${r}, ${g}, ${b})`;
-  }
 
   private classifyAxisAlignmentFromVector(dx: number, dy: number, tolerance: number = 0.02): AxisAlignment {
     const len = Math.sqrt(dx * dx + dy * dy);
