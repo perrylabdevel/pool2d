@@ -4,18 +4,15 @@ import { SettingsManager, PhysicsSettings, RenderSettings } from './SettingsMana
 import { makePanelDraggable } from './drag';
 import { UIPanel } from './panels/UIPanel';
 import { bindSliders, type SliderBindConfig } from './controls/SliderBinder';
-import { SettingsIO } from './SettingsIO';
 
 export class SettingsPanel {
   private panel: HTMLElement;
   private panelController: UIPanel;
   private settingsManager: SettingsManager;
   private physicsConfig: PhysicsSettings;
-  private settingsIO: SettingsIO;
 
   constructor(settingsManager: SettingsManager) {
     this.settingsManager = settingsManager;
-    this.settingsIO = new SettingsIO(settingsManager);
     this.panel = this.createPanel();
     const header = this.panel.querySelector('.panel-header') as HTMLElement | null;
     if (header && !this.panel.closest('#panel-dock')) {
@@ -103,16 +100,8 @@ export class SettingsPanel {
           ${this.sliderRow('BALL_SCALE', 'Ball Scale', 0.8, 1.2, 0.01, CONFIG.BALL_SCALE ?? 1)}
           ${this.sliderRow('CANVAS_SCALE_MULTIPLIER', 'Table Scale', 0.6, 1.6, 0.05, CONFIG.CANVAS_SCALE_MULTIPLIER)}
         </div>
-        <div class="panel-actions" style="margin-top: 16px; gap: 8px; display: flex; flex-direction: column;">
+        <div class="panel-actions">
           <button id="settings-reset" class="panel-btn">Reset Defaults</button>
-          <div style="display: flex; gap: 8px;">
-            <button id="settings-export-file" class="panel-btn">💾 Save to File</button>
-            <button id="settings-export-clipboard" class="panel-btn">📋 Copy JSON</button>
-          </div>
-          <div style="display: flex; gap: 8px;">
-            <button id="settings-import-file" class="panel-btn">📂 Load from File</button>
-            <button id="settings-import-clipboard" class="panel-btn">📥 Paste JSON</button>
-          </div>
         </div>
       </div>
     `;
@@ -135,30 +124,6 @@ export class SettingsPanel {
     const resetBtn = this.panel.querySelector('#settings-reset');
     resetBtn?.addEventListener('click', () => this.resetDefaults());
 
-    // Export buttons
-    const exportFileBtn = this.panel.querySelector('#settings-export-file');
-    exportFileBtn?.addEventListener('click', () => this.settingsIO.downloadAsFile());
-
-    const exportClipboardBtn = this.panel.querySelector('#settings-export-clipboard');
-    exportClipboardBtn?.addEventListener('click', () => this.settingsIO.copyToClipboard());
-
-    // Import buttons
-    const importFileBtn = this.panel.querySelector('#settings-import-file');
-    importFileBtn?.addEventListener('click', async () => {
-      const success = await this.settingsIO.importFromFile();
-      if (success) {
-        this.loadSettings(); // Refresh UI
-      }
-    });
-
-    const importClipboardBtn = this.panel.querySelector('#settings-import-clipboard');
-    importClipboardBtn?.addEventListener('click', async () => {
-      const success = await this.settingsIO.importFromClipboard();
-      if (success) {
-        this.loadSettings(); // Refresh UI
-      }
-    });
-    
     // Close on Escape key
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && this.panelController.isOpen()) {

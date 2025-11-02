@@ -1,5 +1,6 @@
 import { SettingsManager } from './SettingsManager';
 import { UIPanel } from './panels/UIPanel';
+import { SettingsIO } from './SettingsIO';
 
 interface GameSettingsPanelCallbacks {
   onAimAssistToggle?: (enabled: boolean) => void;
@@ -10,10 +11,12 @@ export class GameSettingsPanel {
   private readonly panel: HTMLElement;
   private readonly controller: UIPanel;
   private readonly settingsManager: SettingsManager;
+  private readonly settingsIO: SettingsIO;
   private readonly callbacks: GameSettingsPanelCallbacks;
 
   constructor(settingsManager: SettingsManager, callbacks: GameSettingsPanelCallbacks = {}) {
     this.settingsManager = settingsManager;
+    this.settingsIO = new SettingsIO(settingsManager);
     this.callbacks = callbacks;
     this.panel = this.createPanel();
 
@@ -90,6 +93,19 @@ export class GameSettingsPanel {
             <input type="color" id="turn-indicator-color" />
           </div>
         </div>
+        <div class="settings-group">
+          <h4 class="settings-group-title">💾 Settings Management</h4>
+          <div class="panel-actions" style="gap: 8px; display: flex; flex-direction: column;">
+            <div style="display: flex; gap: 8px;">
+              <button id="settings-export-file" class="panel-btn">💾 Save to File</button>
+              <button id="settings-export-clipboard" class="panel-btn">📋 Copy JSON</button>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button id="settings-import-file" class="panel-btn">📂 Load from File</button>
+              <button id="settings-import-clipboard" class="panel-btn">📥 Paste JSON</button>
+            </div>
+          </div>
+        </div>
         <div class="panel-actions">
           <button type="button" id="settings-reset-ui" class="panel-btn">Reset Colors</button>
         </div>
@@ -163,6 +179,30 @@ export class GameSettingsPanel {
     resetButton?.addEventListener('click', () => {
       this.settingsManager.resetUIColors();
       this.syncColorInputs();
+    });
+
+    // Export buttons
+    const exportFileBtn = this.panel.querySelector('#settings-export-file');
+    exportFileBtn?.addEventListener('click', () => this.settingsIO.downloadAsFile());
+
+    const exportClipboardBtn = this.panel.querySelector('#settings-export-clipboard');
+    exportClipboardBtn?.addEventListener('click', () => this.settingsIO.copyToClipboard());
+
+    // Import buttons
+    const importFileBtn = this.panel.querySelector('#settings-import-file');
+    importFileBtn?.addEventListener('click', async () => {
+      const success = await this.settingsIO.importFromFile();
+      if (success) {
+        this.syncFromSettings(); // Refresh UI
+      }
+    });
+
+    const importClipboardBtn = this.panel.querySelector('#settings-import-clipboard');
+    importClipboardBtn?.addEventListener('click', async () => {
+      const success = await this.settingsIO.importFromClipboard();
+      if (success) {
+        this.syncFromSettings(); // Refresh UI
+      }
     });
   }
 
