@@ -780,20 +780,7 @@ export function getTableGeometry(): TableGeometry {
     // Rails approximating WPA throat geometry, normals point inward
     // Corner rails stop short of pocket centers to leave openings
     rails,
-    frameOutline: {
-      // Frame-only envelope (rendering). Rails stay fixed regardless of rounded corners.
-      outerHalfWidth: frameOuterX,
-      outerHalfHeight: frameOuterY,
-      innerHalfWidth: frameInnerX,
-      innerHalfHeight: frameInnerY,
-      cornerRadius: frameCornerRadius,
-      corners: {
-        northWest: { ...frameCorners.northWest },
-        northEast: { ...frameCorners.northEast },
-        southEast: { ...frameCorners.southEast },
-        southWest: { ...frameCorners.southWest },
-      },
-    },
+    frameOutline,
 
     // Pockets at corners and midpoints
     pockets: [
