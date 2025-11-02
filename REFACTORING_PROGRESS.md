@@ -149,15 +149,22 @@ class Renderer3D extends BaseRenderer { /* 3D-specific */ }
 - Make renderer contracts explicit
 - Easier to add new renderer types (e.g., SVG, WebGPU)
 
-### Phase 3: Extract Geometry Calculation from Rendering
+### Phase 3: Extract Geometry Calculation from Rendering ✅ (Already Complete!)
 
-Separate "what to draw" from "how to draw it":
-- Frame outline calculation → geometry module
-- Rail path calculation → geometry module
-- Pocket placement → geometry module
-- Renderers consume calculated geometry
+**Status:** Upon analysis, this phase is essentially **already done**.
 
-This would reduce complexity in both renderer files significantly.
+**Why:** The geometry calculations are already extracted to `Geometry.ts`:
+- ✅ Frame outline calculation → `frameOutline` in `getTableGeometry()`
+- ✅ Rail path calculation → `rails` array in `getTableGeometry()`
+- ✅ Pocket placement → `pockets` array in `getTableGeometry()`
+
+Both renderers already consume this pre-calculated geometry via `getTableGeometry()` and just render it. The separation of "what to draw" from "how to draw" already exists.
+
+**Remaining renderer-specific code (intentionally not extracted):**
+- **2D Renderer:** Canvas-specific path tracing (`traceRoundedRectPath`), polygon clipping (`clampSegmentToPlayArea`)
+- **3D Renderer:** Three.js mesh creation, materials, render orders, depth control
+
+These renderer-specific utilities serve different rendering paradigms and should remain separate.
 
 ## Metrics
 
