@@ -5,7 +5,7 @@
 import { Ball, Rail } from '../physics/Shapes';
 import { PhysicsWorld } from '../physics/Physics';
 import { CONFIG, BALL_CUE } from '../config';
-import { getTableGeometry, computeBoundaryBounds, computePlayBoundaryPoints, type Vec2, type BoundaryBounds, type PocketDef } from '../geometry/Geometry';
+import { getTableGeometry, type Vec2, type PocketDef } from '../geometry/Geometry';
 import {
   lightenHexColor,
   darkenHexColor,
@@ -14,6 +14,7 @@ import {
   type AxisAlignment,
   type AxisColorPalette,
 } from './RenderUtils';
+import { BaseRenderer } from './BaseRenderer';
 
 import { PredictionResult } from '../physics/Prediction';
 
@@ -23,20 +24,13 @@ type FrameClipInfo = {
   radius: number;
 };
 
-export class Renderer {
-  canvas: HTMLCanvasElement;
+export class Renderer extends BaseRenderer {
   ctx: CanvasRenderingContext2D;
-  scale: number;
-  private playBoundaryPoints: Vec2[] = [];
-  private playBounds: BoundaryBounds = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
   private frameClipInfo: FrameClipInfo | null = null;
-  debugRailSegments: Array<{ id: string; inner: Vec2; trimmed: Vec2; startOuter: Vec2 }> = [];
-  
+
   constructor(canvas: HTMLCanvasElement) {
-    this.canvas = canvas;
+    super(canvas, CONFIG.CANVAS_SCALE);
     this.ctx = canvas.getContext('2d')!;
-    this.scale = CONFIG.CANVAS_SCALE;
-    this.refreshDerivedGeometry();
   }
   
   resize() {
@@ -77,9 +71,9 @@ export class Renderer {
     this.ctx.fillStyle = '#0a0a0a';
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
   }
-  
+
   render(world: PhysicsWorld, alpha: number) {
-    this.refreshDerivedGeometry();
+    this.refreshDerivedGeometry(); // Update geometry if CONFIG changed
     this.clear();
     
     this.ctx.save();
@@ -128,19 +122,14 @@ export class Renderer {
     this.ctx.restore();
   }
 
-  private refreshDerivedGeometry() {
-    this.playBoundaryPoints = computePlayBoundaryPoints(getTableGeometry().rails);
-    this.playBounds = computeBoundaryBounds(this.playBoundaryPoints);
-  }
-
   drawRailBackground() {
     // Rectangular background for the entire rail system
     // This encompasses all rails including corner pocket extensions
     const { minX, maxX, minY, maxY } = this.playBounds;
-    
+
     // Extend slightly beyond the rail boundaries to ensure full coverage
     const padding = 0.5;
-    
+
     this.ctx.fillStyle = '#2d1810'; // Dark wood color
     this.ctx.fillRect(
       minX - padding,
@@ -166,6 +155,10 @@ export class Renderer {
     this.traceRoundedRectPath(this.ctx, outerX, outerY, cornerRadius);
     this.ctx.rect(-innerX, -innerY, innerX * 2, innerY * 2);
     this.ctx.fill('evenodd');
+  }
+
+  protected override refreshDerivedGeometry(): void {
+    super.refreshDerivedGeometry();
   }
 
   private traceRoundedRectPath(

@@ -25,23 +25,20 @@ import {
   type AxisAlignment,
   type AxisColorPalette,
 } from './RenderUtils';
+import { BaseRenderer } from './BaseRenderer';
 
 type FrameClipInfo = { outerX: number; outerY: number; radius: number };
 
-export class Renderer3D {
-  canvas: HTMLCanvasElement;
+export class Renderer3D extends BaseRenderer {
   uiCanvas: HTMLCanvasElement;
   uiCtx: CanvasRenderingContext2D;
   referenceOverlay: HTMLImageElement | null;
   scene: THREE.Scene;
   camera: THREE.OrthographicCamera;
   renderer: THREE.WebGLRenderer;
-  scale: number;
   canvasOffsetX: number = 0;
   canvasOffsetY: number = 0;
   private resizeObserver: ResizeObserver | null = null;
-  private playBoundaryPoints: Vec2[] = [];
-  private playBounds: BoundaryBounds = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
   private frameClipInfo: FrameClipInfo | null = null;
   
   // 3D objects
@@ -115,13 +112,12 @@ export class Renderer3D {
   fillLight: THREE.HemisphereLight;
   
   constructor(canvas: HTMLCanvasElement) {
-    this.canvas = canvas;
-    this.scale = CONFIG.CANVAS_SCALE;
-    
+    super(canvas, CONFIG.CANVAS_SCALE);
+
     // Get UI canvas for 2D overlays
     this.uiCanvas = document.getElementById('ui-canvas') as HTMLCanvasElement;
     this.uiCtx = this.uiCanvas.getContext('2d')!;
-    
+
     this.referenceOverlay = document.getElementById('reference-overlay') as HTMLImageElement | null;
     if (this.referenceOverlay) {
       this.referenceOverlayVisible = !this.referenceOverlay.classList.contains('overlay-hidden');
@@ -134,7 +130,6 @@ export class Renderer3D {
     // Create Three.js scene
     this.scene = new THREE.Scene();
     this.scene.background = null; // Disabled - no background color
-    this.refreshDerivedGeometry();
     
     // Create orthographic camera (top-down view)
     const aspect = 1;
@@ -927,9 +922,8 @@ export class Renderer3D {
     this.initializeFrame();
   }
 
-  private refreshDerivedGeometry() {
-    this.playBoundaryPoints = computePlayBoundaryPoints(getTableGeometry().rails);
-    this.playBounds = computeBoundaryBounds(this.playBoundaryPoints);
+  protected override refreshDerivedGeometry(): void {
+    super.refreshDerivedGeometry();
   }
 
   private createPlayShape(): THREE.Shape {
