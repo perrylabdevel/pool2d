@@ -326,24 +326,26 @@ export function resolveBallRail(contact: Contact) {
   // Record pre-collision velocity for shot capture
   const velBefore = { x: ballA.vx, y: ballA.vy };
   
-  // Reflect with restitution (reduce bounce for shallow grazing to promote short rail glide)
+  // Reflect with restitution (reduce bounce only for very shallow grazing)
   const speedMag = Math.hypot(ballA.vx, ballA.vy);
   const approachRatio = Math.abs(vn) / Math.max(1e-6, speedMag);
   const eBase = CONFIG.CUSHION_RESTITUTION;
-  const eEffective = approachRatio < 0.12 ? 0.0 : eBase;
+  // Only kill bounce for extremely shallow grazing (< 3% approach ratio = ~1.7° from parallel)
+  const eEffective = approachRatio < 0.03 ? 0.0 : eBase;
   const jn = -(1 + eEffective) * vn;
   
   ballA.vx += jn * nx;
   ballA.vy += jn * ny;
   
-  // Tangential friction
+  // Tangential friction (cushions are rubber/synthetic - much less friction than table cloth)
   const tx = -ny;
   const ty = nx;
   const vt = ballA.vx * tx + ballA.vy * ty;
-  
-  const friction = CONFIG.SLIDING_FRICTION;
-  const jt = -vt * friction;
-  
+
+  // Use cushion-specific friction (0.15) instead of table sliding friction (0.65)
+  const cushionFriction = 0.15;
+  const jt = -vt * cushionFriction;
+
   ballA.vx += jt * tx;
   ballA.vy += jt * ty;
   
