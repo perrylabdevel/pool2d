@@ -2724,9 +2724,10 @@ export class Renderer3D extends BaseRenderer {
       this.ghostBall = null;
     }
     
-    // Draw cue stick in 2D (clamped to play area so it doesn’t clip off-canvas)
+    // Draw cue stick in 2D (clamped to play area so it doesn't clip off-canvas)
     const cueLength = CONFIG.CUE_LENGTH_IN ?? 20;
-    const cueDistance = ball.radius + 2 + (1 - power / CONFIG.CUE_POWER_MAX) * 3;
+    // As power increases, cue pulls back away from ball (not toward it)
+    const cueDistance = ball.radius + 2 + (power / CONFIG.CUE_POWER_MAX) * 3;
 
     // Raw endpoints in world space (behind the ball opposite shot direction)
     const rawNear = { x: ball.x - Math.cos(angle) * cueDistance, y: ball.y - Math.sin(angle) * cueDistance };

@@ -68,7 +68,7 @@ export const CONFIG = {
   ACCENT_INTENSITY: 0.5,
 
   // Cue visuals
-  CUE_LENGTH_IN: 20,
+  CUE_LENGTH_IN: 58, // Standard pool cue length
   MIN_WORLD_PADDING_IN: 6, // Minimum world padding around table for camera framing
   RAIL_HIGHLIGHT_INTENSITY: 0.9, // Rail cushion highlight intensity
   RAIL_SHADOW_INTENSITY: 0.25, // Subtle shadow under rails (inner edge)

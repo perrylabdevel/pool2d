@@ -551,8 +551,9 @@ export class Renderer extends BaseRenderer {
     
     // Cue stick (behind the ball, opposite to shot direction)
     const cueStart = ball.radius + 1;
-    const cueLength = 15;
-    const cueOffset = (1 - power / CONFIG.CUE_POWER_MAX) * 3;
+    const cueLength = CONFIG.CUE_LENGTH_IN ?? 58;
+    // As power increases, cue pulls back away from ball (not toward it)
+    const cueOffset = (power / CONFIG.CUE_POWER_MAX) * 3;
 
     // Compute raw endpoints and clamp to play area boundary to avoid clipping at canvas edges
     const rawNear = { x: x - dx * (cueStart + cueOffset), y: y - dy * (cueStart + cueOffset) };
