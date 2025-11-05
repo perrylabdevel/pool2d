@@ -612,8 +612,13 @@ export class Renderer extends BaseRenderer {
     if (showPowerBar) {
       this.drawPowerBar(power, isAimMode);
     }
-    
+
     this.ctx.restore();
+
+    // Draw aim info overlay in screen space (only if scale > 0)
+    if (CONFIG.SHOW_AIM_INFO && CONFIG.AIM_INFO_SCALE > 0) {
+      this.drawAimInfo(ball, angle, power, prediction);
+    }
   }
   
   drawTrajectoryLines(prediction: PredictionResult, cueBallPos: { x: number; y: number }, shotDirection: { x: number; y: number }, predictor: any) {
@@ -999,6 +1004,107 @@ export class Renderer extends BaseRenderer {
     this.ctx.scale(this.scale, this.scale);
   }
   
+  drawAimInfo(ball: Ball, angle: number, power: number, prediction?: PredictionResult) {
+    // Draw in screen space (no transform)
+    this.ctx.save();
+
+    // Calculate values
+    let angleDeg = (angle * 180 / Math.PI) % 360;
+    if (angleDeg < 0) angleDeg += 360;
+
+    const velocity = power * CONFIG.CUE_POWER_MULTIPLIER;
+    const powerPct = (power / CONFIG.CUE_POWER_MAX) * 100;
+
+    // Prepare metrics with icons
+    const metrics: Array<{ icon: string; value: string; color: string }> = [
+      { icon: '⟲', value: `${angleDeg.toFixed(1)}°`, color: '#4fc3f7' },
+      { icon: '⚡', value: `${velocity.toFixed(0)}`, color: '#ffeb3b' },
+      { icon: '⚙', value: `${powerPct.toFixed(0)}%`, color: '#ff5722' }
+    ];
+
+    // Add distance if available
+    if (prediction && prediction.type !== 'none') {
+      metrics.splice(1, 0, {
+        icon: '↔',
+        value: `${prediction.distance.toFixed(1)}"`,
+        color: '#66bb6a'
+      });
+    }
+
+    // Add cut angle for ball-to-ball collisions
+    if (prediction && prediction.type === 'ball' && prediction.hitBall) {
+      const targetBall = prediction.hitBall;
+      const toBallAngle = Math.atan2(targetBall.y - ball.y, targetBall.x - ball.x);
+      let cutAngle = Math.abs(angle - toBallAngle) * 180 / Math.PI;
+      if (cutAngle > 90) cutAngle = 180 - cutAngle;
+      metrics.push({
+        icon: '◐',
+        value: `${cutAngle.toFixed(1)}°`,
+        color: '#ab47bc'
+      });
+    }
+
+    // Position below table frame using screen coordinates
+    // In 2D renderer: canvas center + world position * scale, with Y flipped
+    const geom = getTableGeometry();
+    const canvasCenterY = this.canvas.height / 2;
+    const frameBottomWorldY = -geom.frameOutline.outerHalfHeight;
+    const frameBottomScreenY = canvasCenterY - (frameBottomWorldY * this.scale); // Flip Y
+    const offsetBelowFrame = 8; // Fixed pixel offset below frame edge
+
+    // Layout configuration for circular badges
+    const badgeRadius = 28 * CONFIG.AIM_INFO_SCALE;
+    const badgeSpacing = 12 * CONFIG.AIM_INFO_SCALE;
+    const totalWidth = metrics.length * (badgeRadius * 2) + (metrics.length - 1) * badgeSpacing;
+    const startX = (this.canvas.width - totalWidth) / 2;
+    const startY = frameBottomScreenY + offsetBelowFrame;
+
+    // Draw each metric badge as a circle
+    metrics.forEach((metric, i) => {
+      const centerX = startX + badgeRadius + i * (badgeRadius * 2 + badgeSpacing);
+      const centerY = startY + badgeRadius;
+
+      // Draw outer glow
+      const glowGradient = this.ctx.createRadialGradient(centerX, centerY, badgeRadius * 0.7, centerX, centerY, badgeRadius + 4);
+      glowGradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
+      glowGradient.addColorStop(1, 'rgba(0, 0, 0, 0.5)');
+      this.ctx.fillStyle = glowGradient;
+      this.ctx.beginPath();
+      this.ctx.arc(centerX, centerY, badgeRadius + 4, 0, Math.PI * 2);
+      this.ctx.fill();
+
+      // Draw circle background with gradient
+      const gradient = this.ctx.createRadialGradient(centerX, centerY - 5, 0, centerX, centerY, badgeRadius);
+      gradient.addColorStop(0, 'rgba(30, 30, 40, 0.95)');
+      gradient.addColorStop(1, 'rgba(15, 15, 20, 0.98)');
+      this.ctx.fillStyle = gradient;
+      this.ctx.beginPath();
+      this.ctx.arc(centerX, centerY, badgeRadius, 0, Math.PI * 2);
+      this.ctx.fill();
+
+      // Draw colored ring
+      this.ctx.strokeStyle = metric.color;
+      this.ctx.lineWidth = 2.5;
+      this.ctx.beginPath();
+      this.ctx.arc(centerX, centerY, badgeRadius - 2, 0, Math.PI * 2);
+      this.ctx.stroke();
+
+      // Draw icon
+      this.ctx.font = 'bold 18px Arial';
+      this.ctx.fillStyle = metric.color;
+      this.ctx.textAlign = 'center';
+      this.ctx.textBaseline = 'middle';
+      this.ctx.fillText(metric.icon, centerX, centerY - 6);
+
+      // Draw value
+      this.ctx.font = 'bold 10px monospace';
+      this.ctx.fillStyle = '#ffffff';
+      this.ctx.fillText(metric.value, centerX, centerY + 10);
+    });
+
+    this.ctx.restore();
+  }
+
   getPowerBarBounds() {
     const barWidth = 30;
     const barHeight = 200;

@@ -56,6 +56,8 @@ export const CONFIG = {
   AIM_LINE_OFFSET: 0.2, // Distance from cue ball edge to aim line start
   GHOST_BALL_OFFSET: 0.0, // Offset of ghost ball from contact point (negative = toward cue)
   OBJECT_PATH_PERCENTAGE: 1.0, // Multiplier for object ball path length (0.5 = 50% length)
+  SHOW_AIM_INFO: true, // Display aim angle, distance, speed, and cut angle overlay
+  AIM_INFO_SCALE: 1.0, // Scale multiplier for aim info indicators (0.5 = 50% size, 2.0 = 200% size)
   
   // Rendering
   CANVAS_SCALE: 8, // Pixels per game unit

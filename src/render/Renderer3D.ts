@@ -2840,6 +2840,11 @@ export class Renderer3D extends BaseRenderer {
     if (showPowerBar) {
       this.drawPowerBar2D(power);
     }
+
+    // Draw aim info overlay (only if scale > 0)
+    if (CONFIG.SHOW_AIM_INFO && CONFIG.AIM_INFO_SCALE > 0) {
+      this.drawAimInfo(ball, angle, power, prediction);
+    }
   }
   
   drawPowerBar2D(power: number) {
@@ -2847,25 +2852,119 @@ export class Renderer3D extends BaseRenderer {
     const barHeight = 200;
     const barX = this.uiCanvas.width - 60;
     const barY = (this.uiCanvas.height - barHeight) / 2;
-    
+
     // Background
     this.uiCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
     this.uiCtx.fillRect(barX, barY, barWidth, barHeight);
-    
+
     // Power fill with gradient (bottom to top)
     const fillHeight = (power / CONFIG.CUE_POWER_MAX) * barHeight;
     const gradient = this.uiCtx.createLinearGradient(barX, barY + barHeight - fillHeight, barX, barY + barHeight);
     gradient.addColorStop(0, '#ff0000');
     gradient.addColorStop(0.5, '#ffff00');
     gradient.addColorStop(1, '#00ff00');
-    
+
     this.uiCtx.fillStyle = gradient;
     this.uiCtx.fillRect(barX, barY + barHeight - fillHeight, barWidth, fillHeight);
-    
+
     // Border
     this.uiCtx.strokeStyle = '#ffffff';
     this.uiCtx.lineWidth = 2;
     this.uiCtx.strokeRect(barX, barY, barWidth, barHeight);
+  }
+
+  drawAimInfo(ball: Ball, angle: number, power: number, prediction?: PredictionResult) {
+    // Calculate values
+    let angleDeg = (angle * 180 / Math.PI) % 360;
+    if (angleDeg < 0) angleDeg += 360;
+
+    const velocity = power * CONFIG.CUE_POWER_MULTIPLIER;
+    const powerPct = (power / CONFIG.CUE_POWER_MAX) * 100;
+
+    // Prepare metrics with icons
+    const metrics: Array<{ icon: string; value: string; color: string }> = [
+      { icon: '⟲', value: `${angleDeg.toFixed(1)}°`, color: '#4fc3f7' },
+      { icon: '⚡', value: `${velocity.toFixed(0)}`, color: '#ffeb3b' },
+      { icon: '⚙', value: `${powerPct.toFixed(0)}%`, color: '#ff5722' }
+    ];
+
+    // Add distance if available
+    if (prediction && prediction.type !== 'none') {
+      metrics.splice(1, 0, {
+        icon: '↔',
+        value: `${prediction.distance.toFixed(1)}"`,
+        color: '#66bb6a'
+      });
+    }
+
+    // Add cut angle for ball-to-ball collisions
+    if (prediction && prediction.type === 'ball' && prediction.hitBall) {
+      const targetBall = prediction.hitBall;
+      const toBallAngle = Math.atan2(targetBall.y - ball.y, targetBall.x - ball.x);
+      let cutAngle = Math.abs(angle - toBallAngle) * 180 / Math.PI;
+      if (cutAngle > 90) cutAngle = 180 - cutAngle;
+      metrics.push({
+        icon: '◐',
+        value: `${cutAngle.toFixed(1)}°`,
+        color: '#ab47bc'
+      });
+    }
+
+    // Position below table frame using world-to-screen coordinates
+    const geom = getTableGeometry();
+    const frameBottom = -geom.frameOutline.outerHalfHeight;
+    const tableFrameBottom = this.worldToScreen(0, frameBottom);
+    const offsetBelowFrame = 8; // Fixed pixel offset below frame edge
+
+    // Layout configuration for circular badges
+    const badgeRadius = 28 * CONFIG.AIM_INFO_SCALE;
+    const badgeSpacing = 12 * CONFIG.AIM_INFO_SCALE;
+    const totalWidth = metrics.length * (badgeRadius * 2) + (metrics.length - 1) * badgeSpacing;
+    const startX = (this.uiCanvas.width - totalWidth) / 2;
+    const startY = tableFrameBottom.y + offsetBelowFrame;
+
+    // Draw each metric badge as a circle
+    metrics.forEach((metric, i) => {
+      const centerX = startX + badgeRadius + i * (badgeRadius * 2 + badgeSpacing);
+      const centerY = startY + badgeRadius;
+
+      // Draw outer glow
+      const glowGradient = this.uiCtx.createRadialGradient(centerX, centerY, badgeRadius * 0.7, centerX, centerY, badgeRadius + 4);
+      glowGradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
+      glowGradient.addColorStop(1, 'rgba(0, 0, 0, 0.5)');
+      this.uiCtx.fillStyle = glowGradient;
+      this.uiCtx.beginPath();
+      this.uiCtx.arc(centerX, centerY, badgeRadius + 4, 0, Math.PI * 2);
+      this.uiCtx.fill();
+
+      // Draw circle background with gradient
+      const gradient = this.uiCtx.createRadialGradient(centerX, centerY - 5, 0, centerX, centerY, badgeRadius);
+      gradient.addColorStop(0, 'rgba(30, 30, 40, 0.95)');
+      gradient.addColorStop(1, 'rgba(15, 15, 20, 0.98)');
+      this.uiCtx.fillStyle = gradient;
+      this.uiCtx.beginPath();
+      this.uiCtx.arc(centerX, centerY, badgeRadius, 0, Math.PI * 2);
+      this.uiCtx.fill();
+
+      // Draw colored ring
+      this.uiCtx.strokeStyle = metric.color;
+      this.uiCtx.lineWidth = 2.5;
+      this.uiCtx.beginPath();
+      this.uiCtx.arc(centerX, centerY, badgeRadius - 2, 0, Math.PI * 2);
+      this.uiCtx.stroke();
+
+      // Draw icon
+      this.uiCtx.font = 'bold 18px Arial';
+      this.uiCtx.fillStyle = metric.color;
+      this.uiCtx.textAlign = 'center';
+      this.uiCtx.textBaseline = 'middle';
+      this.uiCtx.fillText(metric.icon, centerX, centerY - 6);
+
+      // Draw value
+      this.uiCtx.font = 'bold 10px monospace';
+      this.uiCtx.fillStyle = '#ffffff';
+      this.uiCtx.fillText(metric.value, centerX, centerY + 10);
+    });
   }
   
   drawPrediction(_prediction: PredictionResult) {

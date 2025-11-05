@@ -94,6 +94,7 @@ export class SettingsPanel {
           ${this.sliderRow('AIM_LINE_OFFSET', 'Aim Line Offset', 0.0, 2.0, 0.1, CONFIG.AIM_LINE_OFFSET)}
           ${this.sliderRow('GHOST_BALL_OFFSET', 'Ghost Ball Offset', -2.0, 2.0, 0.1, CONFIG.GHOST_BALL_OFFSET)}
           ${this.sliderRow('OBJECT_PATH_PERCENTAGE', 'Object Path Length %', 0.1, 2.0, 0.1, CONFIG.OBJECT_PATH_PERCENTAGE)}
+          ${this.sliderRow('AIM_INFO_SCALE', 'Aim Info Scale', 0.9, 2.0, 0.1, CONFIG.AIM_INFO_SCALE)}
         </div>
         <div class="settings-group">
           <h4 class="settings-group-title">🖥️ Display</h4>
@@ -145,6 +146,7 @@ export class SettingsPanel {
       { sliderId: 'AIM_LINE_OFFSET', labelId: 'AIM_LINE_OFFSET-value', onChange: (v) => this.updatePhysicsSetting('AIM_LINE_OFFSET', v!) },
       { sliderId: 'GHOST_BALL_OFFSET', labelId: 'GHOST_BALL_OFFSET-value', onChange: (v) => this.updatePhysicsSetting('GHOST_BALL_OFFSET', v!) },
       { sliderId: 'OBJECT_PATH_PERCENTAGE', labelId: 'OBJECT_PATH_PERCENTAGE-value', onChange: (v) => this.updatePhysicsSetting('OBJECT_PATH_PERCENTAGE', v!) },
+      { sliderId: 'AIM_INFO_SCALE', labelId: 'AIM_INFO_SCALE-value', onChange: (v) => this.updatePhysicsSetting('AIM_INFO_SCALE', v!) },
     ];
 
     // Bind render setting sliders

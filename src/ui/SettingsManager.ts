@@ -30,6 +30,7 @@ export interface PhysicsSettings {
   AIM_LINE_OFFSET: number;
   GHOST_BALL_OFFSET: number;
   OBJECT_PATH_PERCENTAGE: number;
+  AIM_INFO_SCALE: number;
 }
 
 export interface GeometrySettings {
@@ -110,6 +111,7 @@ const DEFAULT_PHYSICS_SETTINGS: PhysicsSettings = {
   AIM_LINE_OFFSET: CONFIG.AIM_LINE_OFFSET ?? 0.2,
   GHOST_BALL_OFFSET: CONFIG.GHOST_BALL_OFFSET ?? 0.0,
   OBJECT_PATH_PERCENTAGE: CONFIG.OBJECT_PATH_PERCENTAGE ?? 1.0,
+  AIM_INFO_SCALE: CONFIG.AIM_INFO_SCALE ?? 1.0,
 };
 
 export class SettingsManager {
