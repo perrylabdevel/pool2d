@@ -61,14 +61,13 @@ export const CONFIG = {
   CANVAS_SCALE: 8, // Pixels per game unit
   CANVAS_SCALE_MULTIPLIER: 1,
   BALL_SCALE: 1,
-  // Optional extra world padding to guarantee cue visibility around table
-  CUE_VISUAL_PADDING_IN: 0, // additional inches beyond computed cue reach
   AMBIENT_INTENSITY: 1.1,
   DIRECTIONAL_INTENSITY: 1.6,
   ACCENT_INTENSITY: 0.5,
 
   // Cue visuals
-  CUE_LENGTH_IN: 58, // Standard pool cue length
+  CUE_LENGTH_IN: 58, // Standard pool cue length (can extend off-screen)
+  CUE_VISUAL_PADDING_IN: 20, // Visual padding around table (not full cue length - cue can extend off-screen)
   MIN_WORLD_PADDING_IN: 6, // Minimum world padding around table for camera framing
   RAIL_HIGHLIGHT_INTENSITY: 0.9, // Rail cushion highlight intensity
   RAIL_SHADOW_INTENSITY: 0.25, // Subtle shadow under rails (inner edge)

@@ -673,11 +673,9 @@ export class Renderer3D extends BaseRenderer {
     const externalMargin = 40;
     
     // Desired world padding around table (inches). Keep in WORLD units to avoid divide-by-scale issues.
-    const cueLengthIn = CONFIG.CUE_LENGTH_IN ?? 20;
-    const baseBallR = (CONFIG as any).BALL_BASE_RADIUS ?? 1.125;
-    const cueMaxDistanceIn = baseBallR + 5;
-    const cueReachWorldIn = cueLengthIn + cueMaxDistanceIn + (CONFIG.CUE_VISUAL_PADDING_IN ?? 0);
-    const padWorldIn = Math.max(CONFIG.MIN_WORLD_PADDING_IN ?? 6, cueReachWorldIn);
+    // Note: We use a reasonable padding value, not the full cue length - it's okay if the cue extends off-screen
+    const visualPadding = CONFIG.CUE_VISUAL_PADDING_IN ?? 20; // Reasonable visual padding
+    const padWorldIn = Math.max(CONFIG.MIN_WORLD_PADDING_IN ?? 6, visualPadding);
     
     // Calculate available space for canvas after external margins
     const availableWidth = Math.max(1, horizontalSpace - externalMargin * 2);
