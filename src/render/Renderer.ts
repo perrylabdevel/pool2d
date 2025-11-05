@@ -953,11 +953,19 @@ export class Renderer extends BaseRenderer {
   drawPowerBar(power: number, isAimMode: boolean) {
     this.ctx.restore(); // Exit game space
     this.ctx.save();
-    
-    // Draw power bar in screen space (right side of canvas)
+
+    // Draw power bar in screen space, positioned relative to table frame
     const barWidth = 30;
     const barHeight = 200;
-    const barX = this.canvas.width - 60;
+
+    // Position to the right of the table frame using screen coordinates
+    const geom = getTableGeometry();
+    const canvasCenterX = this.canvas.width / 2;
+    const frameRightWorldX = geom.frameOutline.outerHalfWidth;
+    const frameRightScreenX = canvasCenterX + (frameRightWorldX * this.scale);
+    const offsetFromFrame = 20; // Fixed pixel offset from frame edge
+
+    const barX = frameRightScreenX + offsetFromFrame;
     const barY = (this.canvas.height - barHeight) / 2;
     
     // Background

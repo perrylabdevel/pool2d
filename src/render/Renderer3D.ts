@@ -2850,7 +2850,14 @@ export class Renderer3D extends BaseRenderer {
   drawPowerBar2D(power: number) {
     const barWidth = 30;
     const barHeight = 200;
-    const barX = this.uiCanvas.width - 60;
+
+    // Position to the right of the table frame using world-to-screen coordinates
+    const geom = getTableGeometry();
+    const frameRight = geom.frameOutline.outerHalfWidth;
+    const tableFrameRight = this.worldToScreen(frameRight, 0);
+    const offsetFromFrame = 20; // Fixed pixel offset from frame edge
+
+    const barX = tableFrameRight.x + offsetFromFrame;
     const barY = (this.uiCanvas.height - barHeight) / 2;
 
     // Background
