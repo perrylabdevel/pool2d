@@ -75,7 +75,7 @@ export const GEOMETRY_TEMPLATES: Record<PocketTemplate, ModernPocketGeometry> = 
     side: {
       opening: 5.25,
       jawAngle: 6.0,
-      depth: 0.3,
+      depth: 1.5,        // Distance from play edge to straight rail end
       shelfDepth: 0.3,
       railCurve: 0.0,
     },
@@ -97,7 +97,7 @@ export const GEOMETRY_TEMPLATES: Record<PocketTemplate, ModernPocketGeometry> = 
     side: {
       opening: 5.0,
       jawAngle: 5.5,
-      depth: 0.25,
+      depth: 1.4,        // Tight - straight rail closer to center
       shelfDepth: 0.25,
       railCurve: 0.0,
     },
@@ -119,7 +119,7 @@ export const GEOMETRY_TEMPLATES: Record<PocketTemplate, ModernPocketGeometry> = 
     side: {
       opening: 5.25,
       jawAngle: 6.0,
-      depth: 0.3,
+      depth: 1.5,        // Medium depth
       shelfDepth: 0.3,
       railCurve: 0.0,
     },
@@ -141,7 +141,7 @@ export const GEOMETRY_TEMPLATES: Record<PocketTemplate, ModernPocketGeometry> = 
     side: {
       opening: 5.5,
       jawAngle: 6.5,
-      depth: 0.375,
+      depth: 1.6,        // Loose - straight rail farther from center
       shelfDepth: 0.375,
       railCurve: 0.0,
     },
@@ -163,7 +163,7 @@ export const GEOMETRY_TEMPLATES: Record<PocketTemplate, ModernPocketGeometry> = 
     side: {
       opening: 5.0625,  // 5 1/16"
       jawAngle: 5.5,
-      depth: 0.25,
+      depth: 1.5,
       shelfDepth: 0.25,
       railCurve: 0.0,
     },
@@ -185,7 +185,7 @@ export const GEOMETRY_TEMPLATES: Record<PocketTemplate, ModernPocketGeometry> = 
     side: {
       opening: 5.375,  // 5 3/8"
       jawAngle: 6.5,
-      depth: 0.375,
+      depth: 1.6,        // Looser pockets
       shelfDepth: 0.375,
       railCurve: 0.0,
     },
@@ -207,7 +207,7 @@ export const GEOMETRY_TEMPLATES: Record<PocketTemplate, ModernPocketGeometry> = 
     side: {
       opening: 4.0,     // Extremely tight for professional play
       jawAngle: 5.0,
-      depth: 0.25,
+      depth: 1.3,        // Very tight - straight rail very close to center
       shelfDepth: 0.25,
       railCurve: 0.0,
     },
@@ -239,7 +239,7 @@ export const GEOMETRY_RANGES = {
   side: {
     opening: { min: 4.0, max: 6.0, typical: 5.25 },
     jawAngle: { min: 4.0, max: 8.0, typical: 6.0 },
-    depth: { min: 0.0, max: 0.5, typical: 0.25 },
+    depth: { min: 0.5, max: 2.5, typical: 1.5 },  // Distance from play edge to straight rail
     shelfDepth: { min: 0.0, max: 0.5, typical: 0.25 },
     railCurve: { min: 0.0, max: 1.0, typical: 0.0 },
   },

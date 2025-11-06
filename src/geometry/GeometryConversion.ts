@@ -102,17 +102,18 @@ function modernPocketToLegacySide(side: PocketConfig): {
   const sideOutwardOffset = 0.25; // Standard
   const pocketCenterY = PLAY_HALF_H_IN + sideOutwardOffset;
 
-  // Inner Y (throat) position
+  // Straight Y is where the jaw meets the straight rail
+  // Depth is measured from play area edge (PLAY_HALF_H_IN), not from throat
+  const straightY = PLAY_HALF_H_IN - side.depth;
+
+  // Inner Y (throat) position - between straight and mouth
   const innerY = pocketCenterY;
 
-  // Straight Y is where the jaw meets the straight rail
-  // This is depth distance back from the throat
-  const straightY = innerY - side.depth;
-
   // Calculate jaw X positions based on angle
+  // The jaw angle is measured along the rail from straightY to innerY
   // tan(angle) = horizontal_distance / vertical_distance
-  // horizontal_distance = vertical_distance * tan(angle)
-  const horizontalSpread = side.depth * Math.tan(jawAngleRad);
+  const verticalDistance = innerY - straightY;
+  const horizontalSpread = verticalDistance * Math.tan(jawAngleRad);
 
   // Jaw positions
   const jawInnerX = throatHalfWidth;
