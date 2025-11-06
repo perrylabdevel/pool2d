@@ -15,6 +15,7 @@ import { Predictor } from '../physics/Prediction';
 import { shotCapture } from '../debug/ShotCapture';
 import { SettingsPanel } from '../ui/SettingsPanel';
 import { GeometryPanel } from '../ui/GeometryPanel';
+import { ModernGeometryPanel } from '../ui/ModernGeometryPanel';
 import { RenderLayerPanel } from '../ui/RenderLayerPanel';
 import { scenarioManager } from '../debug/ScenarioManager';
 
@@ -46,6 +47,7 @@ export class Game {
   debug: DebugDraw;
   settings: SettingsPanel;
   geometryPanel: GeometryPanel;
+  modernGeometryPanel: ModernGeometryPanel;
   renderLayersPanel: RenderLayerPanel;
   rules: EightBallRules;
   predictor: Predictor;
@@ -92,6 +94,7 @@ export class Game {
     this.debug = new DebugDraw(debugCanvas);
     this.settings = new SettingsPanel(this.hud.settingsManager);
     this.geometryPanel = new GeometryPanel(this.hud.settingsManager, () => this.restart());
+    this.modernGeometryPanel = new ModernGeometryPanel(this.hud.settingsManager, () => this.restart());
     this.renderLayersPanel = new RenderLayerPanel(this.hud.settingsManager, this.renderer);
     this.rules = new EightBallRules();
     this.predictor = new Predictor();
@@ -110,6 +113,7 @@ export class Game {
       console.log('💡 Tips:');
       console.log('  - Hold SHIFT and drag the cue ball to reposition it');
       console.log('  - Press G to open Geometry panel (live pocket adjustments)');
+      console.log('  - Press M to open Modern Geometry panel (angle-based controls)');
       console.log('  - Press S to open Physics Settings panel');
       console.log('  - Press D for Debug view');
     }
@@ -296,6 +300,10 @@ export class Game {
     });
     this.hud.registerPanel('geometry-panel', this.geometryPanel.getController(), {
       hotkeys: ['g'],
+      persistState: true,
+    });
+    this.hud.registerPanel('modern-geometry-panel', this.modernGeometryPanel.getController(), {
+      hotkeys: ['m'],
       persistState: true,
     });
     this.hud.registerPanel('render-layer-panel', this.renderLayersPanel.getController(), {
