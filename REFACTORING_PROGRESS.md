@@ -433,6 +433,29 @@ The remaining rail point calculations and pocket generation could be further ext
 
 However, these sections are more tightly coupled to the main function logic and may not provide as much benefit. The current Phase 1 extraction already achieved the primary goals.
 
+### Phase 4: Extract Inline HTML Panels to TypeScript ⏳ (Planned)
+
+**Problem:** The `index.html` file is 793 lines, with 82% being inline panel HTML. This creates maintenance issues and inconsistency with other panels.
+
+**Current State:**
+- ✅ `SettingsPanel.ts` - Generates HTML programmatically
+- ✅ `GameSettingsPanel.ts` - Generates HTML programmatically
+- ❌ `GeometryPanel` - 429 lines of inline HTML in index.html
+- ❌ `RenderLayerPanel` - 226 lines of inline HTML in index.html
+
+**Plan:**
+1. Move GeometryPanel HTML generation to TypeScript (GeometryPanel.ts already exists for logic)
+2. Move RenderLayerPanel HTML generation to TypeScript
+3. Clean up index.html to just contain structure and canvas setup
+
+**Expected Impact:**
+- `index.html`: 793 → ~140 lines (-653 lines, -82%)
+- Consistent approach across all panels
+- Easier to maintain and modify panels
+- Better separation of concerns
+
+**See:** `UI_REFACTORING_PLAN.md` for detailed implementation plan
+
 ## Branch
 
 This work is on the `refactor/renderer-deduplication` branch. Merge into `main` when ready.
