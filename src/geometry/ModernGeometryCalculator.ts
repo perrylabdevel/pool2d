@@ -101,24 +101,26 @@ export function calculateCornerJawPoints(
   const cornerY = PLAY_HALF_H_IN;
 
   // Throat positions - where rails transition to angled corner sections
-  const throatHalfWidth = config.throatWidth / 2;
+  const throatHalfWidth = Math.max(0.75, config.throatWidth / 2);
 
   // Straight rail positions (railDepth from corner)
   const straightX = cornerX - config.railDepth;
   const straightY = cornerY - config.railDepth;
 
+  // Jaw offset determined by jaw depth but must satisfy throat width
+  const desiredOffset = Math.max(throatHalfWidth, config.jawDepth);
+  const maxJawOffset = Math.max(0.75, Math.min(straightX - 1, straightY - 1));
+  const jawOffset = Math.min(Math.max(desiredOffset, 0.75), maxJawOffset);
+
   // Jaw points where rails meet throat
-  // Vertical rail: (straightX, throatY) where throatY = throatWidth/2
-  // Horizontal rail: (throatX, straightY) where throatX = throatWidth/2
   const jawVerticalX = straightX;
-  const jawVerticalY = throatHalfWidth;
-  const jawHorizontalX = throatHalfWidth;
+  const jawVerticalY = straightY - jawOffset;
+  const jawHorizontalX = straightX - jawOffset;
   const jawHorizontalY = straightY;
 
   // Throat position (approximate center, along 45° diagonal)
-  const throatOffset = throatHalfWidth / Math.sqrt(2);
-  const throatX = cornerX - throatOffset;
-  const throatY = cornerY - throatOffset;
+  const throatX = jawHorizontalX;
+  const throatY = jawVerticalY;
 
   return {
     jawVertical: { x: jawVerticalX, y: jawVerticalY },
