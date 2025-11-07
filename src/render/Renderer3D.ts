@@ -27,6 +27,8 @@ import {
 } from './RenderUtils';
 import { BaseRenderer } from './BaseRenderer';
 
+const SIDE_POCKET_VISUAL_INSET = 3.5; // Keep side pocket visuals just inside the cushion edge
+
 type FrameClipInfo = { outerX: number; outerY: number; radius: number };
 
 export class Renderer3D extends BaseRenderer {
@@ -51,6 +53,8 @@ export class Renderer3D extends BaseRenderer {
   frameMesh: THREE.Group | null = null;
   railMeshes: THREE.Mesh[] = [];
   pocketMeshes: THREE.Mesh[] = [];
+  pocketBottomMeshes: THREE.Mesh[] = [];
+  pocketGradientMeshes: THREE.Mesh[] = [];
   pocketCapMeshes: THREE.Mesh[] = [];
   railFillMesh: THREE.Mesh | null = null;
   private tableHighlightMesh: THREE.Mesh | null = null;
@@ -95,6 +99,7 @@ export class Renderer3D extends BaseRenderer {
   private pocketGradientTexture: THREE.CanvasTexture | null = null;
   private pocketCapMaterial: THREE.MeshBasicMaterial | null = null;
   private pocketSideMaterial: THREE.MeshBasicMaterial | null = null;
+  private debugMode: boolean = false;
   
   // Resize reentrancy guard
   private _isResizing: boolean = false;
@@ -330,6 +335,20 @@ export class Renderer3D extends BaseRenderer {
       if (Array.isArray(mat)) mat.forEach(mm => mm.dispose()); else mat.dispose();
     });
     this.pocketMeshes = [];
+    this.pocketBottomMeshes.forEach(m => {
+      this.scene.remove(m);
+      m.geometry.dispose();
+      const mat = m.material as THREE.Material | THREE.Material[];
+      if (Array.isArray(mat)) mat.forEach(mm => mm.dispose()); else mat.dispose();
+    });
+    this.pocketBottomMeshes = [];
+    this.pocketGradientMeshes.forEach(m => {
+      this.scene.remove(m);
+      m.geometry.dispose();
+      const mat = m.material as THREE.Material | THREE.Material[];
+      if (Array.isArray(mat)) mat.forEach(mm => mm.dispose()); else mat.dispose();
+    });
+    this.pocketGradientMeshes = [];
     this.pocketShadowMeshes.forEach((mesh) => {
       this.scene.remove(mesh);
       mesh.geometry.dispose();
@@ -1275,11 +1294,12 @@ export class Renderer3D extends BaseRenderer {
     return this.railHighlightMaterial;
   }
 
-  private addPocketHighlight(pocket: PocketDef, visualRadius: number, angleRad: number) {
+  private addPocketHighlight(pocket: PocketDef, visualRadius: number, angleRad: number, pocketY?: number) {
     const highlightMaterial = this.getPocketHighlightMaterial();
+    const yPos = pocketY !== undefined ? pocketY : pocket.center.y;
 
     // Align the arc with the felt lip so the highlight tracks the table edge
-    const towardCenter = new THREE.Vector2(-pocket.center.x, -pocket.center.y);
+    const towardCenter = new THREE.Vector2(-pocket.center.x, -yPos);
     let facingVector: THREE.Vector2 | null = null;
     if (towardCenter.lengthSq() > 1e-6) {
       facingVector = towardCenter.normalize();
@@ -1311,7 +1331,7 @@ export class Renderer3D extends BaseRenderer {
     );
 
     const highlightMesh = new THREE.Mesh(highlightGeometry, highlightMaterial);
-    highlightMesh.position.set(pocket.center.x, pocket.center.y, 0.2);
+    highlightMesh.position.set(pocket.center.x, yPos, 0.2);
     highlightMesh.renderOrder = this.layerOrder.orderPockets + 0.25;
     highlightMesh.visible = this.layerVisibility.showPockets;
     this.enforceRenderOrderControl(highlightMesh, { disableDepth: false });
@@ -1643,36 +1663,60 @@ export class Renderer3D extends BaseRenderer {
   
   initializePockets(pockets: PocketDef[]) {
     const sideMaterial = this.getPocketSideMaterial();
+    const playHalfHeight = this.playBounds.maxY;
 
     pockets.forEach((pocket) => {
       const visualRadius = pocket.visualRadius ?? pocket.radius;
       const wallTaperRadius = visualRadius * 0.75; // Increased taper for more depth (was 0.85)
       const shelfDepth = Math.max(0.1, pocket.shelfDepth ?? CONFIG.POCKET_SHELF_DEPTH_IN) * 1.5; // 50% deeper
       const angleRad = THREE.MathUtils.degToRad(pocket.cutAngleDeg ?? 0);
+
+      // Detect side pockets and adjust position to cushion edge
+      const isSidePocket = pocket.id === 'N_middle' || pocket.id === 'S_middle';
+      const pocketRotationZ = isSidePocket ? (pocket.center.y > 0 ? Math.PI : 0) : angleRad;
+      const thetaStart = isSidePocket ? Math.PI / 2 : 0;
+      const thetaLength = isSidePocket ? Math.PI : Math.PI * 2;
+      let pocketY = pocket.center.y;
+      if (isSidePocket) {
+        const direction = pocket.center.y >= 0 ? 1 : -1;
+        pocketY = direction * (playHalfHeight - SIDE_POCKET_VISUAL_INSET);
+      }
+
+      // Create cylinder geometry (full for corners, half for sides)
       const pocketGeometry = new THREE.CylinderGeometry(
         visualRadius,
         wallTaperRadius,
         shelfDepth,
         48,
         1,
-        true
+        true,
+        thetaStart,
+        thetaLength
       );
       const pocketMesh = new THREE.Mesh(pocketGeometry, sideMaterial.clone());
-      pocketMesh.position.set(pocket.center.x, pocket.center.y, 0);
+      pocketMesh.position.set(pocket.center.x, pocketY, 0);
       pocketMesh.rotation.x = Math.PI / 2;
-      pocketMesh.rotation.z = angleRad;
+      pocketMesh.rotation.z = pocketRotationZ;
+
       pocketMesh.renderOrder = this.layerOrder.orderPockets;
       pocketMesh.visible = this.layerVisibility.showPockets;
       this.enforceRenderOrderControl(pocketMesh);
       this.scene.add(pocketMesh);
       this.pocketMeshes.push(pocketMesh);
 
-      // Solid black bottom fill for the pocket hole using ShapeGeometry
+      // Solid black bottom fill - semicircle for side pockets
       const circleShape = new THREE.Shape();
       const radius = visualRadius * 0.98;
-      circleShape.absarc(0, 0, radius, 0, Math.PI * 2, false);
+      if (isSidePocket) {
+        // Create semicircle path - front half (0 to π)
+        circleShape.absarc(0, 0, radius, 0, Math.PI, false);
+        circleShape.lineTo(-radius, 0);
+        circleShape.lineTo(radius, 0);
+      } else {
+        circleShape.absarc(0, 0, radius, 0, Math.PI * 2, false);
+      }
       const bottomGeometry = new THREE.ShapeGeometry(circleShape);
-      
+
       const bottomMaterial = new THREE.MeshBasicMaterial({
         color: 0x000000,
         side: THREE.DoubleSide,
@@ -1680,16 +1724,26 @@ export class Renderer3D extends BaseRenderer {
         depthWrite: false,
       });
       const bottomMesh = new THREE.Mesh(bottomGeometry, bottomMaterial);
-      bottomMesh.position.set(pocket.center.x, pocket.center.y, 0.05); // Lower for more depth (was 0.15)
-      bottomMesh.rotation.z = angleRad;
-      bottomMesh.renderOrder = this.layerOrder.orderTable + 5;
+      bottomMesh.position.set(pocket.center.x, pocketY, 0.05);
+
+      // Rotate semicircle to face outward
+      bottomMesh.rotation.z = pocketRotationZ;
+
+      bottomMesh.renderOrder = this.layerOrder.orderPockets - 0.2;  // Render just before pocket walls
       bottomMesh.visible = this.layerVisibility.showPockets;
       this.scene.add(bottomMesh);
-      this.pocketMeshes.push(bottomMesh);
+      this.pocketBottomMeshes.push(bottomMesh);
 
-      // Gradient overlay using ShapeGeometry with proper UV mapping
+      // Gradient overlay - semicircle for side pockets
       const gradientShape = new THREE.Shape();
-      gradientShape.absarc(0, 0, visualRadius, 0, Math.PI * 2, false);
+      if (isSidePocket) {
+        // Front half (0 to π)
+        gradientShape.absarc(0, 0, visualRadius, 0, Math.PI, false);
+        gradientShape.lineTo(-visualRadius, 0);
+        gradientShape.lineTo(visualRadius, 0);
+      } else {
+        gradientShape.absarc(0, 0, visualRadius, 0, Math.PI * 2, false);
+      }
       const gradientGeometry = new THREE.ShapeGeometry(gradientShape);
 
       // Fix UV mapping for the gradient texture
@@ -1704,7 +1758,7 @@ export class Renderer3D extends BaseRenderer {
         uvAttribute.setXY(i, u, v);
       }
       uvAttribute.needsUpdate = true;
-      
+
       // Create fresh material for each pocket to avoid texture sharing issues
       const gradientTexture = this.getPocketGradientTexture();
       const gradientMat = new THREE.MeshBasicMaterial({
@@ -1715,55 +1769,106 @@ export class Renderer3D extends BaseRenderer {
         side: THREE.DoubleSide,
       });
       const gradientMesh = new THREE.Mesh(gradientGeometry, gradientMat);
-      gradientMesh.position.set(pocket.center.x, pocket.center.y, 0.16);
-      gradientMesh.rotation.z = angleRad;
-      gradientMesh.renderOrder = this.layerOrder.orderPockets;
+      gradientMesh.position.set(pocket.center.x, pocketY, 0.16);
+
+      // Rotate semicircle to face outward
+      gradientMesh.rotation.z = pocketRotationZ;
+
+      gradientMesh.renderOrder = this.layerOrder.orderPockets + 0.1;  // Render after pocket walls
       gradientMesh.visible = this.layerVisibility.showPockets;
       this.scene.add(gradientMesh);
-      this.pocketMeshes.push(gradientMesh);
+      this.pocketGradientMeshes.push(gradientMesh);
 
       const pocketShadowMaterial = this.getPocketShadowMaterial();
       const shadowInner = visualRadius * 0.92;
       const shadowOuter = visualRadius * 1.2;
-      const shadowGeometry = new THREE.RingGeometry(shadowInner, shadowOuter, 64);
+      const shadowGeometry = new THREE.RingGeometry(
+        shadowInner,
+        shadowOuter,
+        64,
+        1,
+        thetaStart,
+        thetaLength
+      );
       const shadowMesh = new THREE.Mesh(shadowGeometry, pocketShadowMaterial);
-      shadowMesh.position.set(pocket.center.x, pocket.center.y, 0.3);
+      shadowMesh.position.set(pocket.center.x, pocketY, 0.3);
       shadowMesh.rotation.x = Math.PI / 2;
-      shadowMesh.rotation.z = angleRad;
+
+      // Rotate semicircle to face outward
+      shadowMesh.rotation.z = pocketRotationZ;
+
       shadowMesh.renderOrder = this.layerOrder.orderPockets + 0.2;
       shadowMesh.visible = this.layerVisibility.showPockets;
       this.enforceRenderOrderControl(shadowMesh, { disableDepth: true });
       this.scene.add(shadowMesh);
       this.pocketShadowMeshes.push(shadowMesh);
 
-      this.addPocketHighlight(pocket, visualRadius, angleRad);
+      const highlightAngle = isSidePocket ? pocketRotationZ : angleRad;
+      this.addPocketHighlight(pocket, visualRadius, highlightAngle, pocketY);
     });
     
     this.initializeRailFillMesh();
     this.initializePocketCaps(pockets);
+    this.applyPocketsVisibility(this.layerVisibility.showPockets);
+    this.updatePocketDebugMaterials();
   }
 
   initializePocketCaps(pockets: PocketDef[]) {
     const capThickness = 0.2;
     const capMaterial = new THREE.MeshBasicMaterial({
       color: new THREE.Color('#0a0a0a'),
-      depthTest: false,
-      depthWrite: false,
+      depthTest: true,
+      depthWrite: true,
       transparent: true,
       opacity: 0.75,
     });
+    const playHalfHeight = this.playBounds.maxY;
 
     pockets.forEach((pocket) => {
       const visualRadius = pocket.visualRadius ?? pocket.radius;
-      const capGeometry = new THREE.CylinderGeometry(
-        visualRadius * 1.02,
-        visualRadius * 1.02,
-        capThickness,
-        48
-      );
-      const capMesh = new THREE.Mesh(capGeometry, capMaterial.clone());
-      capMesh.position.set(pocket.center.x, pocket.center.y, 0.6);
-      capMesh.rotation.x = Math.PI / 2;
+      const isSidePocket = pocket.id === 'N_middle' || pocket.id === 'S_middle';
+      const angleRad = THREE.MathUtils.degToRad(pocket.cutAngleDeg ?? 0);
+      const pocketRotationZ = isSidePocket ? (pocket.center.y > 0 ? Math.PI : 0) : angleRad;
+      const thetaStart = isSidePocket ? Math.PI / 2 : 0;
+      const thetaLength = isSidePocket ? Math.PI : Math.PI * 2;
+
+      // Adjust Y position for side pockets (must match pocket walls exactly)
+      let pocketY = pocket.center.y;
+      if (isSidePocket) {
+        const direction = pocket.center.y >= 0 ? 1 : -1;
+        pocketY = direction * (playHalfHeight - SIDE_POCKET_VISUAL_INSET);
+      }
+
+      let capMesh: THREE.Mesh;
+      if (isSidePocket) {
+        const radius = visualRadius * 1.06; // Slightly larger to cover the frame cutout
+        const capGeometry = new THREE.CircleGeometry(radius, 64);
+        const sideCapMaterial = capMaterial.clone();
+        sideCapMaterial.side = THREE.DoubleSide;
+        sideCapMaterial.transparent = false;
+        sideCapMaterial.opacity = 1.0;
+        sideCapMaterial.depthWrite = true;
+        sideCapMaterial.depthTest = true;
+        capMesh = new THREE.Mesh(capGeometry, sideCapMaterial);
+        capMesh.position.set(pocket.center.x, pocket.center.y, 0.62);
+        capMesh.rotation.z = pocketRotationZ;
+      } else {
+        const capGeometry = new THREE.CylinderGeometry(
+          visualRadius * 1.02,
+          visualRadius * 1.02,
+          capThickness,
+          48,
+          1,
+          false,
+          thetaStart,
+          thetaLength
+        );
+        capMesh = new THREE.Mesh(capGeometry, capMaterial.clone());
+        capMesh.position.set(pocket.center.x, pocketY, 0.6);
+        capMesh.rotation.x = Math.PI / 2;
+        capMesh.rotation.z = pocketRotationZ;
+      }
+
       capMesh.renderOrder = this.layerOrder.orderCaps;
       capMesh.visible = this.layerVisibility.showCaps;
       this.enforceRenderOrderControl(capMesh);
@@ -2364,6 +2469,12 @@ export class Renderer3D extends BaseRenderer {
     this.pocketMeshes.forEach((mesh) => {
       mesh.renderOrder = this.layerOrder.orderPockets;
     });
+    this.pocketBottomMeshes.forEach((mesh) => {
+      mesh.renderOrder = this.layerOrder.orderPockets - 0.2;
+    });
+    this.pocketGradientMeshes.forEach((mesh) => {
+      mesh.renderOrder = this.layerOrder.orderPockets + 0.1;
+    });
     this.pocketCapMeshes.forEach((mesh) => {
       mesh.renderOrder = this.layerOrder.orderCaps;
     });
@@ -2437,9 +2548,7 @@ export class Renderer3D extends BaseRenderer {
         if (this.railFillMesh) this.railFillMesh.visible = visible;
         break;
       case 'showPockets':
-        this.pocketMeshes.forEach((mesh) => (mesh.visible = visible));
-        this.pocketShadowMeshes.forEach((mesh) => (mesh.visible = visible));
-        this.pocketHighlightMeshes.forEach((mesh) => (mesh.visible = visible));
+        this.applyPocketsVisibility(visible);
         break;
       case 'showCaps':
         this.pocketCapMeshes.forEach((mesh) => (mesh.visible = visible));
@@ -2465,6 +2574,71 @@ export class Renderer3D extends BaseRenderer {
     if (layer === 'showUIOverlay' || layer === 'showReferenceOverlay') {
       this.updateCanvasZIndex();
     }
+  }
+
+  setDebugMode(enabled: boolean) {
+    if (this.debugMode === enabled) return;
+    this.debugMode = enabled;
+    this.updatePocketDebugMaterials();
+  }
+
+  private applyPocketsVisibility(visible: boolean) {
+    this.pocketMeshes.forEach((mesh) => (mesh.visible = visible));
+    this.pocketBottomMeshes.forEach((mesh) => (mesh.visible = visible));
+    const gradientVisible = visible && !this.debugMode;
+    this.pocketGradientMeshes.forEach((mesh) => (mesh.visible = gradientVisible));
+    this.pocketShadowMeshes.forEach((mesh) => (mesh.visible = visible));
+    this.pocketHighlightMeshes.forEach((mesh) => (mesh.visible = visible));
+  }
+
+  private updatePocketDebugMaterials() {
+    const wallDebugColor = new THREE.Color('#ff4fa2');
+    const wallBaseFallback = new THREE.Color(0x0a0a0a);
+    const floorBaseFallback = new THREE.Color(0x000000);
+    const capDebugColor = new THREE.Color('#1ec8ff');
+    const capBaseFallback = new THREE.Color(0xffffff);
+
+    const applyColor = (mesh: THREE.Mesh, fallback: THREE.Color, debugColor: THREE.Color, useDebug: boolean) => {
+      const material = mesh.material as THREE.MeshBasicMaterial | undefined;
+      if (!material) return;
+      material.userData = material.userData ?? {};
+      if (!material.userData.baseColor) {
+        material.userData.baseColor = material.color?.clone() ?? fallback.clone();
+      }
+      const baseColor: THREE.Color = material.userData.baseColor ?? fallback;
+      if (useDebug) {
+        material.color.copy(debugColor);
+      } else {
+        material.color.copy(baseColor);
+      }
+      material.needsUpdate = true;
+    };
+
+    this.pocketMeshes.forEach((mesh) => applyColor(mesh, wallBaseFallback, wallDebugColor, this.debugMode));
+    this.pocketBottomMeshes.forEach((mesh) => applyColor(mesh, floorBaseFallback, wallDebugColor, this.debugMode));
+
+    this.pocketCapMeshes.forEach((mesh) => {
+      const material = mesh.material as THREE.MeshBasicMaterial | undefined;
+      if (!material) return;
+      material.userData = material.userData ?? {};
+      if (!material.userData.baseColor) {
+        material.userData.baseColor = material.color?.clone() ?? capBaseFallback.clone();
+      }
+      if (!material.userData.baseMap && material.map) {
+        material.userData.baseMap = material.map;
+      }
+      const baseColor: THREE.Color = material.userData.baseColor ?? capBaseFallback;
+      if (this.debugMode) {
+        material.map = null;
+        material.color.copy(capDebugColor);
+      } else {
+        material.map = material.userData.baseMap ?? this.getPocketGradientTexture();
+        material.color.copy(baseColor);
+      }
+      material.needsUpdate = true;
+    });
+
+    this.applyPocketsVisibility(this.layerVisibility.showPockets);
   }
 
   private enforceRenderOrderControl(object: THREE.Object3D, options?: { disableDepth?: boolean }) {

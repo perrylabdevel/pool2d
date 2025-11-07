@@ -150,6 +150,8 @@ metalness: 0.2
 
 **Components per pocket:**
 
+> **Side-pocket orientation note:** Side pockets are authored as semicircles (cylindrical wedges) so the flat chord hugs the cushion edge while the curved lip faces the rail opening. Their centers stay outside the playfield, but we render the visual meshes slightly inset using `SIDE_POCKET_VISUAL_INSET` (inches) so they appear tucked underneath the cushion without protruding into the felt.
+
 **a) Cylinder (tapered walls):**
 
 - Top radius: `visualRadius` (2.5" default)
@@ -202,6 +204,12 @@ color: '#0a0a0a' (near black)
 opacity: 0.75
 transparent: true
 ```
+
+**Side pocket specifics:**
+
+- Caps are rendered as full circular discs (slightly larger than the visual radius) centered on the true pocket position so they visibly cover the frame opening.
+- Material is cloned per cap with `side = DoubleSide`, full opacity, and z-offset of ~0.62 so the ring cleanly masks rails/frame without z-fighting.
+- This differs from corner caps (still tapered cylinders) to keep the semicircle wall cutout while letting the overlay show a circular “hole” into the frame.
 
 ---
 
