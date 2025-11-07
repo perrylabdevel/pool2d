@@ -1,8 +1,11 @@
 /**
  * Geometry Conversion Utilities
  *
- * Converts between modern angle-based geometry and legacy tangent-derivation geometry.
+ * Converts between modern mouth/throat-width geometry and legacy tangent-derivation geometry.
  * This allows gradual migration while maintaining backwards compatibility.
+ *
+ * Modern geometry uses direct physical measurements (mouth width, throat width, depths),
+ * while legacy geometry uses derived jaw positions from mathematical parameters.
  */
 
 import { CONFIG } from '../config';
@@ -42,13 +45,14 @@ const PLAY_HALF_W_IN = 50.0;  // Half width of play area
 const PLAY_HALF_H_IN = 25.0;  // Half height of play area
 
 /**
- * Convert modern angle-based geometry to legacy tangent-derivation parameters
+ * Convert modern mouth/throat-width geometry to legacy tangent-derivation parameters
  *
  * Strategy:
- * 1. Calculate where straight rail should end based on jaw angle and depth
- * 2. Set throat positions from opening width
- * 3. Use reasonable defaults for frame offset and reference radius
- * 4. Use overrides to ensure exact geometry (bypassing derivation)
+ * 1. Directly map mouth width to jaw outer position
+ * 2. Directly map throat width to jaw inner position
+ * 3. Map rail depth and jaw depth to Y positions
+ * 4. Use reasonable defaults for frame offset and reference radius
+ * 5. Use overrides to ensure exact geometry (bypassing derivation)
  */
 export function modernToLegacy(modern: ModernPocketGeometry): LegacyGeometry {
   const side = modernPocketToLegacySide(modern.side);
@@ -61,7 +65,7 @@ export function modernToLegacy(modern: ModernPocketGeometry): LegacyGeometry {
     SIDE_INNER_Y_IN: side.innerY,
     SIDE_JAW_OUTER_OVERRIDE_IN: side.jawOuterX,
     SIDE_JAW_INNER_OVERRIDE_IN: side.jawInnerX,
-    SIDE_THROAT_WIDTH_IN: modern.side.opening,
+    SIDE_THROAT_WIDTH_IN: modern.side.throatWidth,
     JAW_REF_RADIUS_IN: side.refRadius,
     SIDE_POCKET_OUTWARD_OFFSET_IN: 0.25, // Standard offset
     JAW_CURVE_BLEND: modern.side.railCurve ?? 0.0,
@@ -72,7 +76,7 @@ export function modernToLegacy(modern: ModernPocketGeometry): LegacyGeometry {
     CORNER_TARGET_Y_IN: corner.targetY,
     CORNER_JAW_X_OVERRIDE_IN: corner.jawX,
     CORNER_JAW_Y_OVERRIDE_IN: corner.jawY,
-    CORNER_THROAT_WIDTH_IN: modern.corner.opening,
+    CORNER_THROAT_WIDTH_IN: modern.corner.throatWidth,
     CORNER_JAW_REF_RADIUS_IN: corner.refRadius,
 
     // Global parameters
@@ -83,6 +87,12 @@ export function modernToLegacy(modern: ModernPocketGeometry): LegacyGeometry {
 
 /**
  * Convert modern side pocket config to legacy parameters
+ *
+ * Direct mapping from physical measurements:
+ * - mouthWidth → JAW_X_OUTER (width at straight rail end)
+ * - throatWidth → JAW_X_INNER (width at narrowest point)
+ * - railDepth → distance from play edge to straight rail
+ * - jawDepth → distance from straight rail to throat
  */
 function modernPocketToLegacySide(side: PocketConfig): {
   frameOffset: number;
@@ -92,35 +102,16 @@ function modernPocketToLegacySide(side: PocketConfig): {
   jawOuterX: number;
   jawInnerX: number;
 } {
-  // Convert jaw angle to radians
-  const jawAngleRad = (side.jawAngle * Math.PI) / 180;
+  // Direct mapping from physical measurements
+  const jawOuterX = side.mouthWidth / 2;
+  const jawInnerX = side.throatWidth / 2;
 
-  // Calculate throat half-width
-  const throatHalfWidth = side.opening / 2;
-
-  // Side pocket center is at Y = PLAY_HALF_H_IN + outward offset
-  const sideOutwardOffset = 0.25; // Standard
-  const pocketCenterY = PLAY_HALF_H_IN + sideOutwardOffset;
-
-  // Straight Y is where the jaw meets the straight rail
-  // Depth is measured from play area edge (PLAY_HALF_H_IN), not from throat
-  const straightY = PLAY_HALF_H_IN - side.depth;
-
-  // Inner Y (throat) position - between straight and mouth
-  const innerY = pocketCenterY;
-
-  // Calculate jaw X positions based on angle
-  // The jaw angle is measured along the rail from straightY to innerY
-  // tan(angle) = horizontal_distance / vertical_distance
-  const verticalDistance = innerY - straightY;
-  const horizontalSpread = verticalDistance * Math.tan(jawAngleRad);
-
-  // Jaw positions
-  const jawInnerX = throatHalfWidth;
-  const jawOuterX = throatHalfWidth + horizontalSpread;
+  // Y positions calculated from depths
+  const straightY = PLAY_HALF_H_IN - side.railDepth;
+  const innerY = straightY + side.jawDepth;
 
   // Use reasonable defaults for derivation parameters
-  // (These won't be used since we're setting overrides, but they need to be valid)
+  // (won't be used since we're setting overrides)
   const frameOffset = 2.0;
   const refRadius = 4.0;
 
@@ -136,6 +127,9 @@ function modernPocketToLegacySide(side: PocketConfig): {
 
 /**
  * Convert modern corner pocket config to legacy parameters
+ *
+ * Direct mapping from physical measurements for corner pockets.
+ * Corner pockets are oriented at 45° from the table corner.
  */
 function modernPocketToLegacyCorner(corner: PocketConfig): {
   frameOffset: number;
@@ -145,37 +139,28 @@ function modernPocketToLegacyCorner(corner: PocketConfig): {
   jawX: number;
   jawY: number;
 } {
-  // Convert jaw angle to radians
-  const jawAngleRad = (corner.jawAngle * Math.PI) / 180;
-
-  // Calculate throat half-width
-  const throatHalfWidth = corner.opening / 2;
-
   // Corner pocket center is at the corner
   const pocketCenterX = PLAY_HALF_W_IN;
   const pocketCenterY = PLAY_HALF_H_IN;
 
-  // Calculate jaw positions based on angle and depth
-  // For corner pockets, the geometry is more complex due to the 45° orientation
-  // We'll use a simplified approach
+  // For corner pockets at 45°, the throat width is measured perpendicular to the 45° line
+  // Throat position: distance from corner along 45° line
+  const throatHalfWidth = corner.throatWidth / 2;
+  const throatDistFromCorner = throatHalfWidth / Math.sqrt(2);
 
-  // The jaw transition points are depth distance from the corner
-  // At 45° from the corner, so depth / √2 in each direction
-  const depthDiagonal = corner.depth / Math.sqrt(2);
+  const throatX = pocketCenterX - throatDistFromCorner;
+  const throatY = pocketCenterY - throatDistFromCorner;
 
-  // Throat positions (where pocket narrows)
-  const throatX = pocketCenterX - throatHalfWidth / Math.sqrt(2);
-  const throatY = pocketCenterY - throatHalfWidth / Math.sqrt(2);
+  // Mouth position: further from corner by jawDepth along 45° line
+  const mouthHalfWidth = corner.mouthWidth / 2;
+  const mouthDistFromCorner = mouthHalfWidth / Math.sqrt(2);
 
-  // Jaw positions (where angled rail meets straight rail)
-  const horizontalSpread = corner.depth * Math.tan(jawAngleRad);
+  const jawX = pocketCenterX - mouthDistFromCorner - (corner.jawDepth / Math.sqrt(2));
+  const jawY = pocketCenterY - mouthDistFromCorner - (corner.jawDepth / Math.sqrt(2));
 
-  const jawX = throatX - horizontalSpread / Math.sqrt(2);
-  const jawY = throatY - horizontalSpread / Math.sqrt(2);
-
-  // Straight rail positions (where the straight rail ends before curving into pocket)
-  const straightX = jawX;
-  const targetY = jawY;
+  // Straight rail positions (where the straight rail ends before entering pocket)
+  const straightX = jawX - (corner.railDepth / Math.sqrt(2));
+  const targetY = jawY - (corner.railDepth / Math.sqrt(2));
 
   // Use reasonable defaults for derivation parameters
   const frameOffset = 4.0;
@@ -192,12 +177,13 @@ function modernPocketToLegacyCorner(corner: PocketConfig): {
 }
 
 /**
- * Convert legacy tangent-derivation geometry to modern angle-based parameters
+ * Convert legacy tangent-derivation geometry to modern mouth/throat-width parameters
  *
  * Strategy:
- * 1. Use existing jaw positions (derived or overridden) to calculate angles
- * 2. Extract opening widths from throat positions
- * 3. Calculate depth from straight rail to throat positions
+ * 1. Use existing jaw positions (derived or overridden) to extract widths
+ * 2. Calculate mouth width from jaw outer positions
+ * 3. Calculate throat width from jaw inner positions
+ * 4. Extract depths from Y positions
  */
 export function legacyToModern(legacy: LegacyGeometry): ModernPocketGeometry {
   // Recreate the derivation to get actual jaw positions
@@ -246,6 +232,11 @@ export function legacyToModern(legacy: LegacyGeometry): ModernPocketGeometry {
 
 /**
  * Convert legacy side jaw positions to modern pocket config
+ *
+ * Reverse mapping from legacy jaw positions to physical measurements:
+ * - JAW_X_OUTER → mouthWidth
+ * - JAW_X_INNER → throatWidth
+ * - Y positions → railDepth and jawDepth
  */
 function legacySideToModernPocket(
   jawOuterX: number,
@@ -254,24 +245,22 @@ function legacySideToModernPocket(
   innerY: number,
   curveBlend: number
 ): PocketConfig {
-  // Opening width is 2x throat half-width
-  const opening = jawInnerX * 2;
+  // Direct mapping from jaw positions to widths
+  const mouthWidth = jawOuterX * 2;
+  const throatWidth = jawInnerX * 2;
 
-  // Depth is distance from straight rail to throat
-  const depth = innerY - straightY;
-
-  // Calculate jaw angle from horizontal spread and depth
-  const horizontalSpread = jawOuterX - jawInnerX;
-  const jawAngleRad = Math.atan2(horizontalSpread, depth);
-  const jawAngle = (jawAngleRad * 180) / Math.PI;
+  // Calculate depths from Y positions
+  const railDepth = PLAY_HALF_H_IN - straightY;
+  const jawDepth = innerY - straightY;
 
   // Shelf depth (use a reasonable default)
   const shelfDepth = 0.25;
 
   return {
-    opening,
-    jawAngle,
-    depth,
+    mouthWidth,
+    throatWidth,
+    railDepth,
+    jawDepth,
     shelfDepth,
     railCurve: curveBlend,
   };
@@ -279,6 +268,8 @@ function legacySideToModernPocket(
 
 /**
  * Convert legacy corner jaw positions to modern pocket config
+ *
+ * Reverse mapping for corner pockets (oriented at 45°).
  */
 function legacyCornerToModernPocket(
   jawX: number,
@@ -287,28 +278,36 @@ function legacyCornerToModernPocket(
   straightY: number,
   shelfDepth: number
 ): PocketConfig {
-  // Corner pocket opening (throat width)
-  // Distance from jaw to corner along 45° line
-  const throatHalfWidth = (PLAY_HALF_W_IN - jawX) * Math.sqrt(2);
-  const opening = throatHalfWidth * 2;
+  // Corner pocket center
+  const pocketCenterX = PLAY_HALF_W_IN;
+  const pocketCenterY = PLAY_HALF_H_IN;
 
-  // Depth from straight rail to throat
-  const depthX = straightX - jawX;
-  const depthY = straightY - jawY;
-  const depth = Math.sqrt(depthX * depthX + depthY * depthY);
+  // Calculate throat width from jaw inner position
+  // For 45° pockets, the distance from corner to throat along the diagonal
+  const throatDistFromCorner = Math.sqrt(
+    Math.pow(pocketCenterX - jawX, 2) + Math.pow(pocketCenterY - jawY, 2)
+  );
+  const throatHalfWidth = throatDistFromCorner * Math.sqrt(2);
+  const throatWidth = throatHalfWidth * 2;
 
-  // Calculate jaw angle
-  // For corner pockets, this is more complex due to 45° orientation
-  // Approximate using the same logic as side pockets
-  const horizontalSpread = straightX - jawX;
-  const verticalDist = Math.abs(straightY - jawY);
-  const jawAngleRad = Math.atan2(horizontalSpread, verticalDist);
-  const jawAngle = (jawAngleRad * 180) / Math.PI;
+  // Estimate mouth width from straight rail position
+  // This is an approximation; perfect round-trip requires stored values
+  const straightDistFromCorner = Math.sqrt(
+    Math.pow(pocketCenterX - straightX, 2) + Math.pow(pocketCenterY - straightY, 2)
+  );
+
+  // Calculate rail depth and jaw depth from positions
+  const railDepth = (straightDistFromCorner - throatDistFromCorner) * Math.sqrt(2);
+  const jawDepth = 1.0; // Default value
+
+  // Approximate mouth width
+  const mouthWidth = throatWidth + (2 * jawDepth * 0.5); // Rough estimate
 
   return {
-    opening,
-    jawAngle,
-    depth,
+    mouthWidth,
+    throatWidth,
+    railDepth,
+    jawDepth,
     shelfDepth,
     railCurve: 0.0,
   };

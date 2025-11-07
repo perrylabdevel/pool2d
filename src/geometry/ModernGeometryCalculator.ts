@@ -1,8 +1,9 @@
 /**
  * Modern Geometry Calculator
  *
- * Direct angle-based calculation of pocket geometry.
- * Much simpler than legacy tangent-derivation approach.
+ * Direct width-based calculation of pocket geometry using physical measurements.
+ * Uses mouth width, throat width, and depths instead of derived angles.
+ * Much simpler and more intuitive than legacy tangent-derivation approach.
  */
 
 import { PocketConfig } from './ModernGeometry';
@@ -48,10 +49,10 @@ const PLAY_HALF_W_IN = 50.0;
 const PLAY_HALF_H_IN = 25.0;
 
 /**
- * Calculate side pocket jaw points from angle-based parameters
+ * Calculate side pocket jaw points from physical measurements
  *
- * This is the core of the new system - simple trigonometry replaces
- * complex tangent derivations.
+ * Direct mapping from mouth width, throat width, and depths to jaw positions.
+ * No angle calculations needed - the angle emerges naturally from the geometry.
  *
  * @param config Side pocket configuration
  * @param outwardOffset How far pocket extends beyond play area (default: 0.25")
@@ -61,43 +62,29 @@ export function calculateSideJawPoints(
   config: PocketConfig,
   outwardOffset: number = 0.25
 ): SideJawPoints {
-  // Convert jaw angle to radians
-  const jawAngleRad = (config.jawAngle * Math.PI) / 180;
+  // Calculate jaw outer (at straight rail) from mouth width
+  const jawOuterX = config.mouthWidth / 2;
 
-  // Throat half-width
-  const throatHalfWidth = config.opening / 2;
+  // Calculate jaw inner (at throat) from throat width
+  const jawInnerX = config.throatWidth / 2;
 
-  // Side pocket center Y position (extends beyond play area)
+  // Calculate Y positions from depths
+  const straightY = PLAY_HALF_H_IN - config.railDepth;
+  const throatY = straightY + config.jawDepth;
   const pocketCenterY = PLAY_HALF_H_IN + outwardOffset;
 
-  // Throat position (at pocket center)
-  const throatY = pocketCenterY;
-  const throatX = throatHalfWidth;
-
-  // Straight rail ends 'depth' distance back from throat
-  const straightY = throatY - config.depth;
-
-  // Calculate horizontal spread from throat to jaw based on angle
-  // tan(angle) = horizontal / vertical
-  // horizontal = vertical * tan(angle)
-  const horizontalSpread = config.depth * Math.tan(jawAngleRad);
-
-  // Jaw outer position (where straight rail meets jaw)
-  const jawOuterX = throatX + horizontalSpread;
-  const jawOuterY = straightY;
-
   return {
-    jawOuter: { x: jawOuterX, y: jawOuterY },
-    jawInner: { x: throatX, y: throatY },
+    jawOuter: { x: jawOuterX, y: straightY },
+    jawInner: { x: jawInnerX, y: throatY },
     mouth: { x: 0, y: pocketCenterY },
   };
 }
 
 /**
- * Calculate corner pocket jaw points from angle-based parameters
+ * Calculate corner pocket jaw points from physical measurements
  *
- * Corner pockets are oriented at 45° and have more complex geometry,
- * but the angle-based approach still simplifies the calculation.
+ * Corner pockets are oriented at 45° from the table corner.
+ * Direct mapping from mouth width, throat width, and depths.
  *
  * @param config Corner pocket configuration
  * @returns Jaw points for northeast corner (mirror for others)
@@ -105,39 +92,27 @@ export function calculateSideJawPoints(
 export function calculateCornerJawPoints(
   config: PocketConfig
 ): CornerJawPoints {
-  // Convert jaw angle to radians
-  const jawAngleRad = (config.jawAngle * Math.PI) / 180;
-
   // Corner pocket is at the play area corner
   const cornerX = PLAY_HALF_W_IN;
   const cornerY = PLAY_HALF_H_IN;
 
-  // Throat half-width (diagonal opening)
-  const throatHalfWidth = config.opening / 2;
-
-  // For a 45° oriented pocket, the throat point is at:
-  // - Distance throatHalfWidth/√2 inward from corner in both X and Y
+  // Calculate throat position from throat width
+  // For 45° pockets, throat is measured perpendicular to the 45° line
+  const throatHalfWidth = config.throatWidth / 2;
   const throatOffset = throatHalfWidth / Math.sqrt(2);
   const throatX = cornerX - throatOffset;
   const throatY = cornerY - throatOffset;
 
-  // Depth extends inward from throat at 45°
-  const depthOffset = config.depth / Math.sqrt(2);
+  // Calculate mouth (jaw) position from mouth width and jaw depth
+  const mouthHalfWidth = config.mouthWidth / 2;
+  const mouthOffset = mouthHalfWidth / Math.sqrt(2);
+  const jawDepthOffset = config.jawDepth / Math.sqrt(2);
 
-  // Jaw points are where straight rails meet the angled pocket transition
-  // For corner pockets, we need to account for the 45° orientation
-
-  // Horizontal spread due to jaw angle
-  const horizontalSpread = config.depth * Math.tan(jawAngleRad);
-  const spreadOffset = horizontalSpread / Math.sqrt(2);
-
-  // Vertical straight rail jaw point (on east side)
-  const jawVerticalX = throatX - depthOffset - spreadOffset;
-  const jawVerticalY = throatY - depthOffset + spreadOffset;
-
-  // Horizontal straight rail jaw point (on north side)
-  const jawHorizontalX = throatX - depthOffset + spreadOffset;
-  const jawHorizontalY = throatY - depthOffset - spreadOffset;
+  // Jaw points (where straight rails meet the jaw transition)
+  const jawVerticalX = cornerX - mouthOffset - jawDepthOffset;
+  const jawVerticalY = cornerY - mouthOffset - jawDepthOffset;
+  const jawHorizontalX = jawVerticalX;
+  const jawHorizontalY = jawVerticalY;
 
   return {
     jawVertical: { x: jawVerticalX, y: jawVerticalY },
@@ -211,6 +186,21 @@ export function createJawCurve(
 }
 
 /**
+ * Calculate jaw angle from pocket geometry
+ *
+ * This is INFORMATIONAL ONLY - not used in geometry calculations.
+ * The jaw angle emerges naturally from the mouth/throat widths and jaw depth.
+ *
+ * @param config Pocket configuration
+ * @returns Jaw angle in degrees (angle of jaw rail from horizontal)
+ */
+export function calculateJawAngle(config: PocketConfig): number {
+  const horizontalTaper = (config.mouthWidth - config.throatWidth) / 2;
+  const angleRad = Math.atan(horizontalTaper / config.jawDepth);
+  return (angleRad * 180) / Math.PI;
+}
+
+/**
  * Calculate effective pocket opening angle at the cushion nose
  *
  * This is different from jaw angle - it's the total opening angle
@@ -247,9 +237,9 @@ export interface JawValidationResult {
 export function validateJawPoints(jawPoints: SideJawPoints): JawValidationResult {
   const warnings: string[] = [];
 
-  // Check that jaw outer is farther from center than jaw inner
+  // Check that mouth (jaw outer) is wider than throat (jaw inner)
   if (jawPoints.jawOuter.x <= jawPoints.jawInner.x) {
-    warnings.push('Jaw outer should be farther from center than jaw inner');
+    warnings.push('Mouth should be wider than throat');
   }
 
   // Check that jaw is behind throat
@@ -257,20 +247,20 @@ export function validateJawPoints(jawPoints: SideJawPoints): JawValidationResult
     warnings.push('Jaw should be behind (lower Y) throat');
   }
 
-  // Check reasonable opening width (2-6 inches)
-  const openingWidth = jawPoints.jawInner.x * 2;
-  if (openingWidth < 2.0) {
-    warnings.push(`Opening width ${openingWidth.toFixed(2)}" is very tight (< 2")`);
-  } else if (openingWidth > 6.0) {
-    warnings.push(`Opening width ${openingWidth.toFixed(2)}" is very loose (> 6")`);
+  // Check reasonable throat width (2-6 inches)
+  const throatWidth = jawPoints.jawInner.x * 2;
+  if (throatWidth < 2.0) {
+    warnings.push(`Throat width ${throatWidth.toFixed(2)}" is very tight (< 2")`);
+  } else if (throatWidth > 6.0) {
+    warnings.push(`Throat width ${throatWidth.toFixed(2)}" is very loose (> 6")`);
   }
 
-  // Check reasonable depth (0-3 inches for side pockets)
-  const depth = jawPoints.jawInner.y - jawPoints.jawOuter.y;
-  if (depth < 0) {
-    warnings.push('Negative pocket depth - invalid geometry');
-  } else if (depth > 3.0) {
-    warnings.push(`Pocket depth ${depth.toFixed(2)}" is very deep (> 3")`);
+  // Check reasonable jaw depth (0-3 inches for side pockets)
+  const jawDepth = jawPoints.jawInner.y - jawPoints.jawOuter.y;
+  if (jawDepth < 0) {
+    warnings.push('Negative jaw depth - invalid geometry');
+  } else if (jawDepth > 3.0) {
+    warnings.push(`Jaw depth ${jawDepth.toFixed(2)}" is very deep (> 3")`);
   }
 
   return {

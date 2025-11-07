@@ -1,32 +1,39 @@
 /**
  * Modern Pocket Geometry System
  *
- * This module defines a new angle-based parametrization for pocket geometry
+ * This module defines a physical measurement-based parametrization for pocket geometry
  * that is more intuitive and easier to configure than the legacy tangent-derivation system.
  *
  * Key differences from legacy system:
- * - Direct angle control instead of derived positions
- * - Physical measurements (opening width, jaw angle) instead of mathematical parameters
+ * - Direct width control (mouth and throat) instead of derived positions
+ * - Physical measurements (mouth width, throat width, depths) instead of mathematical parameters
+ * - Jaw angle emerges naturally from geometry instead of being an input
  * - Template-based quick setup with fine-tuning capability
  */
 
 /**
- * Pocket configuration for a single pocket type (side or corner)
+ * Pocket configuration using physical measurements
+ *
+ * Pockets have two widths (mouth and throat) and two depths
+ * (rail depth and jaw depth).
  */
 export interface PocketConfig {
-  /** Width of pocket opening at the throat (narrowest point) in inches */
-  opening: number;
+  /** Width at cushion nose / mouth (where straight rail ends), in inches */
+  mouthWidth: number;
 
-  /** Angle between the jaw rail and straight rail in degrees (typically 3-7°) */
-  jawAngle: number;
+  /** Width at throat (narrowest point, deeper in pocket), in inches */
+  throatWidth: number;
 
-  /** How far the pocket extends into the table in inches */
-  depth: number;
+  /** Distance from play area edge to straight rail end, in inches */
+  railDepth: number;
 
-  /** Depth of the shelf (flat area) inside pocket in inches */
+  /** Distance from straight rail to throat (jaw section), in inches */
+  jawDepth: number;
+
+  /** Depth of shelf (flat area inside pocket), in inches */
   shelfDepth: number;
 
-  /** Blend factor for rail curvature: 0=straight transition, 1=fully curved */
+  /** Blend factor for rail curvature: 0=straight, 1=curved */
   railCurve?: number;
 }
 
@@ -58,6 +65,7 @@ export interface ModernPocketGeometry {
  */
 export enum PocketTemplate {
   CUSTOM = 'custom',
+  CURRENT_DEFAULT = 'current_default',
   BCA_TOURNAMENT_TIGHT = 'bca_tournament_tight',
   BCA_TOURNAMENT_MEDIUM = 'bca_tournament_medium',
   BCA_TOURNAMENT_LOOSE = 'bca_tournament_loose',
@@ -73,16 +81,42 @@ export const GEOMETRY_TEMPLATES: Record<PocketTemplate, ModernPocketGeometry> = 
   [PocketTemplate.CUSTOM]: {
     template: PocketTemplate.CUSTOM,
     side: {
-      opening: 5.25,
-      jawAngle: 6.0,
-      depth: 1.5,        // Distance from play edge to straight rail end
+      mouthWidth: 5.5,
+      throatWidth: 4.625,
+      railDepth: 1.5,
+      jawDepth: 1.1,
       shelfDepth: 0.3,
       railCurve: 0.0,
     },
     corner: {
-      opening: 4.75,
-      jawAngle: 5.0,
-      depth: 1.75,
+      mouthWidth: 5.0,
+      throatWidth: 4.125,
+      railDepth: 1.75,
+      jawDepth: 1.0,
+      shelfDepth: 1.75,
+      railCurve: 0.0,
+    },
+    global: {
+      cutAngleAdjust: 0,
+      verticalAngle: 13.5,
+    },
+  },
+
+  [PocketTemplate.CURRENT_DEFAULT]: {
+    template: PocketTemplate.CURRENT_DEFAULT,
+    side: {
+      mouthWidth: 10.97,    // Extremely wide (legacy default)
+      throatWidth: 9.70,    // Extremely wide
+      railDepth: 1.5,
+      jawDepth: 1.1,
+      shelfDepth: 0.3,
+      railCurve: 0.0,
+    },
+    corner: {
+      mouthWidth: 5.0,      // Reasonable
+      throatWidth: 4.5,
+      railDepth: 1.75,
+      jawDepth: 1.0,
       shelfDepth: 1.75,
       railCurve: 0.0,
     },
@@ -95,16 +129,18 @@ export const GEOMETRY_TEMPLATES: Record<PocketTemplate, ModernPocketGeometry> = 
   [PocketTemplate.BCA_TOURNAMENT_TIGHT]: {
     template: PocketTemplate.BCA_TOURNAMENT_TIGHT,
     side: {
-      opening: 5.0,
-      jawAngle: 5.5,
-      depth: 1.4,        // Tight - straight rail closer to center
+      mouthWidth: 5.375,    // BCA minimum
+      throatWidth: 4.375,   // BCA minimum
+      railDepth: 1.4,       // Tighter play area
+      jawDepth: 1.1,
       shelfDepth: 0.25,
       railCurve: 0.0,
     },
     corner: {
-      opening: 4.5,
-      jawAngle: 4.5,
-      depth: 1.625,
+      mouthWidth: 4.875,    // BCA minimum
+      throatWidth: 4.0,     // BCA minimum
+      railDepth: 1.625,
+      jawDepth: 1.0,
       shelfDepth: 1.625,
       railCurve: 0.0,
     },
@@ -117,16 +153,18 @@ export const GEOMETRY_TEMPLATES: Record<PocketTemplate, ModernPocketGeometry> = 
   [PocketTemplate.BCA_TOURNAMENT_MEDIUM]: {
     template: PocketTemplate.BCA_TOURNAMENT_MEDIUM,
     side: {
-      opening: 5.25,
-      jawAngle: 6.0,
-      depth: 1.5,        // Medium depth
+      mouthWidth: 5.5,      // BCA mid-range
+      throatWidth: 4.625,   // BCA mid-range
+      railDepth: 1.5,
+      jawDepth: 1.1,
       shelfDepth: 0.3,
       railCurve: 0.0,
     },
     corner: {
-      opening: 4.75,
-      jawAngle: 5.0,
-      depth: 1.75,
+      mouthWidth: 5.0,      // BCA mid-range
+      throatWidth: 4.125,   // BCA mid-range
+      railDepth: 1.75,
+      jawDepth: 1.0,
       shelfDepth: 1.75,
       railCurve: 0.0,
     },
@@ -139,16 +177,18 @@ export const GEOMETRY_TEMPLATES: Record<PocketTemplate, ModernPocketGeometry> = 
   [PocketTemplate.BCA_TOURNAMENT_LOOSE]: {
     template: PocketTemplate.BCA_TOURNAMENT_LOOSE,
     side: {
-      opening: 5.5,
-      jawAngle: 6.5,
-      depth: 1.6,        // Loose - straight rail farther from center
+      mouthWidth: 5.625,    // BCA maximum
+      throatWidth: 4.875,   // BCA maximum
+      railDepth: 1.6,       // Looser play area
+      jawDepth: 1.1,
       shelfDepth: 0.375,
       railCurve: 0.0,
     },
     corner: {
-      opening: 5.0,
-      jawAngle: 5.5,
-      depth: 1.875,
+      mouthWidth: 5.125,    // BCA maximum
+      throatWidth: 4.25,    // BCA maximum
+      railDepth: 1.875,
+      jawDepth: 1.0,
       shelfDepth: 1.875,
       railCurve: 0.0,
     },
@@ -161,16 +201,18 @@ export const GEOMETRY_TEMPLATES: Record<PocketTemplate, ModernPocketGeometry> = 
   [PocketTemplate.BRUNSWICK_GOLD_CROWN]: {
     template: PocketTemplate.BRUNSWICK_GOLD_CROWN,
     side: {
-      opening: 5.0625,  // 5 1/16"
-      jawAngle: 5.5,
-      depth: 1.5,
+      mouthWidth: 5.5,
+      throatWidth: 4.5,
+      railDepth: 1.5,
+      jawDepth: 1.1,
       shelfDepth: 0.25,
       railCurve: 0.0,
     },
     corner: {
-      opening: 4.5625,  // 4 9/16"
-      jawAngle: 4.5,
-      depth: 1.7,
+      mouthWidth: 4.9,
+      throatWidth: 4.0,
+      railDepth: 1.7,
+      jawDepth: 1.0,
       shelfDepth: 1.7,
       railCurve: 0.0,
     },
@@ -183,16 +225,18 @@ export const GEOMETRY_TEMPLATES: Record<PocketTemplate, ModernPocketGeometry> = 
   [PocketTemplate.VALLEY_BAR_TABLE]: {
     template: PocketTemplate.VALLEY_BAR_TABLE,
     side: {
-      opening: 5.375,  // 5 3/8"
-      jawAngle: 6.5,
-      depth: 1.6,        // Looser pockets
+      mouthWidth: 6.0,      // Generous for bar play
+      throatWidth: 5.0,
+      railDepth: 1.6,
+      jawDepth: 1.2,
       shelfDepth: 0.375,
       railCurve: 0.0,
     },
     corner: {
-      opening: 4.6875, // 4 11/16"
-      jawAngle: 5.5,
-      depth: 2.0,
+      mouthWidth: 5.25,
+      throatWidth: 4.5,
+      railDepth: 2.0,
+      jawDepth: 1.0,
       shelfDepth: 2.0,
       railCurve: 0.0,
     },
@@ -205,16 +249,18 @@ export const GEOMETRY_TEMPLATES: Record<PocketTemplate, ModernPocketGeometry> = 
   [PocketTemplate.DIAMOND_PRO_AM]: {
     template: PocketTemplate.DIAMOND_PRO_AM,
     side: {
-      opening: 4.0,     // Extremely tight for professional play
-      jawAngle: 5.0,
-      depth: 1.3,        // Very tight - straight rail very close to center
+      mouthWidth: 4.5,      // Extremely tight
+      throatWidth: 3.5,     // Extremely tight
+      railDepth: 1.3,
+      jawDepth: 1.0,
       shelfDepth: 0.25,
       railCurve: 0.0,
     },
     corner: {
-      opening: 4.5,
-      jawAngle: 4.0,    // Very tight
-      depth: 1.5,
+      mouthWidth: 4.5,
+      throatWidth: 3.5,
+      railDepth: 1.5,
+      jawDepth: 1.0,
       shelfDepth: 1.5,
       railCurve: 0.0,
     },
@@ -229,18 +275,20 @@ export const GEOMETRY_TEMPLATES: Record<PocketTemplate, ModernPocketGeometry> = 
  * Valid ranges for geometry parameters
  */
 export const GEOMETRY_RANGES = {
-  corner: {
-    opening: { min: 4.0, max: 5.5, typical: 4.75 },
-    jawAngle: { min: 3.0, max: 7.0, typical: 5.0 },
-    depth: { min: 1.0, max: 2.5, typical: 1.75 },
-    shelfDepth: { min: 1.0, max: 2.5, typical: 1.75 },
+  side: {
+    mouthWidth: { min: 4.0, max: 12.0, typical: 5.5 },
+    throatWidth: { min: 3.0, max: 11.0, typical: 4.625 },
+    railDepth: { min: 0.5, max: 2.5, typical: 1.5 },
+    jawDepth: { min: 0.5, max: 2.0, typical: 1.1 },
+    shelfDepth: { min: 0.0, max: 0.5, typical: 0.25 },
     railCurve: { min: 0.0, max: 1.0, typical: 0.0 },
   },
-  side: {
-    opening: { min: 4.0, max: 6.0, typical: 5.25 },
-    jawAngle: { min: 4.0, max: 8.0, typical: 6.0 },
-    depth: { min: 0.5, max: 2.5, typical: 1.5 },  // Distance from play edge to straight rail
-    shelfDepth: { min: 0.0, max: 0.5, typical: 0.25 },
+  corner: {
+    mouthWidth: { min: 4.0, max: 6.0, typical: 5.0 },
+    throatWidth: { min: 3.0, max: 5.0, typical: 4.125 },
+    railDepth: { min: 1.0, max: 2.5, typical: 1.75 },
+    jawDepth: { min: 0.5, max: 1.5, typical: 1.0 },
+    shelfDepth: { min: 1.0, max: 2.5, typical: 1.75 },
     railCurve: { min: 0.0, max: 1.0, typical: 0.0 },
   },
   global: {
@@ -255,6 +303,7 @@ export const GEOMETRY_RANGES = {
 export function getTemplateName(template: PocketTemplate): string {
   const names: Record<PocketTemplate, string> = {
     [PocketTemplate.CUSTOM]: 'Custom',
+    [PocketTemplate.CURRENT_DEFAULT]: 'Current Default',
     [PocketTemplate.BCA_TOURNAMENT_TIGHT]: 'BCA Tournament - Tight',
     [PocketTemplate.BCA_TOURNAMENT_MEDIUM]: 'BCA Tournament - Medium',
     [PocketTemplate.BCA_TOURNAMENT_LOOSE]: 'BCA Tournament - Loose',
@@ -271,6 +320,7 @@ export function getTemplateName(template: PocketTemplate): string {
 export function getTemplateDescription(template: PocketTemplate): string {
   const descriptions: Record<PocketTemplate, string> = {
     [PocketTemplate.CUSTOM]: 'User-defined custom geometry',
+    [PocketTemplate.CURRENT_DEFAULT]: 'Legacy default (extremely wide side pockets)',
     [PocketTemplate.BCA_TOURNAMENT_TIGHT]: 'Challenging tournament specification',
     [PocketTemplate.BCA_TOURNAMENT_MEDIUM]: 'Standard tournament specification',
     [PocketTemplate.BCA_TOURNAMENT_LOOSE]: 'Forgiving tournament specification',
@@ -297,63 +347,84 @@ export function validateModernGeometry(geometry: ModernPocketGeometry): Validati
   const errors: string[] = [];
   const warnings: string[] = [];
 
-  // Validate corner pocket
-  if (geometry.corner.opening < GEOMETRY_RANGES.corner.opening.min ||
-      geometry.corner.opening > GEOMETRY_RANGES.corner.opening.max) {
-    errors.push(
-      `Corner opening ${geometry.corner.opening}" is out of range ` +
-      `(${GEOMETRY_RANGES.corner.opening.min}-${GEOMETRY_RANGES.corner.opening.max})`
-    );
-  }
-
-  if (geometry.corner.jawAngle < GEOMETRY_RANGES.corner.jawAngle.min ||
-      geometry.corner.jawAngle > GEOMETRY_RANGES.corner.jawAngle.max) {
-    errors.push(
-      `Corner jaw angle ${geometry.corner.jawAngle}° is out of range ` +
-      `(${GEOMETRY_RANGES.corner.jawAngle.min}-${GEOMETRY_RANGES.corner.jawAngle.max})`
-    );
-  }
-
-  if (geometry.corner.depth < GEOMETRY_RANGES.corner.depth.min ||
-      geometry.corner.depth > GEOMETRY_RANGES.corner.depth.max) {
-    errors.push(
-      `Corner depth ${geometry.corner.depth}" is out of range ` +
-      `(${GEOMETRY_RANGES.corner.depth.min}-${GEOMETRY_RANGES.corner.depth.max})`
-    );
-  }
-
   // Validate side pocket
-  if (geometry.side.opening < GEOMETRY_RANGES.side.opening.min ||
-      geometry.side.opening > GEOMETRY_RANGES.side.opening.max) {
+  if (geometry.side.mouthWidth < GEOMETRY_RANGES.side.mouthWidth.min ||
+      geometry.side.mouthWidth > GEOMETRY_RANGES.side.mouthWidth.max) {
     errors.push(
-      `Side opening ${geometry.side.opening}" is out of range ` +
-      `(${GEOMETRY_RANGES.side.opening.min}-${GEOMETRY_RANGES.side.opening.max})`
+      `Side mouth width ${geometry.side.mouthWidth}" is out of range ` +
+      `(${GEOMETRY_RANGES.side.mouthWidth.min}-${GEOMETRY_RANGES.side.mouthWidth.max})`
     );
   }
 
-  if (geometry.side.jawAngle < GEOMETRY_RANGES.side.jawAngle.min ||
-      geometry.side.jawAngle > GEOMETRY_RANGES.side.jawAngle.max) {
+  if (geometry.side.throatWidth < GEOMETRY_RANGES.side.throatWidth.min ||
+      geometry.side.throatWidth > GEOMETRY_RANGES.side.throatWidth.max) {
     errors.push(
-      `Side jaw angle ${geometry.side.jawAngle}° is out of range ` +
-      `(${GEOMETRY_RANGES.side.jawAngle.min}-${GEOMETRY_RANGES.side.jawAngle.max})`
+      `Side throat width ${geometry.side.throatWidth}" is out of range ` +
+      `(${GEOMETRY_RANGES.side.throatWidth.min}-${GEOMETRY_RANGES.side.throatWidth.max})`
     );
   }
 
-  if (geometry.side.depth < GEOMETRY_RANGES.side.depth.min ||
-      geometry.side.depth > GEOMETRY_RANGES.side.depth.max) {
+  if (geometry.side.railDepth < GEOMETRY_RANGES.side.railDepth.min ||
+      geometry.side.railDepth > GEOMETRY_RANGES.side.railDepth.max) {
     errors.push(
-      `Side depth ${geometry.side.depth}" is out of range ` +
-      `(${GEOMETRY_RANGES.side.depth.min}-${GEOMETRY_RANGES.side.depth.max})`
+      `Side rail depth ${geometry.side.railDepth}" is out of range ` +
+      `(${GEOMETRY_RANGES.side.railDepth.min}-${GEOMETRY_RANGES.side.railDepth.max})`
     );
+  }
+
+  if (geometry.side.jawDepth < GEOMETRY_RANGES.side.jawDepth.min ||
+      geometry.side.jawDepth > GEOMETRY_RANGES.side.jawDepth.max) {
+    errors.push(
+      `Side jaw depth ${geometry.side.jawDepth}" is out of range ` +
+      `(${GEOMETRY_RANGES.side.jawDepth.min}-${GEOMETRY_RANGES.side.jawDepth.max})`
+    );
+  }
+
+  // Validate corner pocket
+  if (geometry.corner.mouthWidth < GEOMETRY_RANGES.corner.mouthWidth.min ||
+      geometry.corner.mouthWidth > GEOMETRY_RANGES.corner.mouthWidth.max) {
+    errors.push(
+      `Corner mouth width ${geometry.corner.mouthWidth}" is out of range ` +
+      `(${GEOMETRY_RANGES.corner.mouthWidth.min}-${GEOMETRY_RANGES.corner.mouthWidth.max})`
+    );
+  }
+
+  if (geometry.corner.throatWidth < GEOMETRY_RANGES.corner.throatWidth.min ||
+      geometry.corner.throatWidth > GEOMETRY_RANGES.corner.throatWidth.max) {
+    errors.push(
+      `Corner throat width ${geometry.corner.throatWidth}" is out of range ` +
+      `(${GEOMETRY_RANGES.corner.throatWidth.min}-${GEOMETRY_RANGES.corner.throatWidth.max})`
+    );
+  }
+
+  if (geometry.corner.railDepth < GEOMETRY_RANGES.corner.railDepth.min ||
+      geometry.corner.railDepth > GEOMETRY_RANGES.corner.railDepth.max) {
+    errors.push(
+      `Corner rail depth ${geometry.corner.railDepth}" is out of range ` +
+      `(${GEOMETRY_RANGES.corner.railDepth.min}-${GEOMETRY_RANGES.corner.railDepth.max})`
+    );
+  }
+
+  if (geometry.corner.jawDepth < GEOMETRY_RANGES.corner.jawDepth.min ||
+      geometry.corner.jawDepth > GEOMETRY_RANGES.corner.jawDepth.max) {
+    errors.push(
+      `Corner jaw depth ${geometry.corner.jawDepth}" is out of range ` +
+      `(${GEOMETRY_RANGES.corner.jawDepth.min}-${GEOMETRY_RANGES.corner.jawDepth.max})`
+    );
+  }
+
+  // Validation rules: throat must be narrower than mouth
+  if (geometry.side.throatWidth >= geometry.side.mouthWidth) {
+    errors.push('Side throat must be narrower than mouth');
+  }
+
+  if (geometry.corner.throatWidth >= geometry.corner.mouthWidth) {
+    errors.push('Corner throat must be narrower than mouth');
   }
 
   // Warnings for unusual configurations
-  if (geometry.corner.opening >= geometry.side.opening) {
+  if (geometry.corner.mouthWidth >= geometry.side.mouthWidth) {
     warnings.push('Corner pockets are as wide or wider than side pockets (unusual)');
-  }
-
-  if (geometry.corner.jawAngle >= geometry.side.jawAngle) {
-    warnings.push('Corner jaw angle is as steep or steeper than side jaw angle (unusual)');
   }
 
   return {

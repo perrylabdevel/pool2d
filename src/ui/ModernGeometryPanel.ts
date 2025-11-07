@@ -19,6 +19,7 @@ import {
   validateModernGeometry,
 } from '../geometry/ModernGeometry';
 import { modernToLegacy, applyLegacyGeometry } from '../geometry/GeometryConversion';
+import { calculateJawAngle } from '../geometry/ModernGeometryCalculator';
 
 const formatNumber = (value: number, digits: number = 2): string =>
   value.toFixed(digits).replace(/\.0+$|\.([0-9]*[1-9])0+$/, '.$1').replace(/\.$/, '');
@@ -113,29 +114,40 @@ export class ModernGeometryPanel {
     return `
       <div class="settings-group">
         <h4 class="settings-group-title">📍 Side Pockets</h4>
+        <div style="font-size: 0.8rem; color: #888; margin-bottom: 0.5rem;" id="modern-side-jaw-angle-display">
+          Calculated jaw angle: --
+        </div>
         ${this.sliderRow(
-          'modern-side-opening',
-          'Opening Width (in)',
-          ranges.opening.min,
-          ranges.opening.max,
+          'modern-side-mouth',
+          'Mouth Width (in)',
+          ranges.mouthWidth.min,
+          ranges.mouthWidth.max,
           0.05,
-          ranges.opening.typical
+          ranges.mouthWidth.typical
         )}
         ${this.sliderRow(
-          'modern-side-jaw-angle',
-          'Jaw Angle (°)',
-          ranges.jawAngle.min,
-          ranges.jawAngle.max,
-          0.1,
-          ranges.jawAngle.typical
+          'modern-side-throat',
+          'Throat Width (in)',
+          ranges.throatWidth.min,
+          ranges.throatWidth.max,
+          0.05,
+          ranges.throatWidth.typical
         )}
         ${this.sliderRow(
-          'modern-side-depth',
-          'Pocket Depth (in)',
-          ranges.depth.min,
-          ranges.depth.max,
+          'modern-side-rail-depth',
+          'Rail Depth (in)',
+          ranges.railDepth.min,
+          ranges.railDepth.max,
           0.05,
-          ranges.depth.typical
+          ranges.railDepth.typical
+        )}
+        ${this.sliderRow(
+          'modern-side-jaw-depth',
+          'Jaw Depth (in)',
+          ranges.jawDepth.min,
+          ranges.jawDepth.max,
+          0.05,
+          ranges.jawDepth.typical
         )}
         ${this.sliderRow(
           'modern-side-rail-curve',
@@ -154,29 +166,40 @@ export class ModernGeometryPanel {
     return `
       <div class="settings-group">
         <h4 class="settings-group-title">📐 Corner Pockets</h4>
+        <div style="font-size: 0.8rem; color: #888; margin-bottom: 0.5rem;" id="modern-corner-jaw-angle-display">
+          Calculated jaw angle: --
+        </div>
         ${this.sliderRow(
-          'modern-corner-opening',
-          'Opening Width (in)',
-          ranges.opening.min,
-          ranges.opening.max,
+          'modern-corner-mouth',
+          'Mouth Width (in)',
+          ranges.mouthWidth.min,
+          ranges.mouthWidth.max,
           0.05,
-          ranges.opening.typical
+          ranges.mouthWidth.typical
         )}
         ${this.sliderRow(
-          'modern-corner-jaw-angle',
-          'Jaw Angle (°)',
-          ranges.jawAngle.min,
-          ranges.jawAngle.max,
-          0.1,
-          ranges.jawAngle.typical
+          'modern-corner-throat',
+          'Throat Width (in)',
+          ranges.throatWidth.min,
+          ranges.throatWidth.max,
+          0.05,
+          ranges.throatWidth.typical
         )}
         ${this.sliderRow(
-          'modern-corner-depth',
-          'Pocket Depth (in)',
-          ranges.depth.min,
-          ranges.depth.max,
+          'modern-corner-rail-depth',
+          'Rail Depth (in)',
+          ranges.railDepth.min,
+          ranges.railDepth.max,
           0.05,
-          ranges.depth.typical
+          ranges.railDepth.typical
+        )}
+        ${this.sliderRow(
+          'modern-corner-jaw-depth',
+          'Jaw Depth (in)',
+          ranges.jawDepth.min,
+          ranges.jawDepth.max,
+          0.05,
+          ranges.jawDepth.typical
         )}
         ${this.sliderRow(
           'modern-corner-shelf-depth',
@@ -241,28 +264,37 @@ export class ModernGeometryPanel {
     const sliderConfigs: SliderBindConfig<ModernPocketGeometry>[] = [
       // Side pocket sliders
       {
-        sliderId: 'modern-side-opening',
-        labelId: 'modern-side-opening-val',
+        sliderId: 'modern-side-mouth',
+        labelId: 'modern-side-mouth-val',
         onChange: (v) => {
-          this.currentGeometry.side.opening = v!;
+          this.currentGeometry.side.mouthWidth = v!;
           this.validateAndUpdateUI();
         },
         formatDigits: 2,
       },
       {
-        sliderId: 'modern-side-jaw-angle',
-        labelId: 'modern-side-jaw-angle-val',
+        sliderId: 'modern-side-throat',
+        labelId: 'modern-side-throat-val',
         onChange: (v) => {
-          this.currentGeometry.side.jawAngle = v!;
+          this.currentGeometry.side.throatWidth = v!;
           this.validateAndUpdateUI();
         },
-        formatDigits: 1,
+        formatDigits: 2,
       },
       {
-        sliderId: 'modern-side-depth',
-        labelId: 'modern-side-depth-val',
+        sliderId: 'modern-side-rail-depth',
+        labelId: 'modern-side-rail-depth-val',
         onChange: (v) => {
-          this.currentGeometry.side.depth = v!;
+          this.currentGeometry.side.railDepth = v!;
+          this.validateAndUpdateUI();
+        },
+        formatDigits: 2,
+      },
+      {
+        sliderId: 'modern-side-jaw-depth',
+        labelId: 'modern-side-jaw-depth-val',
+        onChange: (v) => {
+          this.currentGeometry.side.jawDepth = v!;
           this.validateAndUpdateUI();
         },
         formatDigits: 2,
@@ -279,28 +311,37 @@ export class ModernGeometryPanel {
 
       // Corner pocket sliders
       {
-        sliderId: 'modern-corner-opening',
-        labelId: 'modern-corner-opening-val',
+        sliderId: 'modern-corner-mouth',
+        labelId: 'modern-corner-mouth-val',
         onChange: (v) => {
-          this.currentGeometry.corner.opening = v!;
+          this.currentGeometry.corner.mouthWidth = v!;
           this.validateAndUpdateUI();
         },
         formatDigits: 2,
       },
       {
-        sliderId: 'modern-corner-jaw-angle',
-        labelId: 'modern-corner-jaw-angle-val',
+        sliderId: 'modern-corner-throat',
+        labelId: 'modern-corner-throat-val',
         onChange: (v) => {
-          this.currentGeometry.corner.jawAngle = v!;
+          this.currentGeometry.corner.throatWidth = v!;
           this.validateAndUpdateUI();
         },
-        formatDigits: 1,
+        formatDigits: 2,
       },
       {
-        sliderId: 'modern-corner-depth',
-        labelId: 'modern-corner-depth-val',
+        sliderId: 'modern-corner-rail-depth',
+        labelId: 'modern-corner-rail-depth-val',
         onChange: (v) => {
-          this.currentGeometry.corner.depth = v!;
+          this.currentGeometry.corner.railDepth = v!;
+          this.validateAndUpdateUI();
+        },
+        formatDigits: 2,
+      },
+      {
+        sliderId: 'modern-corner-jaw-depth',
+        labelId: 'modern-corner-jaw-depth-val',
+        onChange: (v) => {
+          this.currentGeometry.corner.jawDepth = v!;
           this.validateAndUpdateUI();
         },
         formatDigits: 2,
@@ -327,14 +368,16 @@ export class ModernGeometryPanel {
 
   private syncToUI() {
     // Update all slider values
-    this.setSliderValue('modern-side-opening', this.currentGeometry.side.opening);
-    this.setSliderValue('modern-side-jaw-angle', this.currentGeometry.side.jawAngle);
-    this.setSliderValue('modern-side-depth', this.currentGeometry.side.depth);
+    this.setSliderValue('modern-side-mouth', this.currentGeometry.side.mouthWidth);
+    this.setSliderValue('modern-side-throat', this.currentGeometry.side.throatWidth);
+    this.setSliderValue('modern-side-rail-depth', this.currentGeometry.side.railDepth);
+    this.setSliderValue('modern-side-jaw-depth', this.currentGeometry.side.jawDepth);
     this.setSliderValue('modern-side-rail-curve', this.currentGeometry.side.railCurve ?? 0);
 
-    this.setSliderValue('modern-corner-opening', this.currentGeometry.corner.opening);
-    this.setSliderValue('modern-corner-jaw-angle', this.currentGeometry.corner.jawAngle);
-    this.setSliderValue('modern-corner-depth', this.currentGeometry.corner.depth);
+    this.setSliderValue('modern-corner-mouth', this.currentGeometry.corner.mouthWidth);
+    this.setSliderValue('modern-corner-throat', this.currentGeometry.corner.throatWidth);
+    this.setSliderValue('modern-corner-rail-depth', this.currentGeometry.corner.railDepth);
+    this.setSliderValue('modern-corner-jaw-depth', this.currentGeometry.corner.jawDepth);
     this.setSliderValue('modern-corner-shelf-depth', this.currentGeometry.corner.shelfDepth);
 
     this.validateAndUpdateUI();
@@ -356,6 +399,20 @@ export class ModernGeometryPanel {
   private validateAndUpdateUI() {
     const validation = validateModernGeometry(this.currentGeometry);
     const validationDiv = document.getElementById('modern-geometry-validation');
+
+    // Update jaw angle displays
+    const sideJawAngle = calculateJawAngle(this.currentGeometry.side);
+    const cornerJawAngle = calculateJawAngle(this.currentGeometry.corner);
+
+    const sideAngleDisplay = document.getElementById('modern-side-jaw-angle-display');
+    if (sideAngleDisplay) {
+      sideAngleDisplay.textContent = `Calculated jaw angle: ${sideJawAngle.toFixed(1)}°`;
+    }
+
+    const cornerAngleDisplay = document.getElementById('modern-corner-jaw-angle-display');
+    if (cornerAngleDisplay) {
+      cornerAngleDisplay.textContent = `Calculated jaw angle: ${cornerJawAngle.toFixed(1)}°`;
+    }
 
     if (!validationDiv) return;
 
