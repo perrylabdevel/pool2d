@@ -35,8 +35,14 @@ export class ModernGeometryPanel {
     this.settingsManager = settingsManager;
     this.onGeometryChange = onGeometryChange;
 
-    // Start with default template
-    this.currentGeometry = { ...GEOMETRY_TEMPLATES[PocketTemplate.BCA_TOURNAMENT_MEDIUM] };
+    // Start with default template (deep copy to avoid modifying the original)
+    const defaultTemplate = GEOMETRY_TEMPLATES[PocketTemplate.BCA_TOURNAMENT_MEDIUM];
+    this.currentGeometry = {
+      template: defaultTemplate.template,
+      side: { ...defaultTemplate.side },
+      corner: { ...defaultTemplate.corner },
+      global: defaultTemplate.global ? { ...defaultTemplate.global } : undefined,
+    };
 
     this.panel = this.createPanel();
     const header = this.panel.querySelector('.panel-header') as HTMLElement | null;
@@ -75,6 +81,7 @@ export class ModernGeometryPanel {
         ${this.generateTemplateSelector()}
         ${this.generateSidePocketControls()}
         ${this.generateCornerPocketControls()}
+        ${this.generateGlobalControls()}
         ${this.generateActions()}
       </div>
     `;
@@ -213,6 +220,23 @@ export class ModernGeometryPanel {
     `;
   }
 
+  private generateGlobalControls(): string {
+    const ranges = GEOMETRY_RANGES.global;
+    return `
+      <div class="settings-group">
+        <h4 class="settings-group-title">🌐 Global Settings</h4>
+        ${this.sliderRow(
+          'modern-global-side-pocket-offset',
+          'Side Pocket Offset (in)',
+          ranges.sidePocketOffset.min,
+          ranges.sidePocketOffset.max,
+          0.05,
+          ranges.sidePocketOffset.typical
+        )}
+      </div>
+    `;
+  }
+
   private generateActions(): string {
     return `
       <div class="settings-group">
@@ -267,7 +291,9 @@ export class ModernGeometryPanel {
         sliderId: 'modern-side-mouth',
         labelId: 'modern-side-mouth-val',
         onChange: (v) => {
+          console.log('[ModernGeometry] Side mouth width changed to:', v);
           this.currentGeometry.side.mouthWidth = v!;
+          console.log('[ModernGeometry] currentGeometry.side.mouthWidth is now:', this.currentGeometry.side.mouthWidth);
           this.validateAndUpdateUI();
         },
         formatDigits: 2,
@@ -276,7 +302,9 @@ export class ModernGeometryPanel {
         sliderId: 'modern-side-throat',
         labelId: 'modern-side-throat-val',
         onChange: (v) => {
+          console.log('[ModernGeometry] Side throat width changed to:', v);
           this.currentGeometry.side.throatWidth = v!;
+          console.log('[ModernGeometry] currentGeometry.side.throatWidth is now:', this.currentGeometry.side.throatWidth);
           this.validateAndUpdateUI();
         },
         formatDigits: 2,
@@ -355,13 +383,44 @@ export class ModernGeometryPanel {
         },
         formatDigits: 2,
       },
+
+      // Global sliders
+      {
+        sliderId: 'modern-global-side-pocket-offset',
+        labelId: 'modern-global-side-pocket-offset-val',
+        onChange: (v) => {
+          if (!this.currentGeometry.global) {
+            this.currentGeometry.global = {};
+          }
+          this.currentGeometry.global.sidePocketOffset = v!;
+          this.validateAndUpdateUI();
+        },
+        formatDigits: 2,
+      },
     ];
 
-    bindSliders(sliderConfigs);
+    console.log('[ModernGeometry] Attempting to bind', sliderConfigs.length, 'sliders');
+    const binders = bindSliders(sliderConfigs);
+    console.log('[ModernGeometry] Successfully bound', binders.size, 'sliders');
+
+    // Check if specific sliders were bound
+    if (!binders.has('modern-side-mouth')) {
+      console.error('[ModernGeometry] Failed to bind modern-side-mouth slider');
+    }
+    if (!binders.has('modern-side-throat')) {
+      console.error('[ModernGeometry] Failed to bind modern-side-throat slider');
+    }
   }
 
   private loadTemplate(template: PocketTemplate) {
-    this.currentGeometry = { ...GEOMETRY_TEMPLATES[template] };
+    // Deep copy the template to avoid modifying the original
+    const templateData = GEOMETRY_TEMPLATES[template];
+    this.currentGeometry = {
+      template: templateData.template,
+      side: { ...templateData.side },
+      corner: { ...templateData.corner },
+      global: templateData.global ? { ...templateData.global } : undefined,
+    };
     this.syncToUI();
     this.validateAndUpdateUI();
   }
@@ -379,6 +438,8 @@ export class ModernGeometryPanel {
     this.setSliderValue('modern-corner-rail-depth', this.currentGeometry.corner.railDepth);
     this.setSliderValue('modern-corner-jaw-depth', this.currentGeometry.corner.jawDepth);
     this.setSliderValue('modern-corner-shelf-depth', this.currentGeometry.corner.shelfDepth);
+
+    this.setSliderValue('modern-global-side-pocket-offset', this.currentGeometry.global?.sidePocketOffset ?? 0.25);
 
     this.validateAndUpdateUI();
   }
@@ -443,8 +504,30 @@ export class ModernGeometryPanel {
       return;
     }
 
+    console.log('[ModernGeometry] Applying geometry:', {
+      side: {
+        mouthWidth: this.currentGeometry.side.mouthWidth,
+        throatWidth: this.currentGeometry.side.throatWidth,
+        railDepth: this.currentGeometry.side.railDepth,
+        jawDepth: this.currentGeometry.side.jawDepth,
+      },
+      corner: {
+        mouthWidth: this.currentGeometry.corner.mouthWidth,
+        throatWidth: this.currentGeometry.corner.throatWidth,
+        railDepth: this.currentGeometry.corner.railDepth,
+        jawDepth: this.currentGeometry.corner.jawDepth,
+      },
+    });
+
     // Convert modern geometry to legacy CONFIG parameters
     const legacy = modernToLegacy(this.currentGeometry);
+
+    console.log('[ModernGeometry] Converted to legacy:', {
+      SIDE_JAW_OUTER_OVERRIDE_IN: legacy.SIDE_JAW_OUTER_OVERRIDE_IN,
+      SIDE_JAW_INNER_OVERRIDE_IN: legacy.SIDE_JAW_INNER_OVERRIDE_IN,
+      SIDE_STRAIGHT_Y_IN: legacy.SIDE_STRAIGHT_Y_IN,
+      SIDE_INNER_Y_IN: legacy.SIDE_INNER_Y_IN,
+    });
 
     // Apply to CONFIG
     applyLegacyGeometry(legacy);

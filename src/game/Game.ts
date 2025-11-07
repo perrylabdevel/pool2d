@@ -313,7 +313,7 @@ export class Game {
       persistState: true,
     });
     this.hud.registerPanel('modern-geometry-panel', this.modernGeometryPanel.getController(), {
-      hotkeys: ['m'],
+      hotkeys: ['p'],
       persistState: true,
     });
     this.hud.registerPanel('render-layer-panel', this.renderLayersPanel.getController(), {

@@ -67,7 +67,7 @@ export function modernToLegacy(modern: ModernPocketGeometry): LegacyGeometry {
     SIDE_JAW_INNER_OVERRIDE_IN: side.jawInnerX,
     SIDE_THROAT_WIDTH_IN: null, // Don't set when using overrides
     JAW_REF_RADIUS_IN: side.refRadius,
-    SIDE_POCKET_OUTWARD_OFFSET_IN: 0.25, // Standard offset
+    SIDE_POCKET_OUTWARD_OFFSET_IN: modern.global?.sidePocketOffset ?? 0.25,
     JAW_CURVE_BLEND: modern.side.railCurve ?? 0.0,
 
     // Corner pocket parameters

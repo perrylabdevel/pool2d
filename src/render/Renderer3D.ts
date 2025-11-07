@@ -1671,18 +1671,13 @@ export class Renderer3D extends BaseRenderer {
       const shelfDepth = Math.max(0.1, pocket.shelfDepth ?? CONFIG.POCKET_SHELF_DEPTH_IN) * 1.5; // 50% deeper
       const angleRad = THREE.MathUtils.degToRad(pocket.cutAngleDeg ?? 0);
 
-      // Detect side pockets and adjust position to cushion edge
-      const isSidePocket = pocket.id === 'N_middle' || pocket.id === 'S_middle';
-      const pocketRotationZ = isSidePocket ? (pocket.center.y > 0 ? Math.PI : 0) : angleRad;
-      const thetaStart = isSidePocket ? Math.PI / 2 : 0;
-      const thetaLength = isSidePocket ? Math.PI : Math.PI * 2;
-      let pocketY = pocket.center.y;
-      if (isSidePocket) {
-        const direction = pocket.center.y >= 0 ? 1 : -1;
-        pocketY = direction * (playHalfHeight - SIDE_POCKET_VISUAL_INSET);
-      }
+      // All pockets render as full circles at their true physics position
+      const pocketRotationZ = angleRad;
+      const thetaStart = 0;
+      const thetaLength = Math.PI * 2;
+      const pocketY = pocket.center.y;
 
-      // Create cylinder geometry (full for corners, half for sides)
+      // Create cylinder geometry (full circle for all pockets)
       const pocketGeometry = new THREE.CylinderGeometry(
         visualRadius,
         wallTaperRadius,
@@ -1704,17 +1699,10 @@ export class Renderer3D extends BaseRenderer {
       this.scene.add(pocketMesh);
       this.pocketMeshes.push(pocketMesh);
 
-      // Solid black bottom fill - semicircle for side pockets
+      // Solid black bottom fill - full circle for all pockets
       const circleShape = new THREE.Shape();
       const radius = visualRadius * 0.98;
-      if (isSidePocket) {
-        // Create semicircle path - front half (0 to π)
-        circleShape.absarc(0, 0, radius, 0, Math.PI, false);
-        circleShape.lineTo(-radius, 0);
-        circleShape.lineTo(radius, 0);
-      } else {
-        circleShape.absarc(0, 0, radius, 0, Math.PI * 2, false);
-      }
+      circleShape.absarc(0, 0, radius, 0, Math.PI * 2, false);
       const bottomGeometry = new THREE.ShapeGeometry(circleShape);
 
       const bottomMaterial = new THREE.MeshBasicMaterial({
@@ -1725,8 +1713,6 @@ export class Renderer3D extends BaseRenderer {
       });
       const bottomMesh = new THREE.Mesh(bottomGeometry, bottomMaterial);
       bottomMesh.position.set(pocket.center.x, pocketY, 0.05);
-
-      // Rotate semicircle to face outward
       bottomMesh.rotation.z = pocketRotationZ;
 
       bottomMesh.renderOrder = this.layerOrder.orderPockets - 0.2;  // Render just before pocket walls
@@ -1734,16 +1720,9 @@ export class Renderer3D extends BaseRenderer {
       this.scene.add(bottomMesh);
       this.pocketBottomMeshes.push(bottomMesh);
 
-      // Gradient overlay - semicircle for side pockets
+      // Gradient overlay - full circle for all pockets
       const gradientShape = new THREE.Shape();
-      if (isSidePocket) {
-        // Front half (0 to π)
-        gradientShape.absarc(0, 0, visualRadius, 0, Math.PI, false);
-        gradientShape.lineTo(-visualRadius, 0);
-        gradientShape.lineTo(visualRadius, 0);
-      } else {
-        gradientShape.absarc(0, 0, visualRadius, 0, Math.PI * 2, false);
-      }
+      gradientShape.absarc(0, 0, visualRadius, 0, Math.PI * 2, false);
       const gradientGeometry = new THREE.ShapeGeometry(gradientShape);
 
       // Fix UV mapping for the gradient texture
@@ -1803,8 +1782,7 @@ export class Renderer3D extends BaseRenderer {
       this.scene.add(shadowMesh);
       this.pocketShadowMeshes.push(shadowMesh);
 
-      const highlightAngle = isSidePocket ? pocketRotationZ : angleRad;
-      this.addPocketHighlight(pocket, visualRadius, highlightAngle, pocketY);
+      this.addPocketHighlight(pocket, visualRadius, angleRad, pocketY);
     });
     
     this.initializeRailFillMesh();
@@ -1826,48 +1804,27 @@ export class Renderer3D extends BaseRenderer {
 
     pockets.forEach((pocket) => {
       const visualRadius = pocket.visualRadius ?? pocket.radius;
-      const isSidePocket = pocket.id === 'N_middle' || pocket.id === 'S_middle';
       const angleRad = THREE.MathUtils.degToRad(pocket.cutAngleDeg ?? 0);
-      const pocketRotationZ = isSidePocket ? (pocket.center.y > 0 ? Math.PI : 0) : angleRad;
-      const thetaStart = isSidePocket ? Math.PI / 2 : 0;
-      const thetaLength = isSidePocket ? Math.PI : Math.PI * 2;
+      const pocketRotationZ = angleRad;
+      const thetaStart = 0;
+      const thetaLength = Math.PI * 2;
+      const pocketY = pocket.center.y;
 
-      // Adjust Y position for side pockets (must match pocket walls exactly)
-      let pocketY = pocket.center.y;
-      if (isSidePocket) {
-        const direction = pocket.center.y >= 0 ? 1 : -1;
-        pocketY = direction * (playHalfHeight - SIDE_POCKET_VISUAL_INSET);
-      }
-
-      let capMesh: THREE.Mesh;
-      if (isSidePocket) {
-        const radius = visualRadius * 1.06; // Slightly larger to cover the frame cutout
-        const capGeometry = new THREE.CircleGeometry(radius, 64);
-        const sideCapMaterial = capMaterial.clone();
-        sideCapMaterial.side = THREE.DoubleSide;
-        sideCapMaterial.transparent = false;
-        sideCapMaterial.opacity = 1.0;
-        sideCapMaterial.depthWrite = true;
-        sideCapMaterial.depthTest = true;
-        capMesh = new THREE.Mesh(capGeometry, sideCapMaterial);
-        capMesh.position.set(pocket.center.x, pocket.center.y, 0.62);
-        capMesh.rotation.z = pocketRotationZ;
-      } else {
-        const capGeometry = new THREE.CylinderGeometry(
-          visualRadius * 1.02,
-          visualRadius * 1.02,
-          capThickness,
-          48,
-          1,
-          false,
-          thetaStart,
-          thetaLength
-        );
-        capMesh = new THREE.Mesh(capGeometry, capMaterial.clone());
-        capMesh.position.set(pocket.center.x, pocketY, 0.6);
-        capMesh.rotation.x = Math.PI / 2;
-        capMesh.rotation.z = pocketRotationZ;
-      }
+      // All pockets use full cylinder caps
+      const capGeometry = new THREE.CylinderGeometry(
+        visualRadius * 1.02,
+        visualRadius * 1.02,
+        capThickness,
+        48,
+        1,
+        false,
+        thetaStart,
+        thetaLength
+      );
+      const capMesh = new THREE.Mesh(capGeometry, capMaterial.clone());
+      capMesh.position.set(pocket.center.x, pocketY, 0.6);
+      capMesh.rotation.x = Math.PI / 2;
+      capMesh.rotation.z = pocketRotationZ;
 
       capMesh.renderOrder = this.layerOrder.orderCaps;
       capMesh.visible = this.layerVisibility.showCaps;
