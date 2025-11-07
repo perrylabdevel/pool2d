@@ -238,10 +238,41 @@ export class Renderer extends BaseRenderer {
   drawPocket(pocket: PocketDef) {
     const radius = pocket.visualRadius ?? pocket.radius;
     const angleRad = (pocket.cutAngleDeg ?? 0) * (Math.PI / 180);
-    const { x, y } = pocket.center;
+    let { x, y } = pocket.center;
+
+    // Move side pockets to cushion edge and prepare for semicircle clipping
+    let clipToSemicircle = false;
+    let clipOutward = false;
+
+    if (pocket.id === 'N_middle') {
+      y = this.playBounds.maxY;  // Move to cushion edge
+      clipToSemicircle = true;
+      clipOutward = true;  // Clip to show only outward (positive Y) half
+    } else if (pocket.id === 'S_middle') {
+      y = this.playBounds.minY;  // Move to cushion edge
+      clipToSemicircle = true;
+      clipOutward = false;  // Clip to show only outward (negative Y) half
+    }
 
     this.ctx.save();
     this.ctx.translate(x, y);
+
+    // Apply semicircle clipping for side pockets
+    // Canvas Y increases downward, so:
+    // - North pocket (top edge): show Y < 0 (upward/outward from pocket center)
+    // - South pocket (bottom edge): show Y > 0 (downward/outward from pocket center)
+    if (clipToSemicircle) {
+      this.ctx.beginPath();
+      if (clipOutward) {
+        // North pocket: show only upper half (negative Y in canvas coords)
+        this.ctx.rect(-radius, -radius, radius * 2, radius);
+      } else {
+        // South pocket: show only lower half (positive Y in canvas coords)
+        this.ctx.rect(-radius, 0, radius * 2, radius);
+      }
+      this.ctx.clip();
+    }
+
     this.ctx.rotate(angleRad);
 
     // Draw pocket hole (black circle)
@@ -249,7 +280,7 @@ export class Renderer extends BaseRenderer {
     this.ctx.beginPath();
     this.ctx.arc(0, 0, radius, 0, Math.PI * 2);
     this.ctx.fill();
-    
+
     // Inner shadow
     const gradient = this.ctx.createRadialGradient(
       0,
@@ -261,7 +292,7 @@ export class Renderer extends BaseRenderer {
     );
     gradient.addColorStop(0, 'rgba(0, 0, 0, 1)');
     gradient.addColorStop(1, 'rgba(50, 50, 50, 0.3)');
-    
+
     this.ctx.fillStyle = gradient;
     this.ctx.beginPath();
     this.ctx.arc(0, 0, radius, 0, Math.PI * 2);

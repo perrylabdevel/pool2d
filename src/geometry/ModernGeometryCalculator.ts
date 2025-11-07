@@ -83,8 +83,12 @@ export function calculateSideJawPoints(
 /**
  * Calculate corner pocket jaw points from physical measurements
  *
- * Corner pockets are oriented at 45° from the table corner.
- * Direct mapping from mouth width, throat width, and depths.
+ * Corner pockets in legacy system:
+ * - jawVertical: (straightX, jawY) where vertical rail meets throat
+ * - jawHorizontal: (jawX, straightY) where horizontal rail meets throat
+ * - jawX = jawY = throatWidth/2
+ * - straightX = 50 - railDepth
+ * - straightY = 25 - railDepth
  *
  * @param config Corner pocket configuration
  * @returns Jaw points for northeast corner (mirror for others)
@@ -96,23 +100,25 @@ export function calculateCornerJawPoints(
   const cornerX = PLAY_HALF_W_IN;
   const cornerY = PLAY_HALF_H_IN;
 
-  // Calculate throat position from throat width
-  // For 45° pockets, throat is measured perpendicular to the 45° line
+  // Throat positions - where rails transition to angled corner sections
   const throatHalfWidth = config.throatWidth / 2;
+
+  // Straight rail positions (railDepth from corner)
+  const straightX = cornerX - config.railDepth;
+  const straightY = cornerY - config.railDepth;
+
+  // Jaw points where rails meet throat
+  // Vertical rail: (straightX, throatY) where throatY = throatWidth/2
+  // Horizontal rail: (throatX, straightY) where throatX = throatWidth/2
+  const jawVerticalX = straightX;
+  const jawVerticalY = throatHalfWidth;
+  const jawHorizontalX = throatHalfWidth;
+  const jawHorizontalY = straightY;
+
+  // Throat position (approximate center, along 45° diagonal)
   const throatOffset = throatHalfWidth / Math.sqrt(2);
   const throatX = cornerX - throatOffset;
   const throatY = cornerY - throatOffset;
-
-  // Calculate mouth (jaw) position from mouth width and jaw depth
-  const mouthHalfWidth = config.mouthWidth / 2;
-  const mouthOffset = mouthHalfWidth / Math.sqrt(2);
-  const jawDepthOffset = config.jawDepth / Math.sqrt(2);
-
-  // Jaw points (where straight rails meet the jaw transition)
-  const jawVerticalX = cornerX - mouthOffset - jawDepthOffset;
-  const jawVerticalY = cornerY - mouthOffset - jawDepthOffset;
-  const jawHorizontalX = jawVerticalX;
-  const jawHorizontalY = jawVerticalY;
 
   return {
     jawVertical: { x: jawVerticalX, y: jawVerticalY },

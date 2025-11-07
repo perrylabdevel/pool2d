@@ -65,7 +65,7 @@ export function modernToLegacy(modern: ModernPocketGeometry): LegacyGeometry {
     SIDE_INNER_Y_IN: side.innerY,
     SIDE_JAW_OUTER_OVERRIDE_IN: side.jawOuterX,
     SIDE_JAW_INNER_OVERRIDE_IN: side.jawInnerX,
-    SIDE_THROAT_WIDTH_IN: modern.side.throatWidth,
+    SIDE_THROAT_WIDTH_IN: null, // Don't set when using overrides
     JAW_REF_RADIUS_IN: side.refRadius,
     SIDE_POCKET_OUTWARD_OFFSET_IN: 0.25, // Standard offset
     JAW_CURVE_BLEND: modern.side.railCurve ?? 0.0,
@@ -76,7 +76,7 @@ export function modernToLegacy(modern: ModernPocketGeometry): LegacyGeometry {
     CORNER_TARGET_Y_IN: corner.targetY,
     CORNER_JAW_X_OVERRIDE_IN: corner.jawX,
     CORNER_JAW_Y_OVERRIDE_IN: corner.jawY,
-    CORNER_THROAT_WIDTH_IN: modern.corner.throatWidth,
+    CORNER_THROAT_WIDTH_IN: null, // Don't set when using overrides
     CORNER_JAW_REF_RADIUS_IN: corner.refRadius,
 
     // Global parameters
@@ -128,8 +128,10 @@ function modernPocketToLegacySide(side: PocketConfig): {
 /**
  * Convert modern corner pocket config to legacy parameters
  *
- * Direct mapping from physical measurements for corner pockets.
- * Corner pockets are oriented at 45° from the table corner.
+ * IMPORTANT: CORNER_JAW_X/Y are how far straight rails extend from center,
+ * NOT throat positions! They should be derived, not directly set from throat width.
+ *
+ * For now, return reasonable values that let the derivation work.
  */
 function modernPocketToLegacyCorner(corner: PocketConfig): {
   frameOffset: number;
@@ -139,28 +141,15 @@ function modernPocketToLegacyCorner(corner: PocketConfig): {
   jawX: number;
   jawY: number;
 } {
-  // Corner pocket center is at the corner
-  const pocketCenterX = PLAY_HALF_W_IN;
-  const pocketCenterY = PLAY_HALF_H_IN;
+  // Straight rail positions - railDepth from corner
+  const straightX = PLAY_HALF_W_IN - corner.railDepth;
+  const targetY = PLAY_HALF_H_IN - corner.railDepth;
 
-  // For corner pockets at 45°, the throat width is measured perpendicular to the 45° line
-  // Throat position: distance from corner along 45° line
-  const throatHalfWidth = corner.throatWidth / 2;
-  const throatDistFromCorner = throatHalfWidth / Math.sqrt(2);
-
-  const throatX = pocketCenterX - throatDistFromCorner;
-  const throatY = pocketCenterY - throatDistFromCorner;
-
-  // Mouth position: further from corner by jawDepth along 45° line
-  const mouthHalfWidth = corner.mouthWidth / 2;
-  const mouthDistFromCorner = mouthHalfWidth / Math.sqrt(2);
-
-  const jawX = pocketCenterX - mouthDistFromCorner - (corner.jawDepth / Math.sqrt(2));
-  const jawY = pocketCenterY - mouthDistFromCorner - (corner.jawDepth / Math.sqrt(2));
-
-  // Straight rail positions (where the straight rail ends before entering pocket)
-  const straightX = jawX - (corner.railDepth / Math.sqrt(2));
-  const targetY = jawY - (corner.railDepth / Math.sqrt(2));
+  // Jaw X/Y control how far rails extend before corner pockets cut in
+  // jawX: How far horizontal rails extend along X-axis (should be close to straightX)
+  // jawY: How far vertical rails extend along Y-axis (should be close to targetY)
+  const jawX = straightX - 2.5;  // e.g., 48.25 - 2.5 = 45.75
+  const jawY = targetY - 2.5;    // e.g., 23.25 - 2.5 = 20.75
 
   // Use reasonable defaults for derivation parameters
   const frameOffset = 4.0;
@@ -269,7 +258,8 @@ function legacySideToModernPocket(
 /**
  * Convert legacy corner jaw positions to modern pocket config
  *
- * Reverse mapping for corner pockets (oriented at 45°).
+ * Reverse mapping: jawX and jawY are throat positions (throatWidth/2)
+ * straightX and straightY are rail positions (50 - railDepth, 25 - railDepth)
  */
 function legacyCornerToModernPocket(
   jawX: number,
@@ -278,30 +268,18 @@ function legacyCornerToModernPocket(
   straightY: number,
   shelfDepth: number
 ): PocketConfig {
-  // Corner pocket center
-  const pocketCenterX = PLAY_HALF_W_IN;
-  const pocketCenterY = PLAY_HALF_H_IN;
-
-  // Calculate throat width from jaw inner position
-  // For 45° pockets, the distance from corner to throat along the diagonal
-  const throatDistFromCorner = Math.sqrt(
-    Math.pow(pocketCenterX - jawX, 2) + Math.pow(pocketCenterY - jawY, 2)
-  );
-  const throatHalfWidth = throatDistFromCorner * Math.sqrt(2);
+  // Throat width from jaw positions (average if asymmetric)
+  const throatHalfWidth = (jawX + jawY) / 2;
   const throatWidth = throatHalfWidth * 2;
 
-  // Estimate mouth width from straight rail position
-  // This is an approximation; perfect round-trip requires stored values
-  const straightDistFromCorner = Math.sqrt(
-    Math.pow(pocketCenterX - straightX, 2) + Math.pow(pocketCenterY - straightY, 2)
-  );
+  // Rail depth from straight rail positions
+  const railDepthX = PLAY_HALF_W_IN - straightX;
+  const railDepthY = PLAY_HALF_H_IN - straightY;
+  const railDepth = (railDepthX + railDepthY) / 2; // Average if asymmetric
 
-  // Calculate rail depth and jaw depth from positions
-  const railDepth = (straightDistFromCorner - throatDistFromCorner) * Math.sqrt(2);
-  const jawDepth = 1.0; // Default value
-
-  // Approximate mouth width
-  const mouthWidth = throatWidth + (2 * jawDepth * 0.5); // Rough estimate
+  // Jaw depth and mouth width (defaults - not directly stored in legacy)
+  const jawDepth = 1.0;
+  const mouthWidth = throatWidth + (2 * jawDepth * 0.5);
 
   return {
     mouthWidth,

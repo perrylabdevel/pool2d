@@ -234,6 +234,7 @@ export class Game {
     window.addEventListener('keydown', (e) => {
       if (e.key === 'd' || e.key === 'D') {
         this.debug.toggle();
+        this.syncDebugModeWithRenderer();
       }
       if (e.key === 'r' || e.key === 'R') {
         this.restart();
@@ -250,6 +251,7 @@ export class Game {
         // Toggle ball-in-hand overlay (enables debug overlay if needed)
         const next = !this.debug.isBallInHandOverlayEnabled();
         this.debug.setBallInHandOverlayEnabled(next);
+        this.syncDebugModeWithRenderer();
       }
       if (e.key === 'l' || e.key === 'L') {
         // Toggle verbose BIH console logging at runtime via a global flag
@@ -265,13 +267,17 @@ export class Game {
           // eslint-disable-next-line no-console
           console.log('BIH logging disabled.');
         }
+        this.syncDebugModeWithRenderer();
       }
     });
     
     // Wire up debug toggle button
     const debugBtn = document.getElementById('debug-toggle');
     if (debugBtn) {
-      debugBtn.addEventListener('click', () => this.debug.toggle());
+      debugBtn.addEventListener('click', () => {
+        this.debug.toggle();
+        this.syncDebugModeWithRenderer();
+      });
     }
     
     // Wire up restart button
@@ -291,6 +297,10 @@ export class Game {
         }, 300);
       });
     }
+  }
+
+  private syncDebugModeWithRenderer() {
+    this.renderer.setDebugMode(this.debug.isEnabled());
   }
 
   private registerPanels() {
@@ -708,6 +718,7 @@ export class Game {
       // If BIH overlay hasn't been enabled explicitly, enable it for this drag session
       if (!this.debug.isBallInHandOverlayEnabled()) {
         this.debug.setBallInHandOverlayEnabled(true);
+        this.syncDebugModeWithRenderer();
       }
       if (allowFreeDrag) {
         // Immediately place once at start so we can see initial clamp
