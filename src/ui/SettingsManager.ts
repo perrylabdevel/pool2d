@@ -24,7 +24,6 @@ export interface PhysicsSettings {
   SLIDING_FRICTION: number;
   SOLVER_ITERATIONS: number;
   VELOCITY_EPSILON: number;
-  POCKET_JAW_GAP: number;
 }
 
 const STORAGE_KEYS = {
@@ -56,7 +55,6 @@ const DEFAULT_PHYSICS_SETTINGS: PhysicsSettings = {
   SLIDING_FRICTION: 0.65,
   SOLVER_ITERATIONS: 15,
   VELOCITY_EPSILON: 0.2,
-  POCKET_JAW_GAP: 7,
 };
 
 export class SettingsManager {

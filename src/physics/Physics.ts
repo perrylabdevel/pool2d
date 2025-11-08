@@ -18,7 +18,7 @@ export class PhysicsWorld {
   }
   
   initializeRails() {
-    const pocketGap = CONFIG.POCKET_JAW_GAP; // Gap for pockets (inches)
+    const pocketGap = TABLE_GEOMETRY.pocketJawGapIn; // Gap for pockets (inches)
     const halfWidth = TABLE_GEOMETRY.playWidthIn / 2;   // 50" for 9ft table
     const halfHeight = TABLE_GEOMETRY.playHeightIn / 2; // 25" for 9ft table
 

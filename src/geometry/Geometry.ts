@@ -24,6 +24,7 @@ export interface TableGeometry {
   playHeightIn: number;
   cushionProfileIn: number;
   pocketCaptureRadiusIn: number;
+  pocketJawGapIn: number;
   rails: RailDef[];
   pockets: PocketDef[];
 }
@@ -34,6 +35,7 @@ export const TABLE_GEOMETRY: TableGeometry = {
   playHeightIn: 50.0,
   cushionProfileIn: 1.75,
   pocketCaptureRadiusIn: 2.5,
+  pocketJawGapIn: 7.0,
   
   // Rails on inner cushion line, normals point inward
   rails: [

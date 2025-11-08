@@ -69,12 +69,6 @@ export class SettingsPanel {
         ${this.createSlider('VELOCITY_EPSILON', 'Sleep Threshold', 0.05, 1.0, 0.05, CONFIG.VELOCITY_EPSILON)}
       </div>
 
-      <div style="margin-bottom: 20px;">
-        <h4 style="margin: 0 0 10px 0; color: #F06292; font-size: 14px;">🕳️ Table Geometry</h4>
-        ${this.createSlider('POCKET_JAW_GAP', 'Pocket Jaw Gap', 2, 12, 0.5, CONFIG.POCKET_JAW_GAP)}
-        <div style="font-size: 10px; color: #FF9800; margin-top: -8px; margin-bottom: 8px;">⚠️ Requires restart to take effect</div>
-      </div>
-
       <div style="display: flex; gap: 10px; margin-top: 15px;">
         <button id="settings-reset" style="flex: 1; background: #FF9800; color: white; border: none; border-radius: 4px; padding: 8px; cursor: pointer; font-weight: bold;">Reset Defaults</button>
         <button id="settings-export" style="flex: 1; background: #2196F3; color: white; border: none; border-radius: 4px; padding: 8px; cursor: pointer; font-weight: bold;">Copy Config</button>
@@ -180,7 +174,6 @@ export class SettingsPanel {
       SLIDING_FRICTION: CONFIG.SLIDING_FRICTION,
       SOLVER_ITERATIONS: CONFIG.SOLVER_ITERATIONS,
       VELOCITY_EPSILON: CONFIG.VELOCITY_EPSILON,
-      POCKET_JAW_GAP: CONFIG.POCKET_JAW_GAP,
     };
 
     const configText = JSON.stringify(config, null, 2);
