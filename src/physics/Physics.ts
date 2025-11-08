@@ -18,22 +18,24 @@ export class PhysicsWorld {
   }
   
   initializeRails() {
-    const pocketGap = 4; // Gap for pockets (inches)
-    
+    const pocketGap = TABLE_GEOMETRY.pocketJawGapIn; // Gap for pockets (inches)
+    const halfWidth = TABLE_GEOMETRY.playWidthIn / 2;   // 50" for 9ft table
+    const halfHeight = TABLE_GEOMETRY.playHeightIn / 2; // 25" for 9ft table
+
     // Create rail segments with gaps for pockets
     // N_rail (North/top): split at center pocket
-    this.rails.push(new Rail(-50 + pocketGap, 25, -pocketGap, 25));  // NW corner to N middle
-    this.rails.push(new Rail(pocketGap, 25, 50 - pocketGap, 25));     // N middle to NE corner
-    
-    // S_rail (South/bottom): split at center pocket  
-    this.rails.push(new Rail(-50 + pocketGap, -25, -pocketGap, -25)); // SW corner to S middle
-    this.rails.push(new Rail(pocketGap, -25, 50 - pocketGap, -25));   // S middle to SE corner
-    
+    this.rails.push(new Rail(-halfWidth + pocketGap, halfHeight, -pocketGap, halfHeight));  // NW corner to N middle
+    this.rails.push(new Rail(pocketGap, halfHeight, halfWidth - pocketGap, halfHeight));     // N middle to NE corner
+
+    // S_rail (South/bottom): split at center pocket
+    this.rails.push(new Rail(-halfWidth + pocketGap, -halfHeight, -pocketGap, -halfHeight)); // SW corner to S middle
+    this.rails.push(new Rail(pocketGap, -halfHeight, halfWidth - pocketGap, -halfHeight));   // S middle to SE corner
+
     // W_rail (West/left): solid rail between corners (no middle pocket)
-    this.rails.push(new Rail(-50, -25 + pocketGap, -50, 25 - pocketGap));
-    
+    this.rails.push(new Rail(-halfWidth, -halfHeight + pocketGap, -halfWidth, halfHeight - pocketGap));
+
     // E_rail (East/right): solid rail between corners (no middle pocket)
-    this.rails.push(new Rail(50, -25 + pocketGap, 50, 25 - pocketGap));
+    this.rails.push(new Rail(halfWidth, -halfHeight + pocketGap, halfWidth, halfHeight - pocketGap));
     
     // Set normals to point inward (toward center)
     this.rails.forEach((rail) => {
