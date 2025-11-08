@@ -30,6 +30,7 @@ export const CONFIG = {
   
   // Pockets (center-origin coordinates: see Geometry.ts for authoritative definitions)
   POCKET_RADIUS: 2.5,
+  POCKET_JAW_GAP: 7, // Gap in rail cushions for pocket openings (inches) - creates ~10" diagonal opening at corners
   
   // Cue
   CUE_POWER_MIN: 0.5,
