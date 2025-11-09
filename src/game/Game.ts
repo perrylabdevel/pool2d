@@ -10,6 +10,7 @@ import { CONFIG, CUE_BALL_POSITION, RACK_POSITIONS } from '../config';
 import { getTableGeometry } from '../geometry/Geometry';
 import { clampBallInHand } from '../geometry/Placement';
 import { EightBallRules } from '../rules/EightBall';
+import { RULES_PRESETS, getRulesDescription } from '../rules/RulesConfig';
 import { physicsRecorder } from '../debug/PhysicsRecorder';
 import { Predictor } from '../physics/Prediction';
 import { shotCapture } from '../debug/ShotCapture';
@@ -18,10 +19,20 @@ import { GeometryPanel } from '../ui/GeometryPanel';
 import { ModernGeometryPanel } from '../ui/ModernGeometryPanel';
 import { RenderLayerPanel } from '../ui/RenderLayerPanel';
 import { scenarioManager } from '../debug/ScenarioManager';
+import { Player, PlayerType, BallGroup } from './Player';
+import { GameStateMachine, GameState } from './GameStateMachine';
+import { PoolAI, AIDifficulty } from '../ai/PoolAI';
+import { GameModeBase } from './modes/GameModeBase';
+import { TimeAttackMode, TimeAttackDifficulty } from './modes/TimeAttackMode';
+import { PerfectGameMode } from './modes/PerfectGameMode';
+import { SpeedPoolMode } from './modes/SpeedPoolMode';
 
 export enum GameMode {
   PRACTICE,
   EIGHT_BALL,
+  TIME_ATTACK,
+  PERFECT_GAME,
+  SPEED_POOL,
 }
 
 function randomizeBallOrientation(ball: Ball) {
@@ -52,8 +63,20 @@ export class Game {
   rules: EightBallRules;
   predictor: Predictor;
   mode: GameMode;
+  currentRuleset: string = 'CASUAL'; // Can be changed via keyboard shortcuts
   private lastBallScale: number;
   private _lastCanvasScale?: number;
+
+  // Turn-based gameplay
+  players: Player[];
+  currentPlayerIndex: number;
+  stateMachine: GameStateMachine | null;
+  ai: PoolAI | null;
+  aiThinkingStartTime: number;
+  aiSelectedShot: any | null;
+
+  // Arcade modes
+  arcadeMode: GameModeBase | null;
   
   // Game loop
   accumulator: number = 0;
@@ -96,40 +119,81 @@ export class Game {
     this.geometryPanel = new GeometryPanel(this.hud.settingsManager, () => this.restart());
     this.modernGeometryPanel = new ModernGeometryPanel(this.hud.settingsManager, () => this.restart());
     this.renderLayersPanel = new RenderLayerPanel(this.hud.settingsManager, this.renderer);
-    this.rules = new EightBallRules();
+    this.rules = new EightBallRules(RULES_PRESETS[this.currentRuleset]);
     this.predictor = new Predictor();
     this.mode = GameMode.PRACTICE;
     this.lastBallScale = CONFIG.BALL_SCALE ?? 1;
+
+    // Initialize turn-based gameplay components (only for EIGHT_BALL mode)
+    this.players = [];
+    this.currentPlayerIndex = 0;
+    this.stateMachine = null;
+    this.ai = null;
+    this.aiThinkingStartTime = 0;
+    this.aiSelectedShot = null;
+
+    // Initialize arcade mode
+    this.arcadeMode = null;
 
     this.registerPanels();
 
     this.setupCallbacks();
     this.setupEventListeners();
+    this.setupCollisionTracking();
     this.initializeGame();
     scenarioManager.attach(this);
     
     // Log helpful tips
+    console.log('💡 Tips:');
     if (this.mode === GameMode.PRACTICE) {
-      console.log('💡 Tips:');
       console.log('  - Hold SHIFT and drag the cue ball to reposition it');
-      console.log('  - Press G to open Geometry panel (live pocket adjustments)');
-      console.log('  - Press M to open Modern Geometry panel (angle-based controls)');
-      console.log('  - Press S to open Physics Settings panel');
-      console.log('  - Press D for Debug view');
+      console.log('  - Press 8 to play against AI opponent (8-Ball mode)');
+      console.log('  - Press T for Time Attack mode');
+      console.log('  - Press P for Perfect Game mode');
+      console.log('  - Press V for Speed Pool mode');
+    } else if (this.mode === GameMode.EIGHT_BALL) {
+      console.log('  - Playing 8-Ball vs AI');
+      console.log('  - Current ruleset:', getRulesDescription(this.rules.config));
+      console.log('  - Press 1/2/3/4 to switch rulesets (Casual/Tournament/APA/Practice)');
+      console.log('  - Press 8 to return to Practice mode');
+    } else if (this.mode === GameMode.TIME_ATTACK) {
+      console.log('  - Clear all balls as fast as possible!');
+      console.log('  - Press T to return to Practice mode');
+    } else if (this.mode === GameMode.PERFECT_GAME) {
+      console.log('  - Run the table without missing!');
+      console.log('  - Press P to return to Practice mode');
+    } else if (this.mode === GameMode.SPEED_POOL) {
+      console.log('  - Score points with combos! Each ball adds time.');
+      console.log('  - Press V to return to Practice mode');
     }
+    console.log('  - Press G to open Geometry panel (live pocket adjustments)');
+    console.log('  - Press M to open Modern Geometry panel (angle-based controls)');
+    console.log('  - Press S to open Physics Settings panel');
+    console.log('  - Press D for Debug view');
   }
   
+  isPlayerInputBlocked(): boolean {
+    // Block input during AI's turn in 8-ball mode
+    if (this.mode === GameMode.EIGHT_BALL && this.stateMachine) {
+      return this.stateMachine.isAITurn();
+    }
+    return false;
+  }
+
   setupCallbacks() {
     // Handle mouse events (power bar, ball dragging)
     this.input.canvas.addEventListener('mousedown', (e) => {
+      if (this.isPlayerInputBlocked()) return;
       this.handleBallDragStart(e);
       this.handlePowerBarMouseDown(e);
     });
     this.input.canvas.addEventListener('mousemove', (e) => {
+      if (this.isPlayerInputBlocked()) return;
       this.handleBallDrag(e);
       this.handlePowerBarMouseMove(e);
     });
     this.input.canvas.addEventListener('mouseup', (e) => {
+      if (this.isPlayerInputBlocked()) return;
       this.handleBallDragEnd(e);
       this.handlePowerBarMouseUp(e);
     });
@@ -140,6 +204,7 @@ export class Game {
         this.input.setFineAimActive(true);
       }
       if (e.key === 'a' || e.key === 'A') {
+        if (this.isPlayerInputBlocked()) return;
         if (this.isAimMode && this.cueBall && !this.cueBall.pocketed) {
           this.lockedAngle = this.input.getAimAngle(this.cueBall);
         }
@@ -147,6 +212,7 @@ export class Game {
         return;
       }
       if (e.code === 'Space') {
+        if (this.isPlayerInputBlocked()) return;
         if (e.repeat) return;
         if (!this.canShoot || !this.cueBall || this.cueBall.pocketed) return;
         e.preventDefault();
@@ -237,6 +303,47 @@ export class Game {
         this.syncDebugModeWithRenderer();
       }
       if (e.key === 'r' || e.key === 'R') {
+        this.restart();
+      }
+      if (e.key === '8') {
+        // Toggle between PRACTICE and EIGHT_BALL mode
+        this.mode = this.mode === GameMode.PRACTICE ? GameMode.EIGHT_BALL : GameMode.PRACTICE;
+        this.restart();
+      }
+      if (e.key === 't' || e.key === 'T') {
+        // Toggle Time Attack mode
+        this.mode = this.mode === GameMode.PRACTICE ? GameMode.TIME_ATTACK : GameMode.PRACTICE;
+        this.restart();
+      }
+      if (e.key === 'p' || e.key === 'P') {
+        // Toggle Perfect Game mode
+        this.mode = this.mode === GameMode.PRACTICE ? GameMode.PERFECT_GAME : GameMode.PRACTICE;
+        this.restart();
+      }
+      if (e.key === 'v' || e.key === 'V') {
+        // Toggle Speed Pool mode
+        this.mode = this.mode === GameMode.PRACTICE ? GameMode.SPEED_POOL : GameMode.PRACTICE;
+        this.restart();
+      }
+      // Ruleset switching (affects 8-Ball mode rules)
+      if (e.key === '1') {
+        this.currentRuleset = 'CASUAL';
+        console.log('🎱 Ruleset: CASUAL (relaxed bar rules)');
+        this.restart();
+      }
+      if (e.key === '2') {
+        this.currentRuleset = 'TOURNAMENT';
+        console.log('🎱 Ruleset: TOURNAMENT (strict BCA/WPA rules)');
+        this.restart();
+      }
+      if (e.key === '3') {
+        this.currentRuleset = 'APA';
+        console.log('🎱 Ruleset: APA (league rules)');
+        this.restart();
+      }
+      if (e.key === '4') {
+        this.currentRuleset = 'PRACTICE';
+        console.log('🎱 Ruleset: PRACTICE (very relaxed, for learning)');
         this.restart();
       }
       if (e.key === 'm' || e.key === 'M') {
@@ -378,14 +485,130 @@ export class Game {
 
     this.resize();
     this.rules.startGame();
-    this.hud.setMode(this.mode === GameMode.PRACTICE ? 'Practice Mode' : '8-Ball');
-    this.hud.setTurn(1);
+
+    // Set mode display with ruleset if in 8-Ball mode
+    if (this.mode === GameMode.PRACTICE) {
+      this.hud.setMode('Practice Mode');
+    } else {
+      const rulesetName = getRulesDescription(this.rules.config);
+      this.hud.setMode(`8-Ball (${rulesetName})`);
+    }
+
+    // Reset mode-specific components
+    this.players = [];
+    this.currentPlayerIndex = 0;
+    this.stateMachine = null;
+    this.ai = null;
+    this.arcadeMode = null;
+
+    // Initialize mode-specific gameplay
+    if (this.mode === GameMode.EIGHT_BALL) {
+      this.initializePlayers();
+    } else if (this.mode === GameMode.TIME_ATTACK) {
+      this.initializeTimeAttack();
+    } else if (this.mode === GameMode.PERFECT_GAME) {
+      this.initializePerfectGame();
+    } else if (this.mode === GameMode.SPEED_POOL) {
+      this.initializeSpeedPool();
+    } else {
+      // Hide turn indicator in practice mode
+      this.hud.hideTurnIndicator();
+    }
+
     this.lastBallScale = CONFIG.BALL_SCALE ?? 1;
   }
-  
+
+  initializePlayers() {
+    // Create human player and AI opponent
+    const humanPlayer = new Player(1, 'Player', PlayerType.HUMAN);
+    const aiPlayer = new Player(2, 'AI', PlayerType.AI);
+
+    this.players = [humanPlayer, aiPlayer];
+    this.currentPlayerIndex = 0; // Human starts
+
+    console.log('[8-Ball] Players initialized:', {
+      player0: { id: this.players[0].id, type: this.players[0].type, isAI: this.players[0].isAI() },
+      player1: { id: this.players[1].id, type: this.players[1].type, isAI: this.players[1].isAI() },
+      currentPlayerIndex: this.currentPlayerIndex,
+      rulesCurrentPlayer: this.rules.currentPlayer,
+    });
+
+    // Initialize AI with medium difficulty
+    this.ai = new PoolAI(AIDifficulty.MEDIUM);
+
+    // Set up rules callbacks
+    this.rules.onGroupAssigned = (playerId: number, group: number) => {
+      const player = this.players.find(p => p.id === playerId);
+      if (player) {
+        const ballGroup = group === 1 ? BallGroup.SOLIDS : BallGroup.STRIPES;
+        player.assignGroup(ballGroup);
+        console.log('[8-Ball] Player', playerId, 'assigned', ballGroup === BallGroup.SOLIDS ? 'SOLIDS' : 'STRIPES');
+      }
+    };
+
+    this.rules.onFoul = (message: string) => {
+      this.hud.showFoul(message);
+    };
+
+    this.rules.onGameOver = (winner: number) => {
+      console.log('[8-Ball] Game over! Winner:', winner);
+      this.hud.showFoul(`Player ${winner} wins!`);
+    };
+
+    // Initialize state machine
+    this.stateMachine = new GameStateMachine(humanPlayer);
+    this.stateMachine.onBreak();
+
+    // Update HUD to show player's turn
+    this.hud.setTurn(1, false);
+  }
+
+  initializeTimeAttack() {
+    // Create Time Attack mode instance
+    this.arcadeMode = new TimeAttackMode(TimeAttackDifficulty.EASY);
+    this.arcadeMode.onStart();
+
+    // Update HUD
+    this.hud.setMode('Time Attack');
+    this.hud.hideTurnIndicator();
+
+    console.log('⏱️ Time Attack mode initialized');
+  }
+
+  initializePerfectGame() {
+    // Create Perfect Game mode instance
+    this.arcadeMode = new PerfectGameMode();
+    this.arcadeMode.onStart();
+
+    // Update HUD
+    this.hud.setMode('Perfect Game');
+    this.hud.hideTurnIndicator();
+
+    console.log('🎯 Perfect Game mode initialized');
+  }
+
+  initializeSpeedPool() {
+    // Create Speed Pool mode instance
+    this.arcadeMode = new SpeedPoolMode();
+    this.arcadeMode.onStart();
+
+    // Update HUD
+    this.hud.setMode('Speed Pool');
+    this.hud.hideTurnIndicator();
+
+    console.log('⚡ Speed Pool mode initialized');
+  }
+
   restart() {
     // Rebuild physics world (recomputes rails/pockets from current CONFIG)
     this.world = new PhysicsWorld();
+
+    // Recreate rules with current ruleset config
+    this.rules = new EightBallRules(RULES_PRESETS[this.currentRuleset]);
+
+    // Re-attach collision callback after world recreation
+    this.setupCollisionTracking();
+
     // Reset renderer table and rails to avoid duplicates
     const renderer3D = this.renderer as Renderer3D & { clearTableAndRails?: () => void; clearBalls?: () => void };
     if (typeof renderer3D.clearTableAndRails === 'function') {
@@ -396,6 +619,21 @@ export class Game {
       renderer3D.clearBalls();
     }
     this.initializeGame();
+  }
+
+  setupCollisionTracking() {
+    // Hook up ball collision tracking for rules engine
+    this.world.onBallCollision = (ballA, ballB) => {
+      if (this.mode !== GameMode.EIGHT_BALL) return;
+
+      // Track first contact with cue ball
+      const cueBallId = 0;
+      if (ballA.id === cueBallId && !ballB.pocketed) {
+        this.rules.recordFirstContact(ballB.id);
+      } else if (ballB.id === cueBallId && !ballA.pocketed) {
+        this.rules.recordFirstContact(ballA.id);
+      }
+    };
   }
 
   private respawnCueBall() {
@@ -427,7 +665,8 @@ export class Game {
   
   shoot(angle: number, power: number) {
     if (!this.cueBall || this.cueBall.pocketed) return;
-    
+    if (!this.canShoot) return;
+
     // Clear cached prediction
     this.cachedPrediction = null;
     this.cachedDirection = null;
@@ -460,8 +699,14 @@ export class Game {
     this.world.logShotSnapshot(angle, power);
     physicsRecorder.recordShot(angle, power);
     this.canShoot = false;
+
     if (this.mode === GameMode.EIGHT_BALL) {
-      this.rules.startShot();
+      this.rules.startShot(this.world.balls);
+    }
+
+    // Track shot in arcade mode
+    if (this.arcadeMode) {
+      this.arcadeMode.onShotTaken(angle, power);
     }
   }
   
@@ -479,20 +724,154 @@ export class Game {
     const allSleeping = this.world.balls.every(b => b.pocketed || b.sleeping);
     if (allSleeping && !this.canShoot) {
       this.canShoot = true;
-      
+
       // Check for shot capture completion
       if (shotCapture.isCapturing() && this.cueBall) {
         const targetBall = this.world.balls.find(b => b.id !== 0 && !b.pocketed);
         shotCapture.checkForRest(this.cueBall, targetBall || null);
       }
-      
+
       if (this.mode === GameMode.EIGHT_BALL) {
-        this.rules.endShot(this.world.balls);
+        this.handleShotComplete();
+      }
+
+      // Handle arcade mode shot completion
+      if (this.arcadeMode) {
+        this.arcadeMode.onShotComplete(this.world.balls);
       }
 
       if (this.cueBall && this.cueBall.pocketed) {
         this.respawnCueBall();
       }
+    }
+
+    // Handle AI turn
+    if (this.mode === GameMode.EIGHT_BALL && this.canShoot) {
+      this.handleAITurn(dt);
+    }
+
+    // Update arcade mode (timers, etc.)
+    if (this.arcadeMode) {
+      this.arcadeMode.update(dt);
+
+      // Update HUD with arcade stats
+      const hudData = this.arcadeMode.getHUDData();
+      this.hud.showArcadeStats(hudData);
+
+      // Check completion
+      const completion = this.arcadeMode.checkCompletion(this.world.balls);
+      if (completion.isComplete && !this.arcadeMode.isComplete) {
+        this.arcadeMode.isComplete = true;
+        this.hud.showFoul(completion.message || 'Complete!');
+        console.log('🏁', completion.message);
+      }
+    }
+  }
+
+  /**
+   * Handle shot completion in EIGHT_BALL mode
+   */
+  handleShotComplete() {
+    this.rules.endShot(this.world.balls);
+
+    // Update turn management based on rules state
+    if (this.stateMachine && this.players.length > 0) {
+      const currentPlayer = this.players[this.currentPlayerIndex];
+
+      console.log('[8-Ball] Shot complete:', {
+        currentPlayerIndex: this.currentPlayerIndex,
+        currentPlayerId: currentPlayer.id,
+        currentPlayerType: currentPlayer.type,
+        currentPlayerGroup: currentPlayer.group,
+        rulesCurrentPlayer: this.rules.currentPlayer,
+        stateMachineState: this.stateMachine.state,
+      });
+
+      // Check if game is over
+      if (this.rules.gameState === GameState.GAME_OVER) {
+        this.stateMachine.transitionTo(GameState.GAME_OVER);
+        return;
+      }
+
+      // Check if turn changed (rules handle turn switching)
+      if (this.rules.currentPlayer !== currentPlayer.id) {
+        console.log('[8-Ball] Turn changed to player', this.rules.currentPlayer);
+        this.switchToPlayer(this.rules.currentPlayer - 1);
+      } else {
+        console.log('[8-Ball] Same player continues');
+        // Same player continues - transition from BREAK to appropriate turn state
+        if (this.stateMachine.state === GameState.BREAK) {
+          if (currentPlayer.isAI()) {
+            console.log('[8-Ball] Transitioning BREAK -> AI_TURN');
+            this.stateMachine.transitionTo(GameState.AI_TURN);
+            this.aiThinkingStartTime = performance.now();
+            this.aiSelectedShot = null;
+            this.hud.showAIThinking();
+          } else {
+            console.log('[8-Ball] Transitioning BREAK -> PLAYER_TURN');
+            this.stateMachine.transitionTo(GameState.PLAYER_TURN);
+            this.hud.setTurn(currentPlayer.id, false);
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Switch to a specific player
+   */
+  switchToPlayer(playerIndex: number) {
+    this.currentPlayerIndex = playerIndex;
+    const currentPlayer = this.players[this.currentPlayerIndex];
+
+    if (this.stateMachine) {
+      this.stateMachine.switchPlayer(currentPlayer);
+
+      if (currentPlayer.isAI()) {
+        this.stateMachine.transitionTo(GameState.AI_TURN);
+        this.aiThinkingStartTime = performance.now();
+        this.aiSelectedShot = null;
+        this.hud.showAIThinking();
+      } else {
+        this.stateMachine.transitionTo(GameState.PLAYER_TURN);
+        this.hud.setTurn(currentPlayer.id, false);
+      }
+    }
+  }
+
+  /**
+   * Handle AI turn logic
+   */
+  handleAITurn(dt: number) {
+    if (!this.ai || !this.stateMachine) return;
+    if (!this.stateMachine.isAITurn()) return;
+    if (!this.cueBall || this.cueBall.pocketed) return;
+
+    const currentPlayer = this.players[this.currentPlayerIndex];
+    if (!currentPlayer.isAI()) return;
+
+    // If AI hasn't selected a shot yet, wait for thinking time
+    if (!this.aiSelectedShot) {
+      const elapsed = performance.now() - this.aiThinkingStartTime;
+
+      if (elapsed >= this.ai.thinkingTime) {
+        // Select shot
+        console.log('[AI] Selecting shot for player', currentPlayer.id, 'group:', currentPlayer.group);
+        this.aiSelectedShot = this.ai.selectShot(this.world, currentPlayer);
+
+        if (!this.aiSelectedShot) {
+          // No valid shot found - should play safety or pass
+          console.warn('[AI] Could not find a valid shot, switching turn');
+          this.switchToPlayer((this.currentPlayerIndex + 1) % this.players.length);
+          return;
+        }
+        console.log('[AI] Selected shot:', this.aiSelectedShot);
+      }
+    } else {
+      // Execute the selected shot
+      console.log('[AI] Executing shot');
+      this.shoot(this.aiSelectedShot.aimAngle, this.aiSelectedShot.power);
+      this.aiSelectedShot = null;
     }
   }
   

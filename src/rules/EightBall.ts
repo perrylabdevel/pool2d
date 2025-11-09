@@ -2,6 +2,7 @@
 
 import { Ball } from '../physics/Shapes';
 import { BALL_CUE, BALL_8, BALLS_SOLID, BALLS_STRIPE } from '../config';
+import { RulesConfig, getDefaultRulesConfig } from './RulesConfig';
 
 export enum GameState {
   BREAK,
@@ -17,22 +18,28 @@ export enum PlayerGroup {
 }
 
 export class EightBallRules {
+  config: RulesConfig;
   currentPlayer: number = 1;
   player1Group: PlayerGroup = PlayerGroup.NONE;
   player2Group: PlayerGroup = PlayerGroup.NONE;
   gameState: GameState = GameState.BREAK;
   winner: number = 0;
-  
+
   // Track shot state
   cueBallHit: boolean = false;
   firstBallHit: number = -1;
   ballsPocketed: number[] = [];
-  
+  private ballsPocketedBeforeShot: Set<number> = new Set();
+
   onFoul?: (message: string) => void;
   onTurnChange?: (player: number) => void;
   onGameOver?: (winner: number) => void;
   onGroupAssigned?: (player: number, group: PlayerGroup) => void;
-  
+
+  constructor(config?: RulesConfig) {
+    this.config = config || getDefaultRulesConfig();
+  }
+
   startGame() {
     this.currentPlayer = 1;
     this.player1Group = PlayerGroup.NONE;
@@ -40,11 +47,16 @@ export class EightBallRules {
     this.gameState = GameState.BREAK;
     this.winner = 0;
   }
-  
-  startShot() {
+
+  startShot(balls: Ball[]) {
     this.cueBallHit = false;
     this.firstBallHit = -1;
     this.ballsPocketed = [];
+
+    // Track which balls are already pocketed before this shot
+    this.ballsPocketedBeforeShot = new Set(
+      balls.filter(b => b.pocketed).map(b => b.id)
+    );
   }
   
   recordBallPocketed(ballId: number) {
@@ -58,12 +70,20 @@ export class EightBallRules {
   }
   
   endShot(balls: Ball[]) {
+    // Detect which balls were pocketed during this shot
+    const currentlyPocketed = new Set(balls.filter(b => b.pocketed).map(b => b.id));
+    this.ballsPocketed = Array.from(currentlyPocketed).filter(
+      id => !this.ballsPocketedBeforeShot.has(id)
+    );
+
+    console.log('[Rules] Balls pocketed this shot:', this.ballsPocketed);
+
     const cueBall = balls.find((b) => b.id === BALL_CUE);
     const cueBallPocketed = cueBall?.pocketed || false;
-    
+
     let foul = false;
     let foulMessage = '';
-    
+
     // Check for fouls
     if (cueBallPocketed) {
       foul = true;
@@ -74,10 +94,10 @@ export class EightBallRules {
     } else if (this.gameState === GameState.PLAYING) {
       // Check if correct group was hit first
       const currentGroup = this.getCurrentPlayerGroup();
-      
+
       if (currentGroup !== PlayerGroup.NONE) {
         const hitCorrectGroup = this.isCorrectGroup(this.firstBallHit, currentGroup);
-        
+
         if (!hitCorrectGroup && this.firstBallHit !== BALL_8) {
           foul = true;
           foulMessage = 'Foul! Wrong group hit first.';
@@ -93,7 +113,7 @@ export class EightBallRules {
     
     // Handle 8-ball pocketed
     if (this.ballsPocketed.includes(BALL_8)) {
-      this.handle8BallPocketed(foul);
+      this.handle8BallPocketed(foul, balls);
       return;
     }
     
@@ -128,7 +148,7 @@ export class EightBallRules {
   handleBreak(foul: boolean, foulMessage: string) {
     // Legal break: at least 4 balls hit cushions or ball pocketed
     // Simplified: just check if any ball pocketed
-    
+
     if (foul) {
       if (this.onFoul) {
         this.onFoul(foulMessage);
@@ -137,7 +157,7 @@ export class EightBallRules {
       this.switchPlayer();
       return;
     }
-    
+
     // Check if 8-ball pocketed on break
     if (this.ballsPocketed.includes(BALL_8)) {
       // Win on break if no scratch
@@ -148,19 +168,24 @@ export class EightBallRules {
       }
       return;
     }
-    
+
     this.gameState = GameState.PLAYING;
-    
+
+    // Assign groups if balls were pocketed on break
+    if (this.ballsPocketed.length > 0 && this.player1Group === PlayerGroup.NONE) {
+      this.assignGroups();
+    }
+
     // Continue turn if ball pocketed
     if (this.ballsPocketed.length === 0) {
       this.switchPlayer();
     }
   }
   
-  handle8BallPocketed(foul: boolean) {
+  handle8BallPocketed(foul: boolean, balls: Ball[]) {
     // Check if player has cleared their group
-    const hasCleared = this.hasPlayerClearedGroup(this.currentPlayer);
-    
+    const hasCleared = this.hasPlayerClearedGroup(this.currentPlayer, balls);
+
     if (foul || !hasCleared) {
       // Lose if 8-ball pocketed early or with foul
       this.winner = this.currentPlayer === 1 ? 2 : 1;
@@ -219,16 +244,19 @@ export class EightBallRules {
     return false;
   }
   
-  hasPlayerClearedGroup(player: number): boolean {
+  hasPlayerClearedGroup(player: number, balls: Ball[]): boolean {
     // Check if all balls of player's group are pocketed
     const group = player === 1 ? this.player1Group : this.player2Group;
-    
+
     if (group === PlayerGroup.NONE) return false;
-    
-    // In a real implementation, we'd check the actual ball states
-    // For now, simplified - will be properly implemented when integrated with game state
-    // const targetBalls = group === PlayerGroup.SOLIDS ? BALLS_SOLID : BALLS_STRIPE;
-    return false;
+
+    const targetBalls = group === PlayerGroup.SOLIDS ? BALLS_SOLID : BALLS_STRIPE;
+
+    // Check if all balls in the group are pocketed
+    return targetBalls.every(ballId => {
+      const ball = balls.find(b => b.id === ballId);
+      return ball ? ball.pocketed : false;
+    });
   }
   
   switchPlayer() {

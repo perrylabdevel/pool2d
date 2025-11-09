@@ -63,6 +63,8 @@ export class PhysicsWorld {
   pockets: Pocket[] = [];
   // Skip cue ball pocket checks during ball-in-hand dragging
   skipCuePocketCheck: boolean = false;
+  // Callback for ball collisions (for rule tracking)
+  onBallCollision?: (ballA: Ball, ballB: Ball) => void;
   
   constructor() {
     this.initializeRails();
@@ -206,6 +208,10 @@ export class PhysicsWorld {
         contacts.forEach((contact) => {
           if (contact.ballB) {
             resolveBallBall(contact);
+            // Notify collision callback on any substep
+            if (this.onBallCollision) {
+              this.onBallCollision(contact.ballA, contact.ballB);
+            }
           } else if (contact.rail) {
             resolveBallRail(contact);
           }

@@ -19,8 +19,11 @@ Transform Pool 2D from a physics sandbox into a full-featured billiards game wit
 **Game Modes:**
 ```typescript
 enum GameMode {
-  PRACTICE,    // ✅ Implemented - free play, unlimited shots
-  EIGHT_BALL,  // ⚠️ Partial - rules exist, no turn management
+  PRACTICE,      // ✅ Implemented - free play, unlimited shots
+  EIGHT_BALL,    // ✅ Implemented - AI opponent, turn management
+  TIME_ATTACK,   // ✅ Implemented - race against the clock
+  PERFECT_GAME,  // ✅ Implemented - run the table without missing
+  SPEED_POOL,    // ✅ Implemented - combo scoring with timer
 }
 ```
 
@@ -32,23 +35,35 @@ enum GameMode {
 - ✅ Shot prediction and aim assist
 - ✅ Basic HUD (FPS, player turn indicator)
 - ✅ Geometry tuning panel for testing
+- ✅ **Turn-based gameplay loop** (Phase 1 ✅)
+- ✅ **AI opponent with difficulty levels** (Phase 1 ✅)
+- ✅ **Game state machine** (BREAK, PLAYER_TURN, AI_TURN, BALL_IN_HAND, GAME_OVER) (Phase 1 ✅)
+- ✅ **Player management system** (Player.ts with stats tracking) (Phase 1 ✅)
+- ✅ **Arcade game modes** (Time Attack, Perfect Game, Speed Pool) (Phase 2 partial ✅)
 
 **What's Missing:**
-- ❌ Turn-based gameplay loop
-- ❌ AI opponents
-- ❌ Win conditions enforcement
-- ❌ Game state management (breaks, turns, fouls)
-- ❌ Shot timer
-- ❌ Match scoring
+- ⚠️ **Complete 8-ball rules** (see EIGHT_BALL_RULES.md for details)
+- ❌ Shot timer/shot clock
+- ❌ Match scoring (games won tracking)
 - ❌ Replay system
 - ❌ Menu system
+- ❌ Challenge Mode scenarios
+- ❌ Trick Shot Gallery
+- ❌ Survival Mode
 
 ---
 
-## Phase 1: AI Opponent (Priority: Immediate)
+## Phase 1: AI Opponent ✅ COMPLETED
 
 ### Goal
 Implement a computer opponent for testing physics and refining gameplay, allowing you to play full 8-ball games during development.
+
+### Status: ✅ Complete (with known issues to refine)
+- ✅ Game state machine implemented
+- ✅ Player management system created
+- ✅ AI opponent with 4 difficulty levels
+- ✅ Turn-based game loop working
+- ⚠️ Some 8-ball rules still incomplete (see EIGHT_BALL_RULES.md)
 
 ### Why AI First?
 1. **Testing utility** - Need to test turn-based logic and win conditions
@@ -291,14 +306,17 @@ class Game {
 ```
 
 ### Testing Checklist
-- [ ] Can start new AI match
-- [ ] AI selects legal shots
-- [ ] AI aims and shoots automatically
-- [ ] Turn switches after missed shot
-- [ ] Fouls trigger ball-in-hand
-- [ ] Game ends when 8-ball pocketed
-- [ ] Can adjust AI difficulty
-- [ ] AI "thinking" delay feels natural
+- [x] Can start new AI match
+- [x] AI selects legal shots
+- [x] AI aims and shoots automatically
+- [x] Turn switches after missed shot
+- [x] Fouls trigger ball-in-hand
+- [x] Game ends when 8-ball pocketed (basic implementation)
+- [x] Can adjust AI difficulty (4 levels: EASY, MEDIUM, HARD, EXPERT)
+- [x] AI "thinking" delay feels natural
+- [ ] All 8-ball rules properly enforced (see EIGHT_BALL_RULES.md for missing rules)
+- [ ] Ball-in-hand placement works correctly
+- [ ] Shot clock implemented
 
 ### Estimated Effort
 **Total:** 16-20 hours
@@ -310,14 +328,22 @@ class Game {
 
 ---
 
-## Phase 2: Game Mode Variations (Arcade Modes)
+## Phase 2: Game Mode Variations (Arcade Modes) - PARTIAL ✅
 
 ### Goal
 Add varied single-player modes for different playstyles and skill progression.
 
-### Mode Ideas
+### Status: Partial Complete
+- ✅ 2.1: Time Attack (implemented)
+- ✅ 2.2: Perfect Game (implemented)
+- ✅ 2.4: Speed Pool (implemented)
+- ❌ 2.3: Challenge Mode (not started)
+- ❌ 2.5: Trick Shot Gallery (not started)
+- ❌ 2.6: Survival Mode (not started)
 
-#### 2.1: Time Attack
+### Mode Details
+
+#### 2.1: Time Attack ✅ IMPLEMENTED
 **Concept:** Clear all balls as fast as possible.
 
 **Rules:**
@@ -336,7 +362,12 @@ Add varied single-player modes for different playstyles and skill progression.
 - Hard: 5-minute limit, no aim assist
 - Expert: 3-minute limit, random ball placement
 
-#### 2.2: Perfect Game
+**Implementation:**
+- File: `src/game/modes/TimeAttackMode.ts`
+- Keyboard shortcut: `T` key
+- Features: Timer, best time tracking, ball count
+
+#### 2.2: Perfect Game ✅ IMPLEMENTED
 **Concept:** Run the table without missing.
 
 **Rules:**
@@ -350,7 +381,12 @@ Add varied single-player modes for different playstyles and skill progression.
 - Leaderboard for perfect games
 - Unlock harder table setups
 
-#### 2.3: Challenge Mode
+**Implementation:**
+- File: `src/game/modes/PerfectGameMode.ts`
+- Keyboard shortcut: `P` key
+- Features: Streak tracking, attempt counting, instant failure on miss
+
+#### 2.3: Challenge Mode ❌ NOT IMPLEMENTED
 **Concept:** Pre-set scenarios to solve.
 
 **Examples:**
@@ -365,7 +401,7 @@ Add varied single-player modes for different playstyles and skill progression.
 - Unlock new challenges by completing previous ones
 - Workshop mode: Create and share challenges
 
-#### 2.4: Speed Pool
+#### 2.4: Speed Pool ✅ IMPLEMENTED
 **Concept:** Fast-paced scoring mode.
 
 **Rules:**
@@ -380,7 +416,12 @@ Add varied single-player modes for different playstyles and skill progression.
 - Slow Motion (10 seconds)
 - Ball Reveal (highlight easiest shot)
 
-#### 2.5: Trick Shot Gallery
+**Implementation:**
+- File: `src/game/modes/SpeedPoolMode.ts`
+- Keyboard shortcut: `V` key
+- Features: Timer, score tracking, combo multiplier, high score
+
+#### 2.5: Trick Shot Gallery ❌ NOT IMPLEMENTED
 **Concept:** Execute famous trick shots.
 
 **Content:**
@@ -397,7 +438,7 @@ Add varied single-player modes for different playstyles and skill progression.
 - Butterfly shot
 - Figure-8 pattern
 
-#### 2.6: Survival Mode
+#### 2.6: Survival Mode ❌ NOT IMPLEMENTED
 **Concept:** Play against increasingly difficult AI.
 
 **Rules:**
@@ -972,15 +1013,30 @@ src/
 
 ## Next Steps
 
-1. ✅ **Review this plan** - Discuss priorities and scope
-2. 🎯 **Start Phase 1** - Implement AI opponent (highest priority)
-3. 📝 **Create detailed Phase 1 spec** - Break down into small tasks
-4. 🔧 **Refactor game state** - Prepare codebase for turn-based logic
-5. 🤖 **Build basic AI** - Get computer opponent working
-6. 🧪 **Test & iterate** - Play against AI, refine feel
-7. 🎮 **Add first arcade mode** - Time Attack as proof-of-concept
-8. 🌐 **Plan Phase 3** - Begin researching server architecture
+### Completed ✅
+1. ✅ **Review this plan** - Discussed priorities and scope
+2. ✅ **Start Phase 1** - Implemented AI opponent
+3. ✅ **Create detailed Phase 1 spec** - Broke down into small tasks
+4. ✅ **Refactor game state** - Prepared codebase for turn-based logic
+5. ✅ **Build basic AI** - Computer opponent working with 4 difficulty levels
+6. ✅ **Test & iterate** - AI can play full games (with some rule gaps)
+7. ✅ **Add arcade modes** - Time Attack, Perfect Game, Speed Pool implemented
+
+### In Progress 🔄
+8. **Complete 8-ball rules** - See EIGHT_BALL_RULES.md for detailed list
+   - Fix 8-ball on break scratch bug
+   - Add rail contact rule
+   - Add legal break validation
+   - Add called pocket for 8-ball
+   - Fix ball-in-hand placement rules
+
+### Up Next 🎯
+9. **Test complete game flow** - Play full games from break to win
+10. **Remove debug logging** - Clean up console.log statements
+11. **Finish remaining arcade modes** - Challenge Mode, Trick Shot Gallery, Survival Mode
+12. **Add menu system** - Game mode selection UI
+13. **Plan Phase 3** - Begin researching server architecture for multiplayer
 
 ---
 
-**Let's start with AI so you can actually play the game!** 🎱
+**Current Status:** Phase 1 complete, Phase 2 partially complete. Focus on completing 8-ball rules before moving to Phase 3. 🎱

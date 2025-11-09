@@ -92,9 +92,15 @@ export class HUD {
     this.modeElement.textContent = mode;
   }
   
-  setTurn(player: number) {
-    this.turnElement.textContent = `Player ${player}'s Turn`;
-    
+  setTurn(player: number, isAI: boolean = false) {
+    if (isAI) {
+      this.turnElement.textContent = `AI's Turn`;
+      this.turnElement.classList.remove('ai-thinking');
+    } else {
+      this.turnElement.textContent = player === 1 ? `Your Turn` : `Player ${player}'s Turn`;
+      this.turnElement.classList.remove('ai-thinking');
+    }
+
     if (player === 1) {
       this.player1Panel.classList.add('active');
       this.player2Panel.classList.remove('active');
@@ -102,6 +108,29 @@ export class HUD {
       this.player1Panel.classList.remove('active');
       this.player2Panel.classList.add('active');
     }
+  }
+
+  showAIThinking() {
+    this.turnElement.textContent = 'AI Thinking...';
+    this.turnElement.classList.add('ai-thinking');
+  }
+
+  hideTurnIndicator() {
+    this.turnElement.textContent = '';
+    this.turnElement.classList.remove('ai-thinking');
+  }
+
+  showArcadeStats(stats: { [key: string]: string | number }) {
+    // Display arcade mode stats in the turn indicator area
+    const entries = Object.entries(stats);
+    if (entries.length === 0) {
+      this.turnElement.textContent = '';
+      return;
+    }
+
+    const statsText = entries.map(([key, value]) => `${key}: ${value}`).join(' | ');
+    this.turnElement.textContent = statsText;
+    this.turnElement.classList.remove('ai-thinking');
   }
   
   showFoul(message: string) {
