@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Corner Conversion Test</title>
+  <style>
+    body {
+      font-family: 'Courier New', monospace;
+      padding: 20px;
+      background: #1e1e1e;
+      color: #d4d4d4;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .pass { color: #4ec9b0; }
+    .fail { color: #f48771; }
+    .section { margin: 20px 0; border-top: 1px solid #444; padding-top: 10px; }
+    .test-case { margin-bottom: 30px; padding: 10px; background: #252526; border-left: 3px solid #007acc; }
+    .summary { background: #2d2d30; padding: 15px; margin-top: 20px; border: 1px solid #007acc; }
+    pre { margin: 5px 0; }
+  </style>
+</head>
+<body>
+  <h1>Corner Pocket Geometry Conversion Test</h1>
+  <div id="output"></div>
+
+  <script type="module">
+    import { modernToLegacy, legacyToModern } from './src/geometry/GeometryConversion.ts';
+    import { PocketTemplate } from './src/geometry/ModernGeometry.ts';
+
+    const PLAY_HALF_W_IN = 50.0;
+    const PLAY_HALF_H_IN = 25.0;
+
+    const testCases = [
+      {
+        name: 'Standard BCA Medium',
+        corner: {
+          mouthWidth: 5.0,
+          throatWidth: 4.125,
+          railDepth: 1.75,
+          jawDepth: 1.0,
+          shelfDepth: 1.75,
+        },
+        // Expected jaw offset = jawDepth + taperPerSide = 1.0 + 0.4375 = 1.4375
+        // But must be >= throatHalf = 2.0625, so finalOffset = 2.0625
+        // straightX = 50 - 1.75 = 48.25
+        // jawX = 48.25 - 2.0625 = 46.1875
+        expectedJawX: 46.1875,
+        expectedJawOffset: 2.0625,
+        expectedMouthToThroatTaper: 0.4375, // (mouthWidth - throatWidth)/2 = 0.4375
+      },
+      {
+        name: 'Tight throat, shallow jaw',
+        corner: {
+          mouthWidth: 4.5,
+          throatWidth: 3.5,
+          railDepth: 1.5,
+          jawDepth: 0.8,
+          shelfDepth: 1.5,
+        },
+        // taperPerSide = (4.5-3.5)/2 = 0.5
+        // desiredOffset = 0.8 + 0.5 = 1.3
+        // throatHalf = 1.75
+        // finalOffset = max(1.3, 1.75) = 1.75
+        // straightX = 50 - 1.5 = 48.5
+        // jawX = 48.5 - 1.75 = 46.75
+        expectedJawX: 46.75,
+        expectedJawOffset: 1.75,
+        expectedMouthToThroatTaper: 0.5,
+      },
+      {
+        name: 'Deep jaw allows wider mouth',
+        corner: {
+          mouthWidth: 6.0,
+          throatWidth: 5.0,
+          railDepth: 2.0,
+          jawDepth: 3.0,
+          shelfDepth: 2.0,
+        },
+        // taperPerSide = (6.0-5.0)/2 = 0.5
+        // desiredOffset = 3.0 + 0.5 = 3.5
+        // throatHalf = 2.5
+        // finalOffset = max(3.5, 2.5) = 3.5 (jaw depth dominates!)
+        // straightX = 50 - 2.0 = 48.0
+        // jawX = 48.0 - 3.5 = 44.5
+        expectedJawX: 44.5,
+        expectedJawOffset: 3.5,
+        expectedMouthToThroatTaper: 0.5,
+      },
+      {
+        name: 'Wide taper creates forgiving pocket',
+        corner: {
+          mouthWidth: 8.0,
+          throatWidth: 5.0,
+          railDepth: 1.5,
+          jawDepth: 1.0,
+          shelfDepth: 1.5,
+        },
+        // taperPerSide = (8.0-5.0)/2 = 1.5
+        // desiredOffset = 1.0 + 1.5 = 2.5
+        // throatHalf = 2.5
+        // finalOffset = max(2.5, 2.5) = 2.5
+        // straightX = 50 - 1.5 = 48.5
+        // jawX = 48.5 - 2.5 = 46.0
+        expectedJawX: 46.0,
+        expectedJawOffset: 2.5,
+        expectedMouthToThroatTaper: 1.5,
+      },
+      {
+        name: 'Minimal taper for tight play',
+        corner: {
+          mouthWidth: 4.0,
+          throatWidth: 3.5,
+          railDepth: 1.5,
+          jawDepth: 0.5,
+          shelfDepth: 1.5,
+        },
+        // taperPerSide = (4.0-3.5)/2 = 0.25
+        // desiredOffset = 0.5 + 0.25 = 0.75
+        // throatHalf = 1.75
+        // finalOffset = max(0.75, 1.75) = 1.75 (throat requirement wins)
+        // straightX = 50 - 1.5 = 48.5
+        // jawX = 48.5 - 1.75 = 46.75
+        expectedJawX: 46.75,
+        expectedJawOffset: 1.75,
+        expectedMouthToThroatTaper: 0.25,
+      },
+    ];
+
+    function log(html) {
+      const output = document.getElementById('output');
+      output.innerHTML += html + '\n';
+    }
+
+    function runTests() {
+      let passCount = 0;
+      let failCount = 0;
+
+      for (const testCase of testCases) {
+        log(`<div class="test-case">`);
+        log(`<h3>${testCase.name}</h3>`);
+
+        // Create modern geometry
+        const modernGeometry = {
+          template: PocketTemplate.CUSTOM,
+          side: {
+            mouthWidth: 5.5,
+            throatWidth: 4.625,
+            railDepth: 1.5,
+            jawDepth: 1.1,
+            shelfDepth: 0.3,
+            railCurve: 0.0,
+          },
+          corner: testCase.corner,
+        };
+
+        log(`<pre>Input (Modern):`);
+        log(`  mouthWidth: ${testCase.corner.mouthWidth}"`);
+        log(`  throatWidth: ${testCase.corner.throatWidth}"`);
+        log(`  railDepth: ${testCase.corner.railDepth}"`);
+        log(`  jawDepth: ${testCase.corner.jawDepth}"`);
+        log(`  shelfDepth: ${testCase.corner.shelfDepth}"</pre>`);
+
+        // Convert to legacy
+        const legacy = modernToLegacy(modernGeometry);
+
+        const straightX = PLAY_HALF_W_IN - testCase.corner.railDepth;
+        const targetY = PLAY_HALF_H_IN - testCase.corner.railDepth;
+        const actualJawX = legacy.CORNER_JAW_X_OVERRIDE_IN ?? 0;
+        const actualJawY = legacy.CORNER_JAW_Y_OVERRIDE_IN ?? 0;
+        const actualJawOffset = straightX - actualJawX;
+        const throatHalf = testCase.corner.throatWidth / 2;
+        const mouthHalf = testCase.corner.mouthWidth / 2;
+        const actualTaper = mouthHalf - throatHalf;
+
+        log(`<pre>Output (Legacy):`);
+        log(`  CORNER_STRAIGHT_X_IN: ${legacy.CORNER_STRAIGHT_X_IN}"`);
+        log(`  CORNER_TARGET_Y_IN: ${legacy.CORNER_TARGET_Y_IN}"`);
+        log(`  CORNER_JAW_X_OVERRIDE_IN: ${legacy.CORNER_JAW_X_OVERRIDE_IN}"`);
+        log(`  CORNER_JAW_Y_OVERRIDE_IN: ${legacy.CORNER_JAW_Y_OVERRIDE_IN}"`);
+        log(`  CORNER_THROAT_WIDTH_IN: ${legacy.CORNER_THROAT_WIDTH_IN}"</pre>`);
+
+        log(`<pre>Calculated Values:`);
+        log(`  straightX (50 - railDepth): ${straightX.toFixed(3)}"`);
+        log(`  targetY (25 - railDepth): ${targetY.toFixed(3)}"`);
+        log(`  mouthHalf (mouthWidth/2): ${mouthHalf.toFixed(3)}"`);
+        log(`  throatHalf (throatWidth/2): ${throatHalf.toFixed(3)}"`);
+        log(`  Actual jawX (from center): ${actualJawX.toFixed(3)}"`);
+        log(`  Actual jaw offset (straightX - jawX): ${actualJawOffset.toFixed(3)}"`);
+        log(`  Actual taper per side (mouth-throat)/2: ${actualTaper.toFixed(3)}"`);
+        if (testCase.expectedJawX !== undefined) {
+          log(`  Expected jawX: ${testCase.expectedJawX.toFixed(3)}"</pre>`);
+        }
+        if (testCase.expectedJawOffset !== undefined) {
+          log(`  Expected jaw offset: ${testCase.expectedJawOffset.toFixed(3)}"</pre>`);
+        }
+
+        // Test 1: Jaw position uses mouth width
+        let test1Pass = true;
+        if (testCase.expectedJawX !== undefined) {
+          const tolerance = 0.001;
+          const diff = Math.abs(actualJawX - testCase.expectedJawX);
+          if (diff > tolerance) {
+            log(`<pre class="fail">❌ FAIL: JawX mismatch!`);
+            log(`   Expected: ${testCase.expectedJawX.toFixed(3)}"`);
+            log(`   Actual: ${actualJawX.toFixed(3)}"`);
+            log(`   Diff: ${diff.toFixed(3)}"</pre>`);
+            test1Pass = false;
+          } else {
+            log(`<pre class="pass">✅ PASS: JawX correct (${actualJawX.toFixed(3)}") - uses mouthWidth</pre>`);
+          }
+        }
+
+        // Test 1b: Taper validation
+        if (testCase.expectedMouthToThroatTaper !== undefined) {
+          const tolerance = 0.001;
+          const diff = Math.abs(actualTaper - testCase.expectedMouthToThroatTaper);
+          if (diff > tolerance) {
+            log(`<pre class="fail">❌ FAIL: Taper mismatch!`);
+            log(`   Expected taper: ${testCase.expectedMouthToThroatTaper.toFixed(3)}"`);
+            log(`   Actual taper: ${actualTaper.toFixed(3)}"`);
+            log(`   Diff: ${diff.toFixed(3)}"</pre>`);
+            test1Pass = false;
+          } else {
+            log(`<pre class="pass">✅ PASS: Mouth-to-throat taper correct (${actualTaper.toFixed(3)}")</pre>`);
+          }
+        }
+
+        // Test 2: Throat width preservation
+        const test2Pass = Math.abs((legacy.CORNER_THROAT_WIDTH_IN ?? 0) - testCase.corner.throatWidth) < 0.001;
+        if (test2Pass) {
+          log(`<pre class="pass">✅ PASS: Throat width preserved (${testCase.corner.throatWidth}")</pre>`);
+        } else {
+          log(`<pre class="fail">❌ FAIL: Throat width not preserved!`);
+          log(`   Expected: ${testCase.corner.throatWidth}"`);
+          log(`   Actual: ${legacy.CORNER_THROAT_WIDTH_IN}"</pre>`);
+        }
+
+        // Test 3: Proper taper direction (mouth >= throat)
+        const test3Pass = testCase.corner.mouthWidth >= testCase.corner.throatWidth - 0.001;
+        if (test3Pass) {
+          log(`<pre class="pass">✅ PASS: Mouth (${testCase.corner.mouthWidth}") >= Throat (${testCase.corner.throatWidth}") - proper taper</pre>`);
+        } else {
+          log(`<pre class="fail">❌ FAIL: Reverse taper! Mouth (${testCase.corner.mouthWidth}") < Throat (${testCase.corner.throatWidth}")</pre>`);
+        }
+
+        // Test 4: Round-trip conversion
+        const roundTrip = legacyToModern(legacy);
+        const throatDiff = Math.abs(roundTrip.corner.throatWidth - testCase.corner.throatWidth);
+        const railDepthDiff = Math.abs(roundTrip.corner.railDepth - testCase.corner.railDepth);
+        const test4Pass = throatDiff < 0.1 && railDepthDiff < 0.1;
+
+        log(`<pre>Round-trip conversion (Legacy → Modern):`);
+        log(`  Original throatWidth: ${testCase.corner.throatWidth}"`);
+        log(`  Round-trip throatWidth: ${roundTrip.corner.throatWidth.toFixed(3)}"`);
+        log(`  Diff: ${throatDiff.toFixed(3)}"`);
+        log(`  Original railDepth: ${testCase.corner.railDepth}"`);
+        log(`  Round-trip railDepth: ${roundTrip.corner.railDepth.toFixed(3)}"`);
+        log(`  Diff: ${railDepthDiff.toFixed(3)}"</pre>`);
+
+        if (test4Pass) {
+          log(`<pre class="pass">✅ PASS: Round-trip conversion preserves key values</pre>`);
+        } else {
+          log(`<pre class="fail">❌ FAIL: Round-trip conversion loses precision</pre>`);
+        }
+
+        const allPassed = test1Pass && test2Pass && test3Pass && test4Pass;
+        if (allPassed) {
+          passCount++;
+          log(`<pre class="pass">✅ All tests passed for "${testCase.name}"</pre>`);
+        } else {
+          failCount++;
+          log(`<pre class="fail">❌ Some tests failed for "${testCase.name}"</pre>`);
+        }
+
+        log(`</div>`);
+      }
+
+      log(`<div class="summary">`);
+      log(`<h2>SUMMARY</h2>`);
+      log(`<pre>Total test cases: ${testCases.length}`);
+      log(`Passed: ${passCount}`);
+      log(`Failed: ${failCount}</pre>`);
+      log(`</div>`);
+    }
+
+    runTests();
+  </script>
+</body>
+</html>

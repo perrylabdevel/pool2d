@@ -9,7 +9,7 @@ import { HUD } from '../ui/HUD';
 import { CONFIG, CUE_BALL_POSITION, RACK_POSITIONS } from '../config';
 import { getTableGeometry } from '../geometry/Geometry';
 import { clampBallInHand } from '../geometry/Placement';
-import { EightBallRules } from '../rules/EightBall';
+import { EightBallRules, GameState as RulesGameState } from '../rules/EightBall';
 import { RULES_PRESETS, getRulesDescription } from '../rules/RulesConfig';
 import { physicsRecorder } from '../debug/PhysicsRecorder';
 import { Predictor } from '../physics/Prediction';
@@ -420,7 +420,7 @@ export class Game {
       persistState: true,
     });
     this.hud.registerPanel('modern-geometry-panel', this.modernGeometryPanel.getController(), {
-      hotkeys: ['p'],
+      hotkeys: ['j'],
       persistState: true,
     });
     this.hud.registerPanel('render-layer-panel', this.renderLayersPanel.getController(), {
@@ -552,6 +552,10 @@ export class Game {
 
     this.rules.onGameOver = (winner: number) => {
       console.log('[8-Ball] Game over! Winner:', winner);
+      this.canShoot = false;
+      if (this.stateMachine && this.stateMachine.state !== GameState.GAME_OVER) {
+        this.stateMachine.transitionTo(GameState.GAME_OVER);
+      }
       this.hud.showFoul(`Player ${winner} wins!`);
     };
 
@@ -666,6 +670,7 @@ export class Game {
   shoot(angle: number, power: number) {
     if (!this.cueBall || this.cueBall.pocketed) return;
     if (!this.canShoot) return;
+    if (this.mode === GameMode.EIGHT_BALL && this.rules.gameState === RulesGameState.GAME_OVER) return;
 
     // Clear cached prediction
     this.cachedPrediction = null;
@@ -723,8 +728,6 @@ export class Game {
     // Check if all balls are sleeping
     const allSleeping = this.world.balls.every(b => b.pocketed || b.sleeping);
     if (allSleeping && !this.canShoot) {
-      this.canShoot = true;
-
       // Check for shot capture completion
       if (shotCapture.isCapturing() && this.cueBall) {
         const targetBall = this.world.balls.find(b => b.id !== 0 && !b.pocketed);
@@ -740,9 +743,15 @@ export class Game {
         this.arcadeMode.onShotComplete(this.world.balls);
       }
 
-      if (this.cueBall && this.cueBall.pocketed) {
+      const matchOver =
+        this.mode === GameMode.EIGHT_BALL && this.rules.gameState === RulesGameState.GAME_OVER;
+      this.canShoot = !matchOver;
+
+      if (this.cueBall && this.cueBall.pocketed && !matchOver) {
         this.respawnCueBall();
       }
+    } else if (!this.canShoot && this.rules.gameState === RulesGameState.GAME_OVER) {
+      this.canShoot = false;
     }
 
     // Handle AI turn
@@ -788,7 +797,7 @@ export class Game {
       });
 
       // Check if game is over
-      if (this.rules.gameState === GameState.GAME_OVER) {
+      if (this.rules.gameState === RulesGameState.GAME_OVER) {
         this.stateMachine.transitionTo(GameState.GAME_OVER);
         return;
       }

@@ -254,7 +254,7 @@ export class PhysicsWorld {
       if (ball.pocketed) return;
       // Skip cue ball pocketing while dragging for stable placement UX
       if (this.skipCuePocketCheck && ball.id === 0) return;
-      
+
       for (const pocket of this.pockets) {
         if (pocket.contains(ball)) {
           ball.pocketed = true;

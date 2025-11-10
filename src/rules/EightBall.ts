@@ -17,6 +17,10 @@ export enum PlayerGroup {
   STRIPES,
 }
 
+const TABLE_HALF_WIDTH_IN = 50;
+const TABLE_HALF_HEIGHT_IN = 25;
+const POCKET_BUFFER_IN = 2;
+
 export class EightBallRules {
   config: RulesConfig;
   currentPlayer: number = 1;
@@ -57,6 +61,7 @@ export class EightBallRules {
     this.ballsPocketedBeforeShot = new Set(
       balls.filter(b => b.pocketed).map(b => b.id)
     );
+
   }
   
   recordBallPocketed(ballId: number) {
@@ -80,6 +85,24 @@ export class EightBallRules {
 
     const cueBall = balls.find((b) => b.id === BALL_CUE);
     const cueBallPocketed = cueBall?.pocketed || false;
+    const eightBall = balls.find((b) => b.id === BALL_8);
+    const eightBallPocketedThisShot = !!(
+      eightBall?.pocketed && !this.ballsPocketedBeforeShot.has(BALL_8)
+    );
+    const eightBallOutOfBounds = this.wasBallForcedOutOfPlay(eightBall);
+    const eightBallMissing = !eightBall;
+    const eightBallForcedPocket =
+      !this.ballsPocketedBeforeShot.has(BALL_8) && (eightBallMissing || eightBallOutOfBounds);
+
+    console.log('[Rules] 8-ball status', {
+      pocketed: eightBall?.pocketed ?? false,
+      wasPocketedBefore: this.ballsPocketedBeforeShot.has(BALL_8),
+      detectedThisShot: eightBallPocketedThisShot,
+      forcedPocket: eightBallForcedPocket,
+      outOfBounds: eightBallOutOfBounds,
+      missing: eightBallMissing,
+      position: eightBall ? { x: eightBall.x.toFixed(2), y: eightBall.y.toFixed(2) } : null,
+    });
 
     let foul = false;
     let foulMessage = '';
@@ -107,12 +130,32 @@ export class EightBallRules {
     
     // Handle break
     if (this.gameState === GameState.BREAK) {
-      this.handleBreak(foul, foulMessage);
+      this.handleBreak(foul, foulMessage, eightBallPocketedThisShot);
       return;
     }
-    
+
     // Handle 8-ball pocketed
-    if (this.ballsPocketed.includes(BALL_8)) {
+    if (eightBallPocketedThisShot || eightBallForcedPocket) {
+      if (eightBallForcedPocket) {
+        console.warn('[Rules] Forcing 8-ball pocket (out of play)', {
+          foul,
+          eightBallMissing,
+          eightBallOutOfBounds,
+        });
+        if (eightBall) {
+          eightBall.pocketed = true;
+        }
+      } else {
+        console.log('[Rules] Detected 8-ball pocketed during regular play', {
+          foul,
+          currentPlayer: this.currentPlayer,
+          playerGroup: this.getCurrentPlayerGroup(),
+        });
+      }
+
+      if (!this.ballsPocketed.includes(BALL_8)) {
+        this.ballsPocketed.push(BALL_8);
+      }
       this.handle8BallPocketed(foul, balls);
       return;
     }
@@ -145,7 +188,7 @@ export class EightBallRules {
     }
   }
   
-  handleBreak(foul: boolean, foulMessage: string) {
+  handleBreak(foul: boolean, foulMessage: string, eightBallPocketed: boolean) {
     // Legal break: at least 4 balls hit cushions or ball pocketed
     // Simplified: just check if any ball pocketed
 
@@ -159,7 +202,7 @@ export class EightBallRules {
     }
 
     // Check if 8-ball pocketed on break
-    if (this.ballsPocketed.includes(BALL_8)) {
+    if (eightBallPocketed) {
       // Win on break if no scratch
       this.winner = this.currentPlayer;
       this.gameState = GameState.GAME_OVER;
@@ -187,6 +230,7 @@ export class EightBallRules {
     const hasCleared = this.hasPlayerClearedGroup(this.currentPlayer, balls);
 
     if (foul || !hasCleared) {
+      console.log('[Rules] 8-ball ends game (loss)', { foul, hasCleared, currentPlayer: this.currentPlayer });
       // Lose if 8-ball pocketed early or with foul
       this.winner = this.currentPlayer === 1 ? 2 : 1;
       this.gameState = GameState.GAME_OVER;
@@ -194,6 +238,7 @@ export class EightBallRules {
         this.onGameOver(this.winner);
       }
     } else {
+      console.log('[Rules] 8-ball ends game (win)', { currentPlayer: this.currentPlayer });
       // Win if 8-ball pocketed legally
       this.winner = this.currentPlayer;
       this.gameState = GameState.GAME_OVER;
@@ -268,5 +313,12 @@ export class EightBallRules {
   
   canShoot(): boolean {
     return this.gameState !== GameState.GAME_OVER;
+  }
+
+  private wasBallForcedOutOfPlay(ball: Ball | undefined): boolean {
+    if (!ball) return true;
+    const thresholdX = TABLE_HALF_WIDTH_IN + POCKET_BUFFER_IN;
+    const thresholdY = TABLE_HALF_HEIGHT_IN + POCKET_BUFFER_IN;
+    return Math.abs(ball.x) > thresholdX || Math.abs(ball.y) > thresholdY;
   }
 }

@@ -1,6 +1,7 @@
 // Settings manager with local storage persistence
 import { CONFIG } from '../config';
 import { RenderLayerSettings, defaultRenderLayerSettings } from '../render/RenderLayers';
+import type { ModernPocketGeometry } from '../geometry/ModernGeometry';
 
 export interface GameSettings {
   aimAssist: boolean;
@@ -81,6 +82,7 @@ const STORAGE_KEYS = {
   PHYSICS_SETTINGS: 'pool2d_physics_settings',
   GEOMETRY_SETTINGS: 'pool2d_geometry_settings',
   RENDER_SETTINGS: 'pool2d_render_settings',
+  MODERN_GEOMETRY_SETTINGS: 'pool2d_modern_geometry_settings',
 };
 
 const DEFAULT_GAME_SETTINGS: GameSettings = {
@@ -120,6 +122,7 @@ export class SettingsManager {
   private physicsSettings: PhysicsSettings;
   private geometrySettings: GeometrySettings;
   private renderSettings: RenderSettings;
+  private modernGeometrySettings: ModernPocketGeometry | null;
 
   constructor() {
     this.gameSettings = this.loadGameSettings();
@@ -127,6 +130,7 @@ export class SettingsManager {
     this.physicsSettings = this.loadPhysicsSettings();
     this.geometrySettings = this.loadGeometrySettings();
     this.renderSettings = this.loadRenderSettings();
+    this.modernGeometrySettings = this.loadModernGeometrySettings();
     
     // Apply loaded settings
     this.applyPhysicsSettings();
@@ -375,6 +379,35 @@ export class SettingsManager {
     return { ...this.renderSettings };
   }
 
+  private loadModernGeometrySettings(): ModernPocketGeometry | null {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.MODERN_GEOMETRY_SETTINGS);
+      if (stored) {
+        return JSON.parse(stored) as ModernPocketGeometry;
+      }
+    } catch (e) {
+      console.warn('Failed to load modern geometry settings:', e);
+    }
+    return null;
+  }
+
+  getModernGeometrySettings(): ModernPocketGeometry | null {
+    if (!this.modernGeometrySettings) return null;
+    return JSON.parse(JSON.stringify(this.modernGeometrySettings));
+  }
+
+  saveModernGeometrySettings(settings: ModernPocketGeometry) {
+    this.modernGeometrySettings = JSON.parse(JSON.stringify(settings));
+    try {
+      localStorage.setItem(
+        STORAGE_KEYS.MODERN_GEOMETRY_SETTINGS,
+        JSON.stringify(this.modernGeometrySettings)
+      );
+    } catch (e) {
+      console.warn('Failed to save modern geometry settings:', e);
+    }
+  }
+
   resetGeometrySettings() {
     this.geometrySettings = {
       FRAME_OFFSET_IN: 4.0,
@@ -483,10 +516,14 @@ export class SettingsManager {
       localStorage.removeItem(STORAGE_KEYS.UI_COLORS);
       localStorage.removeItem(STORAGE_KEYS.PHYSICS_SETTINGS);
       localStorage.removeItem(STORAGE_KEYS.RENDER_SETTINGS);
+      localStorage.removeItem(STORAGE_KEYS.GEOMETRY_SETTINGS);
+      localStorage.removeItem(STORAGE_KEYS.MODERN_GEOMETRY_SETTINGS);
       
       this.gameSettings = { ...DEFAULT_GAME_SETTINGS };
       this.uiColors = { ...DEFAULT_UI_COLORS };
       this.physicsSettings = { ...DEFAULT_PHYSICS_SETTINGS };
+      this.geometrySettings = this.loadGeometrySettings();
+      this.modernGeometrySettings = null;
       this.renderSettings = {
         ...defaultRenderLayerSettings,
         canvasScale: 1,
@@ -502,6 +539,7 @@ export class SettingsManager {
       
       this.applyPhysicsSettings();
       this.applyUIColors();
+      this.applyGeometrySettings();
       this.applyRenderSettings();
     } catch (e) {
       console.warn('Failed to clear settings:', e);

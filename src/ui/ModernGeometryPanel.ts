@@ -5,7 +5,7 @@
  * Provides template selection and direct angle/opening controls.
  */
 
-import { SettingsManager } from './SettingsManager';
+import { SettingsManager, GeometrySettings } from './SettingsManager';
 import { makePanelDraggable } from './drag';
 import { UIPanel } from './panels/UIPanel';
 import { bindSliders, type SliderBindConfig } from './controls/SliderBinder';
@@ -18,7 +18,7 @@ import {
   GEOMETRY_RANGES,
   validateModernGeometry,
 } from '../geometry/ModernGeometry';
-import { modernToLegacy, applyLegacyGeometry } from '../geometry/GeometryConversion';
+import { modernToLegacy, legacyToModern, getCurrentLegacyGeometry } from '../geometry/GeometryConversion';
 import { calculateJawAngle } from '../geometry/ModernGeometryCalculator';
 
 const formatNumber = (value: number, digits: number = 2): string =>
@@ -30,19 +30,13 @@ export class ModernGeometryPanel {
   private settingsManager: SettingsManager;
   private onGeometryChange: () => void;
   private currentGeometry: ModernPocketGeometry;
+  private livePreviewEnabled: boolean = true;
 
   constructor(settingsManager: SettingsManager, onGeometryChange: () => void) {
     this.settingsManager = settingsManager;
     this.onGeometryChange = onGeometryChange;
 
-    // Start with default template (deep copy to avoid modifying the original)
-    const defaultTemplate = GEOMETRY_TEMPLATES[PocketTemplate.BCA_TOURNAMENT_MEDIUM];
-    this.currentGeometry = {
-      template: defaultTemplate.template,
-      side: { ...defaultTemplate.side },
-      corner: { ...defaultTemplate.corner },
-      global: defaultTemplate.global ? { ...defaultTemplate.global } : undefined,
-    };
+    this.currentGeometry = this.loadGeometryFromConfig();
 
     this.panel = this.createPanel();
     const header = this.panel.querySelector('.panel-header') as HTMLElement | null;
@@ -59,6 +53,38 @@ export class ModernGeometryPanel {
 
     this.setupControls();
     this.syncToUI();
+  }
+
+  private loadGeometryFromConfig(): ModernPocketGeometry {
+    const savedModern = this.settingsManager.getModernGeometrySettings();
+    if (savedModern) {
+      return {
+        template: savedModern.template ?? PocketTemplate.CUSTOM,
+        side: { ...savedModern.side },
+        corner: { ...savedModern.corner },
+        global: savedModern.global ? { ...savedModern.global } : undefined,
+      };
+    }
+
+    try {
+      const legacy = getCurrentLegacyGeometry();
+      const converted = legacyToModern(legacy);
+      return {
+        template: converted.template ?? PocketTemplate.CUSTOM,
+        side: { ...converted.side },
+        corner: { ...converted.corner },
+        global: converted.global ? { ...converted.global } : undefined,
+      };
+    } catch (error) {
+      console.warn('[ModernGeometry] Failed to load geometry from config, using default template', error);
+      const fallback = GEOMETRY_TEMPLATES[PocketTemplate.BCA_TOURNAMENT_MEDIUM];
+      return {
+        template: fallback.template,
+        side: { ...fallback.side },
+        corner: { ...fallback.corner },
+        global: fallback.global ? { ...fallback.global } : undefined,
+      };
+    }
   }
 
   private createPanel(): HTMLElement {
@@ -240,6 +266,12 @@ export class ModernGeometryPanel {
   private generateActions(): string {
     return `
       <div class="settings-group">
+        <div class="input-group" style="margin-bottom: 0.5rem;">
+          <label style="display: flex; align-items: center; cursor: pointer;">
+            <input type="checkbox" id="modern-geometry-live-preview" checked style="margin-right: 0.5rem;">
+            <span style="font-size: 0.85rem;">Live Preview (apply as you drag)</span>
+          </label>
+        </div>
         <button id="modern-geometry-apply" class="panel-mini-btn" data-no-drag="true" style="width: 100%; margin-bottom: 0.5rem;">
           Apply to Table
         </button>
@@ -275,6 +307,15 @@ export class ModernGeometryPanel {
           const template = templateSelect.value as PocketTemplate;
           this.loadTemplate(template);
         }
+      });
+    }
+
+    // Live preview checkbox
+    const livePreviewCheckbox = document.getElementById('modern-geometry-live-preview') as HTMLInputElement;
+    if (livePreviewCheckbox) {
+      livePreviewCheckbox.addEventListener('change', () => {
+        this.livePreviewEnabled = livePreviewCheckbox.checked;
+        console.log('[ModernGeometry] Live preview:', this.livePreviewEnabled ? 'enabled' : 'disabled');
       });
     }
 
@@ -426,6 +467,12 @@ export class ModernGeometryPanel {
   }
 
   private syncToUI() {
+    const templateSelect = document.getElementById('modern-geometry-template') as HTMLSelectElement | null;
+    if (templateSelect) {
+      const templateValue = this.currentGeometry.template ?? PocketTemplate.CUSTOM;
+      templateSelect.value = templateValue;
+    }
+
     // Update all slider values
     this.setSliderValue('modern-side-mouth', this.currentGeometry.side.mouthWidth);
     this.setSliderValue('modern-side-throat', this.currentGeometry.side.throatWidth);
@@ -475,6 +522,14 @@ export class ModernGeometryPanel {
       cornerAngleDisplay.textContent = `Calculated jaw angle: ${cornerJawAngle.toFixed(1)}°`;
     }
 
+    // Apply geometry immediately if live preview is enabled
+    if (this.livePreviewEnabled && validation.valid) {
+      const legacy = modernToLegacy(this.currentGeometry);
+      this.settingsManager.saveGeometrySettings(legacy as Partial<GeometrySettings>);
+      this.settingsManager.saveModernGeometrySettings(this.currentGeometry);
+      this.onGeometryChange();
+    }
+
     if (!validationDiv) return;
 
     if (validation.valid && validation.warnings.length === 0) {
@@ -519,18 +574,11 @@ export class ModernGeometryPanel {
       },
     });
 
-    // Convert modern geometry to legacy CONFIG parameters
+    // Convert modern geometry to legacy parameters and persist via settings manager
     const legacy = modernToLegacy(this.currentGeometry);
-
-    console.log('[ModernGeometry] Converted to legacy:', {
-      SIDE_JAW_OUTER_OVERRIDE_IN: legacy.SIDE_JAW_OUTER_OVERRIDE_IN,
-      SIDE_JAW_INNER_OVERRIDE_IN: legacy.SIDE_JAW_INNER_OVERRIDE_IN,
-      SIDE_STRAIGHT_Y_IN: legacy.SIDE_STRAIGHT_Y_IN,
-      SIDE_INNER_Y_IN: legacy.SIDE_INNER_Y_IN,
-    });
-
-    // Apply to CONFIG
-    applyLegacyGeometry(legacy);
+    console.log('[ModernGeometry] Converted to legacy:', legacy);
+    this.settingsManager.saveGeometrySettings(legacy as Partial<GeometrySettings>);
+    this.settingsManager.saveModernGeometrySettings(this.currentGeometry);
 
     // Notify of geometry change
     this.onGeometryChange();

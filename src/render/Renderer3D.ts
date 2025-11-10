@@ -440,18 +440,18 @@ export class Renderer3D extends BaseRenderer {
       1: '/textures/poolballTx01.jpg',
       2: '/textures/poolballTx02.jpg',
       3: '/textures/poolballTx03.jpg',
-      4: '/textures/poolballTx5.jpg',
-      5: '/textures/poolballTx7.jpg',
+      4: '/textures/poolballTx04.jpg',
+      5: '/textures/poolballTx5.jpg',
       6: '/textures/poolballTx6.jpg',
-      7: '/textures/poolballTx04.jpg',
-      8: '/textures/poolballTx9.jpg',
-      9: '/textures/poolballTx11.jpg',
+      7: '/textures/poolballTx7.jpg',
+      8: '/textures/poolballTx8.jpg',  // FIXED: Was Tx9
+      9: '/textures/poolballTx9.jpg',  // FIXED: Was Tx11
       10: '/textures/poolballTx10.jpg',
-      11: '/textures/poolballTx8.jpg',
-      12: '/textures/poolballTx13.jpg',
-      13: '/textures/poolballTx15.jpg',
+      11: '/textures/poolballTx11.jpg',  // FIXED: Was Tx8
+      12: '/textures/poolballTx12.jpg',  // FIXED: Was Tx13
+      13: '/textures/poolballTx13.jpg',  // FIXED: Was Tx15
       14: '/textures/poolballTx14.jpg',
-      15: '/textures/poolballTx12.jpg'
+      15: '/textures/poolballTx15.jpg'   // FIXED: Was Tx12
     };
     const ballNameMap: Record<string, number> = {
       poolball16: 0,

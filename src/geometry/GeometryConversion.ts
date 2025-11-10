@@ -1,6 +1,11 @@
 /**
  * Geometry Conversion Utilities
  *
+ * ⚠️ CRITICAL: Before modifying this file, read COORDINATE_SYSTEM.md to understand:
+ * - Center-origin coordinate system (0,0 at table center, not corner!)
+ * - CORNER_JAW_X is absolute position from center, NOT offset from corner
+ * - Mouth/throat widths are full widths, side jaw X values are half-widths
+ *
  * Converts between modern mouth/throat-width geometry and legacy tangent-derivation geometry.
  * This allows gradual migration while maintaining backwards compatibility.
  *
@@ -128,10 +133,16 @@ function modernPocketToLegacySide(side: PocketConfig): {
 /**
  * Convert modern corner pocket config to legacy parameters
  *
- * IMPORTANT: CORNER_JAW_X/Y are how far straight rails extend from center,
- * NOT throat positions! They should be derived, not directly set from throat width.
+ * ⚠️ COORDINATE SYSTEM CRITICAL:
+ * - straightX/Y are measured FROM TABLE CENTER (0,0), not from corner!
+ * - jawX/Y (CORNER_JAW_X/Y) are also FROM TABLE CENTER
+ * - Example: straightX=48.25 means 48.25" from center, 1.75" from corner
  *
- * For now, return reasonable values that let the derivation work.
+ * IMPORTANT: CORNER_JAW_X/Y control where straight rails END (jaw mouth opening).
+ * - mouthWidth controls desired opening width at the mouth
+ * - throatWidth controls narrowest point deeper in pocket
+ * - jawDepth controls how deep the jaw taper extends
+ * - These combine to determine the jaw offset from straight rail
  */
 function modernPocketToLegacyCorner(corner: PocketConfig): {
   frameOffset: number;
@@ -141,19 +152,34 @@ function modernPocketToLegacyCorner(corner: PocketConfig): {
   jawX: number;
   jawY: number;
 } {
-  // Straight rail positions - railDepth from corner
+  // Straight rail endpoints (absolute coordinates from table center)
+  // Example: 50 - 1.75 = 48.25" from center (1.75" from corner)
   const straightX = PLAY_HALF_W_IN - corner.railDepth;
   const targetY = PLAY_HALF_H_IN - corner.railDepth;
 
   const throatHalf = Math.max(0.75, corner.throatWidth / 2);
+  const mouthHalf = corner.mouthWidth / 2;
 
-  // Use jaw depth as additional control but don't allow it to shrink below throat requirement
-  const desiredOffset = Math.max(throatHalf, corner.jawDepth);
+  // Calculate taper: how much pocket widens from throat to mouth
+  // Example: (5.0 - 4.0) / 2 = 0.5" per side
+  const taperPerSide = (corner.mouthWidth - corner.throatWidth) / 2;
 
-  // Clamp offset to avoid invalid geometry (must leave at least 1" of straight rail)
-  const maxJawOffset = Math.max(0.75, Math.min(straightX - 1, targetY - 1));
-  const jawOffset = Math.min(Math.max(desiredOffset, 0.75), maxJawOffset);
+  // Jaw offset = distance from straight rail to where jaw funnel begins
+  // Combines base jaw depth + additional offset for mouth-throat taper
+  // Example: 1.0 + 0.5 = 1.5" offset
+  const desiredOffset = corner.jawDepth + taperPerSide;
 
+  // Ensure jaw offset is large enough to accommodate throat width
+  // Example: max(1.5, 2.0) = 2.0" if throat is 4.0"
+  const minOffset = throatHalf;
+  const finalOffset = Math.max(desiredOffset, minOffset);
+
+  // Clamp to avoid invalid geometry (leave at least 0.25" of straight rail)
+  const maxJawOffset = Math.max(0.75, Math.min(straightX - 0.25, targetY - 0.25));
+  const jawOffset = Math.min(Math.max(finalOffset, 0.75), maxJawOffset);
+
+  // Calculate jaw positions (absolute coordinates from table center)
+  // Example: 48.25 - 2.0 = 46.25" from center
   const jawX = straightX - jawOffset;
   const jawY = targetY - jawOffset;
 
