@@ -787,7 +787,7 @@ export function getTableGeometry(): TableGeometry {
     pockets: [
       {
         id: 'NW_corner',
-        center: { x: -50.0, y: 25.0 },
+        center: pocketCenterNW,
         cutNormalHint: cornerHintNW,
         cutAngleDeg: CONFIG.CORNER_CUT_ANGLE_DEG,
         captureRadius: CONFIG.POCKET_CAPTURE_RADIUS_CORNER,
@@ -797,7 +797,7 @@ export function getTableGeometry(): TableGeometry {
       },
       {
         id: 'NE_corner',
-        center: { x: 50.0, y: 25.0 },
+        center: pocketCenterNE,
         cutNormalHint: cornerHintNE,
         cutAngleDeg: CONFIG.CORNER_CUT_ANGLE_DEG,
         captureRadius: CONFIG.POCKET_CAPTURE_RADIUS_CORNER,
@@ -807,7 +807,7 @@ export function getTableGeometry(): TableGeometry {
       },
       {
         id: 'SW_corner',
-        center: { x: -50.0, y: -25.0 },
+        center: pocketCenterSW,
         cutNormalHint: cornerHintSW,
         cutAngleDeg: CONFIG.CORNER_CUT_ANGLE_DEG,
         captureRadius: CONFIG.POCKET_CAPTURE_RADIUS_CORNER,
@@ -817,7 +817,7 @@ export function getTableGeometry(): TableGeometry {
       },
       {
         id: 'SE_corner',
-        center: { x: 50.0, y: -25.0 },
+        center: pocketCenterSE,
         cutNormalHint: cornerHintSE,
         cutAngleDeg: CONFIG.CORNER_CUT_ANGLE_DEG,
         captureRadius: CONFIG.POCKET_CAPTURE_RADIUS_CORNER,
