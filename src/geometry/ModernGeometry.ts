@@ -60,6 +60,8 @@ export interface ModernPocketGeometry {
 
     /** Side pocket outward offset from cushion edge (inches) */
     sidePocketOffset?: number;
+    /** Corner pocket outward offset from cushion edge (inches, along diagonal) */
+    cornerPocketOffset?: number;
   };
 }
 
@@ -103,6 +105,7 @@ export const GEOMETRY_TEMPLATES: Record<PocketTemplate, ModernPocketGeometry> = 
       cutAngleAdjust: 0,
       verticalAngle: 13.5,
       sidePocketOffset: 0.25,
+      cornerPocketOffset: 0.0,
     },
   },
 
@@ -128,6 +131,7 @@ export const GEOMETRY_TEMPLATES: Record<PocketTemplate, ModernPocketGeometry> = 
       cutAngleAdjust: 0,
       verticalAngle: 13.5,
       sidePocketOffset: 0.25,
+      cornerPocketOffset: 0.0,
     },
   },
 
@@ -153,6 +157,7 @@ export const GEOMETRY_TEMPLATES: Record<PocketTemplate, ModernPocketGeometry> = 
       cutAngleAdjust: 0,
       verticalAngle: 13.5,
       sidePocketOffset: 0.25,
+      cornerPocketOffset: 0.0,
     },
   },
 
@@ -178,6 +183,7 @@ export const GEOMETRY_TEMPLATES: Record<PocketTemplate, ModernPocketGeometry> = 
       cutAngleAdjust: 0,
       verticalAngle: 13.5,
       sidePocketOffset: 0.25,
+      cornerPocketOffset: 0.0,
     },
   },
 
@@ -253,6 +259,7 @@ export const GEOMETRY_TEMPLATES: Record<PocketTemplate, ModernPocketGeometry> = 
       cutAngleAdjust: 0,
       verticalAngle: 14.0,
       sidePocketOffset: 0.25,
+      cornerPocketOffset: 0.0,
     },
   },
 
@@ -278,6 +285,7 @@ export const GEOMETRY_TEMPLATES: Record<PocketTemplate, ModernPocketGeometry> = 
       cutAngleAdjust: 0,
       verticalAngle: 12.0,
       sidePocketOffset: 0.25,
+      cornerPocketOffset: 0.0,
     },
   },
 };
@@ -306,6 +314,7 @@ export const GEOMETRY_RANGES = {
     cutAngleAdjust: { min: -5.0, max: 5.0, typical: 0.0 },
     verticalAngle: { min: 12.0, max: 15.0, typical: 13.5 },
     sidePocketOffset: { min: 0.0, max: 1.0, typical: 0.25 },
+    cornerPocketOffset: { min: -1.0, max: 1.5, typical: 0.0 },
   },
 } as const;
 

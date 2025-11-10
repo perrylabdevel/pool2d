@@ -56,6 +56,10 @@ export class GeometryPanel {
       { sliderId: 'live-corner-radius', labelId: 'live-corner-radius-val', onChange: (v) => notify({ CORNER_JAW_REF_RADIUS_IN: v! }), formatDigits: 1 },
     ];
     bindSliders(basicSideSliderConfigs);
+    // Corner offset
+    bindSliders<GeometrySettings>([
+      { sliderId: 'live-corner-offset', labelId: 'live-corner-offset-val', onChange: (v) => notify({ CORNER_POCKET_OUTWARD_OFFSET_IN: v! }) },
+    ]);
 
     const sideStraightSlider = document.getElementById('live-side-straight') as HTMLInputElement;
     const sideStraightVal = document.getElementById('live-side-straight-val');
@@ -393,6 +397,7 @@ export class GeometryPanel {
     setSlider('live-corner-radius', settings.CORNER_JAW_REF_RADIUS_IN, (v) => formatNumber(v, 1), 1);
     setSlider('live-corner-straight', settings.CORNER_STRAIGHT_X_IN);
     setSlider('live-corner-target', settings.CORNER_TARGET_Y_IN);
+    setSlider('live-corner-offset', settings.CORNER_POCKET_OUTWARD_OFFSET_IN);
     setSlider('live-frame-width', settings.FRAME_OFFSET_IN, (v) => formatNumber(v, 1), 1);
     setSlider('live-frame-corner-radius', settings.FRAME_CORNER_RADIUS_IN, (v) => formatNumber(v, 1), 1);
     setSlider('live-rail-thickness-inner', settings.RAIL_THICKNESS_INNER);

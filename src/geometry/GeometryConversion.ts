@@ -39,6 +39,7 @@ export interface LegacyGeometry {
   CORNER_JAW_Y_OVERRIDE_IN: number | null;
   CORNER_THROAT_WIDTH_IN: number | null;
   CORNER_JAW_REF_RADIUS_IN: number;
+  CORNER_POCKET_OUTWARD_OFFSET_IN?: number;
 
   // Global
   POCKET_SHELF_DEPTH_IN: number;
@@ -83,6 +84,7 @@ export function modernToLegacy(modern: ModernPocketGeometry): LegacyGeometry {
     CORNER_JAW_Y_OVERRIDE_IN: corner.jawY,
     CORNER_THROAT_WIDTH_IN: modern.corner.throatWidth,
     CORNER_JAW_REF_RADIUS_IN: corner.refRadius,
+    CORNER_POCKET_OUTWARD_OFFSET_IN: modern.global?.cornerPocketOffset ?? 0,
 
     // Global parameters
     POCKET_SHELF_DEPTH_IN: modern.corner.shelfDepth,

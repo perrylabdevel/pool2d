@@ -733,10 +733,11 @@ export function getTableGeometry(): TableGeometry {
   addRail('W_center', westVerticalBottom, westVerticalTop);
   addRail('W_north_taper', westVerticalTop, northWestOuterWest);
 
-  const pocketCenterNW: Vec2 = { x: -PLAY_HALF_W_IN, y: PLAY_HALF_H_IN };
-  const pocketCenterNE: Vec2 = { x: PLAY_HALF_W_IN, y: PLAY_HALF_H_IN };
-  const pocketCenterSW: Vec2 = { x: -PLAY_HALF_W_IN, y: -PLAY_HALF_H_IN };
-  const pocketCenterSE: Vec2 = { x: PLAY_HALF_W_IN, y: -PLAY_HALF_H_IN };
+  const cornerOffset = CONFIG.CORNER_POCKET_OUTWARD_OFFSET_IN ?? 0;
+  const pocketCenterNW: Vec2 = { x: -(PLAY_HALF_W_IN + cornerOffset), y: (PLAY_HALF_H_IN + cornerOffset) };
+  const pocketCenterNE: Vec2 = { x: (PLAY_HALF_W_IN + cornerOffset), y: (PLAY_HALF_H_IN + cornerOffset) };
+  const pocketCenterSW: Vec2 = { x: -(PLAY_HALF_W_IN + cornerOffset), y: -(PLAY_HALF_H_IN + cornerOffset) };
+  const pocketCenterSE: Vec2 = { x: (PLAY_HALF_W_IN + cornerOffset), y: -(PLAY_HALF_H_IN + cornerOffset) };
   const pocketCenterNorth: Vec2 = { x: 0, y: Y_N_PLAY + SIDE_POCKET_OFFSET };
   const pocketCenterSouth: Vec2 = { x: 0, y: Y_S_PLAY - SIDE_POCKET_OFFSET };
 

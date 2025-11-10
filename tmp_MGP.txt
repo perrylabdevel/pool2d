@@ -254,14 +254,6 @@ export class ModernGeometryPanel {
           0.05,
           ranges.sidePocketOffset.typical
         )}
-        ${this.sliderRow(
-          'modern-global-corner-pocket-offset',
-          'Corner Pocket Offset (in)',
-          ranges.cornerPocketOffset.min,
-          ranges.cornerPocketOffset.max,
-          0.05,
-          ranges.cornerPocketOffset.typical
-        )}
       </div>
     `;
   }
@@ -441,18 +433,6 @@ export class ModernGeometryPanel {
         },
         formatDigits: 2,
       },
-      {
-        sliderId: 'modern-global-corner-pocket-offset',
-        labelId: 'modern-global-corner-pocket-offset-val',
-        onChange: (v) => {
-          if (!this.currentGeometry.global) {
-            this.currentGeometry.global = {} as any;
-          }
-          (this.currentGeometry.global as any).cornerPocketOffset = v!;
-          this.validateAndUpdateUI();
-        },
-        formatDigits: 2,
-      },
     ];
 
     console.log('[ModernGeometry] Attempting to bind', sliderConfigs.length, 'sliders');
@@ -502,7 +482,6 @@ export class ModernGeometryPanel {
     this.setSliderValue('modern-corner-shelf-depth', this.currentGeometry.corner.shelfDepth);
 
     this.setSliderValue('modern-global-side-pocket-offset', this.currentGeometry.global?.sidePocketOffset ?? 0.25);
-    this.setSliderValue('modern-global-corner-pocket-offset', (this.currentGeometry.global as any)?.cornerPocketOffset ?? 0.0);
 
     this.validateAndUpdateUI();
   }
@@ -629,3 +608,4 @@ export class ModernGeometryPanel {
     return this.panelController;
   }
 }
+
