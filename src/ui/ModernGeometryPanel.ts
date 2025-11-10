@@ -6,7 +6,6 @@
  */
 
 import { SettingsManager, GeometrySettings } from './SettingsManager';
-import { makePanelDraggable } from './drag';
 import { UIPanel } from './panels/UIPanel';
 import { bindSliders, type SliderBindConfig } from './controls/SliderBinder';
 import {
@@ -39,10 +38,7 @@ export class ModernGeometryPanel {
     this.currentGeometry = this.loadGeometryFromConfig();
 
     this.panel = this.createPanel();
-    const header = this.panel.querySelector('.panel-header') as HTMLElement | null;
-    if (header) {
-      makePanelDraggable(this.panel, header);
-    }
+    // Draggable disabled for docked modern panel
 
     const focusTarget = this.panel.querySelector<HTMLElement>('input, button, select');
     this.panelController = new UIPanel({
@@ -101,7 +97,6 @@ export class ModernGeometryPanel {
     panel.innerHTML = `
       <div class="panel-header">
         <h3>📐 Pocket Geometry (Modern)</h3>
-        <button id="modern-geometry-panel-close" class="panel-close-btn" data-no-drag="true">×</button>
       </div>
       <div class="panel-content">
         ${this.generateTemplateSelector()}

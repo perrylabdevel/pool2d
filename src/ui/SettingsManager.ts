@@ -72,6 +72,11 @@ export interface RenderSettings extends RenderLayerSettings {
   accentIntensity: number;
   railHighlightIntensity: number;
   railShadowIntensity: number;
+  railShadowSpread: number;
+  railShadowSoftness: number;
+  railShadowBaseGray: number;
+  railHighlightColor: string;
+  railHighlightSpread: number;
   pocketShadowIntensity: number;
   pocketHighlightIntensity: number;
 }
@@ -325,6 +330,11 @@ export class SettingsManager {
       accentIntensity: CONFIG.ACCENT_INTENSITY ?? 0.5,
       railHighlightIntensity: CONFIG.RAIL_HIGHLIGHT_INTENSITY ?? 0.6,
       railShadowIntensity: CONFIG.RAIL_SHADOW_INTENSITY ?? 0.25,
+      railShadowSpread: 1.0,
+      railShadowSoftness: 1.8,
+      railShadowBaseGray: 170,
+      railHighlightColor: '#ffffff',
+      railHighlightSpread: 1.0,
       pocketShadowIntensity: CONFIG.POCKET_SHADOW_INTENSITY ?? 0.45,
       pocketHighlightIntensity: CONFIG.POCKET_HIGHLIGHT_INTENSITY ?? 0.55,
     };
@@ -456,6 +466,11 @@ export class SettingsManager {
       accentIntensity: CONFIG.ACCENT_INTENSITY ?? 0.5,
       railHighlightIntensity: CONFIG.RAIL_HIGHLIGHT_INTENSITY ?? 0.6,
       railShadowIntensity: CONFIG.RAIL_SHADOW_INTENSITY ?? 0.25,
+      railShadowSpread: 1.0,
+      railShadowSoftness: 1.8,
+      railShadowBaseGray: 170,
+      railHighlightColor: '#ffffff',
+      railHighlightSpread: 1.0,
       pocketShadowIntensity: CONFIG.POCKET_SHADOW_INTENSITY ?? 0.45,
       pocketHighlightIntensity: CONFIG.POCKET_HIGHLIGHT_INTENSITY ?? 0.55,
     };
@@ -533,6 +548,11 @@ export class SettingsManager {
         accentIntensity: CONFIG.ACCENT_INTENSITY ?? 0.5,
         railHighlightIntensity: CONFIG.RAIL_HIGHLIGHT_INTENSITY ?? 0.6,
         railShadowIntensity: CONFIG.RAIL_SHADOW_INTENSITY ?? 0.25,
+        railShadowSpread: 1.0,
+        railShadowSoftness: 1.8,
+        railShadowBaseGray: 170,
+        railHighlightColor: '#ffffff',
+        railHighlightSpread: 1.0,
         pocketShadowIntensity: CONFIG.POCKET_SHADOW_INTENSITY ?? 0.45,
         pocketHighlightIntensity: CONFIG.POCKET_HIGHLIGHT_INTENSITY ?? 0.55,
       };

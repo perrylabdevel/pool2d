@@ -61,6 +61,8 @@ export class Renderer3D extends BaseRenderer {
   private tableShadowMesh: THREE.Mesh | null = null;
   private railHighlightMeshes: THREE.Mesh[] = [];
   private railShadowMeshes: THREE.Mesh[] = [];
+  private railShadowRibbonMesh: THREE.Mesh | null = null;
+  private railHighlightRibbonMesh: THREE.Mesh | null = null;
   private pocketHighlightMeshes: THREE.Mesh[] = [];
   private pocketShadowMeshes: THREE.Mesh[] = [];
   private railLines: Array<{ start: Vec2; end: Vec2; nx: number; ny: number }> = [];
@@ -75,6 +77,14 @@ export class Renderer3D extends BaseRenderer {
   private accentLight: THREE.SpotLight | null = null;
   debugRailSegments: Array<{ id: string; inner: Vec2; trimmed: Vec2; startOuter: Vec2 }> = [];
   showMeasurementOverlay = false;
+  private railShadowSpread = 1.0;
+  private railShadowIntensity = CONFIG.RAIL_SHADOW_INTENSITY ?? 0.25;
+  private railShadowOverlapScale = 1.06; // lengthwise overlap to hide seams at joins
+  private railHighlightOverlapScale = 1.02;
+  private railShadowSoftness = 1.8;
+  private railShadowBaseGray = 170;
+  private railHighlightSpread = 1.0;
+  private railHighlightColor = new THREE.Color(0xffffff);
   private layerVisibility: Record<RenderLayerBooleanKey, boolean> = {
     showTable: defaultRenderLayerSettings.showTable,
     showFrame: defaultRenderLayerSettings.showFrame,
@@ -234,7 +244,7 @@ export class Renderer3D extends BaseRenderer {
     });
 
     window.addEventListener('settings:render-changed', (event) => {
-      const detail = (event as CustomEvent<{ settings?: { ballScale?: number; ambientIntensity?: number; directionalIntensity?: number; accentIntensity?: number; railHighlightIntensity?: number; railShadowIntensity?: number; pocketShadowIntensity?: number; pocketHighlightIntensity?: number } }>).detail;
+      const detail = (event as CustomEvent<{ settings?: { ballScale?: number; ambientIntensity?: number; directionalIntensity?: number; accentIntensity?: number; railHighlightIntensity?: number; railShadowIntensity?: number; pocketShadowIntensity?: number; pocketHighlightIntensity?: number; railShadowSpread?: number; railShadowSoftness?: number } }>).detail;
       const settings = detail?.settings;
       const scale = settings?.ballScale ?? CONFIG.BALL_SCALE ?? 1;
       this.setBallScale(scale);
@@ -249,6 +259,21 @@ export class Renderer3D extends BaseRenderer {
         pocketShadow: settings?.pocketShadowIntensity ?? CONFIG.POCKET_SHADOW_INTENSITY,
         pocketHighlight: settings?.pocketHighlightIntensity ?? CONFIG.POCKET_HIGHLIGHT_INTENSITY,
       });
+      if (typeof settings?.railShadowSpread === 'number') {
+        this.setRailShadowSpread(settings.railShadowSpread);
+      }
+      if (typeof settings?.railShadowSoftness === 'number') {
+        this.setRailShadowSoftness(settings.railShadowSoftness);
+      }
+      if (typeof (settings as any)?.railShadowBaseGray === 'number') {
+        this.setRailShadowBaseGray((settings as any).railShadowBaseGray);
+      }
+      if (typeof (settings as any)?.railHighlightSpread === 'number') {
+        this.setRailHighlightSpread((settings as any).railHighlightSpread);
+      }
+      if (typeof (settings as any)?.railHighlightColor === 'string') {
+        this.setRailHighlightColor((settings as any).railHighlightColor);
+      }
     });
   }
 
@@ -288,12 +313,22 @@ export class Renderer3D extends BaseRenderer {
       // Don't dispose material here - it's shared, we'll dispose it once below
     });
     this.railHighlightMeshes = [];
+    if (this.railHighlightRibbonMesh) {
+      this.scene.remove(this.railHighlightRibbonMesh);
+      this.railHighlightRibbonMesh.geometry.dispose();
+      this.railHighlightRibbonMesh = null;
+    }
     this.railShadowMeshes.forEach((mesh) => {
       this.scene.remove(mesh);
       mesh.geometry.dispose();
       // shared material disposed below
     });
     this.railShadowMeshes = [];
+    if (this.railShadowRibbonMesh) {
+      this.scene.remove(this.railShadowRibbonMesh);
+      this.railShadowRibbonMesh.geometry.dispose();
+      this.railShadowRibbonMesh = null;
+    }
     // Dispose shared rail highlight materials once
     if (this.railHighlightTexture) {
       this.railHighlightTexture.dispose();
@@ -863,21 +898,10 @@ export class Renderer3D extends BaseRenderer {
     }
 
     if (typeof intensities.railShadow === 'number') {
-      // For Multiply blending, drive intensity via grayscale color (white=none, black=strong)
       const value = clamp(intensities.railShadow, 0, 1.0);
-      const t = Math.max(0, Math.min(1, value));
-      const shadowMaterial = this.getRailShadowMaterial();
-      const g = 1 - t;
-      shadowMaterial.color.setRGB(g, g, g);
-      shadowMaterial.needsUpdate = true;
+      this.railShadowIntensity = value;
       CONFIG.RAIL_SHADOW_INTENSITY = value;
-      this.railShadowMeshes.forEach((m) => {
-        const mat = m.material as THREE.MeshBasicMaterial;
-        if (mat) {
-          mat.color.setRGB(g, g, g);
-          mat.needsUpdate = true;
-        }
-      });
+      this.updateRailShadowMaterialFromState();
     }
 
     if (typeof intensities.pocketShadow === 'number') {
@@ -897,6 +921,28 @@ export class Renderer3D extends BaseRenderer {
         CONFIG.POCKET_HIGHLIGHT_INTENSITY = value;
       }
     }
+  }
+
+  private computeRailShadowGray(intensity: number, spread: number): number {
+    const s = Math.max(0.5, spread);
+    const softnessExponent = 1.5; // higher => softer with spread
+    const effective = Math.max(0, Math.min(1, intensity / Math.pow(s, softnessExponent)));
+    const g = 1 - effective;
+    return g;
+  }
+
+  private updateRailShadowMaterialFromState() {
+    const g = this.computeRailShadowGray(this.railShadowIntensity, this.railShadowSpread);
+    const shadowMaterial = this.getRailShadowMaterial();
+    shadowMaterial.color.setRGB(g, g, g);
+    shadowMaterial.needsUpdate = true;
+    this.railShadowMeshes.forEach((m) => {
+      const mat = m.material as THREE.MeshBasicMaterial;
+      if (mat) {
+        mat.color.setRGB(g, g, g);
+        mat.needsUpdate = true;
+      }
+    });
   }
 
   getHighlightIntensities(): {
@@ -1255,8 +1301,8 @@ export class Renderer3D extends BaseRenderer {
     if (this.railHighlightMaterial && this.railHighlightTexture) {
       return this.railHighlightMaterial;
     }
-    const sizeX = 64;
-    const sizeY = 256;
+    const sizeX = 128;
+    const sizeY = 512;
     const canvas = document.createElement('canvas');
     canvas.width = sizeX;
     canvas.height = sizeY;
@@ -1280,10 +1326,15 @@ export class Renderer3D extends BaseRenderer {
     texture.wrapT = THREE.ClampToEdgeWrapping;
     texture.needsUpdate = true;
     texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
+    texture.generateMipmaps = true;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.magFilter = THREE.LinearFilter;
     this.railHighlightTexture = texture;
 
     this.railHighlightMaterial = new THREE.MeshBasicMaterial({
       map: texture,
+      color: this.railHighlightColor.clone(),
       transparent: true,
       blending: THREE.AdditiveBlending,
       depthTest: true, // Re-enabled to respect depth ordering
@@ -1291,6 +1342,7 @@ export class Renderer3D extends BaseRenderer {
       opacity: CONFIG.RAIL_HIGHLIGHT_INTENSITY ?? 0.9,
       side: THREE.DoubleSide,
     });
+    (this.railHighlightMaterial as any).toneMapped = false;
     return this.railHighlightMaterial;
   }
 
@@ -1426,6 +1478,7 @@ export class Renderer3D extends BaseRenderer {
 
   initializeRails(rails: Rail[]) {
     this.debugRailSegments = [];
+    this.railLines = [];
     const railMaterial = new THREE.MeshStandardMaterial({
       color: new THREE.Color(CONFIG.RAIL_COLOR),
       roughness: 0.5,
@@ -1484,7 +1537,9 @@ export class Renderer3D extends BaseRenderer {
           const dirLen = Math.sqrt(dir.x * dir.x + dir.y * dir.y) || 1;
           const ux = dir.x / dirLen;
           const uy = dir.y / dirLen;
-          const epsilon = 1e-3;
+          // Use a negative epsilon to extend slightly into the corner arc
+          // This creates a tiny overlap instead of a gap, avoiding visible seams
+          const epsilon = -0.05;
           trimmedOuter = {
             x: result.point.x - ux * epsilon,
             y: result.point.y - uy * epsilon,
@@ -1534,42 +1589,183 @@ export class Renderer3D extends BaseRenderer {
         startOuter: debugStartOuter,
       });
 
-      // Highlight on top surface of rail
-      const highlightMaterial = this.getRailHighlightMaterial(); // Share material (don't clone) so slider can control all
-      const highlightWidth = Math.max(0.3, totalWidth * 0.55); // Wider highlight (was 0.35)
-      const highlightGeometry = new THREE.PlaneGeometry(renderLength, highlightWidth);
-      const highlightMesh = new THREE.Mesh(highlightGeometry, highlightMaterial);
-      // Rails are at Z=-0.25 with height 0.5, so top is at 0. Place highlight just above at 0.01
-      highlightMesh.position.set(railMesh.position.x, railMesh.position.y, 0.01);
-      highlightMesh.rotation.z = angle;
-      highlightMesh.visible = this.layerVisibility.showRails;
-      highlightMesh.renderOrder = this.layerOrder.orderRails + 0.5; // Higher render order
-      this.scene.add(highlightMesh);
-      this.railHighlightMeshes.push(highlightMesh);
+      // (Moved) Per-segment highlight replaced by continuous ribbon built after loop
 
-      // Add a very tight shadow band just inside the felt with a soft fade
-      const shadowWidth = Math.max(0.30, inner * 0.45);
-      const shadowLength = renderLength;
-      const shadowCenterX = renderCenterX;
-      const shadowCenterY = renderCenterY;
-
-      const shadowGeometry = new THREE.PlaneGeometry(shadowLength, shadowWidth);
-      const shadowMaterial = this.getRailShadowMaterial();
-      const shadowMesh = new THREE.Mesh(shadowGeometry, shadowMaterial);
-      // Position shadow on inner edge (toward felt) for depth
-      // Place the band entirely inside the play area: center at (midpoint + n * (shadowWidth/2))
-      const centerInward = shadowWidth * 0.5 + 0.02; // slight inset
-      const centerBaseX = shadowCenterX - nx * centerShift;
-      const centerBaseY = shadowCenterY - ny * centerShift;
-      const cx = centerBaseX + nx * centerInward;
-      const cy = centerBaseY + ny * centerInward;
-      shadowMesh.position.set(cx, cy, 0.005);
-      shadowMesh.rotation.z = angle;
-      shadowMesh.visible = this.layerVisibility.showRails;
-      shadowMesh.renderOrder = this.layerOrder.orderRails + 0.05;
-      this.scene.add(shadowMesh);
-      this.railShadowMeshes.push(shadowMesh);
+      // Collect base lines for a continuous shadow ribbon (built after loop)
+      const baseStart = { x: innerPoint.x - nx * centerShift, y: innerPoint.y - ny * centerShift };
+      const baseEnd = { x: trimmedOuter.x - nx * centerShift, y: trimmedOuter.y - ny * centerShift };
+      this.railLines.push({ start: baseStart, end: baseEnd, nx, ny });
     });
+
+    // Build continuous ribbons (shadow + highlight)
+    this.rebuildRailShadowRibbon();
+    this.rebuildRailHighlightRibbon();
+  }
+
+  private rebuildRailHighlightRibbon() {
+    // Remove previous
+    if (this.railHighlightRibbonMesh) {
+      this.scene.remove(this.railHighlightRibbonMesh);
+      this.railHighlightRibbonMesh.geometry.dispose();
+      this.railHighlightRibbonMesh = null;
+    }
+    const boundary = this.playBoundaryPoints;
+    if (!boundary.length) return;
+
+    const innerT = Math.max(0, CONFIG.RAIL_THICKNESS_INNER ?? 0.2);
+    const outerT = Math.max(0, CONFIG.RAIL_THICKNESS_OUTER ?? 0.2);
+    const totalW = innerT + outerT;
+    const bandW = Math.max(0.3, totalW * 0.55) * this.railHighlightSpread;
+    const halfW = bandW * 0.5;
+    // Center the highlight over the rail top: a bit beyond the inner lip
+    const centerOut = Math.max(0.05, innerT + outerT * 0.5);
+
+    // Compute averaged inward normals at each boundary vertex, then use outward (-n) for rail side
+    const N = boundary.length;
+    const positions: number[] = [];
+    const uvs: number[] = [];
+    const indices: number[] = [];
+    for (let i = 0; i < N; i++) {
+      const prev = boundary[(i - 1 + N) % N];
+      const curr = boundary[i];
+      const next = boundary[(i + 1) % N];
+      const dx1 = curr.x - prev.x;
+      const dy1 = curr.y - prev.y;
+      const l1 = Math.hypot(dx1, dy1) || 1;
+      let inx1 = dy1 / l1;
+      let iny1 = -dx1 / l1;
+      const dx2 = next.x - curr.x;
+      const dy2 = next.y - curr.y;
+      const l2 = Math.hypot(dx2, dy2) || 1;
+      let inx2 = dy2 / l2;
+      let iny2 = -dx2 / l2;
+      let ax = inx1 + inx2;
+      let ay = iny1 + iny2;
+      const al = Math.hypot(ax, ay) || 1;
+      ax /= al; ay /= al;
+      // Ensure inward
+      const dotCenter = ax * -curr.x + ay * -curr.y;
+      if (dotCenter < 0) { ax = -ax; ay = -ay; }
+      // Outward normal
+      const ox = -ax;
+      const oy = -ay;
+      // Centerline at rail top
+      const cx = curr.x + ox * centerOut;
+      const cy = curr.y + oy * centerOut;
+      // Build band across normal: outward (v=0) and inward (v=1) for gradient
+      const outX = cx + ox * halfW;
+      const outY = cy + oy * halfW;
+      const inX = cx - ox * halfW;
+      const inY = cy - oy * halfW;
+      positions.push(outX, outY, 0.01, inX, inY, 0.01);
+      const u = i / N;
+      uvs.push(u, 0, u, 1);
+    }
+    for (let i = 0; i < N; i++) {
+      const a = i * 2;
+      const b = ((i + 1) % N) * 2;
+      indices.push(a, b, a + 1);
+      indices.push(b, b + 1, a + 1);
+    }
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geom.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geom.setIndex(indices);
+    geom.computeVertexNormals();
+
+    const mat = this.getRailHighlightMaterial();
+    const mesh = new THREE.Mesh(geom, mat);
+    mesh.renderOrder = this.layerOrder.orderRails + 0.5;
+    mesh.visible = this.layerVisibility.showRails;
+    this.scene.add(mesh);
+    this.railHighlightRibbonMesh = mesh;
+  }
+
+  private rebuildRailShadowRibbon() {
+    // Remove previous ribbon
+    if (this.railShadowRibbonMesh) {
+      this.scene.remove(this.railShadowRibbonMesh);
+      this.railShadowRibbonMesh.geometry.dispose();
+      this.railShadowRibbonMesh = null;
+    }
+    // Prefer the true cushion (play area) boundary for the ribbon base
+    const boundary = this.playBoundaryPoints;
+    if (!boundary.length) return;
+
+    const inner = CONFIG.RAIL_THICKNESS_INNER;
+    const width = Math.max(0.30, inner * 0.45) * this.railShadowSpread;
+    const halfW = width * 0.5;
+    const centerInset = halfW + 0.02; // keep fully inside play area
+
+    // Compute averaged inward normals at each boundary vertex
+    const N = boundary.length;
+    const joins: Array<{ x: number; y: number; nx: number; ny: number }> = [];
+    for (let i = 0; i < N; i++) {
+      const prev = boundary[(i - 1 + N) % N];
+      const curr = boundary[i];
+      const next = boundary[(i + 1) % N];
+      // Segment normals (perpendicular)
+      const dx1 = curr.x - prev.x;
+      const dy1 = curr.y - prev.y;
+      const l1 = Math.hypot(dx1, dy1) || 1;
+      let nx1 = dy1 / l1;   // inward guess for CCW boundary is +perp
+      let ny1 = -dx1 / l1;
+      const dx2 = next.x - curr.x;
+      const dy2 = next.y - curr.y;
+      const l2 = Math.hypot(dx2, dy2) || 1;
+      let nx2 = dy2 / l2;
+      let ny2 = -dx2 / l2;
+      // Average and normalize
+      let ax = nx1 + nx2;
+      let ay = ny1 + ny2;
+      const al = Math.hypot(ax, ay) || 1;
+      ax /= al; ay /= al;
+      // Ensure inward (toward center)
+      const dotCenter = ax * -curr.x + ay * -curr.y;
+      if (dotCenter < 0) { ax = -ax; ay = -ay; }
+      // Centerline point slightly inside the cushion
+      const cx = curr.x + ax * centerInset;
+      const cy = curr.y + ay * centerInset;
+      joins.push({ x: cx, y: cy, nx: ax, ny: ay });
+    }
+
+    // Create strip vertices
+    const positions: number[] = [];
+    const uvs: number[] = [];
+    const indices: number[] = [];
+    for (let i = 0; i < joins.length; i++) {
+      const { x, y, nx, ny } = joins[i];
+      const rx = x - nx * halfW; // near-rail side (v=0)
+      const ry = y - ny * halfW;
+      const fx = x + nx * halfW; // felt side (v=1)
+      const fy = y + ny * halfW;
+      // push in order: rail-side then felt-side
+      positions.push(rx, ry, 0.005, fx, fy, 0.005);
+      const u = i / joins.length;
+      uvs.push(u, 0, u, 1);
+    }
+    // Connect as triangle strip (two triangles per segment)
+    for (let i = 0; i < joins.length; i++) {
+      const a = i * 2;
+      const b = ((i + 1) % joins.length) * 2;
+      // Quad indices: a(rail), a+1(felt) -> b(rail), b+1(felt)
+      indices.push(a, b, a + 1);
+      indices.push(b, b + 1, a + 1);
+    }
+
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geom.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geom.setIndex(indices);
+    geom.computeVertexNormals();
+
+    const mat = this.getRailShadowMaterial();
+    const mesh = new THREE.Mesh(geom, mat);
+    mesh.renderOrder = this.layerOrder.orderRails + 0.05;
+    mesh.visible = this.layerVisibility.showRails;
+    this.scene.add(mesh);
+    this.railShadowRibbonMesh = mesh;
+    this.updateRailShadowMaterialFromState();
   }
 
   private intersectLineWithCornerArc3D(
@@ -1617,7 +1813,7 @@ export class Renderer3D extends BaseRenderer {
     }
     // Create a vertical gradient (Y direction) that fades from dark near the rail to transparent over felt
     const sizeX = 64;
-    const sizeY = 256;
+    const sizeY = 512;
     const canvas = document.createElement('canvas');
     canvas.width = sizeX;
     canvas.height = sizeY;
@@ -1625,21 +1821,27 @@ export class Renderer3D extends BaseRenderer {
     if (!ctx) {
       throw new Error('Renderer3D: rail shadow texture context missing');
     }
-    const g = ctx.createLinearGradient(0, 0, 0, sizeY);
-    // For Multiply blending, use grayscale (RGB) so alpha isn't required.
-    // Near rail: darker gray (<1). Toward felt: white (1 = no change).
-    g.addColorStop(0.0, 'rgb(170,170,170)');  // ~0.67
-    g.addColorStop(0.35, 'rgb(205,205,205)'); // ~0.80
-    g.addColorStop(0.65, 'rgb(235,235,235)'); // ~0.92
-    g.addColorStop(1.0, 'rgb(255,255,255)');  // 1.0
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, sizeX, sizeY);
+    // Draw softened gradient manually for smoother falloff (eased + exponent)
+    const minGray = Math.max(50, Math.min(250, this.railShadowBaseGray));
+    for (let y = 0; y < sizeY; y++) {
+      const t = y / (sizeY - 1);
+      // Smoothstep then exponent for controllable softness
+      const s = t * t * (3 - 2 * t);
+      const eased = Math.pow(s, Math.max(0.2, Math.min(3.0, this.railShadowSoftness)));
+      const g = Math.round(minGray + (255 - minGray) * eased);
+      ctx.fillStyle = `rgb(${g},${g},${g})`;
+      ctx.fillRect(0, y, sizeX, 1);
+    }
 
     const tex = new THREE.CanvasTexture(canvas);
     tex.wrapS = THREE.ClampToEdgeWrapping;
     tex.wrapT = THREE.ClampToEdgeWrapping;
     tex.needsUpdate = true;
     tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
+    tex.generateMipmaps = true;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.magFilter = THREE.LinearFilter;
     this.railShadowTexture = tex;
 
     // TEMP: vivid magenta to verify slider wiring and placement visibly
@@ -1659,6 +1861,72 @@ export class Renderer3D extends BaseRenderer {
     (material as any).toneMapped = false;
     this.railShadowMaterial = material;
     return material;
+  }
+
+  setRailShadowSoftness(value: number) {
+    const clamped = Math.max(0.2, Math.min(3.0, value));
+    this.railShadowSoftness = clamped;
+    // Recreate texture and material for updated gradient falloff
+    if (this.railShadowTexture) {
+      this.railShadowTexture.dispose();
+      this.railShadowTexture = null;
+    }
+    if (this.railShadowMaterial) {
+      this.railShadowMaterial.dispose();
+      this.railShadowMaterial = null;
+    }
+    const mat = this.getRailShadowMaterial();
+    if (this.railShadowRibbonMesh) {
+      this.railShadowRibbonMesh.material = mat;
+    }
+    this.updateRailShadowMaterialFromState();
+  }
+
+  setRailShadowBaseGray(value: number) {
+    const clamped = Math.max(50, Math.min(250, value));
+    this.railShadowBaseGray = clamped;
+    if (this.railShadowTexture) {
+      this.railShadowTexture.dispose();
+      this.railShadowTexture = null;
+    }
+    if (this.railShadowMaterial) {
+      this.railShadowMaterial.dispose();
+      this.railShadowMaterial = null;
+    }
+    const mat = this.getRailShadowMaterial();
+    if (this.railShadowRibbonMesh) {
+      this.railShadowRibbonMesh.material = mat;
+    }
+    this.updateRailShadowMaterialFromState();
+  }
+
+  setRailHighlightSpread(value: number) {
+    const clamped = Math.max(0.3, Math.min(3.0, value));
+    this.railHighlightSpread = clamped;
+    this.rebuildRailHighlightRibbon();
+  }
+
+  setRailHighlightColor(hex: string) {
+    try {
+      this.railHighlightColor = new THREE.Color(hex);
+    } catch {
+      this.railHighlightColor = new THREE.Color(0xffffff);
+    }
+    const mat = this.getRailHighlightMaterial();
+    mat.color = this.railHighlightColor.clone();
+    mat.needsUpdate = true;
+    if (this.railHighlightRibbonMesh) {
+      (this.railHighlightRibbonMesh.material as THREE.MeshBasicMaterial).color.copy(this.railHighlightColor);
+    }
+  }
+
+  setRailShadowSpread(value: number) {
+    const clamped = Math.max(0.5, Math.min(10, value));
+    this.railShadowSpread = clamped;
+    // Rebuild the continuous ribbon for accurate width without per-segment scaling artifacts
+    this.rebuildRailShadowRibbon();
+    // Recompute color to keep wider spreads softer
+    this.updateRailShadowMaterialFromState();
   }
   
   initializePockets(pockets: PocketDef[]) {
@@ -1977,6 +2245,22 @@ export class Renderer3D extends BaseRenderer {
     });
 
     return this.ensureClockwise(points);
+  }
+
+  // Ensure polygon points are ordered clockwise. Three.js treats holes as clockwise.
+  private ensureClockwise(points: Vec2[]): Vec2[] {
+    if (points.length < 3) return points;
+    let area = 0;
+    for (let i = 0, n = points.length; i < n; i++) {
+      const p1 = points[i];
+      const p2 = points[(i + 1) % n];
+      area += p1.x * p2.y - p2.x * p1.y;
+    }
+    // area > 0 => CCW (in standard XY). For a hole we want clockwise, so reverse if CCW.
+    if (area > 0) {
+      return points.slice().reverse();
+    }
+    return points;
   }
 
   private getPocketSideMaterial(): THREE.MeshBasicMaterial {
@@ -2502,6 +2786,8 @@ export class Renderer3D extends BaseRenderer {
         this.railMeshes.forEach((mesh) => (mesh.visible = visible));
         this.railHighlightMeshes.forEach((mesh) => (mesh.visible = visible));
         this.railShadowMeshes.forEach((mesh) => (mesh.visible = visible));
+        if (this.railShadowRibbonMesh) this.railShadowRibbonMesh.visible = visible;
+        if (this.railHighlightRibbonMesh) this.railHighlightRibbonMesh.visible = visible;
         if (this.railFillMesh) this.railFillMesh.visible = visible;
         break;
       case 'showPockets':

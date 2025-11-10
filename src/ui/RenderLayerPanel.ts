@@ -123,6 +123,11 @@ export class RenderLayerPanel {
       ambientIntensity,
       directionalIntensity,
       accentIntensity,
+      railShadowSpread,
+      railShadowSoftness,
+      railShadowBaseGray,
+      railHighlightSpread,
+      railHighlightColor,
       ...layerSettings
     } = settings;
     void canvasScale;
@@ -135,8 +140,14 @@ export class RenderLayerPanel {
       directional: directionalIntensity,
       accent: accentIntensity,
     });
+    if (typeof railShadowSpread === 'number') this.renderer.setRailShadowSpread(railShadowSpread);
+    if (typeof railShadowSoftness === 'number') this.renderer.setRailShadowSoftness(railShadowSoftness);
+    if (typeof railShadowBaseGray === 'number') this.renderer.setRailShadowBaseGray(railShadowBaseGray);
+    if (typeof railHighlightSpread === 'number') this.renderer.setRailHighlightSpread(railHighlightSpread);
+    if (typeof railHighlightColor === 'string') this.renderer.setRailHighlightColor(railHighlightColor);
     this.renderer.setHighlightIntensities({
       rail: settings.railHighlightIntensity,
+      railShadow: settings.railShadowIntensity,
       pocketHighlight: settings.pocketHighlightIntensity,
       pocketShadow: settings.pocketShadowIntensity,
     });
@@ -216,7 +227,7 @@ export class RenderLayerPanel {
   }
 
   private bindLightingControls() {
-    type LightingKey = 'ambientIntensity' | 'directionalIntensity' | 'accentIntensity' | 'railHighlightIntensity' | 'railShadowIntensity' | 'pocketHighlightIntensity' | 'pocketShadowIntensity';
+    type LightingKey = 'ambientIntensity' | 'directionalIntensity' | 'accentIntensity' | 'railHighlightIntensity' | 'railShadowIntensity' | 'railShadowSpread' | 'railShadowSoftness' | 'railShadowBaseGray' | 'railHighlightSpread' | 'pocketHighlightIntensity' | 'pocketShadowIntensity';
 
     const updateLightingSetting = (key: LightingKey, value: number, apply: (v: number) => void) => {
       (this.settings as Record<string, number>)[key] = value;
@@ -251,6 +262,26 @@ export class RenderLayerPanel {
         onChange: (v) => updateLightingSetting('railShadowIntensity', v!, (value) => this.renderer.setHighlightIntensities({ railShadow: value }))
       },
       {
+        sliderId: 'lighting-rail-shadow-base',
+        labelId: 'lighting-rail-shadow-base-value',
+        onChange: (v) => updateLightingSetting('railShadowBaseGray', v!, (value) => this.renderer.setRailShadowBaseGray(value))
+      },
+      {
+        sliderId: 'lighting-rail-shadow-spread',
+        labelId: 'lighting-rail-shadow-spread-value',
+        onChange: (v) => updateLightingSetting('railShadowSpread', v!, (value) => this.renderer.setRailShadowSpread(value))
+      },
+      {
+        sliderId: 'lighting-rail-shadow-softness',
+        labelId: 'lighting-rail-shadow-softness-value',
+        onChange: (v) => updateLightingSetting('railShadowSoftness', v!, (value) => this.renderer.setRailShadowSoftness(value))
+      },
+      {
+        sliderId: 'lighting-rail-highlight-spread',
+        labelId: 'lighting-rail-highlight-spread-value',
+        onChange: (v) => updateLightingSetting('railHighlightSpread', v!, (value) => this.renderer.setRailHighlightSpread(value))
+      },
+      {
         sliderId: 'lighting-pocket-highlight',
         labelId: 'lighting-pocket-highlight-value',
         onChange: (v) => updateLightingSetting('pocketHighlightIntensity', v!, (value) => this.renderer.setHighlightIntensities({ pocketHighlight: value }))
@@ -263,15 +294,31 @@ export class RenderLayerPanel {
     ];
 
     this.lightingBinders = bindSliders(lightingSliderConfigs);
+
+    // Bind color input for rail highlight
+    const railHighlightColorInput = document.getElementById('lighting-rail-highlight-color') as HTMLInputElement | null;
+    if (railHighlightColorInput) {
+      const applyColor = (hex: string) => {
+        this.settings.railHighlightColor = hex;
+        this.settingsManager.saveRenderSettings({ railHighlightColor: hex } as Partial<RenderSettings>);
+        this.renderer.setRailHighlightColor(hex);
+      };
+      railHighlightColorInput.addEventListener('input', () => applyColor(railHighlightColorInput.value));
+      railHighlightColorInput.addEventListener('change', () => applyColor(railHighlightColorInput.value));
+    }
   }
 
   private syncLightingSliders() {
-    const map: Array<{ key: keyof Pick<RenderSettings, 'ambientIntensity' | 'directionalIntensity' | 'accentIntensity' | 'railHighlightIntensity' | 'railShadowIntensity' | 'pocketHighlightIntensity' | 'pocketShadowIntensity'>; id: string }> = [
+    const map: Array<{ key: keyof Pick<RenderSettings, 'ambientIntensity' | 'directionalIntensity' | 'accentIntensity' | 'railHighlightIntensity' | 'railShadowIntensity' | 'railShadowSpread' | 'railShadowSoftness' | 'railShadowBaseGray' | 'railHighlightSpread' | 'pocketHighlightIntensity' | 'pocketShadowIntensity'>; id: string }> = [
       { key: 'ambientIntensity', id: 'lighting-ambient' },
       { key: 'directionalIntensity', id: 'lighting-directional' },
       { key: 'accentIntensity', id: 'lighting-accent' },
       { key: 'railHighlightIntensity', id: 'lighting-rail-highlight' },
       { key: 'railShadowIntensity', id: 'lighting-rail-shadow' },
+      { key: 'railShadowBaseGray', id: 'lighting-rail-shadow-base' },
+      { key: 'railShadowSpread', id: 'lighting-rail-shadow-spread' },
+      { key: 'railShadowSoftness', id: 'lighting-rail-shadow-softness' },
+      { key: 'railHighlightSpread', id: 'lighting-rail-highlight-spread' },
       { key: 'pocketHighlightIntensity', id: 'lighting-pocket-highlight' },
       { key: 'pocketShadowIntensity', id: 'lighting-pocket-shadow' },
     ];
@@ -282,6 +329,11 @@ export class RenderLayerPanel {
         binder.setValue(this.settings[key]);
       }
     });
+
+    const railHighlightColorInput = document.getElementById('lighting-rail-highlight-color') as HTMLInputElement | null;
+    if (railHighlightColorInput && typeof this.settings.railHighlightColor === 'string') {
+      railHighlightColorInput.value = this.settings.railHighlightColor;
+    }
   }
 
   private bindOrderControls() {

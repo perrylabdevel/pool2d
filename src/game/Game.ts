@@ -166,8 +166,8 @@ export class Game {
       console.log('  - Score points with combos! Each ball adds time.');
       console.log('  - Press V to return to Practice mode');
     }
-    console.log('  - Press G to open Geometry panel (live pocket adjustments)');
-    console.log('  - Press M to open Modern Geometry panel (angle-based controls)');
+    console.log('  - Press G to open Modern Geometry panel (angle-based controls)');
+    console.log('  - Press J to open Legacy Geometry panel (live pocket adjustments)');
     console.log('  - Press S to open Physics Settings panel');
     console.log('  - Press D for Debug view');
   }
@@ -416,11 +416,11 @@ export class Game {
       persistState: true,
     });
     this.hud.registerPanel('geometry-panel', this.geometryPanel.getController(), {
-      hotkeys: ['g'],
+      hotkeys: ['j'],
       persistState: true,
     });
     this.hud.registerPanel('modern-geometry-panel', this.modernGeometryPanel.getController(), {
-      hotkeys: ['j'],
+      hotkeys: ['g'],
       persistState: true,
     });
     this.hud.registerPanel('render-layer-panel', this.renderLayersPanel.getController(), {
