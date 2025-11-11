@@ -65,6 +65,8 @@ export class PhysicsWorld {
   skipCuePocketCheck: boolean = false;
   // Callback for ball collisions (for rule tracking)
   onBallCollision?: (ballA: Ball, ballB: Ball) => void;
+  // Callback for ball-rail collisions (for rule tracking)
+  onRailCollision?: (ball: Ball, rail: Rail) => void;
   
   constructor() {
     this.initializeRails();
@@ -214,6 +216,9 @@ export class PhysicsWorld {
             }
           } else if (contact.rail) {
             resolveBallRail(contact);
+            if (this.onRailCollision) {
+              this.onRailCollision(contact.ballA, contact.rail);
+            }
           }
         });
       }

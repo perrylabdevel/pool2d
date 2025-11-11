@@ -63,7 +63,7 @@ export class Game {
   rules: EightBallRules;
   predictor: Predictor;
   mode: GameMode;
-  currentRuleset: string = 'CASUAL'; // Can be changed via keyboard shortcuts
+  currentRuleset: string = 'HOUSE_8BALL'; // House rules as default
   private lastBallScale: number;
   private _lastCanvasScale?: number;
 
@@ -651,6 +651,13 @@ export class Game {
         this.rules.recordFirstContact(ballA.id);
       }
     };
+    // Track rail contact
+    if (this.world) {
+      this.world.onRailCollision = (ball, rail) => {
+        if (this.mode !== GameMode.EIGHT_BALL) return;
+        this.rules.recordRailContact();
+      };
+    }
   }
 
   private respawnCueBall() {

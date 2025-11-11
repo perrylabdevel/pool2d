@@ -34,6 +34,7 @@ export class EightBallRules {
   firstBallHit: number = -1;
   ballsPocketed: number[] = [];
   private ballsPocketedBeforeShot: Set<number> = new Set();
+  private railContactThisShot: boolean = false;
 
   onFoul?: (message: string) => void;
   onTurnChange?: (player: number) => void;
@@ -56,12 +57,18 @@ export class EightBallRules {
     this.cueBallHit = false;
     this.firstBallHit = -1;
     this.ballsPocketed = [];
+    this.railContactThisShot = false;
 
     // Track which balls are already pocketed before this shot
     this.ballsPocketedBeforeShot = new Set(
       balls.filter(b => b.pocketed).map(b => b.id)
     );
 
+  }
+  
+  // Track any rail contact during the active shot
+  recordRailContact() {
+    this.railContactThisShot = true;
   }
   
   recordBallPocketed(ballId: number) {
@@ -130,7 +137,7 @@ export class EightBallRules {
     
     // Handle break
     if (this.gameState === GameState.BREAK) {
-      this.handleBreak(foul, foulMessage, eightBallPocketedThisShot);
+      this.handleBreak(foul, foulMessage, eightBallPocketedThisShot, balls);
       return;
     }
 
@@ -160,6 +167,14 @@ export class EightBallRules {
       return;
     }
     
+    // Enforce rail contact rule for normal shots (no pocket)
+    if (this.config.requireRailContact && this.ballsPocketed.length === 0 && !foul) {
+      if (!this.railContactThisShot) {
+        foul = true;
+        foulMessage = 'Foul! No rail contact.';
+      }
+    }
+
     // Assign groups if not yet assigned
     if (this.player1Group === PlayerGroup.NONE && this.ballsPocketed.length > 0) {
       this.assignGroups();
@@ -188,7 +203,7 @@ export class EightBallRules {
     }
   }
   
-  handleBreak(foul: boolean, foulMessage: string, eightBallPocketed: boolean) {
+  handleBreak(foul: boolean, foulMessage: string, eightBallPocketed: boolean, balls: Ball[] | null) {
     // Legal break: at least 4 balls hit cushions or ball pocketed
     // Simplified: just check if any ball pocketed
 
@@ -201,15 +216,33 @@ export class EightBallRules {
       return;
     }
 
+    // Enforce legal break if required (simplified: any ball pocketed)
+    if (this.config.requireLegalBreak && this.ballsPocketed.length === 0) {
+      if (this.onFoul) this.onFoul('Illegal break');
+      this.gameState = GameState.BALL_IN_HAND;
+      this.switchPlayer();
+      return;
+    }
+
     // Check if 8-ball pocketed on break
     if (eightBallPocketed) {
-      // Win on break if no scratch
-      this.winner = this.currentPlayer;
-      this.gameState = GameState.GAME_OVER;
-      if (this.onGameOver) {
-        this.onGameOver(this.winner);
+      const behavior = this.config.breakEightBallBehavior ?? (this.config.allow8BallBreakWin ? 'WIN' : 'SPOT_LOSE_TURN');
+      if (behavior === 'WIN') {
+        // Win on break if allowed
+        this.winner = this.currentPlayer;
+        this.gameState = GameState.GAME_OVER;
+        if (this.onGameOver) this.onGameOver(this.winner);
+        return;
+      } else {
+        // Spot 8-ball back on the rack spot
+        const eight = balls?.find(b => b.id === BALL_8);
+        if (eight) {
+          eight.pocketed = false;
+        }
+        if (behavior === 'SPOT_LOSE_TURN') {
+          this.switchPlayer();
+        }
       }
-      return;
     }
 
     this.gameState = GameState.PLAYING;

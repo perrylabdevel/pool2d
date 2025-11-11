@@ -10,6 +10,8 @@ export interface RulesConfig {
   requireLegalBreak: boolean;             // Must drive 4+ balls to rails or pocket ball
   allow8BallBreakWin: boolean;            // Pocketing 8-ball on break = win
   scratch8BallOnBreakLoss: boolean;       // Scratch while pocketing 8-ball on break = loss
+  breakEightBallBehavior?: 'WIN' | 'SPOT_LOSE_TURN' | 'SPOT_CONTINUE';
+  breakScratchPlacement?: 'KITCHEN' | 'ANYWHERE';
 
   // Shot rules
   requireRailContact: boolean;            // If no ball pocketed, must hit rail
@@ -19,6 +21,7 @@ export interface RulesConfig {
 
   // Ball-in-hand rules
   ballInHandAnywhere: boolean;            // true = anywhere, false = behind head string after break scratch
+  bihDisallowTouchingBalls?: boolean;     // Prevent BIH placement touching other balls
 
   // Advanced rules
   enablePushOut: boolean;                 // Allow push-out after break
@@ -131,6 +134,33 @@ export const RULES_PRESETS: { [key: string]: RulesConfig } = {
     scratchIsFoul: true,                    // Still penalize scratches
     noContactIsFoul: false,                 // Allow no contact for experimentation
     wrongBallFirstIsFoul: false,
+  },
+  // House rules preset from user selections
+  HOUSE_8BALL: {
+    enforceGroupAssignment: true,
+    enforceEarly8BallLoss: true,
+
+    requireLegalBreak: true,
+    allow8BallBreakWin: false,
+    scratch8BallOnBreakLoss: true,
+    breakEightBallBehavior: 'SPOT_LOSE_TURN',
+    breakScratchPlacement: 'KITCHEN',
+
+    requireRailContact: true,
+    requireCalledShots: false,
+    requireCalled8Ball: false,
+    allowSlop: true,
+
+    ballInHandAnywhere: true,
+    bihDisallowTouchingBalls: true,
+
+    enablePushOut: false,
+    enableThreeFoulRule: false,
+    shotClockSeconds: 0,
+
+    scratchIsFoul: true,
+    noContactIsFoul: true,
+    wrongBallFirstIsFoul: true,
   },
 };
 
