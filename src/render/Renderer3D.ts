@@ -42,6 +42,7 @@ export class Renderer3D extends BaseRenderer {
   canvasOffsetY: number = 0;
   private resizeObserver: ResizeObserver | null = null;
   private frameClipInfo: FrameClipInfo | null = null;
+  private stencilAppliedOnce: boolean = false;
   
   // 3D objects
   ballMeshes: Map<number, THREE.Object3D> = new Map();
@@ -51,6 +52,7 @@ export class Renderer3D extends BaseRenderer {
   private fbxBlobUrl: string | null = null;
   tableMesh: THREE.Mesh | null = null;
   frameMesh: THREE.Group | null = null;
+  private frameStencilMesh: THREE.Mesh | null = null;
   railMeshes: THREE.Mesh[] = [];
   pocketMeshes: THREE.Mesh[] = [];
   pocketBottomMeshes: THREE.Mesh[] = [];
@@ -1061,6 +1063,9 @@ export class Renderer3D extends BaseRenderer {
     this.frameMesh = group;
     this.scene.add(group);
     this.applyFrameRenderOrder();
+
+    // Create/update stencil mask to clip rails/pockets to outer frame outline
+    this.createOrUpdateFrameStencil(frameOutline.outerHalfWidth, frameOutline.outerHalfHeight, cornerRadius);
     group.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
       if (mesh && (mesh as any).isMesh) {
@@ -1600,6 +1605,74 @@ export class Renderer3D extends BaseRenderer {
     // Build continuous ribbons (shadow + highlight)
     this.rebuildRailShadowRibbon();
     this.rebuildRailHighlightRibbon();
+  }
+
+  private createOrUpdateFrameStencil(outerX: number, outerY: number, cornerRadius: number) {
+    if (this.frameStencilMesh) {
+      this.scene.remove(this.frameStencilMesh);
+      this.frameStencilMesh.geometry.dispose();
+      const matOld = this.frameStencilMesh.material as THREE.Material;
+      matOld.dispose();
+      this.frameStencilMesh = null;
+    }
+
+    // Slightly shrink stencil inward to eliminate 1px AA slivers outside the frame
+    const eps = 0.15;
+    const shape = this.createRoundedRectShape(
+      Math.max(0, outerX - eps),
+      Math.max(0, outerY - eps),
+      Math.max(0, cornerRadius - eps)
+    );
+    const geometry = new THREE.ShapeGeometry(shape, 64);
+    const mat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    (mat as any).colorWrite = false;
+    mat.depthWrite = false;
+    mat.depthTest = false;
+    mat.stencilWrite = true;
+    mat.stencilRef = 1;
+    mat.stencilFunc = THREE.AlwaysStencilFunc;
+    mat.stencilFail = THREE.KeepStencilOp;
+    mat.stencilZFail = THREE.KeepStencilOp;
+    mat.stencilZPass = THREE.ReplaceStencilOp;
+
+    const mesh = new THREE.Mesh(geometry, mat);
+    mesh.position.z = -1.0;
+    mesh.renderOrder = (this.layerOrder.orderFrame ?? 1000) - 10;
+    this.frameStencilMesh = mesh;
+    this.scene.add(mesh);
+
+    // Mark stencil needing application on current table meshes
+    this.stencilAppliedOnce = false;
+  }
+
+  private applyStencilToTableMeshes() {
+    const apply = (m?: THREE.Material | THREE.Material[]) => {
+      if (!m) return;
+      const set = (mat: any) => {
+        mat.stencilWrite = true;
+        mat.stencilRef = 1;
+        mat.stencilFunc = THREE.EqualStencilFunc;
+        mat.stencilFail = THREE.KeepStencilOp;
+        mat.stencilZFail = THREE.KeepStencilOp;
+        mat.stencilZPass = THREE.KeepStencilOp;
+      };
+      if (Array.isArray(m)) m.forEach(set); else set(m);
+    };
+
+    this.railMeshes.forEach((mesh) => apply(mesh.material as any));
+    this.railHighlightMeshes.forEach((mesh) => apply(mesh.material as any));
+    this.railShadowMeshes.forEach((mesh) => apply(mesh.material as any));
+    if (this.railShadowRibbonMesh) apply(this.railShadowRibbonMesh.material as any);
+    if (this.railHighlightRibbonMesh) apply(this.railHighlightRibbonMesh.material as any);
+    if (this.railFillMesh) apply(this.railFillMesh.material as any);
+    this.pocketMeshes.forEach((mesh) => apply(mesh.material as any));
+    this.pocketBottomMeshes.forEach((mesh) => apply(mesh.material as any));
+    this.pocketGradientMeshes.forEach((mesh) => apply(mesh.material as any));
+    this.pocketCapMeshes.forEach((mesh) => apply(mesh.material as any));
+    this.pocketShadowMeshes.forEach((mesh) => apply(mesh.material as any));
+    if (this.tableMesh) apply((this.tableMesh as any).material);
+    if (this.tableHighlightMesh) apply(this.tableHighlightMesh.material as any);
+    if (this.tableShadowMesh) apply(this.tableShadowMesh.material as any);
   }
 
   private rebuildRailHighlightRibbon() {
@@ -2622,6 +2695,12 @@ export class Renderer3D extends BaseRenderer {
     // Clear UI canvas
     this.uiCtx.clearRect(0, 0, this.uiCanvas.width, this.uiCanvas.height);
 
+    // Ensure stencil is applied after any async/late mesh creation
+    if (this.frameStencilMesh && !this.stencilAppliedOnce) {
+      this.applyStencilToTableMeshes();
+      this.stencilAppliedOnce = true;
+    }
+
     if (this.showMeasurementOverlay) {
       this.drawMeasurementOverlay();
     }
@@ -2741,6 +2820,10 @@ export class Renderer3D extends BaseRenderer {
     });
     this.frameMesh.visible = this.layerVisibility.showFrame;
     this.enforceRenderOrderControl(this.frameMesh);
+    // Keep stencil application in sync with render order updates
+    if (this.frameStencilMesh) {
+      this.applyStencilToTableMeshes();
+    }
   }
 
   private updateCanvasZIndex() {

@@ -90,11 +90,12 @@ export class Renderer extends BaseRenderer {
     // Draw in correct order: bottom to top
     const tableGeom = getTableGeometry();
 
-    this.drawFrame();
+    // Draw play elements first, then overlay frame to mask any bleed outside
     this.drawPlayingSurface();
     this.drawRailBackground();
     this.drawRails(world.rails);
     this.drawPockets(tableGeom.pockets);
+    this.drawFrame();
     this.drawBalls(world.balls, alpha);
     
     this.ctx.restore();
@@ -123,20 +124,35 @@ export class Renderer extends BaseRenderer {
   }
 
   drawRailBackground() {
-    // Rectangular background for the entire rail system
-    // This encompasses all rails including corner pocket extensions
+    // Clip rail background to the outer frame so it never escapes rounded corners
+    const geom = getTableGeometry();
+    const { frameOutline } = geom;
+    const outerX = frameOutline.outerHalfWidth;
+    const outerY = frameOutline.outerHalfHeight;
+    const innerX = frameOutline.innerHalfWidth;
+    const innerY = frameOutline.innerHalfHeight;
+    const cornerRadius = Math.max(0, Math.min(frameOutline.cornerRadius, outerX, outerY));
+
+    // Build a donut clip: outer rounded rect minus the inner rectangle (frame hollow)
+    this.ctx.save();
+    this.ctx.beginPath();
+    this.traceRoundedRectPath(this.ctx, outerX, outerY, cornerRadius);
+    this.ctx.rect(-innerX, -innerY, innerX * 2, innerY * 2);
+    this.ctx.clip('evenodd');
+
+    // Fill a padded rect under rails; clipping keeps it inside frame bounds
     const { minX, maxX, minY, maxY } = this.playBounds;
-
-    // Extend slightly beyond the rail boundaries to ensure full coverage
     const padding = 0.5;
-
-    this.ctx.fillStyle = '#2d1810'; // Dark wood color
+    // Use frame color so any overlap with frame remains visually consistent
+    this.ctx.fillStyle = CONFIG.FRAME_COLOR ?? '#3d2413';
     this.ctx.fillRect(
       minX - padding,
       minY - padding,
       (maxX - minX) + padding * 2,
       (maxY - minY) + padding * 2
     );
+
+    this.ctx.restore();
   }
 
   drawFrame() {
