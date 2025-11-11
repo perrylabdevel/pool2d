@@ -7,6 +7,7 @@ export interface GameSettings {
   aimAssist: boolean;
   call8Ball: boolean;
   showFPS: boolean;
+  aiDifficulty?: 'EASY' | 'MEDIUM' | 'HARD' | 'EXPERT';
 }
 
 export interface UIColors {
@@ -95,6 +96,7 @@ const DEFAULT_GAME_SETTINGS: GameSettings = {
   aimAssist: true,
   call8Ball: false,
   showFPS: true,
+  aiDifficulty: 'MEDIUM',
 };
 
 const DEFAULT_UI_COLORS: UIColors = {

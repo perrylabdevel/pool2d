@@ -74,6 +74,7 @@ export class Game {
   ai: PoolAI | null;
   aiThinkingStartTime: number;
   aiSelectedShot: any | null;
+  aiShotAnim: { phase: 'warmup' | 'approach' | 'pause' | 'strike'; elapsed: number; aimAngle: number; targetPower: number; seed: number; w1: number; w2: number; aAmpDeg: number; pAmp: number; warmupDur: number; approachDur: number; pauseDur: number; strikeDur: number } | null;
 
   // Arcade modes
   arcadeMode: GameModeBase | null;
@@ -533,8 +534,10 @@ export class Game {
       rulesCurrentPlayer: this.rules.currentPlayer,
     });
 
-    // Initialize AI with medium difficulty
-    this.ai = new PoolAI(AIDifficulty.MEDIUM);
+    // Initialize AI with difficulty from settings
+    const gs = this.hud.settingsManager.getGameSettings();
+    const diff = this.mapAIDifficulty(gs.aiDifficulty ?? 'MEDIUM');
+    this.ai = new PoolAI(diff);
 
     // Set up rules callbacks
     this.rules.onGroupAssigned = (playerId: number, group: number) => {
@@ -565,6 +568,16 @@ export class Game {
 
     // Update HUD to show player's turn
     this.hud.setTurn(1, false);
+  }
+
+  private mapAIDifficulty(value: 'EASY'|'MEDIUM'|'HARD'|'EXPERT'): AIDifficulty {
+    switch (value) {
+      case 'EASY': return AIDifficulty.EASY;
+      case 'HARD': return AIDifficulty.HARD;
+      case 'EXPERT': return AIDifficulty.EXPERT;
+      case 'MEDIUM':
+      default: return AIDifficulty.MEDIUM;
+    }
   }
 
   initializeTimeAttack() {
@@ -877,10 +890,119 @@ export class Game {
         console.log('[AI] Selected shot:', this.aiSelectedShot);
       }
     } else {
-      // Execute the selected shot
-      console.log('[AI] Executing shot');
-      this.shoot(this.aiSelectedShot.aimAngle, this.aiSelectedShot.power);
-      this.aiSelectedShot = null;
+      // Animate cue like a real player, then execute the shot
+      if (!this.aiShotAnim) {
+        const r = Math.random;
+        const diff = this.ai?.difficulty ?? AIDifficulty.MEDIUM;
+        // Per-shot randomized dynamics
+        const baseW1 = 1.0 + r() * 1.5; // cycles/sec
+        const baseW2 = 2.0 + r() * 2.0;
+        // Angle waggle amplitude in degrees by difficulty
+        const aAmpDeg = (() => {
+          switch (diff) {
+            case AIDifficulty.EASY: return 2.2 + r() * 0.8;
+            case AIDifficulty.MEDIUM: return 1.0 + r() * 0.8;
+            case AIDifficulty.HARD: return 0.35 + r() * 0.25;
+            case AIDifficulty.EXPERT: return 0.15 + r() * 0.15;
+          }
+        })();
+        const pAmp = Math.min(this.aiSelectedShot.power * (0.10 + r() * 0.08), 3.2);
+        const warmupDur = 0.45 + r() * 0.35; // 0.45-0.8s
+        const approachDur = 0.35 + r() * 0.25; // 0.35-0.6s
+        const pauseDur = 0.12 + r() * 0.15; // 0.12-0.27s
+        const strikeDur = 0.16 + r() * 0.10; // 0.16-0.26s
+
+        this.aiShotAnim = {
+          phase: 'warmup',
+          elapsed: 0,
+          aimAngle: this.aiSelectedShot.aimAngle,
+          targetPower: this.aiSelectedShot.power,
+          seed: r(),
+          w1: baseW1 * 2 * Math.PI,
+          w2: baseW2 * 2 * Math.PI,
+          aAmpDeg,
+          pAmp,
+          warmupDur,
+          approachDur,
+          pauseDur,
+          strikeDur,
+        };
+        // Drive UI state to show cue/power bar for AI
+        this.canShoot = true;
+        this.isAimMode = false;
+        this.lockedAngle = this.aiSelectedShot.aimAngle;
+        this.currentPower = 0;
+        // Ensure prediction recalculates each frame for AI animation
+        this.cachedPrediction = null;
+        this.cachedDirection = null;
+      }
+
+      if (this.aiShotAnim) {
+        this.aiShotAnim.elapsed += dt;
+        const p = this.aiShotAnim;
+        const warmupDuration = p.warmupDur;
+        const approachDuration = p.approachDur;
+        const pauseDuration = p.pauseDur;
+        const strikeDuration = p.strikeDur;
+
+        if (p.phase === 'warmup') {
+          // Gentle oscillation in power and slight angle waggle
+          // Two-frequency LFO with random seed phases and gentle decay envelope
+          const phase1 = p.w1 * p.elapsed + p.seed * Math.PI * 2;
+          const phase2 = p.w2 * p.elapsed + (1 - p.seed) * Math.PI * 2;
+          const env = 0.85 + 0.15 * Math.cos(Math.min(1, p.elapsed / warmupDuration) * Math.PI); // subtle decay
+          const waggle = (p.aAmpDeg * Math.PI / 180) * env * (Math.sin(phase1) * 0.7 + Math.sin(phase2) * 0.3);
+          const base = Math.min(p.targetPower * 0.22, 3.6);
+          this.lockedAngle = p.aimAngle + waggle;
+          this.currentPower = base + p.pAmp * (0.5 + 0.5 * Math.sin(phase1 * 0.85 + 0.3 * Math.sin(phase2)));
+          // force fresh prediction (align aim line with cue)
+          this.cachedPrediction = null;
+          this.cachedDirection = null;
+          if (p.elapsed >= warmupDuration) {
+            p.phase = 'approach';
+            p.elapsed = 0;
+          }
+        } else if (p.phase === 'approach') {
+          const t = Math.min(1, p.elapsed / approachDuration);
+          const eased = t * t * (3 - 2 * t); // smoothstep
+          this.lockedAngle = p.aimAngle; // keep aligning
+          this.currentPower = p.targetPower * 0.7 * eased; // approach to 70%
+          // force fresh prediction (align aim line with cue)
+          this.cachedPrediction = null;
+          this.cachedDirection = null;
+          if (t >= 1) {
+            p.phase = 'pause';
+            p.elapsed = 0;
+          }
+        } else if (p.phase === 'pause') {
+          if (p.elapsed >= pauseDuration) {
+            p.phase = 'strike';
+            p.elapsed = 0;
+          }
+        } else if (p.phase === 'strike') {
+          const t = Math.min(1, p.elapsed / strikeDuration);
+          const eased = t * t; // accelerate in
+          // Final micro-refinement on hard/expert: ease angle back to precise aim
+          const refine = (this.ai && (this.ai.difficulty === AIDifficulty.HARD || this.ai.difficulty === AIDifficulty.EXPERT)) ? (1 - (1 - eased) * 0.5) : eased;
+          this.currentPower = p.targetPower * (0.7 + 0.3 * eased);
+          this.lockedAngle = p.aimAngle * refine + this.lockedAngle * (1 - refine);
+          // force fresh prediction (align aim line with cue)
+          this.cachedPrediction = null;
+          this.cachedDirection = null;
+          if (t >= 1) {
+            // Fire the shot
+            console.log('[AI] Executing shot');
+            const finalAngle = this.lockedAngle;
+            const finalPower = Math.max(p.targetPower, this.currentPower);
+            this.shoot(finalAngle, finalPower);
+            this.aiSelectedShot = null;
+            this.aiShotAnim = null;
+            // Reset UI shot controls
+            this.isAimMode = true;
+            this.currentPower = 0;
+          }
+        }
+      }
     }
   }
   
@@ -1196,3 +1318,9 @@ export class Game {
     }
   }
 }
+    // React to AI difficulty changes from settings panel
+    window.addEventListener('game:ai-difficulty-changed', (e: Event) => {
+      const value = (e as CustomEvent<{ value: 'EASY'|'MEDIUM'|'HARD'|'EXPERT' }>).detail?.value ?? 'MEDIUM';
+      const diff = this.mapAIDifficulty(value);
+      this.ai = new PoolAI(diff);
+    });

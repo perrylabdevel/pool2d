@@ -65,6 +65,15 @@ export class GameSettingsPanel {
             <input type="checkbox" id="show-fps-toggle" />
             <span>Show FPS/UPS Overlay</span>
           </label>
+          <div class="panel-input-row" style="display:flex; align-items:center; gap:8px;">
+            <label for="ai-difficulty-select" style="min-width: 140px;">AI Difficulty</label>
+            <select id="ai-difficulty-select">
+              <option value="EASY">Easy</option>
+              <option value="MEDIUM">Medium</option>
+              <option value="HARD">Hard</option>
+              <option value="EXPERT">Expert</option>
+            </select>
+          </div>
         </div>
         <div class="settings-group">
           <h4 class="settings-group-title">UI Colors</h4>
@@ -125,6 +134,7 @@ export class GameSettingsPanel {
     const aimAssistToggle = this.panel.querySelector<HTMLInputElement>('#aim-assist-toggle');
     const call8Toggle = this.panel.querySelector<HTMLInputElement>('#call-8-toggle');
     const showFpsToggle = this.panel.querySelector<HTMLInputElement>('#show-fps-toggle');
+    const aiDifficultySelect = this.panel.querySelector<HTMLSelectElement>('#ai-difficulty-select');
 
     aimAssistToggle?.addEventListener('change', (event) => {
       const enabled = (event.target as HTMLInputElement).checked;
@@ -142,6 +152,12 @@ export class GameSettingsPanel {
       const visible = (event.target as HTMLInputElement).checked;
       this.settingsManager.saveGameSettings({ showFPS: visible });
       this.callbacks.onStatsVisibilityChange?.(visible);
+    });
+
+    aiDifficultySelect?.addEventListener('change', (event) => {
+      const value = (event.target as HTMLSelectElement).value as 'EASY'|'MEDIUM'|'HARD'|'EXPERT';
+      this.settingsManager.saveGameSettings({ aiDifficulty: value });
+      window.dispatchEvent(new CustomEvent('game:ai-difficulty-changed', { detail: { value } }));
     });
 
     const colorInputs = this.panel.querySelectorAll<HTMLInputElement>('.color-setting input[type="color"]');
@@ -204,6 +220,35 @@ export class GameSettingsPanel {
         this.syncFromSettings(); // Refresh UI
       }
     });
+  }
+
+  private syncFromSettings() {
+    const gs = this.settingsManager.getGameSettings();
+    const aimAssistToggle = this.panel.querySelector<HTMLInputElement>('#aim-assist-toggle');
+    const call8Toggle = this.panel.querySelector<HTMLInputElement>('#call-8-toggle');
+    const showFpsToggle = this.panel.querySelector<HTMLInputElement>('#show-fps-toggle');
+    const aiDifficultySelect = this.panel.querySelector<HTMLSelectElement>('#ai-difficulty-select');
+
+    if (aimAssistToggle) aimAssistToggle.checked = !!gs.aimAssist;
+    if (call8Toggle) call8Toggle.checked = !!gs.call8Ball;
+    if (showFpsToggle) showFpsToggle.checked = !!gs.showFPS;
+    if (aiDifficultySelect && gs.aiDifficulty) aiDifficultySelect.value = gs.aiDifficulty;
+
+    this.syncColorInputs();
+  }
+
+  private syncColorInputs() {
+    const colors = this.settingsManager.getUIColors();
+    const set = (id: string, val: string) => {
+      const el = this.panel.querySelector<HTMLInputElement>(`#${id}`);
+      if (el) el.value = val;
+    };
+    set('table-color', colors.tableColor);
+    set('frame-color', colors.frameColor);
+    set('rail-color', colors.railColor);
+    set('rail-fill-color', colors.railFillColor);
+    set('active-player-color', colors.activePlayerColor);
+    set('turn-indicator-color', colors.turnIndicatorColor);
   }
 
   private syncFromSettings(): void {
