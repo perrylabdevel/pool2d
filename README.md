@@ -91,6 +91,20 @@ src/
 └── rules/EightBall.ts # 8-ball rule engine
 ```
 
+## Rules Presets
+
+The default ruleset is now `HOUSE_8BALL` (your house rules). Summary:
+
+- Break: legal break required; 8 on break is spotted and shooter loses turn; break scratch = loss if 8 was pocketed; break scratch placement = kitchen.
+- Shot legality: rail contact required when no ball is pocketed; called shots OFF; slop ON.
+- Sets/Turn: assign solids/stripes after first pocket; wrong set first = foul; continue after any legal make.
+- Ball‑in‑hand: anywhere after any foul; BIH placement should not touch other balls (enforcement TODO).
+- Endgame: early 8 = loss; 8 with a foul = loss; called 8 required OFF.
+- Advanced: push‑out OFF; three‑foul OFF; shot clock 0 (editable later).
+
+Hotkeys still allow switching presets (1/2/3/4 for Casual/Tournament/APA/Practice). A Rules panel UI is planned; see TODO.
+
+
 ## Configuration Snapshot
 
 All tunables live in `src/config.ts` and can be overridden live via the settings panels.
