@@ -3331,11 +3331,16 @@ export class Renderer3D extends BaseRenderer {
     // Draw aim line in 2D - clipped to contact point or rails
     let aimEndX = ball.x + Math.cos(angle) * CONFIG.AIM_LINE_LENGTH;
     let aimEndY = ball.y + Math.sin(angle) * CONFIG.AIM_LINE_LENGTH;
-    
-    // If we have a prediction, stop at the contact point
+
+    // If we have a prediction, stop at the ghost ball center (includes offset)
     if (prediction && prediction.type === 'ball') {
-      aimEndX = prediction.contactPoint.x;
-      aimEndY = prediction.contactPoint.y;
+      // Calculate ghost ball position with offset
+      const offsetDir = Math.atan2(
+        prediction.contactPoint.y - ball.y,
+        prediction.contactPoint.x - ball.x
+      );
+      aimEndX = prediction.contactPoint.x + Math.cos(offsetDir) * CONFIG.GHOST_BALL_OFFSET;
+      aimEndY = prediction.contactPoint.y + Math.sin(offsetDir) * CONFIG.GHOST_BALL_OFFSET;
     } else if (prediction && prediction.type === 'rail') {
       aimEndX = prediction.contactPoint.x;
       aimEndY = prediction.contactPoint.y;
@@ -4128,11 +4133,12 @@ export class Renderer3D extends BaseRenderer {
       const dirX = trajectories.objectBallPath.end.x - trajectories.objectBallPath.start.x;
       const dirY = trajectories.objectBallPath.end.y - trajectories.objectBallPath.start.y;
       const length = Math.sqrt(dirX * dirX + dirY * dirY);
-      
+
       if (length > 0.0001) {
         const normX = dirX / length;
         const normY = dirY / length;
-        const start = { x: prediction.contactPoint.x, y: prediction.contactPoint.y };
+        // Start from actual object ball center (not ghost ball contact point)
+        const start = { x: prediction.hitBall.x, y: prediction.hitBall.y };
         const endRaw = { x: start.x + normX * adjustedLength, y: start.y + normY * adjustedLength };
         const end = this.clipLineAtRails(start, endRaw);
         
@@ -4155,11 +4161,19 @@ export class Renderer3D extends BaseRenderer {
       const dirX = trajectories.cueBallPath.end.x - trajectories.cueBallPath.start.x;
       const dirY = trajectories.cueBallPath.end.y - trajectories.cueBallPath.start.y;
       const length = Math.sqrt(dirX * dirX + dirY * dirY);
-      
+
       if (length > 0.0001) {
         const normX = dirX / length;
         const normY = dirY / length;
-        const start = { x: prediction.contactPoint.x, y: prediction.contactPoint.y };
+        // Start from ghost ball position (includes offset if configured)
+        // Ghost ball offset is applied along the direction from cue to contact point
+        const offsetDir = Math.atan2(
+          prediction.contactPoint.y - cueBallPos.y,
+          prediction.contactPoint.x - cueBallPos.x
+        );
+        const ghostX = prediction.contactPoint.x + Math.cos(offsetDir) * CONFIG.GHOST_BALL_OFFSET;
+        const ghostY = prediction.contactPoint.y + Math.sin(offsetDir) * CONFIG.GHOST_BALL_OFFSET;
+        const start = { x: ghostX, y: ghostY };
         // Cue ball path is 25% the length of object ball path
         const cueBallLength = adjustedLength * 0.25;
         const endRaw = { x: start.x + normX * cueBallLength, y: start.y + normY * cueBallLength };
