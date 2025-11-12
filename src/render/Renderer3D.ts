@@ -3235,12 +3235,97 @@ export class Renderer3D extends BaseRenderer {
     const cueStart = this.worldToScreen(rawNear.x, rawNear.y);
     const cueEnd = this.worldToScreen(rawFar.x, rawFar.y);
 
-    this.uiCtx.strokeStyle = '#8B4513';
-    this.uiCtx.lineWidth = 4;
+    // Scale cue thickness with world scale (about 1 inch diameter in world units)
+    const cueThicknessInches = 1.0; // Standard cue stick diameter
+    const cueThicknessPixels = cueThicknessInches * this.scale;
+
+    // Calculate tip position (about 0.4 inches from the near end - slightly exaggerated for visibility)
+    const tipLengthInches = 0.4;
+    const tipEnd = {
+      x: ball.x - Math.cos(angle) * cueDistance,
+      y: ball.y - Math.sin(angle) * cueDistance
+    };
+    const tipStart = {
+      x: ball.x - Math.cos(angle) * (cueDistance + tipLengthInches),
+      y: ball.y - Math.sin(angle) * (cueDistance + tipLengthInches)
+    };
+    const tipStartScreen = this.worldToScreen(tipStart.x, tipStart.y);
+    const tipEndScreen = this.worldToScreen(tipEnd.x, tipEnd.y);
+
+    // Get cue colors from settings
+    const cueStickColor = (CONFIG as any).CUE_STICK_COLOR || '#8B4513';
+    const cueTipColor = (CONFIG as any).CUE_TIP_COLOR || '#4A90E2';
+
+    // Draw main cue stick with gradient shading for 3D effect
+    const lineWidth = Math.max(4, cueThicknessPixels);
+
+    // Create gradient perpendicular to cue direction for cylindrical appearance
+    const dx = cueEnd.x - tipStartScreen.x;
+    const dy = cueEnd.y - tipStartScreen.y;
+    const length = Math.hypot(dx, dy);
+
+    if (length > 0) {
+      // Perpendicular direction for gradient
+      const perpX = -dy / length;
+      const perpY = dx / length;
+
+      // Gradient center line
+      const midX = (tipStartScreen.x + cueEnd.x) / 2;
+      const midY = (tipStartScreen.y + cueEnd.y) / 2;
+
+      // Create radial-like gradient effect by drawing multiple passes
+      // Shadow/dark side
+      this.uiCtx.strokeStyle = this.shadeColor(cueStickColor, -0.4);
+      this.uiCtx.lineWidth = lineWidth;
+      this.uiCtx.lineCap = 'round';
+      this.uiCtx.beginPath();
+      this.uiCtx.moveTo(tipStartScreen.x, tipStartScreen.y);
+      this.uiCtx.lineTo(cueEnd.x, cueEnd.y);
+      this.uiCtx.stroke();
+
+      // Mid-tone
+      this.uiCtx.strokeStyle = cueStickColor;
+      this.uiCtx.lineWidth = lineWidth * 0.7;
+      this.uiCtx.beginPath();
+      this.uiCtx.moveTo(tipStartScreen.x, tipStartScreen.y);
+      this.uiCtx.lineTo(cueEnd.x, cueEnd.y);
+      this.uiCtx.stroke();
+
+      // Highlight (top edge)
+      this.uiCtx.strokeStyle = this.shadeColor(cueStickColor, 0.3);
+      this.uiCtx.lineWidth = lineWidth * 0.3;
+      this.uiCtx.beginPath();
+      this.uiCtx.moveTo(tipStartScreen.x, tipStartScreen.y);
+      this.uiCtx.lineTo(cueEnd.x, cueEnd.y);
+      this.uiCtx.stroke();
+    }
+
+    // Draw tip with gradient shading
+    const tipWidth = Math.max(3, cueThicknessPixels * 0.9);
+
+    // Tip shadow
+    this.uiCtx.strokeStyle = this.shadeColor(cueTipColor, -0.3);
+    this.uiCtx.lineWidth = tipWidth;
     this.uiCtx.lineCap = 'round';
     this.uiCtx.beginPath();
-    this.uiCtx.moveTo(cueStart.x, cueStart.y);
-    this.uiCtx.lineTo(cueEnd.x, cueEnd.y);
+    this.uiCtx.moveTo(tipStartScreen.x, tipStartScreen.y);
+    this.uiCtx.lineTo(tipEndScreen.x, tipEndScreen.y);
+    this.uiCtx.stroke();
+
+    // Tip mid-tone
+    this.uiCtx.strokeStyle = cueTipColor;
+    this.uiCtx.lineWidth = tipWidth * 0.6;
+    this.uiCtx.beginPath();
+    this.uiCtx.moveTo(tipStartScreen.x, tipStartScreen.y);
+    this.uiCtx.lineTo(tipEndScreen.x, tipEndScreen.y);
+    this.uiCtx.stroke();
+
+    // Tip highlight
+    this.uiCtx.strokeStyle = this.shadeColor(cueTipColor, 0.4);
+    this.uiCtx.lineWidth = tipWidth * 0.25;
+    this.uiCtx.beginPath();
+    this.uiCtx.moveTo(tipStartScreen.x, tipStartScreen.y);
+    this.uiCtx.lineTo(tipEndScreen.x, tipEndScreen.y);
     this.uiCtx.stroke();
     
     // Draw aim line in 2D - clipped to contact point or rails
@@ -4098,5 +4183,90 @@ export class Renderer3D extends BaseRenderer {
     const barX = canvas.width - 60;
     const barY = (canvas.height - barHeight) / 2;
     return { x: barX, y: barY, width: barWidth, height: barHeight };
+  }
+
+  /**
+   * Highlight pockets for selection (called-shot mode)
+   */
+  highlightPocketsForSelection(pockets: Array<{ id: string; label: string; center: { x: number; y: number } }>) {
+    const ctx = this.uiCtx;
+    if (!ctx) return;
+
+    // Time-based pulsing effect
+    const time = Date.now() / 1000;
+    const pulseScale = 0.85 + Math.sin(time * 3) * 0.15;
+
+    pockets.forEach(pocket => {
+      // Convert world coordinates to screen coordinates
+      const screenPos = this.worldToScreen(pocket.center.x, pocket.center.y);
+      if (!screenPos) return;
+
+      // Draw outer glow
+      const glowRadius = 40 * pulseScale;
+      const gradient = ctx.createRadialGradient(
+        screenPos.x, screenPos.y, 0,
+        screenPos.x, screenPos.y, glowRadius
+      );
+      gradient.addColorStop(0, 'rgba(255, 215, 0, 0.6)');
+      gradient.addColorStop(0.5, 'rgba(255, 215, 0, 0.3)');
+      gradient.addColorStop(1, 'rgba(255, 215, 0, 0)');
+
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(screenPos.x, screenPos.y, glowRadius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Draw inner circle
+      ctx.strokeStyle = 'rgba(255, 215, 0, 0.9)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(screenPos.x, screenPos.y, 25 * pulseScale, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Draw label
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+      ctx.font = 'bold 14px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+      ctx.shadowBlur = 4;
+      ctx.fillText(pocket.label, screenPos.x, screenPos.y + 50);
+      ctx.shadowBlur = 0;
+    });
+  }
+
+  /**
+   * Adjust color brightness for shading effects
+   * @param color Hex color string (e.g., '#8B4513')
+   * @param amount Amount to lighten (positive) or darken (negative), range -1 to 1
+   * @returns Adjusted hex color string
+   */
+  private shadeColor(color: string, amount: number): string {
+    // Parse hex color to RGB
+    let r = parseInt(color.slice(1, 3), 16);
+    let g = parseInt(color.slice(3, 5), 16);
+    let b = parseInt(color.slice(5, 7), 16);
+
+    // Apply shading (amount: -1 = black, 0 = no change, 1 = white)
+    if (amount > 0) {
+      // Lighten: blend towards white
+      r = Math.round(r + (255 - r) * amount);
+      g = Math.round(g + (255 - g) * amount);
+      b = Math.round(b + (255 - b) * amount);
+    } else {
+      // Darken: blend towards black
+      r = Math.round(r * (1 + amount));
+      g = Math.round(g * (1 + amount));
+      b = Math.round(b * (1 + amount));
+    }
+
+    // Clamp values to 0-255
+    r = Math.max(0, Math.min(255, r));
+    g = Math.max(0, Math.min(255, g));
+    b = Math.max(0, Math.min(255, b));
+
+    // Convert back to hex
+    const toHex = (n: number) => n.toString(16).padStart(2, '0');
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
   }
 }

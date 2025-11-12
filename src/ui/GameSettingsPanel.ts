@@ -101,6 +101,14 @@ export class GameSettingsPanel {
             <label for="turn-indicator-color">Turn Indicator</label>
             <input type="color" id="turn-indicator-color" />
           </div>
+          <div class="color-setting">
+            <label for="cue-stick-color">Cue Stick</label>
+            <input type="color" id="cue-stick-color" />
+          </div>
+          <div class="color-setting">
+            <label for="cue-tip-color">Cue Tip</label>
+            <input type="color" id="cue-tip-color" />
+          </div>
         </div>
         <div class="settings-group">
           <h4 class="settings-group-title">💾 Settings Management</h4>
@@ -185,6 +193,12 @@ export class GameSettingsPanel {
           case 'turn-indicator-color':
             this.settingsManager.saveUIColors({ turnIndicatorColor: value });
             break;
+          case 'cue-stick-color':
+            this.settingsManager.saveUIColors({ cueStickColor: value });
+            break;
+          case 'cue-tip-color':
+            this.settingsManager.saveUIColors({ cueTipColor: value });
+            break;
           default:
             break;
         }
@@ -231,7 +245,10 @@ export class GameSettingsPanel {
 
     if (aimAssistToggle) aimAssistToggle.checked = !!gs.aimAssist;
     if (call8Toggle) call8Toggle.checked = !!gs.call8Ball;
-    if (showFpsToggle) showFpsToggle.checked = !!gs.showFPS;
+    if (showFpsToggle) {
+      showFpsToggle.checked = !!gs.showFPS;
+      this.callbacks.onStatsVisibilityChange?.(gs.showFPS);
+    }
     if (aiDifficultySelect && gs.aiDifficulty) aiDifficultySelect.value = gs.aiDifficulty;
 
     this.syncColorInputs();
@@ -249,39 +266,8 @@ export class GameSettingsPanel {
     set('rail-fill-color', colors.railFillColor);
     set('active-player-color', colors.activePlayerColor);
     set('turn-indicator-color', colors.turnIndicatorColor);
-  }
-
-  private syncFromSettings(): void {
-    const gameSettings = this.settingsManager.getGameSettings();
-    const aimAssistToggle = this.panel.querySelector<HTMLInputElement>('#aim-assist-toggle');
-    const call8Toggle = this.panel.querySelector<HTMLInputElement>('#call-8-toggle');
-    const showFpsToggle = this.panel.querySelector<HTMLInputElement>('#show-fps-toggle');
-
-    if (aimAssistToggle) aimAssistToggle.checked = gameSettings.aimAssist;
-    if (call8Toggle) call8Toggle.checked = gameSettings.call8Ball;
-    if (showFpsToggle) {
-      showFpsToggle.checked = gameSettings.showFPS;
-      this.callbacks.onStatsVisibilityChange?.(gameSettings.showFPS);
-    }
-
-    this.syncColorInputs();
-  }
-
-  private syncColorInputs(): void {
-    const uiColors = this.settingsManager.getUIColors();
-    const tableColorInput = this.panel.querySelector<HTMLInputElement>('#table-color');
-    const frameColorInput = this.panel.querySelector<HTMLInputElement>('#frame-color');
-    const railColorInput = this.panel.querySelector<HTMLInputElement>('#rail-color');
-    const railFillColorInput = this.panel.querySelector<HTMLInputElement>('#rail-fill-color');
-    const activePlayerColorInput = this.panel.querySelector<HTMLInputElement>('#active-player-color');
-    const turnIndicatorColorInput = this.panel.querySelector<HTMLInputElement>('#turn-indicator-color');
-
-    if (tableColorInput) tableColorInput.value = uiColors.tableColor;
-    if (frameColorInput) frameColorInput.value = uiColors.frameColor;
-    if (railColorInput) railColorInput.value = uiColors.railColor;
-    if (railFillColorInput) railFillColorInput.value = uiColors.railFillColor;
-    if (activePlayerColorInput) activePlayerColorInput.value = uiColors.activePlayerColor;
-    if (turnIndicatorColorInput) turnIndicatorColorInput.value = uiColors.turnIndicatorColor;
+    set('cue-stick-color', colors.cueStickColor);
+    set('cue-tip-color', colors.cueTipColor);
   }
 }
 

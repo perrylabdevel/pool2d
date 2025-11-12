@@ -6,7 +6,7 @@ import { Renderer3D } from '../render/Renderer3D';
 import { InputManager } from '../input/Input';
 import { DebugDraw } from '../debug/DebugDraw';
 import { HUD } from '../ui/HUD';
-import { CONFIG, CUE_BALL_POSITION, RACK_POSITIONS } from '../config';
+import { CONFIG, CUE_BALL_POSITION, RACK_POSITIONS, BALL_8 } from '../config';
 import { getTableGeometry } from '../geometry/Geometry';
 import { clampBallInHand } from '../geometry/Placement';
 import { EightBallRules, GameState as RulesGameState } from '../rules/EightBall';
@@ -34,6 +34,15 @@ export enum GameMode {
   PERFECT_GAME,
   SPEED_POOL,
 }
+
+const POCKET_LABELS: Record<string, string> = {
+  NW_corner: 'Head left corner',
+  NE_corner: 'Head right corner',
+  SW_corner: 'Foot left corner',
+  SE_corner: 'Foot right corner',
+  N_middle: 'Head side pocket',
+  S_middle: 'Foot side pocket',
+};
 
 function randomizeBallOrientation(ball: Ball) {
   const axisZ = Math.random() * 2 - 1;
@@ -66,6 +75,8 @@ export class Game {
   currentRuleset: string = 'HOUSE_8BALL'; // House rules as default
   private lastBallScale: number;
   private _lastCanvasScale?: number;
+  private currentCalledPocketId: string | null = null;
+  private waitingForPocketCall: boolean = false;
 
   // Turn-based gameplay
   players: Player[];
@@ -170,7 +181,7 @@ export class Game {
     console.log('  - Press G to open Modern Geometry panel (angle-based controls)');
     console.log('  - Press J to open Legacy Geometry panel (live pocket adjustments)');
     console.log('  - Press S to open Physics Settings panel');
-    console.log('  - Press D for Debug view');
+    console.log('  - Press Shift+D for Debug view');
   }
   
   isPlayerInputBlocked(): boolean {
@@ -182,19 +193,32 @@ export class Game {
   }
 
   setupCallbacks() {
+    // Handle clicks for pocket selection (only when waiting for pocket call)
+    this.input.onClick = (worldX, worldY, event) => {
+      // Only process clicks when we're actually waiting for a pocket call
+      if (this.waitingForPocketCall) {
+        return this.handleClick(worldX, worldY);
+      }
+      return false;
+    };
+
     // Handle mouse events (power bar, ball dragging)
     this.input.canvas.addEventListener('mousedown', (e) => {
       if (this.isPlayerInputBlocked()) return;
+      // Don't handle ball drag or power bar during pocket selection
+      if (this.waitingForPocketCall) return;
       this.handleBallDragStart(e);
       this.handlePowerBarMouseDown(e);
     });
     this.input.canvas.addEventListener('mousemove', (e) => {
       if (this.isPlayerInputBlocked()) return;
+      if (this.waitingForPocketCall) return;
       this.handleBallDrag(e);
       this.handlePowerBarMouseMove(e);
     });
     this.input.canvas.addEventListener('mouseup', (e) => {
       if (this.isPlayerInputBlocked()) return;
+      if (this.waitingForPocketCall) return;
       this.handleBallDragEnd(e);
       this.handlePowerBarMouseUp(e);
     });
@@ -206,6 +230,7 @@ export class Game {
       }
       if (e.key === 'a' || e.key === 'A') {
         if (this.isPlayerInputBlocked()) return;
+        if (this.waitingForPocketCall) return;
         if (this.isAimMode && this.cueBall && !this.cueBall.pocketed) {
           this.lockedAngle = this.input.getAimAngle(this.cueBall);
         }
@@ -213,10 +238,12 @@ export class Game {
         return;
       }
       if (e.code === 'Space') {
+        // Always prevent default to avoid page scrolling
+        e.preventDefault();
         if (this.isPlayerInputBlocked()) return;
+        if (this.waitingForPocketCall) return;
         if (e.repeat) return;
         if (!this.canShoot || !this.cueBall || this.cueBall.pocketed) return;
-        e.preventDefault();
         this.spaceKeyHeld = true;
         this.wasAimModeBeforeSpace = this.isAimMode;
         if (this.isAimMode) {
@@ -233,11 +260,12 @@ export class Game {
         this.input.setFineAimActive(false);
       }
       if (e.code === 'Space') {
+        // Always prevent default to avoid page scrolling
+        e.preventDefault();
         if (!this.isSpacePowerMode) {
           this.spaceKeyHeld = false;
           return;
         }
-        e.preventDefault();
         this.spaceKeyHeld = false;
         if (this.isDraggingPower) {
           return;
@@ -251,7 +279,7 @@ export class Game {
     });
     
     this.rules.onFoul = (message) => {
-      this.hud.showFoul(message);
+      this.hud.showFoul(this.formatFoulMessage(message));
     };
     
     this.rules.onTurnChange = (player) => {
@@ -299,7 +327,8 @@ export class Game {
     });
     
     window.addEventListener('keydown', (e) => {
-      if (e.key === 'd' || e.key === 'D') {
+      // Require Shift+D to toggle debug mode (prevents accidental triggers)
+      if ((e.key === 'd' || e.key === 'D') && e.shiftKey) {
         this.debug.toggle();
         this.syncDebugModeWithRenderer();
       }
@@ -486,6 +515,8 @@ export class Game {
 
     this.resize();
     this.rules.startGame();
+    this.currentCalledPocketId = null;
+    this.rules.setCalledPocket(null);
 
     // Set mode display with ruleset if in 8-Ball mode
     if (this.mode === GameMode.PRACTICE) {
@@ -545,12 +576,17 @@ export class Game {
       if (player) {
         const ballGroup = group === 1 ? BallGroup.SOLIDS : BallGroup.STRIPES;
         player.assignGroup(ballGroup);
-        console.log('[8-Ball] Player', playerId, 'assigned', ballGroup === BallGroup.SOLIDS ? 'SOLIDS' : 'STRIPES');
+        const setName = ballGroup === BallGroup.SOLIDS ? 'SOLIDS' : 'STRIPES';
+        console.log('[8-Ball] Player', playerId, 'assigned', setName);
+
+        // Show notification to user
+        const playerName = playerId === 1 ? 'You have' : `Player ${playerId} has`;
+        this.hud.showFoul(`${playerName} ${setName}`);
       }
     };
 
     this.rules.onFoul = (message: string) => {
-      this.hud.showFoul(message);
+      this.hud.showFoul(this.formatFoulMessage(message));
     };
 
     this.rules.onGameOver = (winner: number) => {
@@ -622,6 +658,8 @@ export class Game {
 
     // Recreate rules with current ruleset config
     this.rules = new EightBallRules(RULES_PRESETS[this.currentRuleset]);
+    this.currentCalledPocketId = null;
+    this.rules.setCalledPocket(null);
 
     // Re-attach collision callback after world recreation
     this.setupCollisionTracking();
@@ -655,7 +693,7 @@ export class Game {
     if (this.world) {
       this.world.onRailCollision = (ball, rail) => {
         if (this.mode !== GameMode.EIGHT_BALL) return;
-        this.rules.recordRailContact();
+        this.rules.recordRailContact(ball?.id);
       };
     }
   }
@@ -673,6 +711,7 @@ export class Game {
     this.cueBall.y = CUE_BALL_POSITION.y;
     this.cueBall.prevX = this.cueBall.x;
     this.cueBall.prevY = this.cueBall.y;
+    this.cueBall.lastPocketId = null;
   }
   
   resize() {
@@ -691,6 +730,12 @@ export class Game {
     if (!this.cueBall || this.cueBall.pocketed) return;
     if (!this.canShoot) return;
     if (this.mode === GameMode.EIGHT_BALL && this.rules.gameState === RulesGameState.GAME_OVER) return;
+    if (this.mode === GameMode.EIGHT_BALL) {
+      const hasCalledPocket = this.ensureCalledPocketIfNeeded();
+      if (!hasCalledPocket) {
+        return;
+      }
+    }
 
     // Clear cached prediction
     this.cachedPrediction = null;
@@ -802,6 +847,7 @@ export class Game {
    */
   handleShotComplete() {
     this.rules.endShot(this.world.balls);
+    this.clearCalledPocketAfterShot();
 
     // Update turn management based on rules state
     if (this.stateMachine && this.players.length > 0) {
@@ -843,6 +889,9 @@ export class Game {
           }
         }
       }
+
+      // Check if current player needs to call pocket (after turn is determined)
+      this.checkAndPromptPocketCall();
     }
   }
 
@@ -1091,9 +1140,14 @@ export class Game {
       
       this.renderer.drawCueAndPowerBar(this.cueBall, angle, this.currentPower, this.aimAssist, true, this.isAimMode, prediction);
     }
-    
+
+    // Highlight pockets when waiting for pocket call
+    if (this.waitingForPocketCall) {
+      this.renderer.highlightPocketsForSelection(this.getPocketChoices());
+    }
+
     this.debug.draw(this.world);
-    
+
     this.fpsFrames++;
   }
   
@@ -1205,9 +1259,10 @@ export class Game {
   }
   
   handleBallDragStart(e: MouseEvent) {
-    // Only in practice mode, when balls are at rest, and Shift is held
-    if (!this.canShoot) return;
-    if (!e.shiftKey) return;
+    const isBallInHandPhase = this.isBallInHandPhase();
+    // Allow drag during official ball-in-hand or practice mode when balls are at rest
+    if (!this.canShoot && !isBallInHandPhase) return;
+    if (!e.shiftKey && !isBallInHandPhase) return;
     if (!this.cueBall || this.cueBall.pocketed) return;
     
     // Convert screen coords to game coords (same transform as renderer)
@@ -1225,7 +1280,9 @@ export class Game {
     const dx = mouseX - this.cueBall.x;
     const dy = mouseY - this.cueBall.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    const allowFreeDrag = CONFIG.DEBUG_BIH_LOG || this.debug.isBallInHandOverlayEnabled();
+    const allowBallInHandDrag = isBallInHandPhase;
+    const allowFreeDrag =
+      allowBallInHandDrag || CONFIG.DEBUG_BIH_LOG || this.debug.isBallInHandOverlayEnabled();
 
     if (dist <= this.cueBall.radius * 1.5 || allowFreeDrag) {
       this.isDraggingBall = true;
@@ -1252,11 +1309,15 @@ export class Game {
         const margin = this.cueBall.radius;
         const clampedX = Math.max(-halfW + margin, Math.min(halfW - margin, result.x));
         const clampedY = Math.max(-halfH + margin, Math.min(halfH - margin, result.y));
-        this.cueBall.x = clampedX;
+        const kitchenLimitedX = this.applyKitchenLimit(clampedX, margin);
+        this.cueBall.x = kitchenLimitedX;
         this.cueBall.y = clampedY;
         if (CONFIG.DEBUG_BIH_LOG) {
           // eslint-disable-next-line no-console
-          console.log('BIH drag start', { raw: { x: mouseX, y: mouseY }, clamped: { x: clampedX, y: clampedY } });
+          console.log('BIH drag start', {
+            raw: { x: mouseX, y: mouseY },
+            clamped: { x: kitchenLimitedX, y: clampedY },
+          });
         }
       }
     }
@@ -1300,17 +1361,29 @@ export class Game {
     const margin = this.cueBall.radius;
     const clampedX = Math.max(-halfW + margin, Math.min(halfW - margin, result.x));
     const clampedY = Math.max(-halfH + margin, Math.min(halfH - margin, result.y));
-    this.cueBall.x = clampedX;
+    const kitchenLimitedX = this.applyKitchenLimit(clampedX, margin);
+    this.cueBall.x = kitchenLimitedX;
     this.cueBall.y = clampedY;
 
     // Round-trip coordinate check (screen->world->screen)
     // screenX/screenY defined above; compare with renderer's projection
     const re = this.renderer.worldToScreen(mouseX, mouseY);
     const rtErrorPx = Math.hypot(re.x - screenX, re.y - screenY);
-    this.debug.setBallInHandData({ raw: { x: mouseX, y: mouseY }, clamped: { x: clampedX, y: clampedY }, radius: this.cueBall.radius, hits: result.hits.length, rtErrorPx });
+    this.debug.setBallInHandData({
+      raw: { x: mouseX, y: mouseY },
+      clamped: { x: kitchenLimitedX, y: clampedY },
+      radius: this.cueBall.radius,
+      hits: result.hits.length,
+      rtErrorPx,
+    });
     if (CONFIG.DEBUG_BIH_LOG) {
       // eslint-disable-next-line no-console
-      console.log('BIH drag', { raw: { x: mouseX, y: mouseY }, clamped: { x: clampedX, y: clampedY }, hits: result.hits.length, rtErrorPx: Number(rtErrorPx.toFixed(2)) });
+      console.log('BIH drag', {
+        raw: { x: mouseX, y: mouseY },
+        clamped: { x: kitchenLimitedX, y: clampedY },
+        hits: result.hits.length,
+        rtErrorPx: Number(rtErrorPx.toFixed(2)),
+      });
     }
   }
 
@@ -1323,6 +1396,206 @@ export class Game {
       // Re-enable pocketing for cue ball
       this.world.skipCuePocketCheck = false;
     }
+  }
+
+  /**
+   * Proactively check if pocket needs to be called and show prompt
+   * Called after shot completion when turn is determined
+   */
+  private checkAndPromptPocketCall(): void {
+    // Only check for human players
+    if (this.isCurrentShooterAI()) return;
+
+    // Only if not already waiting
+    if (this.waitingForPocketCall) return;
+
+    if (this.mode !== GameMode.EIGHT_BALL) return;
+    const config = this.rules.config;
+    const requiresCall = config.requireCalled8Ball || config.requireCalledShots;
+    if (!requiresCall) return;
+
+    // Check if player has cleared their group
+    const hasCleared = this.rules.hasPlayerClearedGroup(this.rules.currentPlayer, this.world.balls);
+    if (!hasCleared) return;
+
+    // Check if 8-ball is still on table
+    const eightBall = this.world.balls.find((ball) => ball.id === BALL_8);
+    if (!eightBall || eightBall.pocketed) return;
+
+    // Check if pocket already called
+    if (this.currentCalledPocketId) return;
+
+    // Show pocket selection prompt
+    this.promptCalledPocket();
+  }
+
+  /**
+   * Ensure pocket is called before allowing shot (blocks shooting if not called)
+   */
+  private ensureCalledPocketIfNeeded(): boolean {
+    if (this.mode !== GameMode.EIGHT_BALL) return true;
+    const config = this.rules.config;
+    const requiresCall = config.requireCalled8Ball || config.requireCalledShots;
+    if (!requiresCall) return true;
+
+    // TODO: when requireCalledShots = true, extend beyond 8-ball-only workflow.
+    const hasCleared = this.rules.hasPlayerClearedGroup(this.rules.currentPlayer, this.world.balls);
+    if (!hasCleared) return true;
+
+    const eightBall = this.world.balls.find((ball) => ball.id === BALL_8);
+    if (!eightBall || eightBall.pocketed) return true;
+
+    if (this.currentCalledPocketId) return true;
+
+    // Handle AI auto-call
+    if (this.isCurrentShooterAI()) {
+      const autoPocket = this.pickNearestPocketId(eightBall);
+      if (autoPocket) {
+        this.setCalledPocket(autoPocket, true);
+        console.log(`🤖 AI auto-called pocket: ${this.getPocketLabel(autoPocket)}`);
+      }
+      return true;
+    }
+
+    // Human player hasn't called yet - block the shot
+    // (prompt should have been shown already by checkAndPromptPocketCall)
+    if (!this.waitingForPocketCall) {
+      this.promptCalledPocket();
+    }
+    return false;
+  }
+
+  private promptCalledPocket(): boolean {
+    const choices = this.getPocketChoices();
+    if (choices.length === 0) {
+      return true;
+    }
+
+    // Enable pocket selection mode - pockets will be clickable (only if not already waiting)
+    if (!this.waitingForPocketCall) {
+      this.waitingForPocketCall = true;
+      this.hud.showFoul('Click a pocket to call your shot');
+    }
+
+    // Return false to block the shot until a pocket is called
+    return false;
+  }
+
+  private getPocketChoices() {
+    const geom = getTableGeometry();
+    return geom.pockets
+      .filter((pocket) => pocket.id && POCKET_LABELS[pocket.id])
+      .map((pocket) => ({
+        id: pocket.id,
+        label: this.getPocketLabel(pocket.id),
+        center: { x: pocket.center.x, y: pocket.center.y },
+      }));
+  }
+
+  private getPocketLabel(pocketId: string): string {
+    return POCKET_LABELS[pocketId] ?? pocketId ?? 'Unknown pocket';
+  }
+
+  private setCalledPocket(pocketId: string | null, silent: boolean = false) {
+    this.currentCalledPocketId = this.mode === GameMode.EIGHT_BALL ? pocketId : null;
+    this.rules.setCalledPocket(this.currentCalledPocketId);
+    if (!silent && pocketId) {
+      console.log(`🎯 Called pocket: ${this.getPocketLabel(pocketId)}`);
+    }
+  }
+
+  private clearCalledPocketAfterShot() {
+    if (this.mode !== GameMode.EIGHT_BALL) return;
+    this.setCalledPocket(null, true);
+  }
+
+  private handleClick(worldX: number, worldY: number): boolean {
+    // Only handle clicks when waiting for pocket call
+    if (!this.waitingForPocketCall) return false;
+
+    // Check if click is near any pocket
+    const geom = getTableGeometry();
+    const pockets = geom.pockets.filter(p => p.id && POCKET_LABELS[p.id]);
+
+    // Use a generous click radius (in inches)
+    const clickRadius = 3.0;
+
+    for (const pocket of pockets) {
+      const dx = worldX - pocket.center.x;
+      const dy = worldY - pocket.center.y;
+      const distance = Math.hypot(dx, dy);
+
+      if (distance <= clickRadius) {
+        // Pocket clicked!
+        this.waitingForPocketCall = false;
+        this.setCalledPocket(pocket.id);
+        console.log(`🎯 Called pocket: ${this.getPocketLabel(pocket.id)}`);
+        return true; // Click was handled
+      }
+    }
+
+    return false; // Click was not on a pocket
+  }
+
+  private pickNearestPocketId(eightBall: Ball): string | null {
+    const choices = this.getPocketChoices();
+    if (choices.length === 0) return null;
+    let nearest: { id: string; distance: number } | null = null;
+    for (const choice of choices) {
+      const dx = eightBall.x - choice.center.x;
+      const dy = eightBall.y - choice.center.y;
+      const distance = Math.hypot(dx, dy);
+      if (!nearest || distance < nearest.distance) {
+        nearest = { id: choice.id, distance };
+      }
+    }
+    return nearest ? nearest.id : null;
+  }
+
+  private isCurrentShooterAI(): boolean {
+    if (this.mode !== GameMode.EIGHT_BALL) return false;
+    if (
+      this.players.length === 0 ||
+      this.currentPlayerIndex < 0 ||
+      this.currentPlayerIndex >= this.players.length
+    ) {
+      return false;
+    }
+    const player = this.players[this.currentPlayerIndex];
+    return player ? player.isAI() : false;
+  }
+
+  private isBallInHandPhase(): boolean {
+    return (
+      this.mode === GameMode.EIGHT_BALL &&
+      this.rules.gameState === RulesGameState.BALL_IN_HAND
+    );
+  }
+
+  private shouldRestrictToKitchen(): boolean {
+    return this.isBallInHandPhase() && this.rules.getBallInHandPlacement() === 'KITCHEN';
+  }
+
+  private applyKitchenLimit(x: number, radius: number): number {
+    if (!this.shouldRestrictToKitchen()) {
+      return x;
+    }
+    const geom = getTableGeometry();
+    const playWidth = geom.playWidthIn ?? CONFIG.TABLE_WIDTH;
+    const headStringX = -(playWidth / 4);
+    const limit = headStringX - radius + 1e-3;
+    return Math.min(x, limit);
+  }
+
+  private formatFoulMessage(message: string): string {
+    if (!this.isBallInHandPhase()) {
+      return message;
+    }
+
+    if (this.rules.getBallInHandPlacement() === 'KITCHEN') {
+      return `${message} Place the cue ball behind the head string.`;
+    }
+    return message;
   }
 }
     // React to AI difficulty changes from settings panel

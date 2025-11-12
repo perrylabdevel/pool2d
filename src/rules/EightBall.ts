@@ -21,6 +21,8 @@ const TABLE_HALF_WIDTH_IN = 50;
 const TABLE_HALF_HEIGHT_IN = 25;
 const POCKET_BUFFER_IN = 2;
 
+export type BallInHandPlacement = 'ANYWHERE' | 'KITCHEN';
+
 export class EightBallRules {
   config: RulesConfig;
   currentPlayer: number = 1;
@@ -35,6 +37,9 @@ export class EightBallRules {
   ballsPocketed: number[] = [];
   private ballsPocketedBeforeShot: Set<number> = new Set();
   private railContactThisShot: boolean = false;
+  private railContactBallIds: Set<number> = new Set();
+  private ballInHandPlacement: BallInHandPlacement = 'ANYWHERE';
+  private calledPocketId: string | null = null;
 
   onFoul?: (message: string) => void;
   onTurnChange?: (player: number) => void;
@@ -58,17 +63,25 @@ export class EightBallRules {
     this.firstBallHit = -1;
     this.ballsPocketed = [];
     this.railContactThisShot = false;
+    this.railContactBallIds.clear();
 
     // Track which balls are already pocketed before this shot
     this.ballsPocketedBeforeShot = new Set(
       balls.filter(b => b.pocketed).map(b => b.id)
     );
 
+    if (this.gameState === GameState.BALL_IN_HAND) {
+      this.gameState = GameState.PLAYING;
+      this.ballInHandPlacement = 'ANYWHERE';
+    }
   }
   
   // Track any rail contact during the active shot
-  recordRailContact() {
+  recordRailContact(ballId?: number) {
     this.railContactThisShot = true;
+    if (typeof ballId === 'number') {
+      this.railContactBallIds.add(ballId);
+    }
   }
   
   recordBallPocketed(ballId: number) {
@@ -79,6 +92,10 @@ export class EightBallRules {
     if (this.firstBallHit === -1) {
       this.firstBallHit = ballId;
     }
+  }
+  
+  setCalledPocket(pocketId: string | null) {
+    this.calledPocketId = pocketId;
   }
   
   endShot(balls: Ball[]) {
@@ -130,14 +147,20 @@ export class EightBallRules {
 
         if (!hitCorrectGroup && this.firstBallHit !== BALL_8) {
           foul = true;
-          foulMessage = 'Foul! Wrong group hit first.';
+          foulMessage = 'Foul! Wrong set hit first.';
         }
       }
     }
     
     // Handle break
     if (this.gameState === GameState.BREAK) {
-      this.handleBreak(foul, foulMessage, eightBallPocketedThisShot, balls);
+      this.handleBreak(
+        foul,
+        foulMessage,
+        eightBallPocketedThisShot,
+        balls,
+        cueBallPocketed
+      );
       return;
     }
 
@@ -159,6 +182,15 @@ export class EightBallRules {
           playerGroup: this.getCurrentPlayerGroup(),
         });
       }
+
+      if (!eightBallForcedPocket && (this.config.requireCalled8Ball || this.config.requireCalledShots) && !foul) {
+        const actualPocketId = eightBall?.lastPocketId ?? null;
+        if (!this.calledPocketId || !actualPocketId || actualPocketId !== this.calledPocketId) {
+          foul = true;
+          foulMessage = 'Foul! 8-ball pocketed in uncalled pocket.';
+        }
+      }
+      this.calledPocketId = null;
 
       if (!this.ballsPocketed.includes(BALL_8)) {
         this.ballsPocketed.push(BALL_8);
@@ -182,10 +214,11 @@ export class EightBallRules {
     
     // Handle foul
     if (foul) {
+      this.ballInHandPlacement = 'ANYWHERE';
+      this.gameState = GameState.BALL_IN_HAND;
       if (this.onFoul) {
         this.onFoul(foulMessage);
       }
-      this.gameState = GameState.BALL_IN_HAND;
       this.switchPlayer();
       return;
     }
@@ -203,25 +236,63 @@ export class EightBallRules {
     }
   }
   
-  handleBreak(foul: boolean, foulMessage: string, eightBallPocketed: boolean, balls: Ball[] | null) {
+  handleBreak(
+    foul: boolean,
+    foulMessage: string,
+    eightBallPocketed: boolean,
+    balls: Ball[] | null,
+    cueBallPocketed: boolean
+  ) {
     // Legal break: at least 4 balls hit cushions or ball pocketed
     // Simplified: just check if any ball pocketed
+    let foulFlag = foul;
+    let foulReason = foulMessage;
+    const scratchOnBreak = cueBallPocketed;
 
-    if (foul) {
-      if (this.onFoul) {
-        this.onFoul(foulMessage);
+    if (scratchOnBreak && eightBallPocketed) {
+      if (this.config.scratch8BallOnBreakLoss) {
+        this.winner = this.currentPlayer === 1 ? 2 : 1;
+        this.gameState = GameState.GAME_OVER;
+        if (this.onGameOver) {
+          this.onGameOver(this.winner);
+        }
+        return;
+      }
+      foulFlag = true;
+      foulReason = 'Scratch on break while pocketing the 8-ball.';
+      this.spotEightBall(balls);
+      this.removeBallFromPocketed(BALL_8);
+    }
+
+    if (foulFlag) {
+      if (scratchOnBreak) {
+        this.ballInHandPlacement = this.getBreakScratchPlacement();
+      } else {
+        this.ballInHandPlacement = 'ANYWHERE';
       }
       this.gameState = GameState.BALL_IN_HAND;
+      if (this.onFoul) {
+        this.onFoul(foulReason);
+      }
       this.switchPlayer();
       return;
     }
 
     // Enforce legal break if required (simplified: any ball pocketed)
-    if (this.config.requireLegalBreak && this.ballsPocketed.length === 0) {
-      if (this.onFoul) this.onFoul('Illegal break');
-      this.gameState = GameState.BALL_IN_HAND;
-      this.switchPlayer();
-      return;
+    if (this.config.requireLegalBreak) {
+      const objectRailContacts = Array.from(this.railContactBallIds).filter(
+        (id) => id !== BALL_CUE
+      ).length;
+      const meetsRequirement =
+        this.ballsPocketed.length > 0 || objectRailContacts >= 4;
+
+      if (!meetsRequirement) {
+        this.ballInHandPlacement = 'ANYWHERE';
+        this.gameState = GameState.BALL_IN_HAND;
+        if (this.onFoul) this.onFoul('Illegal break');
+        this.switchPlayer();
+        return;
+      }
     }
 
     // Check if 8-ball pocketed on break
@@ -235,10 +306,7 @@ export class EightBallRules {
         return;
       } else {
         // Spot 8-ball back on the rack spot
-        const eight = balls?.find(b => b.id === BALL_8);
-        if (eight) {
-          eight.pocketed = false;
-        }
+        this.spotEightBall(balls);
         if (behavior === 'SPOT_LOSE_TURN') {
           this.switchPlayer();
         }
@@ -348,10 +416,33 @@ export class EightBallRules {
     return this.gameState !== GameState.GAME_OVER;
   }
 
+  getBallInHandPlacement(): BallInHandPlacement {
+    return this.ballInHandPlacement;
+  }
+
   private wasBallForcedOutOfPlay(ball: Ball | undefined): boolean {
     if (!ball) return true;
     const thresholdX = TABLE_HALF_WIDTH_IN + POCKET_BUFFER_IN;
     const thresholdY = TABLE_HALF_HEIGHT_IN + POCKET_BUFFER_IN;
     return Math.abs(ball.x) > thresholdX || Math.abs(ball.y) > thresholdY;
+  }
+
+  private getBreakScratchPlacement(): BallInHandPlacement {
+    if (this.config.breakScratchPlacement) {
+      return this.config.breakScratchPlacement === 'KITCHEN' ? 'KITCHEN' : 'ANYWHERE';
+    }
+    return this.config.ballInHandAnywhere ? 'ANYWHERE' : 'KITCHEN';
+  }
+
+  private spotEightBall(balls: Ball[] | null) {
+    const eight = balls?.find((b) => b.id === BALL_8);
+    if (eight) {
+      eight.pocketed = false;
+      eight.lastPocketId = null;
+    }
+  }
+
+  private removeBallFromPocketed(ballId: number) {
+    this.ballsPocketed = this.ballsPocketed.filter((id) => id !== ballId);
   }
 }

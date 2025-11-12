@@ -17,6 +17,8 @@ export interface UIColors {
   railFillColor: string;
   activePlayerColor: string;
   turnIndicatorColor: string;
+  cueStickColor: string;
+  cueTipColor: string;
 }
 
 export interface PhysicsSettings {
@@ -106,6 +108,8 @@ const DEFAULT_UI_COLORS: UIColors = {
   railFillColor: '#000000',
   activePlayerColor: '#4CAF50',
   turnIndicatorColor: '#FFC107',
+  cueStickColor: '#8B4513', // Brown wood
+  cueTipColor: '#4A90E2', // Blue chalk
 };
 
 const DEFAULT_PHYSICS_SETTINGS: PhysicsSettings = {
@@ -216,6 +220,8 @@ export class SettingsManager {
     CONFIG.FRAME_COLOR = this.uiColors.frameColor;
     CONFIG.RAIL_COLOR = this.uiColors.railColor;
     CONFIG.RAIL_FILL_COLOR = this.uiColors.railFillColor;
+    (CONFIG as any).CUE_STICK_COLOR = this.uiColors.cueStickColor;
+    (CONFIG as any).CUE_TIP_COLOR = this.uiColors.cueTipColor;
 
     // Update CSS variables for UI elements
     const root = document.documentElement;

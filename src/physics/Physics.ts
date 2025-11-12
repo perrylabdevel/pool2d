@@ -97,7 +97,8 @@ export class PhysicsWorld {
         new Pocket(
           pocketDef.center.x,
           pocketDef.center.y,
-          captureRadius
+          captureRadius,
+          pocketDef.id
         )
       );
     });
@@ -263,6 +264,7 @@ export class PhysicsWorld {
       for (const pocket of this.pockets) {
         if (pocket.contains(ball)) {
           ball.pocketed = true;
+          ball.lastPocketId = pocket.id ?? null;
           ball.vx = 0;
           ball.vy = 0;
           if (this.recordingEnabled) {

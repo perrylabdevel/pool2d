@@ -214,4 +214,110 @@ export class HUD {
       });
     });
   }
+
+  /**
+   * Show a clickable pocket selector overlay for calling the 8-ball
+   * Returns a promise that resolves with the selected pocket ID or null if cancelled
+   */
+  showPocketSelector(pockets: Array<{ id: string; label: string }>): Promise<string | null> {
+    return new Promise((resolve) => {
+      // Create overlay
+      const overlay = document.createElement('div');
+      overlay.className = 'pocket-selector-overlay';
+      overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.8);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        animation: fadeIn 0.2s ease-out;
+      `;
+
+      // Create title
+      const title = document.createElement('div');
+      title.textContent = 'Call Your Pocket';
+      title.style.cssText = `
+        font-size: 32px;
+        font-weight: bold;
+        color: #fff;
+        margin-bottom: 30px;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+      `;
+
+      // Create button container
+      const buttonContainer = document.createElement('div');
+      buttonContainer.style.cssText = `
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 15px;
+        max-width: 500px;
+      `;
+
+      // Create pocket buttons
+      pockets.forEach((pocket) => {
+        const button = document.createElement('button');
+        button.textContent = pocket.label;
+        button.style.cssText = `
+          padding: 20px 40px;
+          font-size: 18px;
+          font-weight: 600;
+          color: #fff;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          border: 2px solid rgba(255, 255, 255, 0.3);
+          border-radius: 12px;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+        `;
+
+        button.addEventListener('mouseenter', () => {
+          button.style.transform = 'translateY(-2px) scale(1.05)';
+          button.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.5)';
+          button.style.borderColor = 'rgba(255, 255, 255, 0.6)';
+        });
+
+        button.addEventListener('mouseleave', () => {
+          button.style.transform = '';
+          button.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.4)';
+          button.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+        });
+
+        button.addEventListener('click', () => {
+          overlay.remove();
+          resolve(pocket.id);
+        });
+
+        buttonContainer.appendChild(button);
+      });
+
+      // Add cancel option (ESC key)
+      const cancelHint = document.createElement('div');
+      cancelHint.textContent = 'Press ESC to cancel';
+      cancelHint.style.cssText = `
+        margin-top: 30px;
+        font-size: 14px;
+        color: rgba(255, 255, 255, 0.6);
+      `;
+
+      const handleEscape = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          overlay.remove();
+          document.removeEventListener('keydown', handleEscape);
+          resolve(null);
+        }
+      };
+      document.addEventListener('keydown', handleEscape);
+
+      overlay.appendChild(title);
+      overlay.appendChild(buttonContainer);
+      overlay.appendChild(cancelHint);
+      document.body.appendChild(overlay);
+    });
+  }
 }

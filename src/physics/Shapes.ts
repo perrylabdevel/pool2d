@@ -16,6 +16,7 @@ export class Ball {
   invMass: number;
   pocketed: boolean;
   sleeping: boolean;
+  lastPocketId: string | null;
   
   // Rotation (for visual spinning)
   angle: number; // Rotation angle in radians
@@ -44,6 +45,7 @@ export class Ball {
     this.invMass = mass > 0 ? 1 / mass : 0;
     this.pocketed = false;
     this.sleeping = false;
+    this.lastPocketId = null;
     this.angle = 0;
     this.angularVelocity = 0;
     this.angularAxisX = 0;
@@ -79,6 +81,7 @@ export class Ball {
     copy.invMass = this.invMass;
     copy.pocketed = this.pocketed;
     copy.sleeping = this.sleeping;
+    copy.lastPocketId = this.lastPocketId;
     copy.angle = this.angle;
     copy.angularVelocity = this.angularVelocity;
     copy.angularAxisX = this.angularAxisX;
@@ -135,11 +138,13 @@ export class Rail {
 }
 
 export class Pocket {
+  id?: string;
   x: number;
   y: number;
   radius: number;
   
-  constructor(x: number, y: number, radius: number) {
+  constructor(x: number, y: number, radius: number, id?: string) {
+    this.id = id;
     this.x = x;
     this.y = y;
     this.radius = radius;
@@ -153,7 +158,7 @@ export class Pocket {
   }
   
   clone(): Pocket {
-    return new Pocket(this.x, this.y, this.radius);
+    return new Pocket(this.x, this.y, this.radius, this.id);
   }
 }
 

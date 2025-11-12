@@ -22,6 +22,7 @@ export class InputManager {
   // Callbacks
   onShoot?: (angle: number, power: number) => void;
   onPowerChange?: (power: number) => void;
+  onClick?: (worldX: number, worldY: number, event: MouseEvent) => boolean;
   
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -61,8 +62,17 @@ export class InputManager {
     };
   }
   
-  handleMouseDown(_e: MouseEvent) {
-    // Check if clicking on power bar (will be handled by game logic)
+  handleMouseDown(e: MouseEvent) {
+    // Fire click callback with world coordinates
+    if (this.onClick) {
+      const pos = this.screenToGame(e.clientX, e.clientY);
+      const handled = this.onClick(pos.x, pos.y, e);
+      // If the click was handled, prevent default behavior and stop propagation
+      if (handled) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    }
   }
   
   handleMouseMove(e: MouseEvent) {
@@ -87,7 +97,14 @@ export class InputManager {
   
   handleTouchStart(e: TouchEvent) {
     e.preventDefault();
-    // Touch support for power bar
+    if (this.onClick && e.touches.length > 0) {
+      const touch = e.touches[0];
+      const pos = this.screenToGame(touch.clientX, touch.clientY);
+      const handled = this.onClick(pos.x, pos.y, e as any);
+      if (handled) {
+        e.stopPropagation();
+      }
+    }
   }
   
   handleTouchMove(e: TouchEvent) {
