@@ -45,6 +45,12 @@ export const CONFIG = {
   GHOST_LINE_LENGTH: 30,
   FINE_AIM_SENSITIVITY: 0.1,
 
+  // Distance-based aim sensitivity
+  DISTANCE_AIM_SCALING_ENABLED: true,
+  DISTANCE_AIM_MIN_DISTANCE: 15, // Distance (in) below which no scaling is applied
+  DISTANCE_AIM_MAX_DISTANCE: 60, // Distance (in) at which maximum scaling is applied
+  DISTANCE_AIM_MIN_SENSITIVITY: 0.35, // Sensitivity multiplier at max distance (0.35 = 35% of normal)
+
   // Debug and diagnostics
   DEBUG_BIH_LOG: false, // Verbose console logs for ball-in-hand clamping and drag
 

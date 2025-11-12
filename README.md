@@ -1,11 +1,11 @@
 # Pool 2D – Tournament Grade Billiards
 
-Pool 2D is a tournament-accurate billiards sandbox built with TypeScript, Vite, and a WebGL/Three.js renderer. It pairs deterministic 120 Hz physics with live-tunable geometry, scenario tooling, and deep debugging instrumentation for validating shots, pockets, and table setup.
+Pool 2D is a tournament-accurate billiards sandbox built with TypeScript, Vite, and a WebGL/Three.js renderer. It pairs deterministic 120 Hz physics with live-tunable geometry, scenario tooling, and deep debugging instrumentation for validating shots, pockets, and table setup.
 
 ## Highlights
 
 - **Tournament Physics**
-  - 120 Hz fixed timestep with adaptive sub-stepping for break-speed shots
+  - 120 Hz fixed timestep with adaptive sub-stepping for break-speed shots
   - Pair-tracked impulse solver (single normal + friction impulse per contact)
   - Rolling (0.55) and sliding (0.65) friction controls, configurable sleep threshold
   - Corner/side pocket capture radii and jaw geometry adjustable in real time
@@ -18,14 +18,16 @@ Pool 2D is a tournament-accurate billiards sandbox built with TypeScript, Vite
 
 - **Prediction & Debugging**
   - Aim assistant with ghost-ball visualization and axis-aware trajectory highlighting
+  - Distance-based aim sensitivity for finer control on long shots
   - Physics-based shot predictor plus full-path simulation overlay in debug mode
   - Shot Capture reports (📸) with contact, angle, and timing deltas; clipboard export
   - Scenario Manager (`shotScenarios.list()` in console) for curated test shots, including rail riders
   - Physics Recorder for frame snapshots, events, and markdown export
 
 - **Rules & Practice**
-  - Practice mode with cue-ball drag (SHIFT + drag)
-  - 8-ball mode with fouls, ball-in-hand, and win handling
+  - Practice mode with ball-in-hand drag placement
+  - 8-ball mode with AI opponent, fouls, ball-in-hand, and win handling
+  - Player input blocking during AI turns to prevent interference
   - Geometry panel to tweak jaw offsets, capture radii, and throat angles without code changes
   - Frame radius slider shapes a dedicated frame outline so rail physics stay constant while visuals curve
 
@@ -49,17 +51,22 @@ npm run test
 
 ### Aiming & Shooting
 - **Aim mode (default)**: Move mouse to aim; press **A** to lock angle and switch to power mode
+  - Distance-based sensitivity automatically provides finer control for long shots
+  - Hold **Shift** for ultra-fine aim mode
 - **Power mode**: Drag power bar to set power, release to shoot
+  - Press **Space** to enter power mode quickly
 - **Quick shoot**: Click near cue ball for a low-power tap shot
 
 ### Practice & Debug
-- **SHIFT + drag**: Reposition cue ball (practice mode)
+- **Ball-in-hand**: Click and drag cue ball to reposition (during ball-in-hand phase)
+  - Physics pauses during drag to prevent ball collisions
+  - Cue and aim assist hidden during placement
 - **S**: Physics settings (friction, power, aim-line offsets, solver, table scale)
 - **D**: Debug overlay (normals, velocities, contacts)
 - **G**: Geometry editor (pocket/jaw tuning)
 - **M**: Measurement overlay toggle
-- **Shift + O**: Reference overlay toggle
-- **R**: Restart table
+- **Shift + O**: Reference overlay toggle
+- **R**: Restart table (fully resets all game state)
 
 ### HUD Buttons
 - **⚙️ Physics**: Live physics/display tuning (includes aim-line/ghost-ball offset controls)
@@ -87,6 +94,7 @@ src/
 │   ├── SettingsPanel.ts   # Physics/display sliders with persistence
 │   ├── SettingsManager.ts # Local-storage backed settings store
 │   └── GeometryPanel.ts   # Live pocket/rail editor
+├── ai/PoolAI.ts       # AI opponent with difficulty levels
 ├── debug/             # Shot capture, physics recorder, debug overlay
 └── rules/EightBall.ts # 8-ball rule engine
 ```
@@ -110,13 +118,13 @@ Hotkeys still allow switching presets (1/2/3/4 for Casual/Tournament/APA/Practic
 All tunables live in `src/config.ts` and can be overridden live via the settings panels.
 
 - **Physics**
-  - `PHYSICS_DT`: 1 / 120 s (120 Hz)
+  - `PHYSICS_DT`: 1 / 120 s (120 Hz)
   - `SOLVER_ITERATIONS`: 15
   - `BALL_RESTITUTION`: 0.93
   - `BALL_BALL_FRICTION`: 0.01
   - `ROLLING_FRICTION`: 0.55
   - `SLIDING_FRICTION`: 0.65
-  - `VELOCITY_EPSILON`: 0.2 in/s
+  - `VELOCITY_EPSILON`: 0.2 in/s
 - **Geometry**
   - `BALL_RADIUS`: 1.125"
   - `POCKET_RADIUS_CORNER`: 2.5" (capture radius, user-adjustable)
@@ -125,6 +133,11 @@ All tunables live in `src/config.ts` and can be overridden live via the settings
   - `frameOutline` exposes frame inner/outer bounds so rounded corners never move rail endpoints
 - **Display**
   - `CANVAS_SCALE_MULTIPLIER`: 1.0 (live slider in Settings → Display)
+- **Aiming**
+  - `DISTANCE_AIM_SCALING_ENABLED`: true (automatic sensitivity adjustment for long shots)
+  - `DISTANCE_AIM_MIN_DISTANCE`: 15" (distance below which no scaling is applied)
+  - `DISTANCE_AIM_MAX_DISTANCE`: 60" (distance at which maximum scaling is applied)
+  - `DISTANCE_AIM_MIN_SENSITIVITY`: 0.35 (sensitivity multiplier at max distance)
 
 For coordinate details, pocket derivations, and naming conventions, see `geometry.md`.
 

@@ -7,18 +7,21 @@ import { CONFIG } from '../config';
 export class InputManager {
   canvas: HTMLCanvasElement;
   scale: number;
-  
+
   // Mouse state
   mouseX: number = 0;
   mouseY: number = 0;
   mouseTargetX: number = 0;
   mouseTargetY: number = 0;
   fineAimActive: boolean = false;
-  
+
+  // Aim smoothing state
+  private lastAimAngle: number | null = null;
+
   // Power bar state
   isDraggingPowerBar: boolean = false;
   powerBarDragStart: number = 0;
-  
+
   // Callbacks
   onShoot?: (angle: number, power: number) => void;
   onPowerChange?: (power: number) => void;
@@ -126,10 +129,36 @@ export class InputManager {
     }
   }
   
-  getAimAngle(ball: Ball): number {
+  getAimAngle(ball: Ball, sensitivityMultiplier: number = 1.0): number {
+    // Calculate the raw angle from ball to mouse
     const dx = this.mouseX - ball.x;
     const dy = this.mouseY - ball.y;
-    return Math.atan2(dy, dx);
+    const targetAngle = Math.atan2(dy, dx);
+
+    // For long shots, reduce angular sensitivity by interpolating with previous angle
+    // Lower sensitivity = slower angular changes = finer control
+    if (sensitivityMultiplier < 1.0 && this.lastAimAngle !== null) {
+      // Handle angle wrapping (shortest path from lastAngle to targetAngle)
+      let delta = targetAngle - this.lastAimAngle;
+
+      // Normalize delta to [-PI, PI]
+      while (delta > Math.PI) delta -= 2 * Math.PI;
+      while (delta < -Math.PI) delta += 2 * Math.PI;
+
+      // Interpolate: move toward target angle at rate determined by sensitivity
+      // Lower sensitivity = smaller steps = smoother, finer control
+      const smoothedAngle = this.lastAimAngle + delta * sensitivityMultiplier;
+      this.lastAimAngle = smoothedAngle;
+      return smoothedAngle;
+    }
+
+    // First frame or no smoothing needed
+    this.lastAimAngle = targetAngle;
+    return targetAngle;
+  }
+
+  resetAimAngle(): void {
+    this.lastAimAngle = null;
   }
   
   startPowerBarDrag(screenY: number) {

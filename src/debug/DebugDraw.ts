@@ -50,36 +50,44 @@ export class DebugDraw {
   
   toggle() {
     this.enabled = !this.enabled;
-    this.canvas.classList.toggle('visible', this.enabled);
+    this.updateVisibility();
   }
-  
+
   isEnabled(): boolean {
     return this.enabled;
   }
-  
+
+  /** Check if the debug canvas should be visible (either full debug or ball-in-hand overlay) */
+  private shouldBeVisible(): boolean {
+    return this.enabled || this.bihEnabled;
+  }
+
+  /** Update canvas visibility based on both debug mode and ball-in-hand overlay */
+  private updateVisibility() {
+    this.canvas.classList.toggle('visible', this.shouldBeVisible());
+  }
+
   resize(width: number, height: number, scale: number, offsetX?: number, offsetY?: number) {
     this.canvas.width = width;
     this.canvas.height = height;
     this.scale = scale;
     this.canvas.style.width = `${width}px`;
     this.canvas.style.height = `${height}px`;
-    
+
     // Apply position offsets if provided
     if (offsetX !== undefined && offsetY !== undefined) {
       this.canvas.style.left = `${offsetX}px`;
       this.canvas.style.top = `${offsetY}px`;
     }
   }
-  
+
   clear() {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
   }
 
   setBallInHandOverlayEnabled(enabled: boolean) {
     this.bihEnabled = enabled;
-    if (enabled && !this.enabled) {
-      this.toggle();
-    }
+    this.updateVisibility();
   }
 
   isBallInHandOverlayEnabled(): boolean {
@@ -97,14 +105,17 @@ export class DebugDraw {
   }
   
   draw(world: PhysicsWorld) {
-    if (!this.enabled || !this.renderer) return;
-    
+    // Draw if either full debug mode OR ball-in-hand overlay is enabled
+    if (!this.shouldBeVisible() || !this.renderer) return;
+
     this.clear();
-    
+
     this.ctx.save();
 
-    // Draw rails with unique colors
-    world.rails.forEach((rail, index) => {
+    // Only draw full debug visualizations when debug mode is explicitly enabled
+    if (this.enabled) {
+      // Draw rails with unique colors
+      world.rails.forEach((rail, index) => {
       const color = RAIL_DEBUG_COLORS[index % RAIL_DEBUG_COLORS.length];
       const p1 = this.renderer!.worldToScreen(rail.x1, rail.y1);
       const p2 = this.renderer!.worldToScreen(rail.x2, rail.y2);
@@ -170,6 +181,7 @@ export class DebugDraw {
         this.ctx.setLineDash([]);
       }
     });
+    } // end if (this.enabled) - full debug mode visualizations
 
     // When BIH overlay is on, draw corner mouth chords used for placement clamp
     if (this.bihEnabled) {

@@ -232,9 +232,14 @@ export class Game {
         if (this.isPlayerInputBlocked()) return;
         if (this.waitingForPocketCall) return;
         if (this.isAimMode && this.cueBall && !this.cueBall.pocketed) {
-          this.lockedAngle = this.input.getAimAngle(this.cueBall);
+          const aimSensitivity = this.calculateAimSensitivity();
+          this.lockedAngle = this.input.getAimAngle(this.cueBall, aimSensitivity);
         }
         this.isAimMode = !this.isAimMode;
+        // Reset aim smoothing when entering aim mode for fresh aim
+        if (this.isAimMode) {
+          this.input.resetAimAngle();
+        }
         return;
       }
       if (e.code === 'Space') {
@@ -247,7 +252,8 @@ export class Game {
         this.spaceKeyHeld = true;
         this.wasAimModeBeforeSpace = this.isAimMode;
         if (this.isAimMode) {
-          this.lockedAngle = this.input.getAimAngle(this.cueBall);
+          const aimSensitivity = this.calculateAimSensitivity();
+          this.lockedAngle = this.input.getAimAngle(this.cueBall, aimSensitivity);
         }
         this.isAimMode = false;
         this.isSpacePowerMode = true;
@@ -653,12 +659,55 @@ export class Game {
   }
 
   restart() {
+    // Reset all game loop state
+    this.accumulator = 0;
+    this.lastTime = 0;
+    this.fpsFrames = 0;
+    this.fpsTime = 0;
+    this.upsSteps = 0;
+    this.upsTime = 0;
+
+    // Reset shooting state
+    this.canShoot = true;
+    this.currentPower = 0;
+    this.isDraggingPower = false;
+    this.isAimMode = true;
+    this.lockedAngle = 0;
+    this.isSpacePowerMode = false;
+    this.wasAimModeBeforeSpace = true;
+    this.powerDragStartY = 0;
+    this.spaceKeyHeld = false;
+
+    // Reset prediction cache
+    this.cachedPrediction = null;
+    this.cachedDirection = null;
+
+    // Reset ball dragging state
+    this.isDraggingBall = false;
+
+    // Reset pocket calling state
+    this.currentCalledPocketId = null;
+    this.waitingForPocketCall = false;
+
+    // Reset AI state
+    this.aiThinkingStartTime = 0;
+    this.aiSelectedShot = null;
+    this.aiShotAnim = null;
+
+    // Reset input state
+    this.input.resetAimAngle();
+    this.input.isDraggingPowerBar = false;
+    this.input.canvas.style.cursor = 'default';
+
+    // Clear HUD messages
+    this.hud.foulBanner.classList.add('hidden');
+    this.hud.foulBanner.textContent = '';
+
     // Rebuild physics world (recomputes rails/pockets from current CONFIG)
     this.world = new PhysicsWorld();
 
     // Recreate rules with current ruleset config
     this.rules = new EightBallRules(RULES_PRESETS[this.currentRuleset]);
-    this.currentCalledPocketId = null;
     this.rules.setCalledPocket(null);
 
     // Re-attach collision callback after world recreation
@@ -737,10 +786,11 @@ export class Game {
       }
     }
 
-    // Clear cached prediction
+    // Clear cached prediction and aim angle smoothing state
     this.cachedPrediction = null;
     this.cachedDirection = null;
-    
+    this.input.resetAimAngle();
+
     // Record shot for capture system if active
     if (shotCapture.isCapturing()) {
       // Prefer physics-based prediction for capture (more accurate at glancing/rail cases)
@@ -782,12 +832,16 @@ export class Game {
   
   update(dt: number) {
     this.accumulator += dt;
-    
-    while (this.accumulator >= CONFIG.PHYSICS_DT) {
-      this.world.step(CONFIG.PHYSICS_DT);
-      physicsRecorder.recordFrame(this.world);
-      this.accumulator -= CONFIG.PHYSICS_DT;
-      this.upsSteps++;
+
+    // Skip physics simulation while dragging cue ball during ball-in-hand
+    // to prevent other balls from being pushed by the dragged cue ball
+    if (!this.isDraggingBall) {
+      while (this.accumulator >= CONFIG.PHYSICS_DT) {
+        this.world.step(CONFIG.PHYSICS_DT);
+        physicsRecorder.recordFrame(this.world);
+        this.accumulator -= CONFIG.PHYSICS_DT;
+        this.upsSteps++;
+      }
     }
     
     // Check if all balls are sleeping
@@ -1062,15 +1116,59 @@ export class Game {
     }
   }
   
+  /**
+   * Calculate aim sensitivity multiplier based on distance to nearest object ball
+   * Returns 1.0 for short shots, lower values (finer control) for long shots
+   */
+  private calculateAimSensitivity(): number {
+    if (!CONFIG.DISTANCE_AIM_SCALING_ENABLED || !this.cueBall) {
+      return 1.0;
+    }
+
+    // Find nearest non-cue ball
+    let minDistance = Infinity;
+    for (const ball of this.world.balls) {
+      if (ball.id === 0 || ball.pocketed) continue; // Skip cue ball and pocketed balls
+      const dx = ball.x - this.cueBall.x;
+      const dy = ball.y - this.cueBall.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      if (distance < minDistance) {
+        minDistance = distance;
+      }
+    }
+
+    // If no object balls found, use default sensitivity
+    if (minDistance === Infinity) {
+      return 1.0;
+    }
+
+    // Map distance to sensitivity using linear interpolation
+    // Short shots (< MIN_DISTANCE): full sensitivity (1.0)
+    // Long shots (> MAX_DISTANCE): minimum sensitivity (MIN_SENSITIVITY)
+    if (minDistance <= CONFIG.DISTANCE_AIM_MIN_DISTANCE) {
+      return 1.0;
+    } else if (minDistance >= CONFIG.DISTANCE_AIM_MAX_DISTANCE) {
+      return CONFIG.DISTANCE_AIM_MIN_SENSITIVITY;
+    } else {
+      // Linear interpolation between min and max distance
+      const t = (minDistance - CONFIG.DISTANCE_AIM_MIN_DISTANCE) /
+                (CONFIG.DISTANCE_AIM_MAX_DISTANCE - CONFIG.DISTANCE_AIM_MIN_DISTANCE);
+      return 1.0 - t * (1.0 - CONFIG.DISTANCE_AIM_MIN_SENSITIVITY);
+    }
+  }
+
   render() {
     const alpha = this.accumulator / CONFIG.PHYSICS_DT;
-    
+
     this.renderer.render(this.world, alpha);
-    
-    // Draw cue line and power bar if can shoot
-    if (this.canShoot && this.cueBall && !this.cueBall.pocketed) {
+
+    // Draw cue line and power bar if can shoot (hide during ball-in-hand drag only)
+    if (this.canShoot && this.cueBall && !this.cueBall.pocketed && !this.isDraggingBall) {
+      // Calculate aim sensitivity based on distance to nearest object ball
+      const aimSensitivity = this.calculateAimSensitivity();
+
       // Use locked angle in power mode, live angle in aim mode
-      const angle = this.isAimMode ? this.input.getAimAngle(this.cueBall) : this.lockedAngle;
+      const angle = this.isAimMode ? this.input.getAimAngle(this.cueBall, aimSensitivity) : this.lockedAngle;
       
       // Predict first contact (always run to clip aim line at rails/balls)
       const direction = {
@@ -1289,11 +1387,6 @@ export class Game {
       this.input.canvas.style.cursor = 'move';
       // Suppress cue pocketing while dragging
       this.world.skipCuePocketCheck = true;
-      // If BIH overlay hasn't been enabled explicitly, enable it for this drag session
-      if (!this.debug.isBallInHandOverlayEnabled()) {
-        this.debug.setBallInHandOverlayEnabled(true);
-        this.syncDebugModeWithRenderer();
-      }
       if (allowFreeDrag) {
         // Immediately place once at start so we can see initial clamp
         const result = clampBallInHand(
