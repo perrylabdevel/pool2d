@@ -1374,15 +1374,16 @@ export class Game {
     const mouseX = (screenX - canvasCenterX) / this.renderer.scale;
     const mouseY = -(screenY - canvasCenterY) / this.renderer.scale; // Flip Y
     
-    // Check if clicking on cue ball, or allow free drag when BIH overlay/logging is on
+    // Check if clicking on cue ball - must click directly on the ball
     const dx = mouseX - this.cueBall.x;
     const dy = mouseY - this.cueBall.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    const allowBallInHandDrag = isBallInHandPhase;
-    const allowFreeDrag =
-      allowBallInHandDrag || CONFIG.DEBUG_BIH_LOG || this.debug.isBallInHandOverlayEnabled();
 
-    if (dist <= this.cueBall.radius * 1.5 || allowFreeDrag) {
+    // Only allow drag if clicking within the ball radius (not extended radius)
+    if (dist <= this.cueBall.radius) {
+      const allowBallInHandDrag = isBallInHandPhase;
+      const allowFreeDrag =
+        allowBallInHandDrag || CONFIG.DEBUG_BIH_LOG || this.debug.isBallInHandOverlayEnabled();
       this.isDraggingBall = true;
       this.input.canvas.style.cursor = 'move';
       // Suppress cue pocketing while dragging
