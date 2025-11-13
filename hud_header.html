@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pool Game Header Template</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/"
+  }
+}
+</script>
+</head>
+  <body class="bg-gradient-to-br from-gray-900 to-black text-white font-sans">
+    <div class="w-full max-w-7xl mx-auto p-2 sm:p-4">
+        <!-- Header -->
+        <header class="w-full flex justify-between items-start" aria-label="Game Header">
+            
+            <!-- Left Player Profile -->
+            <div role="region" aria-label="Player 1 Information" class="flex flex-row items-center gap-3 p-2 bg-black/40 backdrop-blur-sm rounded-lg w-48 sm:w-64 mt-4">
+                <img src="https://picsum.photos/seed/player1/100/100" alt="Player 1 Avatar" class="w-12 h-12 sm:w-16 sm:h-16 rounded-full border-2 border-cyan-400 shadow-lg shadow-cyan-500/20">
+                <div class="flex-1 text-left">
+                    <h2 class="text-sm sm:text-lg font-bold truncate text-white">Player 1</h2>
+                    <div class="flex gap-1 mt-2 justify-start" role="group" aria-label="Player 1 Score: 4 of 7 balls potted">
+                        <!-- Example Score: 4/7 solid balls potted -->
+                        <div class="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-gray-600 border border-gray-500" title="Ball not potted" aria-label="Ball not potted"></div>
+                        <div class="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-gray-600 border border-gray-500" title="Ball not potted" aria-label="Ball not potted"></div>
+                        <div class="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-gray-600 border border-gray-500" title="Ball not potted" aria-label="Ball not potted"></div>
+                        <div class="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-yellow-400 border-2 border-white/80 shadow-md" title="Solid ball potted" aria-label="Solid ball potted"></div>
+                        <div class="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-yellow-400 border-2 border-white/80 shadow-md" title="Solid ball potted" aria-label="Solid ball potted"></div>
+                        <div class="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-yellow-400 border-2 border-white/80 shadow-md" title="Solid ball potted" aria-label="Solid ball potted"></div>
+                        <div class="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-yellow-400 border-2 border-white/80 shadow-md" title="Solid ball potted" aria-label="Solid ball potted"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Game Timer -->
+            <div role="timer" aria-label="Time remaining: 30 seconds" class="relative w-24 h-24 sm:w-32 sm:h-32 mt-4">
+                <svg class="w-full h-full" viewBox="0 0 100 100" aria-hidden="true">
+                    <!-- Background circle -->
+                    <circle class="text-gray-700/50" stroke-width="8" stroke="currentColor" fill="transparent" r="45" cx="50" cy="50"></circle>
+                    <!-- Progress circle (full) -->
+                    <circle class="text-cyan-400" stroke-width="8" stroke-dasharray="283" stroke-dashoffset="0" stroke-linecap="round" stroke="currentColor" fill="transparent" r="45" cx="50" cy="50" transform="rotate(-90 50 50)"></circle>
+                </svg>
+                <div class="absolute inset-0 flex items-center justify-center">
+                    <span class="text-3xl sm:text-4xl font-bold text-white" style="text-shadow: 0 0 10px rgba(0, 255, 255, 0.7);">30</span>
+                </div>
+            </div>
+
+            <!-- Right Player Profile -->
+            <div role="region" aria-label="Player 2 Information" class="flex flex-row-reverse items-center gap-3 p-2 bg-black/40 backdrop-blur-sm rounded-lg w-48 sm:w-64 mt-4">
+                <img src="https://picsum.photos/seed/player2/100/100" alt="Player 2 Avatar" class="w-12 h-12 sm:w-16 sm:h-16 rounded-full border-2 border-cyan-400 shadow-lg shadow-cyan-500/20">
+                <div class="flex-1 text-right">
+                    <h2 class="text-sm sm:text-lg font-bold truncate text-white">CPU-MASTER</h2>
+                    <div class="flex gap-1 mt-2 justify-end" role="group" aria-label="Player 2 Score: 4 of 7 balls potted">
+                        <!-- Example Score: 4/7 striped balls potted -->
+                        <div class="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-gray-600 border border-gray-500" title="Ball not potted" aria-label="Ball not potted"></div>
+                        <div class="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-gray-600 border border-gray-500" title="Ball not potted" aria-label="Ball not potted"></div>
+                        <div class="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-gray-600 border border-gray-500" title="Ball not potted" aria-label="Ball not potted"></div>
+                        <div class="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-blue-400 border-2 border-white/80 shadow-md" title="Striped ball potted" aria-label="Striped ball potted"></div>
+                        <div class="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-blue-400 border-2 border-white/80 shadow-md" title="Striped ball potted" aria-label="Striped ball potted"></div>
+                        <div class="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-blue-400 border-2 border-white/80 shadow-md" title="Striped ball potted" aria-label="Striped ball potted"></div>
+                        <div class="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-blue-400 border-2 border-white/80 shadow-md" title="Striped ball potted" aria-label="Striped ball potted"></div>
+                    </div>
+                </div>
+            </div>
+        </header>
+    </div>
+  </body>
+</html>

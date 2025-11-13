@@ -4165,15 +4165,22 @@ export class Renderer3D extends BaseRenderer {
       if (length > 0.0001) {
         const normX = dirX / length;
         const normY = dirY / length;
-        // Start from ghost ball position (includes offset if configured)
-        // Ghost ball offset is applied along the direction from cue to contact point
-        const offsetDir = Math.atan2(
-          prediction.contactPoint.y - cueBallPos.y,
-          prediction.contactPoint.x - cueBallPos.x
-        );
-        const ghostX = prediction.contactPoint.x + Math.cos(offsetDir) * CONFIG.GHOST_BALL_OFFSET;
-        const ghostY = prediction.contactPoint.y + Math.sin(offsetDir) * CONFIG.GHOST_BALL_OFFSET;
-        const start = { x: ghostX, y: ghostY };
+        // Start from ghost ball position for ball hits, contact point for rail hits
+        let startX, startY;
+        if (prediction.type === 'ball') {
+          // Ghost ball offset is applied along the direction from cue to contact point
+          const offsetDir = Math.atan2(
+            prediction.contactPoint.y - cueBallPos.y,
+            prediction.contactPoint.x - cueBallPos.x
+          );
+          startX = prediction.contactPoint.x + Math.cos(offsetDir) * CONFIG.GHOST_BALL_OFFSET;
+          startY = prediction.contactPoint.y + Math.sin(offsetDir) * CONFIG.GHOST_BALL_OFFSET;
+        } else {
+          // Rail hit - no offset, use contact point directly
+          startX = prediction.contactPoint.x;
+          startY = prediction.contactPoint.y;
+        }
+        const start = { x: startX, y: startY };
         // Cue ball path is 25% the length of object ball path
         const cueBallLength = adjustedLength * 0.25;
         const endRaw = { x: start.x + normX * cueBallLength, y: start.y + normY * cueBallLength };
