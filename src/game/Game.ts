@@ -305,6 +305,25 @@ export class Game {
       // Keep input and debug overlay aligned with renderer canvas
       this.input.updateScale(detail.scale);
       this.debug.resize(detail.width, detail.height, detail.scale, detail.offsetX, detail.offsetY);
+
+      // Sync HUD ball chip size (in CSS) with actual ball diameter in pixels
+      const diameterPx = Math.max(8, Math.min(128, Math.round((CONFIG.BALL_RADIUS * 2) * detail.scale)));
+      document.documentElement.style.setProperty('--ball-chip-size', `${diameterPx}px`);
+
+      // Regenerate icons if size changed materially
+      const regen = () => {
+        if ((this as any)._lastChipSizePx === diameterPx) return;
+        if (!(this.renderer as any).ballModelsLoaded) return; // defer until textures ready
+        (this as any)._lastChipSizePx = diameterPx;
+        if ((this.renderer as any).generateBallIcons) {
+          (this.renderer as any).generateBallIcons(diameterPx).then((map: Map<number, string>) => {
+            (window as any).__BALL_ICONS__ = map;
+            this.updateHUDPlayerBalls();
+          }).catch(() => {/* ignore */});
+        }
+      };
+      clearTimeout((this as any)._chipIconTimer);
+      (this as any)._chipIconTimer = setTimeout(regen, 150);
     });
     window.addEventListener('settings:render-changed', (event) => {
       const detail = (event as CustomEvent<{ settings?: { ballScale?: number; canvasScale?: number } }>).detail;
@@ -519,6 +538,41 @@ export class Game {
     // Connect debug overlay to renderer for coordinate projection
     this.debug.setRenderer(this.renderer);
 
+    // Initialize HUD player balls at game start
+    this.updateHUDPlayerBalls();
+
+    // Generate ball icon thumbnails for HUD and update once ready
+    if ((this.renderer as any).generateBallIcons) {
+      const tryGenerate = () => {
+        const rootStyle = getComputedStyle(document.documentElement);
+        const sizeVar = rootStyle.getPropertyValue('--ball-chip-size').trim();
+        const parsed = Number(sizeVar.replace('px','')) || Math.round(CONFIG.BALL_RADIUS * 2 * (this.renderer as any).scale || 32);
+        (this.renderer as any).generateBallIcons(parsed).then((map: Map<number, string>) => {
+          (window as any).__BALL_ICONS__ = map;
+          this.updateHUDPlayerBalls();
+        }).catch(() => {/* ignore icon errors */});
+      };
+
+      // Defer until ball models/textures are loaded to ensure real textures are used
+      const waitForTextures = () => {
+        if ((this.renderer as any).ballModelsLoaded) {
+          tryGenerate();
+          return true;
+        }
+        return false;
+      };
+
+      if (!waitForTextures()) {
+        let attempts = 0;
+        const poll = () => {
+          if (waitForTextures() || attempts++ > 50) {
+            clearInterval((this as any)._chipPollTimer);
+          }
+        };
+        (this as any)._chipPollTimer = setInterval(poll, 120);
+      }
+    }
+
     this.resize();
     this.rules.startGame();
     this.currentCalledPocketId = null;
@@ -564,6 +618,10 @@ export class Game {
     this.players = [humanPlayer, aiPlayer];
     this.currentPlayerIndex = 0; // Human starts
 
+    // Update HUD player names
+    this.hud.setPlayerName(1, humanPlayer.name);
+    this.hud.setPlayerName(2, aiPlayer.name);
+
     console.log('[8-Ball] Players initialized:', {
       player0: { id: this.players[0].id, type: this.players[0].type, isAI: this.players[0].isAI() },
       player1: { id: this.players[1].id, type: this.players[1].type, isAI: this.players[1].isAI() },
@@ -588,6 +646,9 @@ export class Game {
         // Show notification to user
         const playerName = playerId === 1 ? 'You have' : `Player ${playerId} has`;
         this.hud.showFoul(`${playerName} ${setName}`);
+
+        // Update HUD ball chips to reflect assigned groups
+        this.updateHUDPlayerBalls();
       }
     };
 
@@ -700,8 +761,8 @@ export class Game {
     this.input.canvas.style.cursor = 'default';
 
     // Clear HUD messages
-    this.hud.foulBanner.classList.add('hidden');
-    this.hud.foulBanner.textContent = '';
+    this.hud.foulBanner?.classList.add('hidden');
+    if (this.hud.foulBanner) this.hud.foulBanner.textContent = '';
 
     // Rebuild physics world (recomputes rails/pockets from current CONFIG)
     this.world = new PhysicsWorld();
@@ -902,6 +963,8 @@ export class Game {
   handleShotComplete() {
     this.rules.endShot(this.world.balls);
     this.clearCalledPocketAfterShot();
+    // Update HUD player balls after any pocketing
+    this.updateHUDPlayerBalls();
 
     // Update turn management based on rules state
     if (this.stateMachine && this.players.length > 0) {
@@ -969,6 +1032,38 @@ export class Game {
         this.hud.setTurn(currentPlayer.id, false);
       }
     }
+  }
+
+  /**
+   * Compute and push remaining group balls per player to HUD.
+   */
+  private updateHUDPlayerBalls() {
+    if (!this.hud) return;
+    const balls = this.world?.balls ?? [];
+    const remainingForGroup = (group: BallGroup | null): number[] | null => {
+      if (group === null) return null;
+      const targetIds = group === BallGroup.SOLIDS
+        ? [1,2,3,4,5,6,7]
+        : [9,10,11,12,13,14,15];
+      const remaining = targetIds.filter(id => {
+        const b = balls.find(x => x.id === id);
+        return b && !b.pocketed;
+      });
+      return remaining;
+    };
+
+    const p1 = this.players && this.players.length > 0 ? this.players[0] : undefined;
+    const p2 = this.players && this.players.length > 1 ? this.players[1] : undefined;
+
+    if (!p1 || !p2) {
+      // Players not initialized yet (e.g., practice mode or early init) – show placeholders
+      this.hud.updatePlayerBalls(1, null);
+      this.hud.updatePlayerBalls(2, null);
+      return;
+    }
+
+    this.hud.updatePlayerBalls(1, remainingForGroup(p1.group ?? null));
+    this.hud.updatePlayerBalls(2, remainingForGroup(p2.group ?? null));
   }
 
   /**

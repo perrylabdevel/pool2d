@@ -145,6 +145,13 @@ For a configurable, fair 8-ball experience:
 3. Expand ball-in-hand validation to cover all fouls (touching other balls) when `bihDisallowTouchingBalls` is set.
 4. Replace the prompt-based called-pocket workflow with an in-HUD selector and extend it to every shot when `requireCalledShots` is enabled.
 
+### HUD Progress Chips (New)
+
+- The HUD header shows each player’s group progress as 7 fixed chips.
+- Remaining balls display realistic thumbnails rendered offscreen with the same materials as gameplay, with a front-facing centered number for legibility.
+- Potted balls remain as empty rings to retain spatial consistency.
+- Before groups are assigned, chips render as neutral placeholders.
+
 ### Option B: Add competitive/tournament polish
 1. Upgrade the called-pocket UI (non-blocking HUD picker) and extend it to fully support `requireCalledShots`.
 2. Layer in optional timers, push-out turns, and three-foul tracking for TOURNAMENT preset.

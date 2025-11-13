@@ -6,14 +6,14 @@ import { UIPanel } from './panels/UIPanel';
 import { GameSettingsPanel } from './GameSettingsPanel';
 
 export class HUD {
-  fpsElement: HTMLElement;
-  upsElement: HTMLElement;
-  modeElement: HTMLElement;
-  turnElement: HTMLElement;
-  foulBanner: HTMLElement;
-  player1Panel: HTMLElement;
-  player2Panel: HTMLElement;
-  statsElement: HTMLElement;
+  fpsElement: HTMLElement | null;
+  upsElement: HTMLElement | null;
+  modeElement: HTMLElement | null;
+  turnElement: HTMLElement | null;
+  foulBanner: HTMLElement | null;
+  player1Panel: HTMLElement | null;
+  player2Panel: HTMLElement | null;
+  statsElement: HTMLElement | null;
   settingsManager: SettingsManager;
   panelManager = panelManager;
   private gameSettingsPanel: GameSettingsPanel;
@@ -21,14 +21,14 @@ export class HUD {
   showStats: boolean = true;
   
   constructor() {
-    this.fpsElement = document.getElementById('fps')!;
-    this.upsElement = document.getElementById('ups')!;
-    this.modeElement = document.getElementById('mode-indicator')!;
-    this.turnElement = document.getElementById('turn-indicator')!;
-    this.foulBanner = document.getElementById('foul-banner')!;
-    this.player1Panel = document.getElementById('player1-info')!;
-    this.player2Panel = document.getElementById('player2-info')!;
-    this.statsElement = document.getElementById('stats')!;
+    this.fpsElement = document.getElementById('fps');
+    this.upsElement = document.getElementById('ups');
+    this.modeElement = document.getElementById('mode-indicator');
+    this.turnElement = document.getElementById('turn-indicator');
+    this.foulBanner = document.getElementById('foul-banner');
+    this.player1Panel = document.getElementById('player1-info');
+    this.player2Panel = document.getElementById('player2-info');
+    this.statsElement = document.getElementById('stats');
     
     this.settingsManager = new SettingsManager();
     this.gameSettingsPanel = new GameSettingsPanel(this.settingsManager, {
@@ -46,76 +46,89 @@ export class HUD {
   }
   
   setupControls() {
-    const pauseBtn = document.getElementById('pause-btn')!;
-    const restartBtn = document.getElementById('restart-btn')!;
-    const settingsBtn = document.getElementById('settings-btn')!;
-    const debugToggle = document.getElementById('debug-toggle')!;
-    
-    pauseBtn.addEventListener('click', () => {
-      // Will be handled by Game class
-      window.dispatchEvent(new CustomEvent('game:pause'));
-    });
-    
-    restartBtn.addEventListener('click', () => {
-      window.dispatchEvent(new CustomEvent('game:restart'));
-    });
-    
-    settingsBtn.addEventListener('click', () => {
-      const toggled = this.panelManager.togglePanel('game-settings');
-      if (!toggled) {
-        this.panelManager.openPanel('game-settings');
-      }
-    });
-    
-    debugToggle.addEventListener('click', () => {
-      window.dispatchEvent(new CustomEvent('game:debug-toggle'));
-    });
-    
+    const pauseBtn = document.getElementById('pause-btn');
+    const restartBtn = document.getElementById('restart-btn');
+    const settingsBtn = document.getElementById('settings-btn');
+    const debugToggle = document.getElementById('debug-toggle');
+
+    if (pauseBtn) {
+      pauseBtn.addEventListener('click', () => {
+        window.dispatchEvent(new CustomEvent('game:pause'));
+      });
+    }
+
+    if (restartBtn) {
+      restartBtn.addEventListener('click', () => {
+        window.dispatchEvent(new CustomEvent('game:restart'));
+      });
+    }
+
+    if (settingsBtn) {
+      settingsBtn.addEventListener('click', () => {
+        const toggled = this.panelManager.togglePanel('game-settings');
+        if (!toggled) {
+          this.panelManager.openPanel('game-settings');
+        }
+      });
+    }
+
+    if (debugToggle) {
+      debugToggle.addEventListener('click', () => {
+        window.dispatchEvent(new CustomEvent('game:debug-toggle'));
+      });
+    }
+
     this.wirePanelLauncher();
   }
 
   loadSettings() {
     const gameSettings = this.settingsManager.getGameSettings();
     this.showStats = gameSettings.showFPS;
-    this.statsElement.style.display = this.showStats ? 'flex' : 'none';
+    if (this.statsElement) {
+      this.statsElement.style.display = this.showStats ? 'flex' : 'none';
+    }
   }
   
   updateFPS(fps: number) {
-    this.fpsElement.textContent = `FPS: ${Math.round(fps)}`;
+    if (this.fpsElement) this.fpsElement.textContent = `FPS: ${Math.round(fps)}`;
   }
   
   updateUPS(ups: number) {
-    this.upsElement.textContent = `UPS: ${Math.round(ups)}`;
+    if (this.upsElement) this.upsElement.textContent = `UPS: ${Math.round(ups)}`;
   }
   
   setMode(mode: string) {
-    this.modeElement.textContent = mode;
+    if (this.modeElement) this.modeElement.textContent = mode;
   }
   
   setTurn(player: number, isAI: boolean = false) {
-    if (isAI) {
-      this.turnElement.textContent = `AI's Turn`;
-      this.turnElement.classList.remove('ai-thinking');
-    } else {
-      this.turnElement.textContent = player === 1 ? `Your Turn` : `Player ${player}'s Turn`;
-      this.turnElement.classList.remove('ai-thinking');
+    if (this.turnElement) {
+      if (isAI) {
+        this.turnElement.textContent = `AI's Turn`;
+        this.turnElement.classList.remove('ai-thinking');
+      } else {
+        this.turnElement.textContent = player === 1 ? `Your Turn` : `Player ${player}'s Turn`;
+        this.turnElement.classList.remove('ai-thinking');
+      }
     }
 
     if (player === 1) {
-      this.player1Panel.classList.add('active');
-      this.player2Panel.classList.remove('active');
+      this.player1Panel?.classList.add('active');
+      this.player2Panel?.classList.remove('active');
     } else {
-      this.player1Panel.classList.remove('active');
-      this.player2Panel.classList.add('active');
+      this.player1Panel?.classList.remove('active');
+      this.player2Panel?.classList.add('active');
     }
   }
 
   showAIThinking() {
+    if (!this.turnElement) return;
     this.turnElement.textContent = 'AI Thinking...';
     this.turnElement.classList.add('ai-thinking');
   }
 
   hideTurnIndicator() {
+    if (!this.turnElement) return;
     this.turnElement.textContent = '';
     this.turnElement.classList.remove('ai-thinking');
   }
@@ -124,32 +137,75 @@ export class HUD {
     // Display arcade mode stats in the turn indicator area
     const entries = Object.entries(stats);
     if (entries.length === 0) {
-      this.turnElement.textContent = '';
+      if (this.turnElement) this.turnElement.textContent = '';
       return;
     }
 
     const statsText = entries.map(([key, value]) => `${key}: ${value}`).join(' | ');
-    this.turnElement.textContent = statsText;
-    this.turnElement.classList.remove('ai-thinking');
+    if (this.turnElement) {
+      this.turnElement.textContent = statsText;
+      this.turnElement.classList.remove('ai-thinking');
+    }
   }
   
   showFoul(message: string) {
+    if (!this.foulBanner) return;
     this.foulBanner.textContent = message;
     this.foulBanner.classList.remove('hidden');
-    
     setTimeout(() => {
-      this.foulBanner.classList.add('hidden');
+      this.foulBanner?.classList.add('hidden');
     }, 3000);
   }
-  
-  updatePlayerBalls(player: number, balls: number[]) {
-    const panel = player === 1 ? this.player1Panel : this.player2Panel;
-    const ballsContainer = panel.querySelector('.balls-remaining')!;
-    
-    if (balls.length === 0) {
-      ballsContainer.textContent = 'No balls assigned';
-    } else {
-      ballsContainer.textContent = `Balls: ${balls.join(', ')}`;
+
+  setPlayerName(player: number, name: string) {
+    const panel = (player === 1 ? this.player1Panel : this.player2Panel) as HTMLElement | null;
+    if (!panel) return;
+    const nameEl = panel.querySelector('.name') as HTMLElement | null;
+    if (nameEl) nameEl.textContent = name;
+  }
+
+  /**
+   * Render player's remaining balls.
+   * If remainingIds is null, show 7 placeholder dots (group not yet assigned).
+   * Otherwise, show numbered chips for each remaining group ball id.
+   */
+  updatePlayerBalls(player: number, remainingIds: number[] | null) {
+    const panel = (player === 1 ? this.player1Panel : this.player2Panel) as HTMLElement | null;
+    if (!panel) return;
+    const ballsContainer = panel.querySelector('.balls-remaining') as HTMLElement | null;
+    if (!ballsContainer) return;
+    ballsContainer.innerHTML = '';
+
+    if (!remainingIds) {
+      // Unknown group yet – show 7 neutral placeholders
+      for (let i = 0; i < 7; i++) {
+        const dot = document.createElement('span');
+        dot.className = 'ball-dot';
+        ballsContainer.appendChild(dot);
+      }
+      return;
+    }
+    const remainingSet = new Set(remainingIds);
+    // Infer group from remaining ids
+    const isSolidsGroup = remainingIds.some(id => id >= 1 && id <= 7);
+    const groupIds = isSolidsGroup ? [1,2,3,4,5,6,7] : [9,10,11,12,13,14,15];
+
+    const icons: Map<number, string> | undefined = (window as any).__BALL_ICONS__;
+    for (const id of groupIds) {
+      const chip = document.createElement('span');
+      const isRemaining = remainingSet.has(id);
+      chip.className = `ball-chip ${isSolidsGroup ? 'solids' : 'stripes'}${isRemaining ? '' : ' empty'}`;
+      if (isRemaining) {
+        if (icons && icons.get && icons.has(id)) {
+          const img = document.createElement('img');
+          img.src = icons.get(id)!;
+          img.alt = `Ball ${id}`;
+          chip.classList.add('has-image');
+          chip.appendChild(img);
+        }
+        // No fallback overlays (avoid mixed visuals)
+      }
+      ballsContainer.appendChild(chip);
     }
   }
 

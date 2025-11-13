@@ -112,6 +112,14 @@ export class Renderer3D extends BaseRenderer {
   private pocketCapMaterial: THREE.MeshBasicMaterial | null = null;
   private pocketSideMaterial: THREE.MeshBasicMaterial | null = null;
   private debugMode: boolean = false;
+  // Cache of icon maps keyed by pixel size
+  private ballIconCaches: Map<number, Map<number, string>> = new Map();
+  private getBallTexture(ballId: number): THREE.Texture | null {
+    const tpl = this.ballModels.get(ballId);
+    const mat = tpl?.material as THREE.MeshStandardMaterial | undefined;
+    const map = mat?.map ?? null;
+    return map ?? null;
+  }
   
   // Resize reentrancy guard
   private _isResizing: boolean = false;
@@ -2739,6 +2747,135 @@ export class Renderer3D extends BaseRenderer {
     
     // Render the scene
     this.renderer.render(this.scene, this.camera);
+  }
+
+  /**
+   * Generate ball icon thumbnails using the same geometry/materials as the 3D balls.
+   * Returns a map of ballId -> dataURL (PNG). Cached after first generation.
+   */
+  async generateBallIcons(sizePx: number = 64): Promise<Map<number, string>> {
+    const size = Math.max(8, Math.min(64, Math.round(sizePx)));
+    const cached = this.ballIconCaches.get(size);
+    if (cached) return cached;
+
+    // Use main WebGL context via an offscreen render target (avoids cross-context texture issues)
+    const rt = new THREE.WebGLRenderTarget(size, size, { depthBuffer: false, stencilBuffer: false });
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(26, 1, 0.01, 10);
+    camera.position.set(0, 0, 2.6);
+    camera.lookAt(0, 0, 0);
+
+    // Very bright lighting for clear, visible icons
+    scene.add(new THREE.AmbientLight(0xffffff, 2.0));  // Much brighter ambient
+    const dir = new THREE.DirectionalLight(0xffffff, 1.5);  // Brighter directional
+    dir.position.set(2.2, 3.0, 4.0);
+    scene.add(dir);
+    // Add front light to eliminate shadows
+    const frontLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    frontLight.position.set(0, 0, 5);
+    scene.add(frontLight);
+
+    const ids = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15];
+    const result = new Map<number, string>();
+
+    // Per-ball orientation - X=270° (3π/2) and Y=90° (π/2) shows numbers/stripes correctly
+    const orientation: Record<number, { rx: number; ry: number }> = {
+      1: { rx: Math.PI * 1.5, ry: Math.PI * 0.5 }, 2: { rx: Math.PI * 1.5, ry: Math.PI * 0.5 },
+      3: { rx: Math.PI * 1.5, ry: Math.PI * 0.5 }, 4: { rx: Math.PI * 1.5, ry: Math.PI * 0.5 },
+      5: { rx: Math.PI * 1.5, ry: Math.PI * 0.5 }, 6: { rx: Math.PI * 1.5, ry: Math.PI * 0.5 },
+      7: { rx: Math.PI * 1.5, ry: Math.PI * 0.5 }, 8: { rx: Math.PI * 1.5, ry: Math.PI * 0.5 },
+      9: { rx: Math.PI * 1.5, ry: Math.PI * 0.5 }, 10: { rx: Math.PI * 1.5, ry: Math.PI * 0.5 },
+      11: { rx: Math.PI * 1.5, ry: Math.PI * 0.5 }, 12: { rx: Math.PI * 1.5, ry: Math.PI * 0.5 },
+      13: { rx: Math.PI * 1.5, ry: Math.PI * 0.5 }, 14: { rx: Math.PI * 1.5, ry: Math.PI * 0.5 },
+      15: { rx: Math.PI * 1.5, ry: Math.PI * 0.5 },
+    };
+
+    const buildMesh = async (id: number): Promise<THREE.Mesh> => {
+      const baseRadius = (CONFIG.BALL_BASE_RADIUS ?? CONFIG.BALL_RADIUS);
+      const template = this.ballModels.get(id);
+      let geom: THREE.BufferGeometry;
+      let mat: THREE.MeshStandardMaterial;
+      if (template) {
+        geom = template.geometry.clone();
+        geom.computeBoundingSphere();
+        const center = geom.boundingSphere?.center ?? new THREE.Vector3();
+        const radius = geom.boundingSphere?.radius ?? baseRadius;
+        // Center and scale - use larger size to fill the icon space better
+        geom.translate(-center.x, -center.y, -center.z);
+        const targetRadius = 0.9;  // Larger to fill more of the available space
+        const scale = targetRadius / Math.max(1e-6, radius);
+        geom.scale(scale, scale, scale);
+        mat = template.material.clone();
+      } else {
+        geom = new THREE.SphereGeometry(baseRadius, 48, 48);
+        mat = new THREE.MeshStandardMaterial({ color: CONFIG.BALL_COLORS[id - 1] || '#ffffff', roughness: 0.32, metalness: 0.38 });
+      }
+
+      // Reuse the template's texture map if present
+      const tex = (template?.material as THREE.MeshStandardMaterial | undefined)?.map ?? null;
+      if (tex && tex.image) {
+        mat.map = tex;
+        mat.map.colorSpace = THREE.SRGBColorSpace;
+        mat.map.needsUpdate = false;
+        // Ensure material color is white so it doesn't tint the texture
+        mat.color.setHex(0xffffff);
+      }
+
+      const mesh = new THREE.Mesh(geom, mat);
+      // Slight rotation to expose number/stripe; can tune per id
+      const ori = orientation[id] || { rx: 0, ry: Math.PI * 0.5 };
+      mesh.rotation.x = ori.rx;
+      mesh.rotation.y = ori.ry;
+      return mesh;
+    };
+
+    for (const id of ids) {
+      // Clear scene and rebuild lights
+      while (scene.children.length > 0) scene.remove(scene.children[0]);
+      scene.add(new THREE.AmbientLight(0xffffff, 2.0));
+      const dir2 = new THREE.DirectionalLight(0xffffff, 1.5);
+      dir2.position.set(2.2, 3.0, 4.0);
+      scene.add(dir2);
+      const frontLight2 = new THREE.DirectionalLight(0xffffff, 0.8);
+      frontLight2.position.set(0, 0, 5);
+      scene.add(frontLight2);
+
+      const mesh = await buildMesh(id);
+      mesh.position.set(0, 0, 0);
+      scene.add(mesh);
+
+      const prevTarget = this.renderer.getRenderTarget();
+      this.renderer.setRenderTarget(rt);
+      this.renderer.clear();
+      this.renderer.render(scene, camera);
+      this.renderer.setRenderTarget(prevTarget);
+
+      const pixels = new Uint8Array(size * size * 4);
+      this.renderer.readRenderTargetPixels(rt, 0, 0, size, size, pixels);
+      const canvas2D = document.createElement('canvas');
+      canvas2D.width = size;
+      canvas2D.height = size;
+      const ctx = canvas2D.getContext('2d');
+      const imgData = ctx!.createImageData(size, size);
+      for (let y = 0; y < size; y++) {
+        const src = (size - 1 - y) * size * 4;
+        const dst = y * size * 4;
+        imgData.data.set(pixels.subarray(src, src + size * 4), dst);
+      }
+      ctx!.putImageData(imgData, 0, 0);
+      const url = canvas2D.toDataURL('image/png');
+      result.set(id, url);
+
+      // Cleanup mesh resources (geometry/material were cloned)
+      if (mesh.geometry) mesh.geometry.dispose();
+      if (mesh.material) (mesh.material as THREE.Material).dispose();
+    }
+
+    // Cleanup render target
+    rt.dispose();
+    this.ballIconCaches.set(size, result);
+    return result;
   }
 
   toggleMeasurementOverlay(force?: boolean) {

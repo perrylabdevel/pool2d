@@ -61,36 +61,50 @@
               <span class="panel-launcher-label">Layers</span>
               <span class="panel-launcher-shortcut">L</span>
             </button>
+            <!-- Action: Capture Shot moved from top bar -->
+            <button
+              id="capture-shot-btn"
+              class="panel-launcher-btn"
+              title="Capture Shot"
+              aria-label="Capture Shot"
+            >
+              <span class="panel-launcher-icon">📸</span>
+              <span class="panel-launcher-label">Shot</span>
+            </button>
           </nav>
         </aside>
 
         <main id="workspace-main">
           <div id="hud">
-            <div id="top-bar">
-              <div id="game-info">
-                <div id="mode-indicator">Practice Mode</div>
-                <div id="turn-indicator"></div>
-                <div id="player-info">
-                  <div id="player1-info" class="player-panel">
-                    <span class="player-icon">👤</span>
-                    <span class="player-label">P1</span>
-                    <span class="balls-remaining"></span>
-                  </div>
-                  <div id="player2-info" class="player-panel">
-                    <span class="player-icon">👤</span>
-                    <span class="player-label">P2</span>
-                    <span class="balls-remaining"></span>
-                  </div>
+            <header class="hud-header" aria-label="Game Header">
+              <!-- Left Player -->
+              <div id="player1-info" class="hud-player" role="region" aria-label="Player 1 Information">
+                <div class="avatar" aria-hidden="true"></div>
+                <div class="meta">
+                  <div class="name" id="p1-name">Player 1</div>
+                  <div class="balls-remaining" aria-label="P1 balls potted"></div>
                 </div>
               </div>
-              <div id="controls">
-                <button id="pause-btn" class="icon-btn" title="Pause">⏸</button>
-                <button id="restart-btn" class="icon-btn" title="Restart">↻</button>
-                <button id="settings-btn" class="icon-btn" title="Settings">⚙</button>
-                <button id="debug-toggle" class="icon-btn" title="Debug Mode">🐛</button>
-                <button id="capture-shot-btn" class="icon-btn" title="Capture Shot">📸</button>
+
+              <!-- Center Timer (hidden for now) -->
+              <div id="hud-timer" class="hud-timer hidden" aria-hidden="true"></div>
+
+              <!-- Right Player -->
+              <div id="player2-info" class="hud-player right" role="region" aria-label="Player 2 Information">
+                <div class="avatar" aria-hidden="true"></div>
+                <div class="meta">
+                  <div class="name" id="p2-name">CPU</div>
+                  <div class="balls-remaining" aria-label="P2 balls potted"></div>
+                </div>
               </div>
+            </header>
+
+            <!-- Optional: keep mode/turn indicators offscreen but present for now -->
+            <div class="hud-meta">
+              <div id="mode-indicator" class="hud-mode"></div>
+              <div id="turn-indicator" class="hud-turn"></div>
             </div>
+
             <div id="stats">
               <span id="fps">FPS: 0</span>
               <span id="ups">UPS: 0</span>

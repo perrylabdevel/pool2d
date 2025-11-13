@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ball Chip Test</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      background: #1a1a1a;
+      color: white;
+      font-family: monospace;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .chips {
+      display: flex;
+      gap: 40px;
+      margin: 40px 0;
+      align-items: center;
+    }
+    .chip {
+      text-align: center;
+    }
+    .chip canvas {
+      border: 2px solid #333;
+      border-radius: 4px;
+      display: block;
+      margin: 0 auto 10px;
+    }
+    #log {
+      background: #000;
+      padding: 15px;
+      border-radius: 4px;
+      font-size: 12px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .log-entry {
+      margin: 5px 0;
+      padding: 3px 0;
+      border-bottom: 1px solid #222;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Ball Chip Texture Test</h1>
+    <p>Testing texture rendering for ball chips</p>
+
+    <h3>Ball 1 - Different Rotations</h3>
+    <div class="chips">
+      <div class="chip">
+        <canvas id="ball1-rot0" width="128" height="128"></canvas>
+        <div>0°</div>
+      </div>
+      <div class="chip">
+        <canvas id="ball1-rot1" width="128" height="128"></canvas>
+        <div>45°</div>
+      </div>
+      <div class="chip">
+        <canvas id="ball1-rot2" width="128" height="128"></canvas>
+        <div>90°</div>
+      </div>
+      <div class="chip">
+        <canvas id="ball1-rot3" width="128" height="128"></canvas>
+        <div>135°</div>
+      </div>
+      <div class="chip">
+        <canvas id="ball1-rot4" width="128" height="128"></canvas>
+        <div>180°</div>
+      </div>
+      <div class="chip">
+        <canvas id="ball1-rot5" width="128" height="128"></canvas>
+        <div>225°</div>
+      </div>
+      <div class="chip">
+        <canvas id="ball1-rot6" width="128" height="128"></canvas>
+        <div>270°</div>
+      </div>
+      <div class="chip">
+        <canvas id="ball1-rot7" width="128" height="128"></canvas>
+        <div>315°</div>
+      </div>
+    </div>
+
+    <h3>Ball 9 - Different Rotations</h3>
+    <div class="chips">
+      <div class="chip">
+        <canvas id="ball9-rot0" width="128" height="128"></canvas>
+        <div>0°</div>
+      </div>
+      <div class="chip">
+        <canvas id="ball9-rot1" width="128" height="128"></canvas>
+        <div>45°</div>
+      </div>
+      <div class="chip">
+        <canvas id="ball9-rot2" width="128" height="128"></canvas>
+        <div>90°</div>
+      </div>
+      <div class="chip">
+        <canvas id="ball9-rot3" width="128" height="128"></canvas>
+        <div>135°</div>
+      </div>
+      <div class="chip">
+        <canvas id="ball9-rot4" width="128" height="128"></canvas>
+        <div>180°</div>
+      </div>
+      <div class="chip">
+        <canvas id="ball9-rot5" width="128" height="128"></canvas>
+        <div>225°</div>
+      </div>
+      <div class="chip">
+        <canvas id="ball9-rot6" width="128" height="128"></canvas>
+        <div>270°</div>
+      </div>
+      <div class="chip">
+        <canvas id="ball9-rot7" width="128" height="128"></canvas>
+        <div>315°</div>
+      </div>
+    </div>
+
+    <h2>Debug Log</h2>
+    <div id="log"></div>
+  </div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+
+    const logEl = document.getElementById('log');
+    function log(message, data = null) {
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+      entry.textContent = message;
+      if (data) {
+        entry.textContent += ' ' + JSON.stringify(data, null, 2);
+      }
+      logEl.appendChild(entry);
+      console.log(message, data);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    log('Starting ball chip test...');
+
+    // Texture paths matching the main app
+    const textureMap = {
+      1: '/textures/poolballTx01.jpg',
+      9: '/textures/poolballTx9.jpg'
+    };
+
+    const ballNameMap = {
+      poolball16: 0,
+      poolball1: 1,
+      poolball22: 9
+    };
+
+    // Preload textures and FBX once
+    let fbxCache = null;
+    let textureCache = new Map();
+
+    async function loadAssets() {
+      if (fbxCache) return; // Already loaded
+
+      log('Preloading textures...');
+
+      // Set up loading manager with embedded texture map
+      const loadingManager = new THREE.LoadingManager();
+      const embeddedTextureMap = new Map();
+
+      loadingManager.setURLModifier((url) => {
+        const normalized = url.replace(/^\.\//, '').replace(/^\//, '');
+        const filename = normalized.split('/').pop() ?? normalized;
+        return (
+          embeddedTextureMap.get(url) ||
+          embeddedTextureMap.get(normalized) ||
+          embeddedTextureMap.get(filename) ||
+          url
+        );
+      });
+
+      const textureLoader = new THREE.TextureLoader(loadingManager);
+
+      // Preload textures
+      const texturePromises = Object.entries(textureMap).map(async ([ballId, path]) => {
+        try {
+          const response = await fetch(path);
+          const blob = await response.blob();
+          const dataUrl = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.readAsDataURL(blob);
+          });
+
+          const filename = path.split('/').pop();
+          embeddedTextureMap.set(path, dataUrl);
+          embeddedTextureMap.set(path.replace(/^\//, ''), dataUrl);
+          embeddedTextureMap.set(`./${filename}`, dataUrl);
+          embeddedTextureMap.set(`textures/${filename}`, dataUrl);
+          embeddedTextureMap.set(`/${filename}`, dataUrl);
+          embeddedTextureMap.set(filename, dataUrl);
+
+          return new Promise((resolve) => {
+            textureLoader.load(
+              dataUrl,
+              (texture) => {
+                texture.colorSpace = THREE.SRGBColorSpace;
+                texture.generateMipmaps = true;
+                texture.minFilter = THREE.LinearMipmapLinearFilter;
+                texture.magFilter = THREE.LinearFilter;
+                log(`Texture loaded for ball ${ballId}`);
+                resolve([Number(ballId), texture]);
+              },
+              undefined,
+              (err) => {
+                log(`ERROR loading texture for ball ${ballId}:`, err);
+                resolve([Number(ballId), null]);
+              }
+            );
+          });
+        } catch (err) {
+          log(`ERROR fetching texture for ball ${ballId}:`, err);
+          return [Number(ballId), null];
+        }
+      });
+
+      const loadedTextures = await Promise.all(texturePromises);
+      loadedTextures.forEach(([ballId, texture]) => {
+        if (texture) {
+          // CRITICAL: Force needsUpdate to ensure texture is uploaded to GPU
+          texture.needsUpdate = true;
+          textureCache.set(ballId, texture);
+        }
+      });
+
+      log('Loading FBX...');
+
+      // Load FBX
+      const loader = new FBXLoader(loadingManager);
+      fbxCache = await new Promise((resolve, reject) => {
+        loader.load('/poolballs.fbx', resolve, undefined, reject);
+      });
+
+      log('FBX loaded successfully');
+    }
+
+    // Shared renderer to maintain WebGL context
+    // MUST be initialized BEFORE loading textures so they use the same WebGL context
+    let sharedRenderer = null;
+    let sharedScene = null;
+    let sharedCamera = null;
+
+    function initSharedRenderer() {
+      if (sharedRenderer) return sharedRenderer;
+
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = 128;
+      tempCanvas.height = 128;
+      sharedRenderer = new THREE.WebGLRenderer({ canvas: tempCanvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
+      sharedRenderer.setSize(128, 128, false);
+
+      sharedScene = new THREE.Scene();
+      sharedCamera = new THREE.PerspectiveCamera(26, 1, 0.01, 10);
+      sharedCamera.position.set(0, 0, 2.6);
+      sharedCamera.lookAt(0, 0, 0);
+
+      // Lighting
+      sharedScene.add(new THREE.AmbientLight(0xffffff, 0.9));
+      const dir = new THREE.DirectionalLight(0xffffff, 0.7);
+      dir.position.set(2.2, 3.0, 4.0);
+      sharedScene.add(dir);
+
+      return sharedRenderer;
+    }
+
+    // Load FBX and render chips
+    async function renderBallChip(ballId, canvasId) {
+      initSharedRenderer();
+      const targetCanvas = document.getElementById(canvasId);
+
+      log(`Rendering ball ${ballId}...`);
+
+      try {
+        // Find the ball mesh by name
+        const ballNames = Object.entries(ballNameMap).find(([name, id]) => id === ballId);
+        if (!ballNames) {
+          log(`ERROR: No ball name mapping for ball ${ballId}`);
+          return;
+        }
+
+        const [ballMeshName] = ballNames;
+        let ballMesh = null;
+
+        fbxCache.traverse((child) => {
+          if (child.isMesh && child.name === ballMeshName) {
+            ballMesh = child;
+            log(`Found ball mesh: ${child.name}`);
+          }
+        });
+
+        if (!ballMesh) {
+          log(`ERROR: Ball mesh '${ballMeshName}' not found in FBX`);
+          return;
+        }
+
+        // Clone geometry and center it at the origin
+        const geom = ballMesh.geometry.clone();
+        geom.computeBoundingSphere();
+        const center = geom.boundingSphere.center;
+        const radius = geom.boundingSphere.radius;
+
+        // Check UV coordinates BEFORE transformations
+        const hasUV = geom.attributes.uv !== undefined;
+        log(`Geometry has UV coords: ${hasUV}, UV count: ${hasUV ? geom.attributes.uv.count : 0}`);
+
+        if (hasUV) {
+          const uvArray = geom.attributes.uv.array;
+          log(`Sample UVs: [0]=(${uvArray[0].toFixed(3)}, ${uvArray[1].toFixed(3)}), [1]=(${uvArray[2].toFixed(3)}, ${uvArray[3].toFixed(3)}), [2]=(${uvArray[4].toFixed(3)}, ${uvArray[5].toFixed(3)})`);
+
+          // Check UV range
+          let minU = 1, maxU = 0, minV = 1, maxV = 0;
+          for (let i = 0; i < uvArray.length; i += 2) {
+            minU = Math.min(minU, uvArray[i]);
+            maxU = Math.max(maxU, uvArray[i]);
+            minV = Math.min(minV, uvArray[i + 1]);
+            maxV = Math.max(maxV, uvArray[i + 1]);
+          }
+          log(`UV range: U=[${minU.toFixed(3)}, ${maxU.toFixed(3)}], V=[${minV.toFixed(3)}, ${maxV.toFixed(3)}]`);
+        }
+
+        // Translate geometry to center it at origin
+        geom.translate(-center.x, -center.y, -center.z);
+
+        // Scale to standard ball size (1.125 inches is the target radius)
+        const targetRadius = 1.125;
+        const scaleFactor = targetRadius / radius;
+        geom.scale(scaleFactor, scaleFactor, scaleFactor);
+
+        // Use preloaded texture
+        const preloadedTexture = textureCache.get(ballId);
+
+        if (!preloadedTexture || !preloadedTexture.image) {
+          log(`ERROR: No preloaded texture for ball ${ballId}`);
+          return;
+        }
+
+        // Try using the preloaded texture DIRECTLY - it's already a THREE.Texture
+        // and we're in the same WebGL context (shared renderer)
+        log(`Using preloaded THREE.Texture directly for ball ${ballId}`);
+        log(`Preloaded texture version: ${preloadedTexture.version}, needsUpdate: ${preloadedTexture.needsUpdate}`);
+
+        const testMat = new THREE.MeshBasicMaterial({
+          map: preloadedTexture,
+        });
+
+        log(`MeshBasicMaterial created with preloaded texture`);
+
+        const mesh = new THREE.Mesh(geom, testMat);
+
+        // Try different rotations for different balls
+        const rotations = {
+          1: 0,
+          9: Math.PI
+        };
+        mesh.rotation.y = rotations[ballId] ?? Math.PI * 0.5;
+
+        // Clear shared scene (keep lights)
+        const meshesToRemove = [];
+        sharedScene.traverse((obj) => {
+          if (obj instanceof THREE.Mesh) {
+            meshesToRemove.push(obj);
+          }
+        });
+        meshesToRemove.forEach(m => sharedScene.remove(m));
+
+        // Add new mesh
+        sharedScene.add(mesh);
+
+        // Render to shared canvas
+        sharedRenderer.render(sharedScene, sharedCamera);
+
+        // Copy to target canvas
+        const ctx = targetCanvas.getContext('2d');
+        ctx.clearRect(0, 0, 128, 128);
+        ctx.drawImage(sharedRenderer.domElement, 0, 0);
+
+        log(`Ball ${ballId} rendered to canvas`);
+      } catch (error) {
+        log(`ERROR rendering ball: ${error.message}`);
+      }
+    }
+
+    // Render a simple THREE.SphereGeometry with the texture to test if texturing works at all
+    async function renderTestSphere(ballId, canvasId) {
+      initSharedRenderer();
+      const targetCanvas = document.getElementById(canvasId);
+
+      log(`Rendering test sphere for ball ${ballId}...`);
+
+      const preloadedTexture = textureCache.get(ballId);
+      if (!preloadedTexture) {
+        log(`ERROR: No preloaded texture for ball ${ballId}`);
+        return;
+      }
+
+      log(`Creating BRAND NEW image and texture from scratch...`);
+
+      // Create a brand new Image element and wait for it to load
+      const newImage = new Image();
+      newImage.crossOrigin = 'anonymous';
+
+      await new Promise((resolve) => {
+        newImage.onload = () => {
+          log(`New image loaded: ${newImage.width}x${newImage.height}`);
+          resolve(null);
+        };
+        newImage.src = preloadedTexture.image.src;
+      });
+
+      // Create a completely new THREE.Texture from the fresh image element
+      const freshTexture = new THREE.Texture(newImage);
+      freshTexture.colorSpace = THREE.SRGBColorSpace;
+      freshTexture.generateMipmaps = true;
+      freshTexture.minFilter = THREE.LinearMipmapLinearFilter;
+      freshTexture.magFilter = THREE.LinearFilter;
+      freshTexture.wrapS = THREE.ClampToEdgeWrapping;
+      freshTexture.wrapT = THREE.ClampToEdgeWrapping;
+      freshTexture.needsUpdate = true;
+
+      log(`Fresh texture created from new image, version: ${freshTexture.version}`);
+
+      // Create a simple sphere with default UVs
+      const geom = new THREE.SphereGeometry(1.125, 32, 32);
+      const mat = new THREE.MeshBasicMaterial({
+        map: freshTexture,
+        side: THREE.DoubleSide,
+      });
+
+      log(`Material created with fresh texture`);
+
+      const mesh = new THREE.Mesh(geom, mat);
+
+      // Try different rotations for different balls to find the number/stripe
+      const rotations = {
+        1: 0,  // Try front
+        9: Math.PI  // Try back
+      };
+      mesh.rotation.y = rotations[ballId] ?? Math.PI * 0.5;
+
+      // Clear shared scene
+      const meshesToRemove = [];
+      sharedScene.traverse((obj) => {
+        if (obj instanceof THREE.Mesh) {
+          meshesToRemove.push(obj);
+        }
+      });
+      meshesToRemove.forEach(m => sharedScene.remove(m));
+
+      sharedScene.add(mesh);
+
+      // Check for WebGL errors
+      const gl = sharedRenderer.getContext();
+      const err1 = gl.getError();
+      if (err1 !== gl.NO_ERROR) {
+        log(`WebGL error before render: ${err1}`);
+      }
+
+      // Render
+      sharedRenderer.render(sharedScene, sharedCamera);
+
+      const err2 = gl.getError();
+      if (err2 !== gl.NO_ERROR) {
+        log(`WebGL error after render: ${err2}`);
+      }
+
+      // Wait a frame and render again to ensure texture upload
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      sharedRenderer.render(sharedScene, sharedCamera);
+
+      const ctx = targetCanvas.getContext('2d');
+      ctx.clearRect(0, 0, 128, 128);
+      ctx.drawImage(sharedRenderer.domElement, 0, 0);
+
+      log(`Test sphere ${ballId} rendered`);
+    }
+
+    // Render raw texture to verify it's loaded correctly
+    function renderRawTexture(ballId, canvasId) {
+      const texture = textureCache.get(ballId);
+      if (!texture || !texture.image) {
+        log(`ERROR: No texture found for ball ${ballId}`);
+        return;
+      }
+
+      const canvas = document.getElementById(canvasId);
+      const ctx = canvas.getContext('2d');
+
+      // Draw the texture image scaled down to canvas size
+      ctx.clearRect(0, 0, 128, 128);
+      ctx.drawImage(texture.image, 0, 0, 128, 128);
+
+      log(`Raw texture ${ballId} rendered: ${texture.image.width}x${texture.image.height}`);
+    }
+
+    // Render ball at specific rotation
+    async function renderBallAtRotation(ballId, canvasId, rotationX, rotationY) {
+      initSharedRenderer();
+      const targetCanvas = document.getElementById(canvasId);
+
+      const ballNames = Object.entries(ballNameMap).find(([name, id]) => id === ballId);
+      if (!ballNames) return;
+
+      const [ballMeshName] = ballNames;
+      let ballMesh = null;
+
+      fbxCache.traverse((child) => {
+        if (child.isMesh && child.name === ballMeshName) {
+          ballMesh = child;
+        }
+      });
+
+      if (!ballMesh) return;
+
+      const geom = ballMesh.geometry.clone();
+      geom.computeBoundingSphere();
+      const center = geom.boundingSphere.center;
+      const radius = geom.boundingSphere.radius;
+
+      geom.translate(-center.x, -center.y, -center.z);
+      // Make the ball even smaller so we can see more detail
+      const targetRadius = 0.35;  // Even smaller to zoom out more
+      const scaleFactor = targetRadius / radius;
+      geom.scale(scaleFactor, scaleFactor, scaleFactor);
+
+      const preloadedTexture = textureCache.get(ballId);
+      if (!preloadedTexture) return;
+
+      const testMat = new THREE.MeshBasicMaterial({ map: preloadedTexture });
+      const mesh = new THREE.Mesh(geom, testMat);
+      mesh.rotation.x = rotationX;
+      mesh.rotation.y = rotationY;
+
+      const meshesToRemove = [];
+      sharedScene.traverse((obj) => {
+        if (obj instanceof THREE.Mesh) meshesToRemove.push(obj);
+      });
+      meshesToRemove.forEach(m => sharedScene.remove(m));
+
+      sharedScene.add(mesh);
+      sharedRenderer.render(sharedScene, sharedCamera);
+
+      const ctx = targetCanvas.getContext('2d');
+      ctx.clearRect(0, 0, 128, 128);
+      ctx.drawImage(sharedRenderer.domElement, 0, 0);
+    }
+
+    // Load assets first
+    await loadAssets();
+
+    // Render ball 1 at 8 different X-axis rotations (keep Y at 90° since that looked good)
+    const fixedY1 = Math.PI / 2;  // 90 degrees
+    for (let i = 0; i < 8; i++) {
+      const angleX = (i * Math.PI / 4);
+      await renderBallAtRotation(1, `ball1-rot${i}`, angleX, fixedY1);
+    }
+
+    // Render ball 9 at 8 different X-axis rotations (keep Y at 90°)
+    const fixedY9 = Math.PI / 2;  // 90 degrees
+    for (let i = 0; i < 8; i++) {
+      const angleX = (i * Math.PI / 4);
+      await renderBallAtRotation(9, `ball9-rot${i}`, angleX, fixedY9);
+    }
+
+    log('Test complete!');
+  </script>
+</body>
+</html>
