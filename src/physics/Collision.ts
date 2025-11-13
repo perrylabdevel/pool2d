@@ -16,6 +16,7 @@ export interface Contact {
 
 // Track which collision pairs have had impulses applied this timestep
 const resolvedPairsThisStep = new Set<string>();
+const resolvedRailContactsThisStep = new Set<string>();
 
 // Suppress collision warnings during prediction simulations
 let suppressCollisionWarnings = false;
@@ -53,6 +54,7 @@ export function consumeCollisionSnapshot(): CollisionSnapshot | null {
 
 export function resetCollisionTracking() {
   resolvedPairsThisStep.clear();
+  resolvedRailContactsThisStep.clear();
   if (collisionCaptureEnabled) {
     collisionSnapshots = [];
   }
@@ -67,6 +69,11 @@ function getCollisionPairId(ballA: Ball, ballB: Ball): string {
   const id1 = Math.min(ballA.id, ballB.id);
   const id2 = Math.max(ballA.id, ballB.id);
   return `${id1}-${id2}`;
+}
+
+function getBallRailPairId(ball: Ball, rail: Rail): string {
+  const railId = rail.id ?? `${rail.x1.toFixed(3)}_${rail.y1.toFixed(3)}_${rail.x2.toFixed(3)}_${rail.y2.toFixed(3)}`;
+  return `${ball.id}:${railId}`;
 }
 
 // Ball-ball collision detection
@@ -307,9 +314,17 @@ export function resolveBallRail(contact: Contact) {
   const { ballA, rail, nx, ny, depth } = contact;
   if (!rail) return;
   
+  const pairId = getBallRailPairId(ballA, rail);
+  const isFirstResolution = !resolvedRailContactsThisStep.has(pairId);
+  
   // Positional correction
   ballA.x += nx * depth;
   ballA.y += ny * depth;
+
+  if (!isFirstResolution) {
+    return;
+  }
+  resolvedRailContactsThisStep.add(pairId);
   
   // Calculate contact point
   const contactPoint = {
@@ -330,24 +345,40 @@ export function resolveBallRail(contact: Contact) {
   const speedMag = Math.hypot(ballA.vx, ballA.vy);
   const approachRatio = Math.abs(vn) / Math.max(1e-6, speedMag);
   const eBase = CONFIG.CUSHION_RESTITUTION;
-  // Only kill bounce for extremely shallow grazing (< 3% approach ratio = ~1.7° from parallel)
-  const eEffective = approachRatio < 0.03 ? 0.0 : eBase;
+  const grazeZero = 0.015; // <~0.9°
+  const grazeFull = 0.12; // ~6.9°
+  let restitutionScale: number;
+  if (approachRatio <= grazeZero) {
+    restitutionScale = 0;
+  } else if (approachRatio >= grazeFull) {
+    restitutionScale = 1;
+  } else {
+    const t = (approachRatio - grazeZero) / (grazeFull - grazeZero);
+    restitutionScale = t * t * (3 - 2 * t); // smoothstep blend
+  }
+  const eEffective = eBase * restitutionScale;
   const jn = -(1 + eEffective) * vn;
   
-  ballA.vx += jn * nx;
-  ballA.vy += jn * ny;
+  ballA.vx += jn * nx * ballA.invMass;
+  ballA.vy += jn * ny * ballA.invMass;
   
   // Tangential friction (cushions are rubber/synthetic - much less friction than table cloth)
   const tx = -ny;
   const ty = nx;
   const vt = ballA.vx * tx + ballA.vy * ty;
 
-  // Use cushion-specific friction (0.15) instead of table sliding friction (0.65)
+  // Use cushion-specific friction (0.15) with Coulomb clamp against the normal impulse
   const cushionFriction = 0.15;
-  const jt = -vt * cushionFriction;
+  const totalInvMass = ballA.invMass;
+  let jt = 0;
+  if (totalInvMass > 0) {
+    jt = -vt / totalInvMass;
+  }
+  const maxFriction = Math.abs(jn) * cushionFriction;
+  const jtClamped = Math.max(-maxFriction, Math.min(maxFriction, jt));
 
-  ballA.vx += jt * tx;
-  ballA.vy += jt * ty;
+  ballA.vx += jtClamped * tx * ballA.invMass;
+  ballA.vy += jtClamped * ty * ballA.invMass;
   
   // Clamp tiny separating normal velocity when still against rail to extend brief glide realistically
   const vnAfter = ballA.vx * nx + ballA.vy * ny;
