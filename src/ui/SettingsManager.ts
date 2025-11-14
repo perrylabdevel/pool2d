@@ -61,6 +61,7 @@ export interface GeometrySettings {
   SIDE_POCKET_VISUAL_RADIUS_IN: number;
   CORNER_POCKET_OUTWARD_OFFSET_IN: number;
   POCKET_SHELF_DEPTH_IN: number;
+  POCKET_SHELF_DEPTH_SIDE_IN?: number;
   JAW_CURVE_BLEND: number;
   CORNER_CUT_ANGLE_DEG: number;
   SIDE_CUT_ANGLE_DEG: number;
@@ -83,6 +84,24 @@ export interface RenderSettings extends RenderLayerSettings {
   railHighlightSpread: number;
   pocketShadowIntensity: number;
   pocketHighlightIntensity: number;
+  // Pocket groove appearance controls
+  grooveInnerBase: number;            // base inner radius factor (of visualRadius)
+  grooveInnerDepthScale: number;      // how much inner radius grows with depthFactor
+  grooveThicknessFactor: number;      // groove thickness factor (of visualRadius)
+  grooveOpacityBase: number;          // base groove opacity
+  grooveOpacityDepthScale: number;    // opacity increase with depthFactor
+  grooveRimThicknessFactor: number;   // rim thickness factor (of visualRadius)
+  grooveRimOuterOpacity: number;      // outer rim opacity
+  grooveRimInnerOpacity: number;      // inner rim opacity
+  // Groove/pocket colors
+  grooveColor: string;
+  rimColor: string;
+  pocketBottomColor: string;
+  pocketGradientCenterColor: string;
+  pocketGradientEdgeColor: string;
+  pocketWallColor: string;
+  // Pocket gradient overall strength (alpha multiplier 0..1)
+  pocketGradientStrength: number;
 }
 
 const STORAGE_KEYS = {
@@ -307,6 +326,7 @@ export class SettingsManager {
       SIDE_POCKET_VISUAL_RADIUS_IN: CONFIG.POCKET_VISUAL_RADIUS_SIDE,
       CORNER_POCKET_OUTWARD_OFFSET_IN: CONFIG.CORNER_POCKET_OUTWARD_OFFSET_IN ?? 0,
       POCKET_SHELF_DEPTH_IN: CONFIG.POCKET_SHELF_DEPTH_IN,
+      POCKET_SHELF_DEPTH_SIDE_IN: (CONFIG as any).POCKET_SHELF_DEPTH_SIDE_IN ?? 0.25,
       JAW_CURVE_BLEND: CONFIG.JAW_CURVE_BLEND,
       CORNER_CUT_ANGLE_DEG: CONFIG.CORNER_CUT_ANGLE_DEG,
       SIDE_CUT_ANGLE_DEG: CONFIG.SIDE_CUT_ANGLE_DEG,
@@ -347,6 +367,22 @@ export class SettingsManager {
       railHighlightSpread: 1.0,
       pocketShadowIntensity: CONFIG.POCKET_SHADOW_INTENSITY ?? 0.45,
       pocketHighlightIntensity: CONFIG.POCKET_HIGHLIGHT_INTENSITY ?? 0.55,
+      // Groove defaults match current visuals
+      grooveInnerBase: 0.18,
+      grooveInnerDepthScale: 0.22,
+      grooveThicknessFactor: 0.08,
+      grooveOpacityBase: 0.18,
+      grooveOpacityDepthScale: 0.36,
+      grooveRimThicknessFactor: 0.02,
+      grooveRimOuterOpacity: 0.10,
+      grooveRimInnerOpacity: 0.08,
+      grooveColor: '#000000',
+      rimColor: '#ffffff',
+      pocketBottomColor: '#000000',
+      pocketGradientCenterColor: '#050505',
+      pocketGradientEdgeColor: '#5a5a5a',
+      pocketWallColor: '#0a0a0a',
+      pocketGradientStrength: 1.0,
     };
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.RENDER_SETTINGS);
@@ -453,6 +489,7 @@ export class SettingsManager {
       SIDE_POCKET_VISUAL_RADIUS_IN: 2.5,
       CORNER_POCKET_OUTWARD_OFFSET_IN: 0.0,
       POCKET_SHELF_DEPTH_IN: 0.5,
+      POCKET_SHELF_DEPTH_SIDE_IN: 0.25,
       JAW_CURVE_BLEND: 0.0,
       CORNER_CUT_ANGLE_DEG: 0.0,
       SIDE_CUT_ANGLE_DEG: 0.0,
@@ -517,6 +554,7 @@ export class SettingsManager {
     CONFIG.POCKET_VISUAL_RADIUS_SIDE = this.geometrySettings.SIDE_POCKET_VISUAL_RADIUS_IN;
     CONFIG.CORNER_POCKET_OUTWARD_OFFSET_IN = this.geometrySettings.CORNER_POCKET_OUTWARD_OFFSET_IN;
     CONFIG.POCKET_SHELF_DEPTH_IN = this.geometrySettings.POCKET_SHELF_DEPTH_IN;
+    (CONFIG as any).POCKET_SHELF_DEPTH_SIDE_IN = this.geometrySettings.POCKET_SHELF_DEPTH_SIDE_IN ?? (CONFIG as any).POCKET_SHELF_DEPTH_SIDE_IN ?? 0.25;
     CONFIG.JAW_CURVE_BLEND = this.geometrySettings.JAW_CURVE_BLEND;
     CONFIG.CORNER_CUT_ANGLE_DEG = this.geometrySettings.CORNER_CUT_ANGLE_DEG;
     CONFIG.SIDE_CUT_ANGLE_DEG = this.geometrySettings.SIDE_CUT_ANGLE_DEG;

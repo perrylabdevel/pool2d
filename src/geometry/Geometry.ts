@@ -832,7 +832,7 @@ export function getTableGeometry(): TableGeometry {
         cutAngleDeg: CONFIG.SIDE_CUT_ANGLE_DEG,
         captureRadius: CONFIG.POCKET_CAPTURE_RADIUS_SIDE,
         visualRadius: CONFIG.POCKET_VISUAL_RADIUS_SIDE,
-        shelfDepth: CONFIG.POCKET_SHELF_DEPTH_IN,
+        shelfDepth: (CONFIG as any).POCKET_SHELF_DEPTH_SIDE_IN ?? CONFIG.POCKET_SHELF_DEPTH_IN,
         radius: CONFIG.POCKET_VISUAL_RADIUS_SIDE,
       },
       {
@@ -842,7 +842,7 @@ export function getTableGeometry(): TableGeometry {
         cutAngleDeg: CONFIG.SIDE_CUT_ANGLE_DEG,
         captureRadius: CONFIG.POCKET_CAPTURE_RADIUS_SIDE,
         visualRadius: CONFIG.POCKET_VISUAL_RADIUS_SIDE,
-        shelfDepth: CONFIG.POCKET_SHELF_DEPTH_IN,
+        shelfDepth: (CONFIG as any).POCKET_SHELF_DEPTH_SIDE_IN ?? CONFIG.POCKET_SHELF_DEPTH_IN,
         radius: CONFIG.POCKET_VISUAL_RADIUS_SIDE,
       },
     ]

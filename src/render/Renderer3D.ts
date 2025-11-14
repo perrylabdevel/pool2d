@@ -57,6 +57,8 @@ export class Renderer3D extends BaseRenderer {
   pocketMeshes: THREE.Mesh[] = [];
   pocketBottomMeshes: THREE.Mesh[] = [];
   pocketGradientMeshes: THREE.Mesh[] = [];
+  private pocketGrooveMeshes: THREE.Mesh[] = [];
+  private pocketRimMeshes: THREE.Mesh[] = [];
   pocketCapMeshes: THREE.Mesh[] = [];
   railFillMesh: THREE.Mesh | null = null;
   private tableHighlightMesh: THREE.Mesh | null = null;
@@ -77,6 +79,24 @@ export class Renderer3D extends BaseRenderer {
   private pocketHighlightTexture: THREE.CanvasTexture | null = null;
   private pocketShadowTexture: THREE.CanvasTexture | null = null;
   private accentLight: THREE.SpotLight | null = null;
+  // Groove appearance settings
+  private grooveInnerBase = 0.18;
+  private grooveInnerDepthScale = 0.22;
+  private grooveThicknessFactor = 0.08;
+  private grooveOpacityBase = 0.18;
+  private grooveOpacityDepthScale = 0.36;
+  private grooveRimThicknessFactor = 0.02;
+  private grooveRimOuterOpacity = 0.10;
+  private grooveRimInnerOpacity = 0.08;
+  private lastPocketDefs: PocketDef[] = [];
+  // Pocket shade colors
+  private grooveColor = new THREE.Color(0x000000);
+  private rimColor = new THREE.Color(0xffffff);
+  private pocketBottomColor = new THREE.Color(0x000000);
+  private pocketWallColor = new THREE.Color(0x0a0a0a);
+  private gradientCenterColor = '#050505';
+  private gradientEdgeColor = '#5a5a5a';
+  private pocketGradientStrength = 1.0;
   debugRailSegments: Array<{ id: string; inner: Vec2; trimmed: Vec2; startOuter: Vec2 }> = [];
   showMeasurementOverlay = false;
   private railShadowSpread = 1.0;
@@ -394,6 +414,20 @@ export class Renderer3D extends BaseRenderer {
       if (Array.isArray(mat)) mat.forEach(mm => mm.dispose()); else mat.dispose();
     });
     this.pocketGradientMeshes = [];
+    this.pocketGrooveMeshes.forEach(m => {
+      this.scene.remove(m);
+      m.geometry.dispose();
+      const mat = m.material as THREE.Material | THREE.Material[];
+      if (Array.isArray(mat)) mat.forEach(mm => mm.dispose()); else mat.dispose();
+    });
+    this.pocketGrooveMeshes = [];
+    this.pocketRimMeshes.forEach(m => {
+      this.scene.remove(m);
+      m.geometry.dispose();
+      const mat = m.material as THREE.Material | THREE.Material[];
+      if (Array.isArray(mat)) mat.forEach(mm => mm.dispose()); else mat.dispose();
+    });
+    this.pocketRimMeshes = [];
     this.pocketShadowMeshes.forEach((mesh) => {
       this.scene.remove(mesh);
       mesh.geometry.dispose();
@@ -2011,13 +2045,16 @@ export class Renderer3D extends BaseRenderer {
   }
   
   initializePockets(pockets: PocketDef[]) {
+    this.lastPocketDefs = pockets.map(p => ({ ...p }));
     const sideMaterial = this.getPocketSideMaterial();
     const playHalfHeight = this.playBounds.maxY;
 
     pockets.forEach((pocket) => {
       const visualRadius = pocket.visualRadius ?? pocket.radius;
       const wallTaperRadius = visualRadius * 0.75; // Increased taper for more depth (was 0.85)
-      const shelfDepth = Math.max(0.1, pocket.shelfDepth ?? CONFIG.POCKET_SHELF_DEPTH_IN) * 1.5; // 50% deeper
+      const shelfDepthIn = pocket.shelfDepth ?? CONFIG.POCKET_SHELF_DEPTH_IN;
+      const shelfDepth = Math.max(0.1, shelfDepthIn) * 1.5; // 50% deeper
+      const depthFactor = Math.max(0, Math.min(1, (shelfDepthIn ?? 0.5) / 2.0));
       const angleRad = THREE.MathUtils.degToRad(pocket.cutAngleDeg ?? 0);
 
       // All pockets render as full circles at their true physics position
@@ -2055,7 +2092,7 @@ export class Renderer3D extends BaseRenderer {
       const bottomGeometry = new THREE.ShapeGeometry(circleShape);
 
       const bottomMaterial = new THREE.MeshBasicMaterial({
-        color: 0x000000,
+        color: this.pocketBottomColor,
         side: THREE.DoubleSide,
         depthTest: false,
         depthWrite: false,
@@ -2096,6 +2133,8 @@ export class Renderer3D extends BaseRenderer {
         depthWrite: false,
         side: THREE.DoubleSide,
       });
+      // Make deeper pockets appear darker by increasing overlay opacity
+      gradientMat.opacity = 0.65 + 0.35 * depthFactor; // 0.65..1.0
       const gradientMesh = new THREE.Mesh(gradientGeometry, gradientMat);
       gradientMesh.position.set(pocket.center.x, pocketY, 0.16);
 
@@ -2107,9 +2146,13 @@ export class Renderer3D extends BaseRenderer {
       this.scene.add(gradientMesh);
       this.pocketGradientMeshes.push(gradientMesh);
 
-      const pocketShadowMaterial = this.getPocketShadowMaterial();
-      const shadowInner = visualRadius * 0.92;
-      const shadowOuter = visualRadius * 1.2;
+      const pocketShadowMaterialBase = this.getPocketShadowMaterial();
+      // Clone per pocket so we can vary opacity with depth safely
+      const pocketShadowMaterial = pocketShadowMaterialBase.clone();
+      pocketShadowMaterial.opacity = (pocketShadowMaterialBase.opacity ?? 0.45) * (0.85 + 0.5 * depthFactor);
+
+      const shadowInner = visualRadius * (0.9 + 0.05 * depthFactor);
+      const shadowOuter = visualRadius * (1.16 + 0.08 * depthFactor);
       const shadowGeometry = new THREE.RingGeometry(
         shadowInner,
         shadowOuter,
@@ -2130,6 +2173,74 @@ export class Renderer3D extends BaseRenderer {
       this.enforceRenderOrderControl(shadowMesh, { disableDepth: true });
       this.scene.add(shadowMesh);
       this.pocketShadowMeshes.push(shadowMesh);
+
+      // Bottom groove ring to imply deepest shelf edge (stronger with depth)
+      // Size groove to match the darkest inner region of the pocket
+      // Start near 18% of radius (shallow) and grow with depth
+      const grooveInner = visualRadius * (this.grooveInnerBase + this.grooveInnerDepthScale * depthFactor);
+      const grooveOuter = grooveInner + visualRadius * this.grooveThicknessFactor;
+      const grooveGeometry = new THREE.RingGeometry(grooveInner, grooveOuter, 64, 1, thetaStart, thetaLength);
+      const grooveMaterial = new THREE.MeshBasicMaterial({
+        color: this.grooveColor,
+        transparent: true,
+        opacity: this.grooveOpacityBase + this.grooveOpacityDepthScale * depthFactor,
+        depthTest: false,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+      const grooveMesh = new THREE.Mesh(grooveGeometry, grooveMaterial);
+      grooveMesh.position.set(pocket.center.x, pocketY, 0.21);
+      // Align with gradient overlay (no X-rotation), rotate only around Z
+      grooveMesh.rotation.z = pocketRotationZ;
+      grooveMesh.renderOrder = this.layerOrder.orderPockets + 0.21;
+      grooveMesh.visible = this.layerVisibility.showPockets;
+      this.enforceRenderOrderControl(grooveMesh, { disableDepth: true });
+      this.scene.add(grooveMesh);
+      this.pocketGrooveMeshes.push(grooveMesh);
+
+      // Thin inner rim highlight to define groove edge (very subtle)
+      const rimInner = grooveOuter;
+      const rimOuter = rimInner + visualRadius * this.grooveRimThicknessFactor; // thinner outline
+      const rimGeometry = new THREE.RingGeometry(rimInner, rimOuter, 96, 1, thetaStart, thetaLength);
+      const rimMaterial = new THREE.MeshBasicMaterial({
+        color: this.rimColor,
+        transparent: true,
+        opacity: this.grooveRimOuterOpacity * (0.5 + 0.5 * depthFactor),
+        blending: THREE.AdditiveBlending,
+        depthTest: false,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+      const rimMesh = new THREE.Mesh(rimGeometry, rimMaterial);
+      rimMesh.position.set(pocket.center.x, pocketY, 0.22);
+      rimMesh.rotation.z = pocketRotationZ;
+      rimMesh.renderOrder = this.layerOrder.orderPockets + 0.22;
+      rimMesh.visible = this.layerVisibility.showPockets;
+      this.enforceRenderOrderControl(rimMesh, { disableDepth: true });
+      this.scene.add(rimMesh);
+      this.pocketRimMeshes.push(rimMesh);
+
+      // Inner thin rim at groove inner edge
+      const rim2Outer = grooveInner;
+      const rim2Inner = Math.max(0.01, rim2Outer - visualRadius * this.grooveRimThicknessFactor);
+      const rim2Geometry = new THREE.RingGeometry(rim2Inner, rim2Outer, 96, 1, thetaStart, thetaLength);
+      const rim2Material = new THREE.MeshBasicMaterial({
+        color: this.rimColor,
+        transparent: true,
+        opacity: this.grooveRimInnerOpacity * (0.5 + 0.5 * depthFactor),
+        blending: THREE.AdditiveBlending,
+        depthTest: false,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+      const rim2Mesh = new THREE.Mesh(rim2Geometry, rim2Material);
+      rim2Mesh.position.set(pocket.center.x, pocketY, 0.22);
+      rim2Mesh.rotation.z = pocketRotationZ;
+      rim2Mesh.renderOrder = this.layerOrder.orderPockets + 0.22;
+      rim2Mesh.visible = this.layerVisibility.showPockets;
+      this.enforceRenderOrderControl(rim2Mesh, { disableDepth: true });
+      this.scene.add(rim2Mesh);
+      this.pocketRimMeshes.push(rim2Mesh);
 
       this.addPocketHighlight(pocket, visualRadius, angleRad, pocketY);
     });
@@ -2347,7 +2458,7 @@ export class Renderer3D extends BaseRenderer {
   private getPocketSideMaterial(): THREE.MeshBasicMaterial {
     if (!this.pocketSideMaterial) {
       this.pocketSideMaterial = new THREE.MeshBasicMaterial({
-        color: 0x0a0a0a, // Darker walls for more depth (was 0x151515)
+        color: this.pocketWallColor.clone(),
         depthTest: true,
         depthWrite: false,
         side: THREE.DoubleSide,
@@ -2388,14 +2499,21 @@ export class Renderer3D extends BaseRenderer {
 
     const center = size / 2;
     const radius = size / 2;
-    
-    // Enhanced radial gradient with darker center for more depth
+
+    // Build gradient from configurable colors
+    const centerCol = parseHexColor(this.gradientCenterColor ?? '#050505');
+    const edgeCol = parseHexColor(this.gradientEdgeColor ?? '#5a5a5a');
+    const midCol = mixColors(centerCol, edgeCol, 0.5);
+    const nearCol = mixColors(centerCol, edgeCol, 0.8);
+
+    const toRgbaStr = (c: { r: number; g: number; b: number }, a: number) => `rgba(${Math.round(c.r * 255)}, ${Math.round(c.g * 255)}, ${Math.round(c.b * 255)}, ${a})`;
+
+    const s = Math.max(0, Math.min(1, this.pocketGradientStrength));
     const gradient = ctx.createRadialGradient(center, center, 0, center, center, radius);
-    gradient.addColorStop(0, 'rgba(5, 5, 5, 1.0)');      // Much darker center (near black)
-    gradient.addColorStop(0.2, 'rgba(15, 15, 15, 0.98)'); // Very dark inner area
-    gradient.addColorStop(0.5, 'rgba(40, 40, 40, 0.9)');  // Dark middle
-    gradient.addColorStop(0.75, 'rgba(70, 70, 70, 0.75)'); // Lighter toward edge
-    gradient.addColorStop(1, 'rgba(90, 90, 90, 0.3)');    // Fade out at edge
+    gradient.addColorStop(0.0, toRgbaStr(centerCol, 1.0 * s));
+    gradient.addColorStop(0.25, toRgbaStr(midCol, 0.95 * s));
+    gradient.addColorStop(0.6, toRgbaStr(nearCol, 0.8 * s));
+    gradient.addColorStop(1.0, toRgbaStr(edgeCol, 0.35 * s));
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, size, size);
 
@@ -2942,6 +3060,12 @@ export class Renderer3D extends BaseRenderer {
     this.pocketShadowMeshes.forEach((mesh) => {
       mesh.renderOrder = this.layerOrder.orderPockets + 0.2;
     });
+    this.pocketGrooveMeshes.forEach((mesh) => {
+      mesh.renderOrder = this.layerOrder.orderPockets + 0.21;
+    });
+    this.pocketRimMeshes.forEach((mesh) => {
+      mesh.renderOrder = this.layerOrder.orderPockets + 0.22;
+    });
     if (this.railFillMesh) {
       this.railFillMesh.renderOrder = this.layerOrder.orderRails - 1; // Render before rails
     }
@@ -3056,6 +3180,181 @@ export class Renderer3D extends BaseRenderer {
     this.pocketGradientMeshes.forEach((mesh) => (mesh.visible = gradientVisible));
     this.pocketShadowMeshes.forEach((mesh) => (mesh.visible = visible));
     this.pocketHighlightMeshes.forEach((mesh) => (mesh.visible = visible));
+    this.pocketGrooveMeshes.forEach((mesh) => (mesh.visible = visible));
+    this.pocketRimMeshes.forEach((mesh) => (mesh.visible = visible));
+  }
+
+  setPocketGradientStrength(value: number) {
+    this.pocketGradientStrength = Math.max(0, Math.min(1, value));
+    if (this.pocketGradientTexture) {
+      this.pocketGradientTexture.dispose();
+      this.pocketGradientTexture = null;
+    }
+    const tex = this.getPocketGradientTexture();
+    this.pocketGradientMeshes.forEach((m) => {
+      const mat = m.material as THREE.MeshBasicMaterial;
+      mat.map = tex;
+      mat.needsUpdate = true;
+    });
+  }
+
+  setPocketShadeColors(colors: {
+    grooveColor?: string;
+    rimColor?: string;
+    bottomColor?: string;
+    gradientCenter?: string;
+    gradientEdge?: string;
+    wallColor?: string;
+  }) {
+    if (colors.grooveColor) {
+      try { this.grooveColor = new THREE.Color(colors.grooveColor); } catch {}
+      this.pocketGrooveMeshes.forEach((m) => {
+        const mat = m.material as THREE.MeshBasicMaterial; mat.color = this.grooveColor.clone(); mat.needsUpdate = true;
+      });
+    }
+    if (colors.rimColor) {
+      try { this.rimColor = new THREE.Color(colors.rimColor); } catch {}
+      this.pocketRimMeshes.forEach((m) => {
+        const mat = m.material as THREE.MeshBasicMaterial; mat.color = this.rimColor.clone(); mat.needsUpdate = true;
+      });
+    }
+    if (colors.bottomColor) {
+      try { this.pocketBottomColor = new THREE.Color(colors.bottomColor); } catch {}
+      this.pocketBottomMeshes.forEach((m) => {
+        const mat = m.material as THREE.MeshBasicMaterial; mat.color.copy(this.pocketBottomColor); mat.needsUpdate = true;
+      });
+    }
+    let refreshGradient = false;
+    if (colors.gradientCenter) { this.gradientCenterColor = colors.gradientCenter; refreshGradient = true; }
+    if (colors.gradientEdge) { this.gradientEdgeColor = colors.gradientEdge; refreshGradient = true; }
+    if (refreshGradient) {
+      if (this.pocketGradientTexture) { this.pocketGradientTexture.dispose(); this.pocketGradientTexture = null; }
+      const tex = this.getPocketGradientTexture();
+      this.pocketGradientMeshes.forEach((m) => {
+        const mat = m.material as THREE.MeshBasicMaterial;
+        mat.map = tex;
+        mat.needsUpdate = true;
+      });
+    }
+    if (colors.wallColor) {
+      try { this.pocketWallColor = new THREE.Color(colors.wallColor); } catch {}
+      this.pocketMeshes.forEach((m) => {
+        const mat = m.material as THREE.MeshBasicMaterial;
+        mat.color.copy(this.pocketWallColor);
+        mat.needsUpdate = true;
+      });
+      if (this.pocketSideMaterial) {
+        this.pocketSideMaterial.color.copy(this.pocketWallColor);
+        this.pocketSideMaterial.needsUpdate = true;
+      }
+    }
+  }
+
+  setPocketGrooveSettings(settings: {
+    innerBase: number;
+    innerDepthScale: number;
+    thicknessFactor: number;
+    opacityBase: number;
+    opacityDepthScale: number;
+    rimThicknessFactor: number;
+    rimOuterOpacity: number;
+    rimInnerOpacity: number;
+  }) {
+    this.grooveInnerBase = settings.innerBase;
+    this.grooveInnerDepthScale = settings.innerDepthScale;
+    this.grooveThicknessFactor = settings.thicknessFactor;
+    this.grooveOpacityBase = settings.opacityBase;
+    this.grooveOpacityDepthScale = settings.opacityDepthScale;
+    this.grooveRimThicknessFactor = settings.rimThicknessFactor;
+    this.grooveRimOuterOpacity = settings.rimOuterOpacity;
+    this.grooveRimInnerOpacity = settings.rimInnerOpacity;
+    this.rebuildPocketGrooves();
+  }
+
+  private rebuildPocketGrooves() {
+    // Remove existing groove/rim meshes
+    this.pocketGrooveMeshes.forEach((m) => {
+      this.scene.remove(m);
+      m.geometry.dispose();
+      (m.material as THREE.Material).dispose();
+    });
+    this.pocketGrooveMeshes = [];
+    this.pocketRimMeshes.forEach((m) => {
+      this.scene.remove(m);
+      m.geometry.dispose();
+      (m.material as THREE.Material).dispose();
+    });
+    this.pocketRimMeshes = [];
+
+    if (!this.lastPocketDefs.length) return;
+    // Recreate groove/rim for current pockets
+    this.lastPocketDefs.forEach((p) => {
+      const visualRadius = p.visualRadius ?? (p as any).radius ?? 2.5;
+      const shelfDepthIn = p.shelfDepth ?? CONFIG.POCKET_SHELF_DEPTH_IN;
+      const depthFactor = Math.max(0, Math.min(1, (shelfDepthIn ?? 0.5) / 2.0));
+
+      const grooveInner = visualRadius * (this.grooveInnerBase + this.grooveInnerDepthScale * depthFactor);
+      const grooveOuter = grooveInner + visualRadius * this.grooveThicknessFactor;
+      const grooveGeometry = new THREE.RingGeometry(grooveInner, grooveOuter, 96, 1, 0, Math.PI * 2);
+      const grooveMaterial = new THREE.MeshBasicMaterial({
+        color: 0x000000,
+        transparent: true,
+        opacity: this.grooveOpacityBase + this.grooveOpacityDepthScale * depthFactor,
+        depthTest: false,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+      const gm = new THREE.Mesh(grooveGeometry, grooveMaterial);
+      gm.position.set(p.center.x, p.center.y, 0.21);
+      gm.rotation.z = THREE.MathUtils.degToRad(p.cutAngleDeg ?? 0);
+      gm.renderOrder = this.layerOrder.orderPockets + 0.21;
+      gm.visible = this.layerVisibility.showPockets;
+      this.enforceRenderOrderControl(gm, { disableDepth: true });
+      this.scene.add(gm);
+      this.pocketGrooveMeshes.push(gm);
+
+      const rimInner = grooveOuter;
+      const rimOuter = rimInner + visualRadius * this.grooveRimThicknessFactor;
+      const rimGeometry = new THREE.RingGeometry(rimInner, rimOuter, 96, 1, 0, Math.PI * 2);
+      const rimMaterial = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: this.grooveRimOuterOpacity * (0.5 + 0.5 * depthFactor),
+        blending: THREE.AdditiveBlending,
+        depthTest: false,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+      const rm = new THREE.Mesh(rimGeometry, rimMaterial);
+      rm.position.set(p.center.x, p.center.y, 0.22);
+      rm.rotation.z = THREE.MathUtils.degToRad(p.cutAngleDeg ?? 0);
+      rm.renderOrder = this.layerOrder.orderPockets + 0.22;
+      rm.visible = this.layerVisibility.showPockets;
+      this.enforceRenderOrderControl(rm, { disableDepth: true });
+      this.scene.add(rm);
+      this.pocketRimMeshes.push(rm);
+
+      const rim2Outer = grooveInner;
+      const rim2Inner = Math.max(0.01, rim2Outer - visualRadius * this.grooveRimThicknessFactor);
+      const rim2Geometry = new THREE.RingGeometry(rim2Inner, rim2Outer, 96, 1, 0, Math.PI * 2);
+      const rim2Material = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: this.grooveRimInnerOpacity * (0.5 + 0.5 * depthFactor),
+        blending: THREE.AdditiveBlending,
+        depthTest: false,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+      const rm2 = new THREE.Mesh(rim2Geometry, rim2Material);
+      rm2.position.set(p.center.x, p.center.y, 0.22);
+      rm2.rotation.z = THREE.MathUtils.degToRad(p.cutAngleDeg ?? 0);
+      rm2.renderOrder = this.layerOrder.orderPockets + 0.22;
+      rm2.visible = this.layerVisibility.showPockets;
+      this.enforceRenderOrderControl(rm2, { disableDepth: true });
+      this.scene.add(rm2);
+      this.pocketRimMeshes.push(rm2);
+    });
   }
 
   private updatePocketDebugMaterials() {

@@ -256,49 +256,79 @@ export class Renderer extends BaseRenderer {
     const angleRad = (pocket.cutAngleDeg ?? 0) * (Math.PI / 180);
     const { x, y } = pocket.center;
 
+    // Map shelf depth to a 0..1 visual factor so deeper pockets look darker
+    const shelf = pocket.shelfDepth ?? CONFIG.POCKET_SHELF_DEPTH_IN ?? 0.5;
+    const depthFactor = Math.max(0, Math.min(1, shelf / 2.0));
+
     this.ctx.save();
     this.ctx.translate(x, y);
     this.ctx.rotate(angleRad);
 
-    // Draw pocket hole (black circle)
+    // Draw pocket hole (base)
     this.ctx.fillStyle = CONFIG.POCKET_COLOR;
     this.ctx.beginPath();
     this.ctx.arc(0, 0, radius, 0, Math.PI * 2);
     this.ctx.fill();
 
-    // Inner shadow
-    const gradient = this.ctx.createRadialGradient(
-      0,
-      0,
-      0,
-      0,
-      0,
-      radius
-    );
-    gradient.addColorStop(0, 'rgba(0, 0, 0, 1)');
-    gradient.addColorStop(1, 'rgba(50, 50, 50, 0.3)');
+    // Inner shadow scaled by depth (deeper = darker and broader)
+    const gradient = this.ctx.createRadialGradient(0, 0, 0, 0, 0, radius);
+    const centerAlpha = 0.7 + 0.3 * depthFactor; // 0.7..1.0
+    const edgeAlpha = 0.12 + 0.35 * depthFactor; // 0.12..0.47
+    gradient.addColorStop(0, `rgba(0, 0, 0, ${centerAlpha.toFixed(3)})`);
+    gradient.addColorStop(1, `rgba(20, 20, 20, ${edgeAlpha.toFixed(3)})`);
 
     this.ctx.fillStyle = gradient;
     this.ctx.beginPath();
     this.ctx.arc(0, 0, radius, 0, Math.PI * 2);
     this.ctx.fill();
 
-    // Directional highlight wedge to visualize rotation
+    // Directional highlight wedge reduced by depth (shallow = more highlight)
     const wedgeAngle = Math.PI / 3;
-    this.ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
-    this.ctx.beginPath();
-    this.ctx.moveTo(0, 0);
-    this.ctx.arc(0, 0, radius * 1.05, -wedgeAngle / 2, wedgeAngle / 2);
-    this.ctx.closePath();
-    this.ctx.fill();
+    const highlightAlpha = 0.12 * (1 - 0.7 * depthFactor); // 0.12..~0.036
+    if (highlightAlpha > 0.005) {
+      this.ctx.fillStyle = `rgba(255, 255, 255, ${highlightAlpha.toFixed(3)})`;
+      this.ctx.beginPath();
+      this.ctx.moveTo(0, 0);
+      this.ctx.arc(0, 0, radius * 1.05, -wedgeAngle / 2, wedgeAngle / 2);
+      this.ctx.closePath();
+      this.ctx.fill();
+    }
 
-    // Darken opposite wedge for additional contrast
-    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
+    // Darken opposite wedge for contrast (slightly scaled with depth)
+    const oppositeAlpha = 0.14 + 0.08 * depthFactor; // 0.14..0.22
+    this.ctx.fillStyle = `rgba(0, 0, 0, ${oppositeAlpha.toFixed(3)})`;
     this.ctx.beginPath();
     this.ctx.moveTo(0, 0);
     this.ctx.arc(0, 0, radius, Math.PI - wedgeAngle / 2, Math.PI + wedgeAngle / 2);
     this.ctx.closePath();
     this.ctx.fill();
+
+    // Subtle bottom groove ring near the deepest area (stronger with depth)
+    const grooveThickness = Math.max(1, radius * 0.08);
+    const grooveInner = radius * (0.18 + 0.22 * depthFactor);
+    const grooveOuter = grooveInner + grooveThickness;
+    // Subtle dark groove for depth
+    const grooveAlpha = 0.08 + 0.22 * depthFactor; // 0.08..0.30
+    this.ctx.fillStyle = `rgba(0, 0, 0, ${grooveAlpha.toFixed(3)})`;
+    this.ctx.beginPath();
+    // Outer circle
+    this.ctx.arc(0, 0, grooveOuter, 0, Math.PI * 2);
+    // Inner cutout
+    this.ctx.arc(0, 0, grooveInner, 0, Math.PI * 2, true);
+    this.ctx.closePath();
+    this.ctx.fill('evenodd');
+
+    // Very faint thin white outline on groove edges for readability
+    const pixelWidth = 0.75 / Math.max(1e-6, (this as any).scale ?? 1);
+    const strokeWidth = Math.max(pixelWidth, radius * 0.01);
+    this.ctx.lineWidth = strokeWidth;
+    this.ctx.strokeStyle = `rgba(255, 255, 255, ${(0.10 * (1 - 0.3 * depthFactor)).toFixed(3)})`;
+    this.ctx.beginPath();
+    this.ctx.arc(0, 0, grooveInner, 0, Math.PI * 2);
+    this.ctx.stroke();
+    this.ctx.beginPath();
+    this.ctx.arc(0, 0, grooveOuter, 0, Math.PI * 2);
+    this.ctx.stroke();
 
     this.ctx.restore();
   }

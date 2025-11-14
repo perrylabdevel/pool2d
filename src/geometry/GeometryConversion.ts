@@ -43,6 +43,7 @@ export interface LegacyGeometry {
 
   // Global
   POCKET_SHELF_DEPTH_IN: number;
+  POCKET_SHELF_DEPTH_SIDE_IN?: number;
   FRAME_OFFSET_IN: number;
 }
 
@@ -88,6 +89,7 @@ export function modernToLegacy(modern: ModernPocketGeometry): LegacyGeometry {
 
     // Global parameters
     POCKET_SHELF_DEPTH_IN: modern.corner.shelfDepth,
+    POCKET_SHELF_DEPTH_SIDE_IN: modern.side.shelfDepth,
     FRAME_OFFSET_IN: CONFIG.FRAME_OFFSET_IN,
   };
 }
@@ -250,6 +252,8 @@ export function legacyToModern(legacy: LegacyGeometry): ModernPocketGeometry {
     global: {
       cutAngleAdjust: 0,
       verticalAngle: 13.5,
+      sidePocketOffset: legacy.SIDE_POCKET_OUTWARD_OFFSET_IN,
+      cornerPocketOffset: legacy.CORNER_POCKET_OUTWARD_OFFSET_IN ?? 0,
     },
   };
 }

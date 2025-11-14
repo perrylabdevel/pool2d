@@ -185,6 +185,14 @@ export class ModernGeometryPanel {
           0.05,
           ranges.railCurve.typical
         )}
+        ${this.sliderRow(
+          'modern-side-shelf-depth',
+          'Shelf Depth (in)',
+          ranges.shelfDepth.min,
+          ranges.shelfDepth.max,
+          0.05,
+          ranges.shelfDepth.typical
+        )}
       </div>
     `;
   }
@@ -380,6 +388,15 @@ export class ModernGeometryPanel {
         },
         formatDigits: 2,
       },
+      {
+        sliderId: 'modern-side-shelf-depth',
+        labelId: 'modern-side-shelf-depth-val',
+        onChange: (v) => {
+          this.currentGeometry.side.shelfDepth = v!;
+          this.validateAndUpdateUI();
+        },
+        formatDigits: 2,
+      },
 
       // Corner pocket sliders
       {
@@ -494,6 +511,7 @@ export class ModernGeometryPanel {
     this.setSliderValue('modern-side-rail-depth', this.currentGeometry.side.railDepth);
     this.setSliderValue('modern-side-jaw-depth', this.currentGeometry.side.jawDepth);
     this.setSliderValue('modern-side-rail-curve', this.currentGeometry.side.railCurve ?? 0);
+    this.setSliderValue('modern-side-shelf-depth', this.currentGeometry.side.shelfDepth);
 
     this.setSliderValue('modern-corner-mouth', this.currentGeometry.corner.mouthWidth);
     this.setSliderValue('modern-corner-throat', this.currentGeometry.corner.throatWidth);

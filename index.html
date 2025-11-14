@@ -47,6 +47,15 @@
             </button>
             <button
               class="panel-launcher-btn"
+              data-panel-id="pocket-tuning-panel"
+              title="Pocket Tuning (P)"
+            >
+              <span class="panel-launcher-icon">🕳</span>
+              <span class="panel-launcher-label">Pockets</span>
+              <span class="panel-launcher-shortcut">P</span>
+            </button>
+            <button
+              class="panel-launcher-btn"
               data-panel-id="render-layer-panel"
               title="Render Layers (L)"
             >
@@ -781,6 +790,107 @@
                       step="0.05"
                       value="0.45"
                     />
+                  </div>
+                  <h4 class="settings-group-title">🕳 Pocket Groove</h4>
+                  <div class="slider-group">
+                    <label class="slider-label" for="groove-inner-base">
+                      <span class="slider-title">Inner Radius Base</span>
+                      <span class="slider-value" id="groove-inner-base-value">0.18</span>
+                    </label>
+                    <input type="range" id="groove-inner-base" min="0.05" max="0.5" step="0.01" value="0.18" />
+                  </div>
+                  <div class="slider-group">
+                    <label class="slider-label" for="groove-color">
+                      <span class="slider-title">Groove Color</span>
+                    </label>
+                    <input type="color" id="groove-color" value="#000000" style="height: 28px; width: 48px; padding: 0; border: none; background: transparent;" />
+                  </div>
+                  <div class="slider-group">
+                    <label class="slider-label" for="groove-rim-color">
+                      <span class="slider-title">Rim Color</span>
+                    </label>
+                    <input type="color" id="groove-rim-color" value="#ffffff" style="height: 28px; width: 48px; padding: 0; border: none; background: transparent;" />
+                  </div>
+                  <h4 class="settings-group-title">🎨 Pocket Shades</h4>
+                  <div class="slider-group">
+                    <label class="slider-label" for="pocket-bottom-color">
+                      <span class="slider-title">Bottom Fill</span>
+                    </label>
+                    <input type="color" id="pocket-bottom-color" value="#000000" style="height: 28px; width: 48px; padding: 0; border: none; background: transparent;" />
+                  </div>
+                  <div class="slider-group">
+                    <label class="slider-label" for="pocket-gradient-center">
+                      <span class="slider-title">Gradient Center</span>
+                    </label>
+                    <input type="color" id="pocket-gradient-center" value="#050505" style="height: 28px; width: 48px; padding: 0; border: none; background: transparent;" />
+                  </div>
+                  <div class="slider-group">
+                    <label class="slider-label" for="pocket-gradient-edge">
+                      <span class="slider-title">Gradient Edge</span>
+                    </label>
+                    <input type="color" id="pocket-gradient-edge" value="#5a5a5a" style="height: 28px; width: 48px; padding: 0; border: none; background: transparent;" />
+                  </div>
+                  <div class="slider-group">
+                    <label class="slider-label" for="pocket-gradient-strength">
+                      <span class="slider-title">Gradient Strength</span>
+                      <span class="slider-value" id="pocket-gradient-strength-value">1.00</span>
+                    </label>
+                    <input type="range" id="pocket-gradient-strength" min="0" max="1" step="0.01" value="1.00" />
+                  </div>
+                  <div class="slider-group">
+                    <label class="slider-label" for="pocket-wall-color">
+                      <span class="slider-title">Wall Color</span>
+                    </label>
+                    <input type="color" id="pocket-wall-color" value="#0a0a0a" style="height: 28px; width: 48px; padding: 0; border: none; background: transparent;" />
+                  </div>
+                  <div class="slider-group">
+                    <label class="slider-label" for="groove-inner-depth">
+                      <span class="slider-title">Inner Radius Depth Scale</span>
+                      <span class="slider-value" id="groove-inner-depth-value">0.22</span>
+                    </label>
+                    <input type="range" id="groove-inner-depth" min="0.0" max="0.6" step="0.01" value="0.22" />
+                  </div>
+                  <div class="slider-group">
+                    <label class="slider-label" for="groove-thickness">
+                      <span class="slider-title">Groove Thickness</span>
+                      <span class="slider-value" id="groove-thickness-value">0.08</span>
+                    </label>
+                    <input type="range" id="groove-thickness" min="0.01" max="0.2" step="0.005" value="0.08" />
+                  </div>
+                  <div class="slider-group">
+                    <label class="slider-label" for="groove-opacity-base">
+                      <span class="slider-title">Groove Opacity Base</span>
+                      <span class="slider-value" id="groove-opacity-base-value">0.18</span>
+                    </label>
+                    <input type="range" id="groove-opacity-base" min="0.0" max="1.0" step="0.02" value="0.18" />
+                  </div>
+                  <div class="slider-group">
+                    <label class="slider-label" for="groove-opacity-depth">
+                      <span class="slider-title">Groove Opacity Depth</span>
+                      <span class="slider-value" id="groove-opacity-depth-value">0.36</span>
+                    </label>
+                    <input type="range" id="groove-opacity-depth" min="0.0" max="1.0" step="0.02" value="0.36" />
+                  </div>
+                  <div class="slider-group">
+                    <label class="slider-label" for="groove-rim-thickness">
+                      <span class="slider-title">Rim Thickness</span>
+                      <span class="slider-value" id="groove-rim-thickness-value">0.02</span>
+                    </label>
+                    <input type="range" id="groove-rim-thickness" min="0.005" max="0.08" step="0.005" value="0.02" />
+                  </div>
+                  <div class="slider-group">
+                    <label class="slider-label" for="groove-rim-outer-opacity">
+                      <span class="slider-title">Rim Outer Opacity</span>
+                      <span class="slider-value" id="groove-rim-outer-opacity-value">0.10</span>
+                    </label>
+                    <input type="range" id="groove-rim-outer-opacity" min="0.0" max="0.5" step="0.02" value="0.10" />
+                  </div>
+                  <div class="slider-group">
+                    <label class="slider-label" for="groove-rim-inner-opacity">
+                      <span class="slider-title">Rim Inner Opacity</span>
+                      <span class="slider-value" id="groove-rim-inner-opacity-value">0.08</span>
+                    </label>
+                    <input type="range" id="groove-rim-inner-opacity" min="0.0" max="0.5" step="0.02" value="0.08" />
                   </div>
                   <div class="slider-group">
                     <label class="slider-label" for="lighting-rail-shadow">
