@@ -2754,12 +2754,16 @@ export class Renderer3D extends BaseRenderer {
    * Returns a map of ballId -> dataURL (PNG). Cached after first generation.
    */
   async generateBallIcons(sizePx: number = 64): Promise<Map<number, string>> {
-    const size = Math.max(8, Math.min(64, Math.round(sizePx)));
+    const size = Math.max(8, Math.min(128, Math.round(sizePx)));
     const cached = this.ballIconCaches.get(size);
     if (cached) return cached;
 
     // Use main WebGL context via an offscreen render target (avoids cross-context texture issues)
-    const rt = new THREE.WebGLRenderTarget(size, size, { depthBuffer: false, stencilBuffer: false });
+    const rt = new THREE.WebGLRenderTarget(size, size, {
+      depthBuffer: false,
+      stencilBuffer: false,
+      samples: 8  // Enable 8x MSAA for smooth antialiasing
+    });
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(26, 1, 0.01, 10);
@@ -2803,7 +2807,7 @@ export class Renderer3D extends BaseRenderer {
         const radius = geom.boundingSphere?.radius ?? baseRadius;
         // Center and scale - use larger size to fill the icon space better
         geom.translate(-center.x, -center.y, -center.z);
-        const targetRadius = 0.9;  // Larger to fill more of the available space
+        const targetRadius = 0.54;  // Larger to fill more of the available space
         const scale = targetRadius / Math.max(1e-6, radius);
         geom.scale(scale, scale, scale);
         mat = template.material.clone();
@@ -4380,17 +4384,59 @@ export class Renderer3D extends BaseRenderer {
       ctx.beginPath();
       ctx.arc(screenPos.x, screenPos.y, 25 * pulseScale, 0, Math.PI * 2);
       ctx.stroke();
-
-      // Draw label
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-      ctx.font = 'bold 14px Arial';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-      ctx.shadowBlur = 4;
-      ctx.fillText(pocket.label, screenPos.x, screenPos.y + 50);
-      ctx.shadowBlur = 0;
     });
+  }
+
+  /**
+   * Highlight the called pocket (after it's been selected)
+   */
+  highlightCalledPocket(pocket: { id: string; label: string; center: { x: number; y: number } }) {
+    const ctx = this.uiCtx;
+    if (!ctx) return;
+
+    // Convert world coordinates to screen coordinates
+    const screenPos = this.worldToScreen(pocket.center.x, pocket.center.y);
+    if (!screenPos) return;
+
+    // Time-based gentle pulsing
+    const time = Date.now() / 1000;
+    const pulseScale = 0.9 + Math.sin(time * 2) * 0.1;
+
+    // Draw outer glow (green to indicate called/locked pocket)
+    const glowRadius = 35 * pulseScale;
+    const gradient = ctx.createRadialGradient(
+      screenPos.x, screenPos.y, 0,
+      screenPos.x, screenPos.y, glowRadius
+    );
+    gradient.addColorStop(0, 'rgba(0, 255, 100, 0.5)');
+    gradient.addColorStop(0.5, 'rgba(0, 255, 100, 0.25)');
+    gradient.addColorStop(1, 'rgba(0, 255, 100, 0)');
+
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(screenPos.x, screenPos.y, glowRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Draw inner circle
+    ctx.strokeStyle = 'rgba(0, 255, 100, 0.9)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(screenPos.x, screenPos.y, 20 * pulseScale, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Draw checkmark icon
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+    ctx.shadowBlur = 3;
+    ctx.beginPath();
+    ctx.moveTo(screenPos.x - 8, screenPos.y);
+    ctx.lineTo(screenPos.x - 3, screenPos.y + 5);
+    ctx.lineTo(screenPos.x + 8, screenPos.y - 6);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
   }
 
   /**

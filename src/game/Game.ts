@@ -72,7 +72,7 @@ export class Game {
   rules: EightBallRules;
   predictor: Predictor;
   mode: GameMode;
-  currentRuleset: string = 'HOUSE_8BALL'; // House rules as default
+  currentRuleset: string = 'TOURNAMENT'; // Tournament rules as default
   private lastBallScale: number;
   private _lastCanvasScale?: number;
   private currentCalledPocketId: string | null = null;
@@ -134,7 +134,7 @@ export class Game {
     this.renderLayersPanel = new RenderLayerPanel(this.hud.settingsManager, this.renderer);
     this.rules = new EightBallRules(RULES_PRESETS[this.currentRuleset]);
     this.predictor = new Predictor();
-    this.mode = GameMode.PRACTICE;
+    this.mode = GameMode.EIGHT_BALL;
     this.lastBallScale = CONFIG.BALL_SCALE ?? 1;
 
     // Initialize turn-based gameplay components (only for EIGHT_BALL mode)
@@ -318,11 +318,12 @@ export class Game {
 
       // Regenerate icons if size changed materially
       const regen = () => {
-        if ((this as any)._lastChipSizePx === chipSizePx) return;
+        const iconSizePx = this.getHudChipIconSizePx();
+        if ((this as any)._lastChipIconSizePx === iconSizePx) return;
         if (!(this.renderer as any).ballModelsLoaded) return; // defer until textures ready
-        (this as any)._lastChipSizePx = chipSizePx;
+        (this as any)._lastChipIconSizePx = iconSizePx;
         if ((this.renderer as any).generateBallIcons) {
-          (this.renderer as any).generateBallIcons(chipSizePx).then((map: Map<number, string>) => {
+          (this.renderer as any).generateBallIcons(iconSizePx).then((map: Map<number, string>) => {
             (window as any).__BALL_ICONS__ = map;
             this.updateHUDPlayerBalls();
           }).catch(() => {/* ignore */});
@@ -550,10 +551,8 @@ export class Game {
     // Generate ball icon thumbnails for HUD and update once ready
     if ((this.renderer as any).generateBallIcons) {
       const tryGenerate = () => {
-        const rootStyle = getComputedStyle(document.documentElement);
-        const sizeVar = rootStyle.getPropertyValue('--ball-chip-size').trim();
-        const parsed = Number(sizeVar.replace('px','')) || this.getHudChipSizePx();
-        (this.renderer as any).generateBallIcons(parsed).then((map: Map<number, string>) => {
+        const iconSizePx = this.getHudChipIconSizePx();
+        (this.renderer as any).generateBallIcons(iconSizePx).then((map: Map<number, string>) => {
           (window as any).__BALL_ICONS__ = map;
           this.updateHUDPlayerBalls();
         }).catch(() => {/* ignore icon errors */});
@@ -675,7 +674,22 @@ export class Game {
       if (this.stateMachine && this.stateMachine.state !== GameState.GAME_OVER) {
         this.stateMachine.transitionTo(GameState.GAME_OVER);
       }
-      this.hud.showFoul(`Player ${winner} wins!`);
+
+      // Check if winner is AI or human player
+      const winningPlayer = this.players.find(p => p.id === winner);
+      console.log('[8-Ball] Winning player:', { id: winningPlayer?.id, type: winningPlayer?.type, isAI: winningPlayer?.isAI() });
+
+      let winnerMessage: string;
+      if (winningPlayer && winningPlayer.isAI()) {
+        winnerMessage = 'AI wins!';
+      } else if (winner === 1) {
+        winnerMessage = 'You win!';
+      } else {
+        winnerMessage = `Player ${winner} wins!`;
+      }
+
+      console.log('[8-Ball] Winner message:', winnerMessage);
+      this.hud.showFoul(winnerMessage);
     };
 
     // Initialize state machine
@@ -927,7 +941,10 @@ export class Game {
     
     // Check if all balls are sleeping
     const allSleeping = this.world.balls.every(b => b.pocketed || b.sleeping);
-    if (allSleeping && !this.canShoot) {
+    const matchOver =
+      this.mode === GameMode.EIGHT_BALL && this.rules.gameState === RulesGameState.GAME_OVER;
+
+    if (allSleeping && !this.canShoot && !matchOver) {
       // Check for shot capture completion
       if (shotCapture.isCapturing() && this.cueBall) {
         const targetBall = this.world.balls.find(b => b.id !== 0 && !b.pocketed);
@@ -943,8 +960,6 @@ export class Game {
         this.arcadeMode.onShotComplete(this.world.balls);
       }
 
-      const matchOver =
-        this.mode === GameMode.EIGHT_BALL && this.rules.gameState === RulesGameState.GAME_OVER;
       this.canShoot = !matchOver;
 
       if (this.cueBall && this.cueBall.pocketed && !matchOver) {
@@ -1085,6 +1100,15 @@ export class Game {
         const b = balls.find(x => x.id === id);
         return b && !b.pocketed;
       });
+
+      // If player has cleared all their group balls, add the 8-ball
+      if (remaining.length === 0) {
+        const eightBall = balls.find(b => b.id === 8);
+        if (eightBall && !eightBall.pocketed) {
+          remaining.push(8);
+        }
+      }
+
       return remaining;
     };
 
@@ -1104,6 +1128,13 @@ export class Game {
 
   private getHudChipSizePx(): number {
     return Math.max(8, Math.min(128, CONFIG.HUD_BALL_CHIP_SIZE_PX ?? 28));
+  }
+
+  private getHudChipIconSizePx(): number {
+    const baseSizePx = this.getHudChipSizePx();
+    // Multiply by device pixel ratio for retina displays to generate higher quality icons
+    const dpr = Math.min(window.devicePixelRatio || 1, 2); // Cap at 2x to avoid excessive memory
+    return Math.max(8, Math.min(128, Math.round(baseSizePx * dpr)));
   }
 
   /**
@@ -1131,6 +1162,7 @@ export class Game {
       if (elapsed >= this.ai.thinkingTime) {
         // Select shot
         console.log('[AI] Selecting shot for player', currentPlayer.id, 'group:', currentPlayer.group);
+
         this.aiSelectedShot = this.ai.selectShot(this.world, currentPlayer);
 
         if (!this.aiSelectedShot) {
@@ -1140,6 +1172,24 @@ export class Game {
           return;
         }
         console.log('[AI] Selected shot:', this.aiSelectedShot);
+
+        // Check if AI needs to call pocket for 8-ball AFTER selecting shot
+        const config = this.rules.config;
+        const requiresCall = config.requireCalled8Ball || config.requireCalledShots;
+        if (requiresCall && !this.currentCalledPocketId) {
+          const hasCleared = this.rules.hasPlayerClearedGroup(currentPlayer.id, this.world.balls);
+          if (hasCleared) {
+            const eightBall = this.world.balls.find((ball) => ball.id === BALL_8);
+            if (eightBall && !eightBall.pocketed && this.aiSelectedShot.targetBall.id === BALL_8) {
+              // Call the pocket the AI is actually aiming for
+              const targetPocketId = this.aiSelectedShot.pocket.id;
+              if (targetPocketId) {
+                this.setCalledPocket(targetPocketId, false);
+                console.log(`🤖 AI called pocket: ${this.getPocketLabel(targetPocketId)}`);
+              }
+            }
+          }
+        }
       }
     } else {
       // Animate cue like a real player, then execute the shot
@@ -1384,6 +1434,15 @@ export class Game {
     // Highlight pockets when waiting for pocket call
     if (this.waitingForPocketCall) {
       this.renderer.highlightPocketsForSelection(this.getPocketChoices());
+    }
+
+    // Show called pocket indicator if a pocket has been called
+    if (this.currentCalledPocketId && !this.waitingForPocketCall) {
+      const allPockets = this.getPocketChoices();
+      const calledPocket = allPockets.find(p => p.id === this.currentCalledPocketId);
+      if (calledPocket) {
+        this.renderer.highlightCalledPocket(calledPocket);
+      }
     }
 
     this.debug.draw(this.world);

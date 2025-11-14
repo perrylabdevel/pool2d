@@ -72,6 +72,7 @@ export const CONFIG = {
   AMBIENT_INTENSITY: 1.1,
   DIRECTIONAL_INTENSITY: 1.6,
   ACCENT_INTENSITY: 0.5,
+  HUD_BALL_CHIP_SIZE_PX: 42,
 
   // Cue visuals
   CUE_LENGTH_IN: 58, // Standard pool cue length (can extend off-screen)

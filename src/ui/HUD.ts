@@ -165,6 +165,14 @@ export class HUD {
   }
 
   /**
+   * Show or hide the Player 2 panel (for single-player vs multiplayer modes)
+   */
+  setPlayer2Visible(visible: boolean) {
+    if (!this.player2Panel) return;
+    this.player2Panel.style.display = visible ? 'flex' : 'none';
+  }
+
+  /**
    * Render player's remaining balls.
    * If remainingIds is null, show 7 placeholder dots (group not yet assigned).
    * Otherwise, show numbered chips for each remaining group ball id.
@@ -207,6 +215,62 @@ export class HUD {
       }
       ballsContainer.appendChild(chip);
     }
+
+    // Show 8-ball if player has cleared their group
+    if (remainingSet.has(8)) {
+      const chip = document.createElement('span');
+      chip.className = 'ball-chip';
+      if (icons && icons.get && icons.has(8)) {
+        const img = document.createElement('img');
+        img.src = icons.get(8)!;
+        img.alt = 'Ball 8';
+        chip.classList.add('has-image');
+        chip.appendChild(img);
+      }
+      ballsContainer.appendChild(chip);
+    }
+  }
+
+  /**
+   * Render all remaining balls (for practice mode and arcade modes).
+   * Shows all numbered balls 1-15 that are still on the table.
+   */
+  updateAllBalls(player: number, allRemainingIds: number[]) {
+    const panel = (player === 1 ? this.player1Panel : this.player2Panel) as HTMLElement | null;
+    if (!panel) return;
+    const ballsContainer = panel.querySelector('.balls-remaining') as HTMLElement | null;
+    if (!ballsContainer) return;
+    ballsContainer.innerHTML = '';
+
+    const remainingSet = new Set(allRemainingIds);
+    const allBallIds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+
+    const icons: Map<number, string> | undefined = (window as any).__BALL_ICONS__;
+    for (const id of allBallIds) {
+      const chip = document.createElement('span');
+      const isRemaining = remainingSet.has(id);
+      const isSolid = id >= 1 && id <= 7;
+      const isStripe = id >= 9 && id <= 15;
+      const is8Ball = id === 8;
+
+      let className = 'ball-chip';
+      if (isSolid) className += ' solids';
+      else if (isStripe) className += ' stripes';
+      if (!isRemaining) className += ' empty';
+
+      chip.className = className;
+
+      if (isRemaining) {
+        if (icons && icons.get && icons.has(id)) {
+          const img = document.createElement('img');
+          img.src = icons.get(id)!;
+          img.alt = `Ball ${id}`;
+          chip.classList.add('has-image');
+          chip.appendChild(img);
+        }
+      }
+      ballsContainer.appendChild(chip);
+    }
   }
 
   registerPanel(id: string, panel: UIPanel, options?: PanelRegistrationOptions) {
@@ -240,7 +304,23 @@ export class HUD {
     if (!toggleButton) return;
 
     toggleButton.setAttribute('type', 'button');
-    toggleButton.setAttribute('aria-expanded', 'true');
+
+    // Load saved collapsed state from localStorage
+    const savedState = localStorage.getItem('dock-collapsed');
+    const initiallyCollapsed = savedState === 'true';
+
+    // Apply initial state
+    if (initiallyCollapsed) {
+      launcher.classList.add('collapsed');
+      const rightDock = document.getElementById('dock-right');
+      const leftDock = document.getElementById('dock-left');
+      const workspace = document.getElementById('workspace');
+      if (rightDock) rightDock.classList.add('collapsed');
+      if (leftDock) leftDock.classList.add('collapsed');
+      if (workspace) workspace.classList.add('docks-collapsed');
+    }
+
+    toggleButton.setAttribute('aria-expanded', initiallyCollapsed ? 'false' : 'true');
 
     toggleButton.addEventListener('click', (event) => {
       event.preventDefault();
@@ -258,6 +338,10 @@ export class HUD {
       if (workspace) {
         workspace.classList.toggle('docks-collapsed', collapsed);
       }
+
+      // Save state to localStorage
+      localStorage.setItem('dock-collapsed', collapsed.toString());
+
       console.log('[HUD] Dock toggle state changed', {
         collapsed,
         leftDockWidth: leftDock?.offsetWidth ?? null,
