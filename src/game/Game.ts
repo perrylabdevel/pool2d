@@ -9,7 +9,7 @@ import { HUD } from '../ui/HUD';
 import { CONFIG, CUE_BALL_POSITION, RACK_POSITIONS, BALL_8 } from '../config';
 import { getTableGeometry } from '../geometry/Geometry';
 import { clampBallInHand } from '../geometry/Placement';
-import { EightBallRules, GameState as RulesGameState } from '../rules/EightBall';
+import { EightBallRules, GameState as RulesGameState, type BallInHandPlacement } from '../rules/EightBall';
 import { RULES_PRESETS, getRulesDescription } from '../rules/RulesConfig';
 import { physicsRecorder } from '../debug/PhysicsRecorder';
 import { Predictor } from '../physics/Prediction';
@@ -77,6 +77,7 @@ export class Game {
   private _lastCanvasScale?: number;
   private currentCalledPocketId: string | null = null;
   private waitingForPocketCall: boolean = false;
+  private pendingBallInHandForAI: boolean = false;
 
   // Turn-based gameplay
   players: Player[];
@@ -186,8 +187,13 @@ export class Game {
   
   isPlayerInputBlocked(): boolean {
     // Block input during AI's turn in 8-ball mode
-    if (this.mode === GameMode.EIGHT_BALL && this.stateMachine) {
-      return this.stateMachine.isAITurn();
+    if (this.mode === GameMode.EIGHT_BALL) {
+      if (this.pendingBallInHandForAI) {
+        return true;
+      }
+      if (this.stateMachine) {
+        return this.stateMachine.isAITurn();
+      }
     }
     return false;
   }
@@ -306,17 +312,17 @@ export class Game {
       this.input.updateScale(detail.scale);
       this.debug.resize(detail.width, detail.height, detail.scale, detail.offsetX, detail.offsetY);
 
-      // Sync HUD ball chip size (in CSS) with actual ball diameter in pixels
-      const diameterPx = Math.max(8, Math.min(128, Math.round((CONFIG.BALL_RADIUS * 2) * detail.scale)));
-      document.documentElement.style.setProperty('--ball-chip-size', `${diameterPx}px`);
+      // Sync HUD ball chip size (in CSS) with configured default rather than table scale
+      const chipSizePx = this.getHudChipSizePx();
+      document.documentElement.style.setProperty('--ball-chip-size', `${chipSizePx}px`);
 
       // Regenerate icons if size changed materially
       const regen = () => {
-        if ((this as any)._lastChipSizePx === diameterPx) return;
+        if ((this as any)._lastChipSizePx === chipSizePx) return;
         if (!(this.renderer as any).ballModelsLoaded) return; // defer until textures ready
-        (this as any)._lastChipSizePx = diameterPx;
+        (this as any)._lastChipSizePx = chipSizePx;
         if ((this.renderer as any).generateBallIcons) {
-          (this.renderer as any).generateBallIcons(diameterPx).then((map: Map<number, string>) => {
+          (this.renderer as any).generateBallIcons(chipSizePx).then((map: Map<number, string>) => {
             (window as any).__BALL_ICONS__ = map;
             this.updateHUDPlayerBalls();
           }).catch(() => {/* ignore */});
@@ -546,7 +552,7 @@ export class Game {
       const tryGenerate = () => {
         const rootStyle = getComputedStyle(document.documentElement);
         const sizeVar = rootStyle.getPropertyValue('--ball-chip-size').trim();
-        const parsed = Number(sizeVar.replace('px','')) || Math.round(CONFIG.BALL_RADIUS * 2 * (this.renderer as any).scale || 32);
+        const parsed = Number(sizeVar.replace('px','')) || this.getHudChipSizePx();
         (this.renderer as any).generateBallIcons(parsed).then((map: Map<number, string>) => {
           (window as any).__BALL_ICONS__ = map;
           this.updateHUDPlayerBalls();
@@ -596,15 +602,22 @@ export class Game {
     // Initialize mode-specific gameplay
     if (this.mode === GameMode.EIGHT_BALL) {
       this.initializePlayers();
+      this.hud.setPlayer2Visible(true); // Show Player 2 in 8-ball mode
     } else if (this.mode === GameMode.TIME_ATTACK) {
       this.initializeTimeAttack();
+      this.hud.setPlayer2Visible(false); // Hide Player 2 in arcade modes
     } else if (this.mode === GameMode.PERFECT_GAME) {
       this.initializePerfectGame();
+      this.hud.setPlayer2Visible(false); // Hide Player 2 in arcade modes
     } else if (this.mode === GameMode.SPEED_POOL) {
       this.initializeSpeedPool();
+      this.hud.setPlayer2Visible(false); // Hide Player 2 in arcade modes
     } else {
       // Hide turn indicator in practice mode
       this.hud.hideTurnIndicator();
+      // Set player 1 as active in practice mode
+      this.hud.setTurn(1, false);
+      this.hud.setPlayer2Visible(false); // Hide Player 2 in practice mode
     }
 
     this.lastBallScale = CONFIG.BALL_SCALE ?? 1;
@@ -691,6 +704,8 @@ export class Game {
     // Update HUD
     this.hud.setMode('Time Attack');
     this.hud.hideTurnIndicator();
+    // Set player 1 as active in Time Attack mode
+    this.hud.setTurn(1, false);
 
     console.log('⏱️ Time Attack mode initialized');
   }
@@ -703,6 +718,8 @@ export class Game {
     // Update HUD
     this.hud.setMode('Perfect Game');
     this.hud.hideTurnIndicator();
+    // Set player 1 as active in Perfect Game mode
+    this.hud.setTurn(1, false);
 
     console.log('🎯 Perfect Game mode initialized');
   }
@@ -715,6 +732,8 @@ export class Game {
     // Update HUD
     this.hud.setMode('Speed Pool');
     this.hud.hideTurnIndicator();
+    // Set player 1 as active in Speed Pool mode
+    this.hud.setTurn(1, false);
 
     console.log('⚡ Speed Pool mode initialized');
   }
@@ -749,6 +768,7 @@ export class Game {
     // Reset pocket calling state
     this.currentCalledPocketId = null;
     this.waitingForPocketCall = false;
+    this.pendingBallInHandForAI = false;
 
     // Reset AI state
     this.aiThinkingStartTime = 0;
@@ -998,6 +1018,7 @@ export class Game {
             this.stateMachine.transitionTo(GameState.AI_TURN);
             this.aiThinkingStartTime = performance.now();
             this.aiSelectedShot = null;
+            this.hud.setTurn(currentPlayer.id, true);
             this.hud.showAIThinking();
           } else {
             console.log('[8-Ball] Transitioning BREAK -> PLAYER_TURN');
@@ -1009,6 +1030,7 @@ export class Game {
 
       // Check if current player needs to call pocket (after turn is determined)
       this.checkAndPromptPocketCall();
+      this.updateBallInHandAssistState();
     }
   }
 
@@ -1026,6 +1048,7 @@ export class Game {
         this.stateMachine.transitionTo(GameState.AI_TURN);
         this.aiThinkingStartTime = performance.now();
         this.aiSelectedShot = null;
+        this.hud.setTurn(currentPlayer.id, true);
         this.hud.showAIThinking();
       } else {
         this.stateMachine.transitionTo(GameState.PLAYER_TURN);
@@ -1040,6 +1063,19 @@ export class Game {
   private updateHUDPlayerBalls() {
     if (!this.hud) return;
     const balls = this.world?.balls ?? [];
+
+    // In practice mode or arcade modes, show all remaining balls on the table
+    if (this.mode !== GameMode.EIGHT_BALL) {
+      const allRemainingIds = balls
+        .filter(b => b.id > 0 && !b.pocketed) // Exclude cue ball (id=0) and pocketed balls
+        .map(b => b.id);
+
+      // Show all balls in player 1's panel only (player 2 panel is hidden)
+      this.hud.updateAllBalls(1, allRemainingIds);
+      return;
+    }
+
+    // 8-Ball mode: show grouped balls
     const remainingForGroup = (group: BallGroup | null): number[] | null => {
       if (group === null) return null;
       const targetIds = group === BallGroup.SOLIDS
@@ -1056,7 +1092,7 @@ export class Game {
     const p2 = this.players && this.players.length > 1 ? this.players[1] : undefined;
 
     if (!p1 || !p2) {
-      // Players not initialized yet (e.g., practice mode or early init) – show placeholders
+      // Players not initialized yet – show placeholders
       this.hud.updatePlayerBalls(1, null);
       this.hud.updatePlayerBalls(2, null);
       return;
@@ -1064,6 +1100,10 @@ export class Game {
 
     this.hud.updatePlayerBalls(1, remainingForGroup(p1.group ?? null));
     this.hud.updatePlayerBalls(2, remainingForGroup(p2.group ?? null));
+  }
+
+  private getHudChipSizePx(): number {
+    return Math.max(8, Math.min(128, CONFIG.HUD_BALL_CHIP_SIZE_PX ?? 28));
   }
 
   /**
@@ -1076,6 +1116,13 @@ export class Game {
 
     const currentPlayer = this.players[this.currentPlayerIndex];
     if (!currentPlayer.isAI()) return;
+
+    if (this.pendingBallInHandForAI) {
+      const placed = this.placeCueBallForAI();
+      if (!placed) {
+        return;
+      }
+    }
 
     // If AI hasn't selected a shot yet, wait for thinking time
     if (!this.aiSelectedShot) {
@@ -1785,6 +1832,118 @@ export class Game {
       return `${message} Place the cue ball behind the head string.`;
     }
     return message;
+  }
+
+  private updateBallInHandAssistState(): void {
+    if (this.mode !== GameMode.EIGHT_BALL) {
+      this.pendingBallInHandForAI = false;
+      return;
+    }
+    if (this.isBallInHandPhase() && this.isCurrentShooterAI()) {
+      this.pendingBallInHandForAI = true;
+    } else {
+      this.pendingBallInHandForAI = false;
+    }
+  }
+
+  private placeCueBallForAI(): boolean {
+    if (!this.pendingBallInHandForAI || !this.cueBall) {
+      return this.pendingBallInHandForAI ? false : true;
+    }
+
+    const placement = this.rules.getBallInHandPlacement();
+    const geom = getTableGeometry();
+    const radius = this.cueBall.radius;
+    const halfW = (geom.playWidthIn ?? CONFIG.TABLE_WIDTH) / 2;
+    const halfH = (geom.playHeightIn ?? CONFIG.TABLE_HEIGHT) / 2;
+
+    const candidates = this.getAIBallInHandCandidates(placement, radius);
+    let fallback: { x: number; y: number } | null = null;
+
+    const clampTarget = (target: { x: number; y: number }) => {
+      const clampResult = clampBallInHand(
+        target,
+        radius,
+        this.world.rails,
+        this.world.pockets,
+        {
+          iterations: CONFIG.BALL_IN_HAND_ITERATIONS,
+          pocketMargin: CONFIG.BALL_IN_HAND_POCKET_MARGIN_IN,
+        }
+      );
+      const boundedX = Math.max(-halfW + radius, Math.min(halfW - radius, clampResult.x));
+      const boundedY = Math.max(-halfH + radius, Math.min(halfH - radius, clampResult.y));
+      const kitchenLimitedX = this.applyKitchenLimit(boundedX, radius);
+      return { x: kitchenLimitedX, y: boundedY };
+    };
+
+    for (const candidate of candidates) {
+      const spot = clampTarget(candidate);
+      if (this.isCueBallSpotOpen(spot.x, spot.y, radius)) {
+        this.commitAIBallPlacement(spot.x, spot.y);
+        return true;
+      }
+      if (!fallback) {
+        fallback = spot;
+      }
+    }
+
+    if (fallback) {
+      this.commitAIBallPlacement(fallback.x, fallback.y);
+      return true;
+    }
+
+    return false;
+  }
+
+  private commitAIBallPlacement(x: number, y: number) {
+    if (!this.cueBall) return;
+    this.cueBall.x = x;
+    this.cueBall.y = y;
+    this.cueBall.vx = 0;
+    this.cueBall.vy = 0;
+    this.cueBall.angularVelocity = 0;
+    this.cueBall.sleeping = true;
+    this.cueBall.pocketed = false;
+    this.cueBall.lastPocketId = null;
+    this.pendingBallInHandForAI = false;
+    console.log('[AI] Ball-in-hand placement', { x: x.toFixed(2), y: y.toFixed(2) });
+  }
+
+  private getAIBallInHandCandidates(
+    placement: BallInHandPlacement,
+    radius: number
+  ): Array<{ x: number; y: number }> {
+    const geom = getTableGeometry();
+    const headStringX = -(geom.playWidthIn ?? CONFIG.TABLE_WIDTH) / 4;
+    const safeKitchenX = headStringX - radius - 0.5;
+    const yOffsets = [0, 6, -6, 12, -12, 18, -18, 24, -24];
+    const candidates: Array<{ x: number; y: number }> = [];
+    const kitchenXs = [safeKitchenX, safeKitchenX - 4, safeKitchenX - 8];
+    const anywhereXs = [CUE_BALL_POSITION.x, -15, -10, -5, 0, 5, 10, 15];
+    const bases = placement === 'KITCHEN' ? kitchenXs : anywhereXs;
+    for (const baseX of bases) {
+      for (const offset of yOffsets) {
+        candidates.push({ x: baseX, y: offset });
+      }
+    }
+    if (placement === 'ANYWHERE') {
+      candidates.push({ x: 0, y: 0 });
+    }
+    return candidates;
+  }
+
+  private isCueBallSpotOpen(x: number, y: number, radius: number): boolean {
+    const minClearance = radius * 2 + 0.1;
+    for (const ball of this.world.balls) {
+      if (ball === this.cueBall) continue;
+      if (ball.pocketed) continue;
+      const dist = Math.hypot(ball.x - x, ball.y - y);
+      if (dist < minClearance) {
+        return false;
+      }
+    }
+    return true;
   }
 }
     // React to AI difficulty changes from settings panel

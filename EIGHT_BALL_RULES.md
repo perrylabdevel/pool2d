@@ -52,6 +52,7 @@ This document tracks the implementation status of standard 8-ball rules in Pool 
 - ✅ **Turn switching on miss** - Miss or foul = turn switches to opponent
 - ✅ **Continue on legal pocket** - Legally pocketing your ball = continue shooting
 - ✅ **Foul handling** - Fouls trigger ball-in-hand and turn switch
+- ✅ **AI scratch recovery** - If the human scratches on the break, AI auto-accepts ball-in-hand and fires a fallback break shot instead of passing
 
 ---
 

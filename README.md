@@ -27,6 +27,7 @@ Pool 2D is a tournament-accurate billiards sandbox built with TypeScript, Vite, 
 - **Rules & Practice**
   - Practice mode with ball-in-hand drag placement
   - 8-ball mode with AI opponent, fouls, ball-in-hand, and win handling
+  - AI immediately takes over break shots after opponent scratches, firing a fallback power shot instead of yielding
   - Player input blocking during AI turns to prevent interference
   - Geometry panel to tweak jaw offsets, capture radii, and throat angles without code changes
   - Frame radius slider shapes a dedicated frame outline so rail physics stay constant while visuals curve

@@ -69,6 +69,11 @@ export class PoolAI {
     console.log('[AI] Shot options found:', shotOptions.length);
     if (shotOptions.length === 0) {
       console.log('[AI] No shot options generated');
+      const fallback = this.createFallbackBreakShot(cueBall, world);
+      if (fallback) {
+        console.log('[AI] Using fallback power shot');
+        return fallback;
+      }
       return null;
     }
 
@@ -84,6 +89,40 @@ export class PoolAI {
     // Choose the best offensive shot and add difficulty-based human error
     const best = this.chooseBestShot(shotOptions);
     return this.addHumanError(best);
+  }
+
+  private createFallbackBreakShot(cueBall: Ball, world: PhysicsWorld): ShotOption | null {
+    const availableBalls = world.balls.filter((ball) => !ball.pocketed && ball.id !== BALL_CUE);
+    if (availableBalls.length === 0) {
+      return null;
+    }
+
+    // Aim for the ball furthest down-table (most positive X) so we mimic a break-style blast
+    const targetBall = availableBalls.reduce((best, ball) => (ball.x > best.x ? ball : best), availableBalls[0]);
+    const geom = getTableGeometry();
+    const fallbackPocket = geom.pockets.find((p) => p.id === 'SE_corner') ?? geom.pockets[0];
+
+    const dx = targetBall.x - cueBall.x;
+    const dy = targetBall.y - cueBall.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    if (distance < 1e-3) {
+      return null;
+    }
+
+    const aimAngle = Math.atan2(dy, dx);
+    const power = Math.max(12, Math.min(20, distance * 0.5));
+
+    return {
+      targetBall,
+      pocket: fallbackPocket,
+      aimAngle,
+      power,
+      expectedSuccess: 0.15,
+      isSafe: false,
+      positioningScore: 0,
+      cutAngle: 0,
+      distance,
+    };
   }
 
   /**
