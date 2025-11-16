@@ -18,7 +18,6 @@ import { SettingsPanel } from '../ui/SettingsPanel';
 import { GeometryPanel } from '../ui/GeometryPanel';
 import { ModernGeometryPanel } from '../ui/ModernGeometryPanel';
 import { RenderLayerPanel } from '../ui/RenderLayerPanel';
-import { PocketTuningPanel } from '../ui/PocketTuningPanel';
 import { scenarioManager } from '../debug/ScenarioManager';
 import { Player, PlayerType, BallGroup } from './Player';
 import { GameStateMachine, GameState } from './GameStateMachine';
@@ -133,9 +132,6 @@ export class Game {
     this.geometryPanel = new GeometryPanel(this.hud.settingsManager, () => this.restart());
     this.modernGeometryPanel = new ModernGeometryPanel(this.hud.settingsManager, () => this.restart());
     this.renderLayersPanel = new RenderLayerPanel(this.hud.settingsManager, this.renderer);
-    // Pocket tuner panel for quick pocket tweaks
-    const tuner = new PocketTuningPanel(this.hud.settingsManager, () => this.restart());
-    this.hud.registerPanel('pocket-tuning-panel', tuner.getController(), { hotkeys: ['p'], persistState: true });
     this.rules = new EightBallRules(RULES_PRESETS[this.currentRuleset]);
     this.predictor = new Predictor();
     this.mode = GameMode.EIGHT_BALL;

@@ -54,33 +54,99 @@ export class ModernGeometryPanel {
   private loadGeometryFromConfig(): ModernPocketGeometry {
     const savedModern = this.settingsManager.getModernGeometrySettings();
     if (savedModern) {
-      return {
+      return this.normalizeGeometry({
         template: savedModern.template ?? PocketTemplate.CUSTOM,
         side: { ...savedModern.side },
         corner: { ...savedModern.corner },
         global: savedModern.global ? { ...savedModern.global } : undefined,
-      };
+      });
     }
 
     try {
       const legacy = getCurrentLegacyGeometry();
       const converted = legacyToModern(legacy);
-      return {
+      return this.normalizeGeometry({
         template: converted.template ?? PocketTemplate.CUSTOM,
         side: { ...converted.side },
         corner: { ...converted.corner },
         global: converted.global ? { ...converted.global } : undefined,
-      };
+      });
     } catch (error) {
       console.warn('[ModernGeometry] Failed to load geometry from config, using default template', error);
       const fallback = GEOMETRY_TEMPLATES[PocketTemplate.BCA_TOURNAMENT_MEDIUM];
-      return {
+      return this.normalizeGeometry({
         template: fallback.template,
         side: { ...fallback.side },
         corner: { ...fallback.corner },
         global: fallback.global ? { ...fallback.global } : undefined,
-      };
+      });
     }
+  }
+
+  private clampToRange(value: number | undefined, range: { min: number; max: number; typical: number }): number {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return Math.min(range.max, Math.max(range.min, value));
+    }
+    const fallback = Number.isFinite(range.typical) ? range.typical : range.min;
+    return Math.min(range.max, Math.max(range.min, fallback));
+  }
+
+  private normalizeGeometry(geometry: ModernPocketGeometry): ModernPocketGeometry {
+    const normalizedSide = {
+      mouthWidth: this.clampToRange(geometry.side.mouthWidth, GEOMETRY_RANGES.side.mouthWidth),
+      throatWidth: this.clampToRange(geometry.side.throatWidth, GEOMETRY_RANGES.side.throatWidth),
+      railDepth: this.clampToRange(geometry.side.railDepth, GEOMETRY_RANGES.side.railDepth),
+      jawDepth: this.clampToRange(geometry.side.jawDepth, GEOMETRY_RANGES.side.jawDepth),
+      shelfDepth: this.clampToRange(geometry.side.shelfDepth, GEOMETRY_RANGES.side.shelfDepth),
+      railCurve: this.clampToRange(geometry.side.railCurve ?? GEOMETRY_RANGES.side.railCurve.min, GEOMETRY_RANGES.side.railCurve),
+    };
+
+    const normalizedCorner = {
+      mouthWidth: this.clampToRange(geometry.corner.mouthWidth, GEOMETRY_RANGES.corner.mouthWidth),
+      throatWidth: this.clampToRange(geometry.corner.throatWidth, GEOMETRY_RANGES.corner.throatWidth),
+      railDepth: this.clampToRange(geometry.corner.railDepth, GEOMETRY_RANGES.corner.railDepth),
+      jawDepth: this.clampToRange(geometry.corner.jawDepth, GEOMETRY_RANGES.corner.jawDepth),
+      shelfDepth: this.clampToRange(geometry.corner.shelfDepth, GEOMETRY_RANGES.corner.shelfDepth),
+      railCurve: this.clampToRange(geometry.corner.railCurve ?? GEOMETRY_RANGES.corner.railCurve.min, GEOMETRY_RANGES.corner.railCurve),
+    };
+
+    const normalizedGlobal = geometry.global ? { ...geometry.global } : undefined;
+    if (normalizedGlobal) {
+      if (normalizedGlobal.cutAngleAdjust !== undefined) {
+        normalizedGlobal.cutAngleAdjust = this.clampToRange(
+          normalizedGlobal.cutAngleAdjust,
+          GEOMETRY_RANGES.global.cutAngleAdjust
+        );
+      }
+      if (normalizedGlobal.verticalAngle !== undefined) {
+        normalizedGlobal.verticalAngle = this.clampToRange(
+          normalizedGlobal.verticalAngle,
+          GEOMETRY_RANGES.global.verticalAngle
+        );
+      }
+      if (normalizedGlobal.sidePocketOffset !== undefined) {
+        normalizedGlobal.sidePocketOffset = this.clampToRange(
+          normalizedGlobal.sidePocketOffset,
+          GEOMETRY_RANGES.global.sidePocketOffset
+        );
+      }
+      if (normalizedGlobal.cornerPocketOffset !== undefined) {
+        normalizedGlobal.cornerPocketOffset = this.clampToRange(
+          normalizedGlobal.cornerPocketOffset,
+          GEOMETRY_RANGES.global.cornerPocketOffset
+        );
+      }
+    }
+
+    const cleanedGlobal =
+      normalizedGlobal && Object.keys(normalizedGlobal).length > 0 ? normalizedGlobal : undefined;
+
+    return {
+      template: geometry.template ?? PocketTemplate.CUSTOM,
+      side: normalizedSide,
+      corner: normalizedCorner,
+      global: cleanedGlobal,
+    };
   }
 
   private createPanel(): HTMLElement {
@@ -488,12 +554,12 @@ export class ModernGeometryPanel {
   private loadTemplate(template: PocketTemplate) {
     // Deep copy the template to avoid modifying the original
     const templateData = GEOMETRY_TEMPLATES[template];
-    this.currentGeometry = {
+    this.currentGeometry = this.normalizeGeometry({
       template: templateData.template,
       side: { ...templateData.side },
       corner: { ...templateData.corner },
       global: templateData.global ? { ...templateData.global } : undefined,
-    };
+    });
     this.syncToUI();
     this.validateAndUpdateUI();
   }
@@ -539,6 +605,7 @@ export class ModernGeometryPanel {
   }
 
   private validateAndUpdateUI() {
+    this.currentGeometry = this.normalizeGeometry(this.currentGeometry);
     const validation = validateModernGeometry(this.currentGeometry);
     const validationDiv = document.getElementById('modern-geometry-validation');
 

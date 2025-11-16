@@ -295,7 +295,7 @@ export const GEOMETRY_TEMPLATES: Record<PocketTemplate, ModernPocketGeometry> = 
  */
 export const GEOMETRY_RANGES = {
   side: {
-    mouthWidth: { min: 4.0, max: 12.0, typical: 5.5 },
+    mouthWidth: { min: 3.0, max: 12.0, typical: 5.5 },
     throatWidth: { min: 3.0, max: 11.0, typical: 4.625 },
     railDepth: { min: 0.5, max: 3.0, typical: 1.5 },
     jawDepth: { min: 0.5, max: 4.0, typical: 1.1 },
@@ -313,7 +313,7 @@ export const GEOMETRY_RANGES = {
   global: {
     cutAngleAdjust: { min: -5.0, max: 5.0, typical: 0.0 },
     verticalAngle: { min: 12.0, max: 15.0, typical: 13.5 },
-    sidePocketOffset: { min: 0.0, max: 1.0, typical: 0.25 },
+    sidePocketOffset: { min: 0.0, max: 1.5, typical: 0.25 },
     cornerPocketOffset: { min: -1.0, max: 1.5, typical: 0.0 },
   },
 } as const;
