@@ -23,7 +23,7 @@ export const CONFIG = {
   CUSHION_RESTITUTION: 0.88, // Ball-cushion
   
   // Friction - balanced for 10x velocity multiplier
-  ROLLING_FRICTION: 0.55, // Slightly higher for faster settles (tuned for 10x velocity)
+  ROLLING_FRICTION: 0.62, // Slightly higher for heavier rolling feel (tuned for 10x velocity)
   SLIDING_FRICTION: 0.65, // Ball-table friction
   BALL_BALL_FRICTION: 0.01, // Reduced for more realistic smooth ball surfaces (phenolic resin)
   VELOCITY_EPSILON: 0.2, // Sleep threshold adjusted for 10x velocity scale
@@ -45,6 +45,7 @@ export const CONFIG = {
   AIM_LINE_LENGTH: 20,
   GHOST_LINE_LENGTH: 30,
   FINE_AIM_SENSITIVITY: 0.1,
+  MICRO_AIM_MAX_DEGREES: 2.5, // Maximum micro-dial adjustment (total range = ±value degrees)
 
   // Distance-based aim sensitivity
   DISTANCE_AIM_SCALING_ENABLED: true,
@@ -65,6 +66,14 @@ export const CONFIG = {
   OBJECT_PATH_PERCENTAGE: 1.0, // Multiplier for object ball path length (0.5 = 50% length)
   SHOW_AIM_INFO: true, // Display aim angle, distance, speed, and cut angle overlay
   AIM_INFO_SCALE: 1.0, // Scale multiplier for aim info indicators (0.5 = 50% size, 2.0 = 200% size)
+  POCKET_ANIMATION_DURATION_MS: 340,
+  POCKET_ANIMATION_DROP_DEPTH: 0.35, // visual drop depth in inches ~ depth perception
+  POCKET_CAPTURE_SPEED_THRESHOLD: 45, // in/s speed above which we damp pocket entry
+  POCKET_CAPTURE_DAMPING: 0.25, // velocity multiplier applied in pocket throat
+  POCKET_CAPTURE_PULL_DISTANCE: 0.8, // additional inches pulled toward pocket center before removal
+  POCKET_CAPTURE_GRAVITY: 60, // extra in/s^2 acceleration toward center for fast captures
+  HEAVY_SHOT_SHAKE_MAX_OFFSET_PX: 0,
+  HEAVY_SHOT_SHAKE_DURATION_MS: 0,
   
   // Rendering
   CANVAS_SCALE: 8, // Pixels per game unit

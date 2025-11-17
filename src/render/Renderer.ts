@@ -17,6 +17,7 @@ import {
 import { BaseRenderer } from './BaseRenderer';
 
 import { PredictionResult } from '../physics/Prediction';
+import type { MicroDialRenderState, PocketAnimationEvent } from './ControlTypes';
 
 type FrameClipInfo = {
   outerX: number;
@@ -24,9 +25,25 @@ type FrameClipInfo = {
   radius: number;
 };
 
+type PocketDropAnimation = {
+  event: PocketAnimationEvent;
+  startTime: number;
+  duration: number;
+};
+
+type IconCacheEntry = {
+  img: HTMLImageElement;
+  ready: boolean;
+  failed: boolean;
+};
+
 export class Renderer extends BaseRenderer {
   ctx: CanvasRenderingContext2D;
   private frameClipInfo: FrameClipInfo | null = null;
+  private queuedPocketEvents: PocketAnimationEvent[] = [];
+  private pocketAnimations: PocketDropAnimation[] = [];
+  private pocketIconCache: Map<string, IconCacheEntry> = new Map();
+  private shakeState: { start: number; duration: number; strength: number; seed: number } | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     super(canvas, CONFIG.CANVAS_SCALE);
@@ -86,6 +103,9 @@ export class Renderer extends BaseRenderer {
     
     this.ctx.translate(canvasCenterX, canvasCenterY);
     this.ctx.scale(this.scale, -this.scale); // Negative Y to flip vertical axis
+
+    const shakeOffset = this.computeShakeOffset();
+    this.applyShakeTransform(shakeOffset.x, shakeOffset.y);
     
     // Draw in correct order: bottom to top
     const tableGeom = getTableGeometry();
@@ -97,8 +117,11 @@ export class Renderer extends BaseRenderer {
     this.drawPockets(tableGeom.pockets);
     this.drawFrame();
     this.drawBalls(world.balls, alpha);
-    
+
     this.ctx.restore();
+
+    this.processPocketAnimationQueue();
+    this.drawPocketAnimations();
   }
   
   drawPlayingSurface() {
@@ -576,7 +599,7 @@ export class Renderer extends BaseRenderer {
     this.ctx.fill();
   }
   
-  drawCueAndPowerBar(ball: Ball, angle: number, power: number, showGhost: boolean, showPowerBar: boolean, isAimMode: boolean, prediction?: PredictionResult) {
+  drawCueAndPowerBar(ball: Ball, angle: number, power: number, showGhost: boolean, showPowerBar: boolean, isAimMode: boolean, prediction?: PredictionResult, microDialState?: MicroDialRenderState) {
     this.ctx.save();
     
     // Use same transform as main render
@@ -656,7 +679,7 @@ export class Renderer extends BaseRenderer {
     
     // Power bar (vertical bar to the right of the table)
     if (showPowerBar) {
-      this.drawPowerBar(power, isAimMode);
+      this.drawPowerBar(power, isAimMode, microDialState);
     }
 
     this.ctx.restore();
@@ -996,23 +1019,14 @@ export class Renderer extends BaseRenderer {
   
 
   
-  drawPowerBar(power: number, isAimMode: boolean) {
+  drawPowerBar(power: number, isAimMode: boolean, microDialState?: MicroDialRenderState) {
     this.ctx.restore(); // Exit game space
     this.ctx.save();
 
     // Draw power bar in screen space, positioned relative to table frame
     const barWidth = 30;
     const barHeight = 200;
-
-    // Position to the right of the table frame using screen coordinates
-    const geom = getTableGeometry();
-    const canvasCenterX = this.canvas.width / 2;
-    const frameRightWorldX = geom.frameOutline.outerHalfWidth;
-    const frameRightScreenX = canvasCenterX + (frameRightWorldX * this.scale);
-    const offsetFromFrame = 20; // Fixed pixel offset from frame edge
-
-    const barX = frameRightScreenX + offsetFromFrame;
-    const barY = (this.canvas.height - barHeight) / 2;
+    const { x: barX, y: barY } = this.getSideBarPosition('right', barWidth, barHeight);
     
     // Background
     this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
@@ -1036,19 +1050,8 @@ export class Renderer extends BaseRenderer {
     this.ctx.fillStyle = gradient;
     this.ctx.fillRect(barX, barY, barWidth, fillHeight);
     
-    // Label
-    this.ctx.fillStyle = '#ffffff';
-    this.ctx.font = '14px Arial';
-    this.ctx.textAlign = 'center';
-    this.ctx.fillText('POWER', barX + barWidth / 2, barY - 10);
-    
-    // Mode indicator
-    this.ctx.font = 'bold 16px Arial';
-    this.ctx.fillStyle = isAimMode ? '#ffaa00' : '#00ff00';
-    this.ctx.fillText(isAimMode ? 'AIM' : 'POWER', barX + barWidth / 2, barY + barHeight + 30);
-    this.ctx.font = '12px Arial';
-    this.ctx.fillStyle = '#cccccc';
-    this.ctx.fillText('Press A to toggle', barX + barWidth / 2, barY + barHeight + 50);
+    // Micro aim dial on the opposite side
+    this.drawMicroAimDial(microDialState);
     
     // Re-enter game space for subsequent drawing
     this.ctx.restore();
@@ -1162,8 +1165,235 @@ export class Renderer extends BaseRenderer {
   getPowerBarBounds() {
     const barWidth = 30;
     const barHeight = 200;
-    const barX = this.canvas.width - 60;
-    const barY = (this.canvas.height - barHeight) / 2;
-    return { x: barX, y: barY, width: barWidth, height: barHeight };
+    const { x, y } = this.getSideBarPosition('right', barWidth, barHeight);
+    return { x, y, width: barWidth, height: barHeight };
+  }
+
+  getMicroDialBounds() {
+    const barWidth = 30;
+    const barHeight = 200;
+    const { x, y } = this.getSideBarPosition('left', barWidth, barHeight);
+    return { x, y, width: barWidth, height: barHeight };
+  }
+
+  private getSideBarPosition(side: 'left' | 'right', width: number, height: number) {
+    const geom = getTableGeometry();
+    const canvasCenterX = this.canvas.width / 2;
+    const frameHalfWidth = geom.frameOutline.outerHalfWidth;
+    const frameWorldX = side === 'right' ? frameHalfWidth : -frameHalfWidth;
+    const frameScreenX = canvasCenterX + (frameWorldX * this.scale);
+    const offsetFromFrame = 20;
+    const x = side === 'right' ? frameScreenX + offsetFromFrame : frameScreenX - offsetFromFrame - width;
+    const y = (this.canvas.height - height) / 2;
+    return { x, y };
+  }
+
+  private drawMicroAimDial(state?: MicroDialRenderState) {
+    const barWidth = 30;
+    const barHeight = 200;
+    const { x: barX, y: barY } = this.getSideBarPosition('left', barWidth, barHeight);
+    const ctx = this.ctx;
+    const value = Math.max(-1, Math.min(1, state?.value ?? 0));
+    const degrees = state?.degrees ?? 0;
+    const isActive = state?.isActive ?? false;
+    const handlePercent = 0.5 - (value * 0.5);
+    const handleY = barY + handlePercent * barHeight;
+    const centerY = barY + barHeight / 2;
+    const handleX = barX + barWidth / 2;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.fillRect(barX, barY, barWidth, barHeight);
+    ctx.strokeStyle = isActive ? '#ffffff' : '#888888';
+    ctx.lineWidth = isActive ? 2 : 1.5;
+    ctx.strokeRect(barX, barY, barWidth, barHeight);
+
+    // Zero line
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(barX + 4, centerY);
+    ctx.lineTo(barX + barWidth - 4, centerY);
+    ctx.stroke();
+
+    // Draw tick marks
+    ctx.lineWidth = 1;
+    for (let i = 1; i <= 2; i++) {
+      const offset = i * (barHeight / 6);
+      ctx.beginPath();
+      ctx.moveTo(barX + 6, centerY - offset);
+      ctx.lineTo(barX + barWidth - 6, centerY - offset);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(barX + 6, centerY + offset);
+      ctx.lineTo(barX + barWidth - 6, centerY + offset);
+      ctx.stroke();
+    }
+
+    // Show adjustment magnitude
+    if (Math.abs(value) > 0.01) {
+      const fromY = value > 0 ? handleY : centerY;
+      const toY = value > 0 ? centerY : handleY;
+      const gradient = ctx.createLinearGradient(barX, fromY, barX, toY);
+      if (value > 0) {
+        gradient.addColorStop(0, 'rgba(111, 202, 255, 0.8)');
+        gradient.addColorStop(1, 'rgba(111, 202, 255, 0.1)');
+      } else {
+        gradient.addColorStop(0, 'rgba(255, 138, 101, 0.8)');
+        gradient.addColorStop(1, 'rgba(255, 138, 101, 0.1)');
+      }
+      ctx.fillStyle = gradient;
+      ctx.fillRect(barX + 5, Math.min(fromY, toY), barWidth - 10, Math.abs(toY - fromY));
+    }
+
+    // Dial handle
+    const handleRadius = barWidth / 2 - 6;
+    ctx.beginPath();
+    ctx.arc(handleX, handleY, handleRadius, 0, Math.PI * 2);
+    ctx.fillStyle = isActive ? '#fff59d' : '#ffd54f';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
+    ctx.stroke();
+
+    // Indicator arrow
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(handleX, handleY - handleRadius + 4);
+    ctx.lineTo(handleX, handleY + handleRadius - 4);
+    ctx.stroke();
+
+    // Labels
+    ctx.restore();
+  }
+
+  queuePocketAnimation(event: PocketAnimationEvent) {
+    this.queuedPocketEvents.push(event);
+  }
+
+  private processPocketAnimationQueue() {
+    if (!this.queuedPocketEvents.length) return;
+    const duration = CONFIG.POCKET_ANIMATION_DURATION_MS ?? 400;
+    const now = performance.now();
+    while (this.queuedPocketEvents.length) {
+      const event = this.queuedPocketEvents.shift()!;
+      this.pocketAnimations.push({ event, startTime: now, duration });
+    }
+  }
+
+  private drawPocketAnimations() {
+    if (!this.pocketAnimations.length) return;
+    const now = performance.now();
+    const canvasCenterX = this.canvas.width / 2;
+    const canvasCenterY = this.canvas.height / 2;
+
+    this.pocketAnimations = this.pocketAnimations.filter((anim) => {
+      const elapsed = now - anim.startTime;
+      const progress = Math.min(1, elapsed / Math.max(anim.duration, 1));
+      this.drawPocketAnimationSprite(anim.event, progress, canvasCenterX, canvasCenterY);
+      return progress < 1;
+    });
+  }
+
+  private drawPocketAnimationSprite(event: PocketAnimationEvent, progress: number, centerX: number, centerY: number) {
+    const eased = progress * progress * (3 - 2 * progress);
+    const startScreenX = centerX + event.position.x * this.scale;
+    const startScreenY = centerY - event.position.y * this.scale;
+    const endScreenX = centerX + event.pocket.x * this.scale;
+    const dropOffset = (CONFIG.POCKET_ANIMATION_DROP_DEPTH ?? 1.5) * this.scale;
+    const endScreenY = centerY - event.pocket.y * this.scale + dropOffset * eased;
+    const x = startScreenX + (endScreenX - startScreenX) * eased;
+    const y = startScreenY + (endScreenY - startScreenY) * eased;
+    const baseRadius = event.radius * this.scale;
+    const radius = Math.max(4, baseRadius * (1 - 0.35 * eased));
+    const alpha = Math.max(0, 1 - eased);
+
+    this.ctx.save();
+    this.ctx.globalAlpha = alpha;
+    const fill = this.getBallColor(event.ballId);
+    const gradient = this.ctx.createRadialGradient(x - radius * 0.2, y - radius * 0.2, radius * 0.1, x, y, radius);
+    gradient.addColorStop(0, fill.light);
+    gradient.addColorStop(1, fill.dark);
+    this.ctx.fillStyle = gradient;
+    this.ctx.beginPath();
+    this.ctx.arc(x, y, radius, 0, Math.PI * 2);
+    this.ctx.fill();
+
+    const iconImage = this.getPocketIconImage(event.icon);
+    if (iconImage) {
+      const size = radius * 2;
+      this.ctx.drawImage(iconImage, x - radius, y - radius, size, size);
+    }
+
+    this.ctx.lineWidth = 1.2;
+    this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+    this.ctx.stroke();
+    this.ctx.restore();
+  }
+
+  private getBallColor(ballId: number) {
+    const hex = CONFIG.BALL_COLORS[ballId - 1] || '#ffffff';
+    const base = hex.startsWith('#') ? hex : `#${hex}`;
+    const light = lightenHexColor(base, 0.2);
+    const dark = darkenHexColor(base, 0.35);
+    return { light, dark };
+  }
+
+  private getPocketIconImage(iconSrc?: string) {
+    if (!iconSrc) return null;
+    let entry = this.pocketIconCache.get(iconSrc);
+    if (!entry) {
+      const img = new Image();
+      entry = { img, ready: img.complete, failed: false };
+      img.onload = () => {
+        entry!.ready = true;
+      };
+      img.onerror = () => {
+        entry!.failed = true;
+      };
+      img.src = iconSrc;
+      this.pocketIconCache.set(iconSrc, entry);
+    }
+    if (entry.failed || !entry.ready) return null;
+    return entry.img;
+  }
+
+  override triggerShotShake(intensity: number) {
+    const clamped = Math.max(0, Math.min(1, intensity));
+    if (clamped <= 0) return;
+    const duration = CONFIG.HEAVY_SHOT_SHAKE_DURATION_MS ?? 240;
+    const strength = (CONFIG.HEAVY_SHOT_SHAKE_MAX_OFFSET_PX ?? 5) * clamped;
+    this.shakeState = {
+      start: performance.now(),
+      duration,
+      strength,
+      seed: Math.random() * Math.PI * 2,
+    };
+  }
+
+  private computeShakeOffset() {
+    if (!this.shakeState) return { x: 0, y: 0 };
+    const now = performance.now();
+    const elapsed = now - this.shakeState.start;
+    if (elapsed >= this.shakeState.duration) {
+      this.shakeState = null;
+      return { x: 0, y: 0 };
+    }
+    const progress = elapsed / Math.max(1, this.shakeState.duration);
+    const decay = 1 - progress;
+    const angle = now * 0.04 + this.shakeState.seed;
+    const x = Math.cos(angle * 50) * this.shakeState.strength * decay;
+    const y = Math.sin(angle * 60) * this.shakeState.strength * decay;
+    return { x, y };
+  }
+
+  private applyShakeTransform(x: number, y: number) {
+    if (!this.canvas) return;
+    if (Math.abs(x) < 0.01 && Math.abs(y) < 0.01) {
+      this.canvas.style.transform = '';
+    } else {
+      this.canvas.style.transform = `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px)`;
+    }
   }
 }

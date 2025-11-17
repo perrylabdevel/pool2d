@@ -9,6 +9,13 @@ import { physicsRecorder } from '../debug/PhysicsRecorder';
 
 const ROTATION_EPSILON = 1e-7;
 
+export type PocketCaptureDetails = {
+  ball: Ball;
+  pocket: Pocket;
+  position: { x: number; y: number };
+  velocity: { x: number; y: number };
+};
+
 function applyIncrementalRotation(ball: Ball, axisX: number, axisY: number, axisZ: number, angle: number) {
   if (Math.abs(angle) < ROTATION_EPSILON) {
     return;
@@ -67,6 +74,8 @@ export class PhysicsWorld {
   onBallCollision?: (ballA: Ball, ballB: Ball) => void;
   // Callback for ball-rail collisions (for rule tracking)
   onRailCollision?: (ball: Ball, rail: Rail) => void;
+  // Callback for ball pocket captures (for visuals/analytics)
+  onBallPocketed?: (details: PocketCaptureDetails) => void;
   
   constructor() {
     this.initializeRails();
@@ -263,10 +272,45 @@ export class PhysicsWorld {
 
       for (const pocket of this.pockets) {
         if (pocket.contains(ball)) {
+          let capturePos = { x: ball.x, y: ball.y };
+          let impactVelocity = { x: ball.vx, y: ball.vy };
+          const speed = ball.getSpeed();
+          const speedThreshold = CONFIG.POCKET_CAPTURE_SPEED_THRESHOLD ?? Infinity;
+          if (speed > speedThreshold) {
+            const toCenterX = pocket.x - ball.x;
+            const toCenterY = pocket.y - ball.y;
+            const distToCenter = Math.sqrt(toCenterX * toCenterX + toCenterY * toCenterY) || 1;
+            const dirX = toCenterX / distToCenter;
+            const dirY = toCenterY / distToCenter;
+            const pullDist = Math.min(CONFIG.POCKET_CAPTURE_PULL_DISTANCE ?? 0, distToCenter);
+            if (pullDist > 0) {
+              capturePos = {
+                x: ball.x + dirX * pullDist,
+                y: ball.y + dirY * pullDist,
+              };
+              ball.x = capturePos.x;
+              ball.y = capturePos.y;
+            }
+            const damping = CONFIG.POCKET_CAPTURE_DAMPING ?? 0;
+            const gravity = CONFIG.POCKET_CAPTURE_GRAVITY ?? 0;
+            const dampedSpeed = speed * damping;
+            impactVelocity = {
+              x: dirX * (dampedSpeed + gravity * 0.016),
+              y: dirY * (dampedSpeed + gravity * 0.016),
+            };
+          }
           ball.pocketed = true;
           ball.lastPocketId = pocket.id ?? null;
           ball.vx = 0;
           ball.vy = 0;
+          if (this.onBallPocketed) {
+            this.onBallPocketed({
+              ball,
+              pocket,
+              position: capturePos,
+              velocity: impactVelocity,
+            });
+          }
           if (this.recordingEnabled) {
             physicsRecorder.recordPocket(ball);
           }

@@ -178,28 +178,6 @@ body {
   margin-top: 4px;
 }
 
-.ball-dot {
-  width: var(--ball-chip-size, 42px);
-  height: var(--ball-chip-size, 42px);
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.ball-dot.filled {
-  border-width: 1.5px;
-  border-color: rgba(255, 255, 255, 0.55);
-  box-shadow: 0 0 4px rgba(255, 255, 255, 0.08);
-}
-
-.ball-dot.filled.solids {
-  background: #facc15; /* amber-400 */
-}
-
-.ball-dot.filled.stripes {
-  background: #60a5fa; /* blue-400 */
-}
-
 /* Small ball chips with numbers */
 .ball-chip {
   width: var(--ball-chip-size, 42px);

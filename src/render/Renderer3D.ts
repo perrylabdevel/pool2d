@@ -24,12 +24,26 @@ import {
   getAxisPalette,
   type AxisAlignment,
   type AxisColorPalette,
+  lightenHexColor,
+  darkenHexColor,
 } from './RenderUtils';
 import { BaseRenderer } from './BaseRenderer';
+import type { MicroDialRenderState, PocketAnimationEvent } from './ControlTypes';
 
 const SIDE_POCKET_VISUAL_INSET = 3.5; // Keep side pocket visuals just inside the cushion edge
 
 type FrameClipInfo = { outerX: number; outerY: number; radius: number };
+type PocketDropAnimation = {
+  event: PocketAnimationEvent;
+  startTime: number;
+  duration: number;
+};
+
+type IconCacheEntry = {
+  img: HTMLImageElement;
+  ready: boolean;
+  failed: boolean;
+};
 
 export class Renderer3D extends BaseRenderer {
   uiCanvas: HTMLCanvasElement;
@@ -78,6 +92,10 @@ export class Renderer3D extends BaseRenderer {
   private railHighlightTexture: THREE.CanvasTexture | null = null;
   private pocketHighlightTexture: THREE.CanvasTexture | null = null;
   private pocketShadowTexture: THREE.CanvasTexture | null = null;
+  private queuedPocketEvents: PocketAnimationEvent[] = [];
+  private pocketAnimations: PocketDropAnimation[] = [];
+  private pocketIconCache: Map<string, IconCacheEntry> = new Map();
+  private shakeState: { start: number; duration: number; strength: number; seed: number } | null = null;
   private accentLight: THREE.SpotLight | null = null;
   // Groove appearance settings
   private grooveInnerBase = 0.18;
@@ -2830,6 +2848,9 @@ export class Renderer3D extends BaseRenderer {
     if (this.showMeasurementOverlay) {
       this.drawMeasurementOverlay();
     }
+
+    const shakeOffset = this.computeShakeOffset();
+    this.applyShakeTransform(shakeOffset.x, shakeOffset.y);
     
     // Update ball positions and rotations
     world.balls.forEach((ball) => {
@@ -2865,6 +2886,9 @@ export class Renderer3D extends BaseRenderer {
     
     // Render the scene
     this.renderer.render(this.scene, this.camera);
+
+    this.processPocketAnimationQueue();
+    this.drawPocketAnimations();
   }
 
   /**
@@ -3647,7 +3671,7 @@ export class Renderer3D extends BaseRenderer {
   }
   
   // Compatibility methods for existing code
-  drawCueAndPowerBar(ball: Ball, angle: number, power: number, showGhost: boolean, showPowerBar: boolean, _isAimMode: boolean, prediction?: PredictionResult) {
+  drawCueAndPowerBar(ball: Ball, angle: number, power: number, showGhost: boolean, showPowerBar: boolean, isAimMode: boolean, prediction?: PredictionResult, microDialState?: MicroDialRenderState) {
     // Remove old 3D elements if they exist
     if (this.cueStick) {
       this.scene.remove(this.cueStick);
@@ -3868,7 +3892,7 @@ export class Renderer3D extends BaseRenderer {
     
     // Draw power bar in 2D
     if (showPowerBar) {
-      this.drawPowerBar2D(power);
+      this.drawPowerBar2D(power, isAimMode, microDialState);
     }
 
     // Draw aim info overlay (only if scale > 0)
@@ -3877,37 +3901,109 @@ export class Renderer3D extends BaseRenderer {
     }
   }
   
-  drawPowerBar2D(power: number) {
+  drawPowerBar2D(power: number, isAimMode: boolean, microDialState?: MicroDialRenderState) {
     const barWidth = 30;
     const barHeight = 200;
-
-    // Position to the right of the table frame using world-to-screen coordinates
-    const geom = getTableGeometry();
-    const frameRight = geom.frameOutline.outerHalfWidth;
-    const tableFrameRight = this.worldToScreen(frameRight, 0);
-    const offsetFromFrame = 20; // Fixed pixel offset from frame edge
-
-    const barX = tableFrameRight.x + offsetFromFrame;
-    const barY = (this.uiCanvas.height - barHeight) / 2;
+    const rect = this.getSideBarRect('right', barWidth, barHeight);
+    const barX = rect.x;
+    const barY = rect.y;
 
     // Background
     this.uiCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
     this.uiCtx.fillRect(barX, barY, barWidth, barHeight);
 
-    // Power fill with gradient (bottom to top)
-    const fillHeight = (power / CONFIG.CUE_POWER_MAX) * barHeight;
-    const gradient = this.uiCtx.createLinearGradient(barX, barY + barHeight - fillHeight, barX, barY + barHeight);
-    gradient.addColorStop(0, '#ff0000');
+    // Power fill with gradient (top (max) to bottom (zero))
+    const powerPercent = Math.max(0, Math.min(1, power / CONFIG.CUE_POWER_MAX));
+    const fillHeight = barHeight * powerPercent;
+    const gradient = this.uiCtx.createLinearGradient(barX, barY, barX, barY + barHeight);
+    gradient.addColorStop(0, '#00ff00');
     gradient.addColorStop(0.5, '#ffff00');
-    gradient.addColorStop(1, '#00ff00');
+    gradient.addColorStop(1, '#ff0000');
 
     this.uiCtx.fillStyle = gradient;
-    this.uiCtx.fillRect(barX, barY + barHeight - fillHeight, barWidth, fillHeight);
+    this.uiCtx.fillRect(barX, barY, barWidth, fillHeight);
 
     // Border
-    this.uiCtx.strokeStyle = '#ffffff';
-    this.uiCtx.lineWidth = 2;
+    this.uiCtx.strokeStyle = isAimMode ? '#888888' : '#ffffff';
+    this.uiCtx.lineWidth = isAimMode ? 1 : 3;
     this.uiCtx.strokeRect(barX, barY, barWidth, barHeight);
+
+    this.drawMicroDial2D(microDialState);
+  }
+
+  private drawMicroDial2D(state?: MicroDialRenderState) {
+    const barWidth = 30;
+    const barHeight = 200;
+    const rect = this.getSideBarRect('left', barWidth, barHeight);
+    const barX = rect.x;
+    const barY = rect.y;
+    const ctx = this.uiCtx;
+    const value = Math.max(-1, Math.min(1, state?.value ?? 0));
+    const degrees = state?.degrees ?? 0;
+    const isActive = state?.isActive ?? false;
+    const handlePercent = 0.5 - (value * 0.5);
+    const handleY = barY + handlePercent * barHeight;
+    const centerY = barY + barHeight / 2;
+    const handleX = barX + barWidth / 2;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.fillRect(barX, barY, barWidth, barHeight);
+    ctx.strokeStyle = isActive ? '#ffffff' : '#888888';
+    ctx.lineWidth = isActive ? 2 : 1.5;
+    ctx.strokeRect(barX, barY, barWidth, barHeight);
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(barX + 4, centerY);
+    ctx.lineTo(barX + barWidth - 4, centerY);
+    ctx.stroke();
+
+    for (let i = 1; i <= 2; i++) {
+      const offset = i * (barHeight / 6);
+      ctx.beginPath();
+      ctx.moveTo(barX + 6, centerY - offset);
+      ctx.lineTo(barX + barWidth - 6, centerY - offset);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(barX + 6, centerY + offset);
+      ctx.lineTo(barX + barWidth - 6, centerY + offset);
+      ctx.stroke();
+    }
+
+    if (Math.abs(value) > 0.01) {
+      const fromY = value > 0 ? handleY : centerY;
+      const toY = value > 0 ? centerY : handleY;
+      const gradient = ctx.createLinearGradient(barX, fromY, barX, toY);
+      if (value > 0) {
+        gradient.addColorStop(0, 'rgba(111, 202, 255, 0.8)');
+        gradient.addColorStop(1, 'rgba(111, 202, 255, 0.1)');
+      } else {
+        gradient.addColorStop(0, 'rgba(255, 138, 101, 0.8)');
+        gradient.addColorStop(1, 'rgba(255, 138, 101, 0.1)');
+      }
+      ctx.fillStyle = gradient;
+      ctx.fillRect(barX + 5, Math.min(fromY, toY), barWidth - 10, Math.abs(toY - fromY));
+    }
+
+    const handleRadius = barWidth / 2 - 6;
+    ctx.beginPath();
+    ctx.arc(handleX, handleY, handleRadius, 0, Math.PI * 2);
+    ctx.fillStyle = isActive ? '#fff59d' : '#ffd54f';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
+    ctx.stroke();
+
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(handleX, handleY - handleRadius + 4);
+    ctx.lineTo(handleX, handleY + handleRadius - 4);
+    ctx.stroke();
+
+    ctx.restore();
   }
 
   drawAimInfo(ball: Ball, angle: number, power: number, prediction?: PredictionResult) {
@@ -4638,12 +4734,158 @@ export class Renderer3D extends BaseRenderer {
   }
   
   getPowerBarBounds() {
-    const canvas = this.renderer.domElement;
     const barWidth = 30;
     const barHeight = 200;
-    const barX = canvas.width - 60;
-    const barY = (canvas.height - barHeight) / 2;
-    return { x: barX, y: barY, width: barWidth, height: barHeight };
+    const rect = this.getSideBarRect('right', barWidth, barHeight);
+    return { x: rect.x, y: rect.y, width: barWidth, height: barHeight };
+  }
+
+  getMicroDialBounds() {
+    const barWidth = 30;
+    const barHeight = 200;
+    const rect = this.getSideBarRect('left', barWidth, barHeight);
+    return { x: rect.x, y: rect.y, width: barWidth, height: barHeight };
+  }
+
+  private getSideBarRect(side: 'left' | 'right', width: number, height: number) {
+    const geom = getTableGeometry();
+    const frameHalfWidth = geom.frameOutline.outerHalfWidth;
+    const frameWorldX = side === 'right' ? frameHalfWidth : -frameHalfWidth;
+    const frameScreen = this.worldToScreen(frameWorldX, 0);
+    const offsetFromFrame = 20;
+    const x = side === 'right' ? frameScreen.x + offsetFromFrame : frameScreen.x - offsetFromFrame - width;
+    const y = (this.uiCanvas.height - height) / 2;
+    return { x, y, width, height };
+  }
+
+  queuePocketAnimation(event: PocketAnimationEvent) {
+    this.queuedPocketEvents.push(event);
+  }
+
+  private processPocketAnimationQueue() {
+    if (!this.queuedPocketEvents.length) return;
+    const duration = CONFIG.POCKET_ANIMATION_DURATION_MS ?? 400;
+    const now = performance.now();
+    while (this.queuedPocketEvents.length) {
+      const event = this.queuedPocketEvents.shift()!;
+      this.pocketAnimations.push({ event, startTime: now, duration });
+    }
+  }
+
+  private drawPocketAnimations() {
+    if (!this.pocketAnimations.length) return;
+    const now = performance.now();
+    const ctx = this.uiCtx;
+    ctx.save();
+    this.pocketAnimations = this.pocketAnimations.filter((anim) => {
+      const elapsed = now - anim.startTime;
+      const progress = Math.min(1, elapsed / Math.max(anim.duration, 1));
+      this.drawPocketAnimationSprite(anim.event, progress, ctx);
+      return progress < 1;
+    });
+    ctx.restore();
+  }
+
+  private drawPocketAnimationSprite(event: PocketAnimationEvent, progress: number, ctx: CanvasRenderingContext2D) {
+    const eased = progress * progress * (3 - 2 * progress);
+    const startScreen = this.worldToScreen(event.position.x, event.position.y);
+    const endScreen = this.worldToScreen(event.pocket.x, event.pocket.y);
+    const dropOffset = CONFIG.POCKET_ANIMATION_DROP_DEPTH ?? 1.5;
+    const x = startScreen.x + (endScreen.x - startScreen.x) * eased;
+    const y = startScreen.y + (endScreen.y - startScreen.y + dropOffset * this.scale) * eased;
+    const baseRadius = Math.max(3, event.radius * this.scale);
+    const radius = Math.max(4, baseRadius * (1 - 0.35 * eased));
+    const alpha = Math.max(0, 1 - eased);
+    const colors = this.getBallColor(event.ballId);
+
+    const gradient = ctx.createRadialGradient(x - radius * 0.3, y - radius * 0.3, radius * 0.15, x, y, radius);
+    gradient.addColorStop(0, colors.light);
+    gradient.addColorStop(1, colors.dark);
+
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    const iconImage = this.getPocketIconImage(event.icon);
+    if (iconImage) {
+      const size = radius * 2;
+      ctx.drawImage(iconImage, x - radius, y - radius, size, size);
+    }
+
+    ctx.lineWidth = 1.2;
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+    ctx.stroke();
+  }
+
+  private getBallColor(ballId: number) {
+    const hex = CONFIG.BALL_COLORS[ballId - 1] || '#ffffff';
+    const base = hex.startsWith('#') ? hex : `#${hex}`;
+    const light = lightenHexColor(base, 0.2);
+    const dark = darkenHexColor(base, 0.35);
+    return { light, dark };
+  }
+
+  private getPocketIconImage(iconSrc?: string) {
+    if (!iconSrc) return null;
+    let entry = this.pocketIconCache.get(iconSrc);
+    if (!entry) {
+      const img = new Image();
+      entry = { img, ready: img.complete, failed: false };
+      img.onload = () => {
+        entry!.ready = true;
+      };
+      img.onerror = () => {
+        entry!.failed = true;
+      };
+      img.src = iconSrc;
+      this.pocketIconCache.set(iconSrc, entry);
+    }
+    if (entry.failed || !entry.ready) return null;
+    return entry.img;
+  }
+
+  override triggerShotShake(intensity: number) {
+    const clamped = Math.max(0, Math.min(1, intensity));
+    if (clamped <= 0) return;
+    const duration = CONFIG.HEAVY_SHOT_SHAKE_DURATION_MS ?? 240;
+    const strength = (CONFIG.HEAVY_SHOT_SHAKE_MAX_OFFSET_PX ?? 5) * clamped;
+    this.shakeState = {
+      start: performance.now(),
+      duration,
+      strength,
+      seed: Math.random() * Math.PI * 2,
+    };
+  }
+
+  private computeShakeOffset() {
+    if (!this.shakeState) return { x: 0, y: 0 };
+    const now = performance.now();
+    const elapsed = now - this.shakeState.start;
+    if (elapsed >= this.shakeState.duration) {
+      this.shakeState = null;
+      return { x: 0, y: 0 };
+    }
+    const progress = elapsed / Math.max(1, this.shakeState.duration);
+    const decay = 1 - progress;
+    const angle = now * 0.04 + this.shakeState.seed;
+    const x = Math.cos(angle * 50) * this.shakeState.strength * decay;
+    const y = Math.sin(angle * 60) * this.shakeState.strength * decay;
+    return { x, y };
+  }
+
+  private applyShakeTransform(x: number, y: number) {
+    const transform = Math.abs(x) < 0.01 && Math.abs(y) < 0.01
+      ? ''
+      : `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px)`;
+    this.canvas.style.transform = transform;
+    if (this.uiCanvas) {
+      this.uiCanvas.style.transform = transform;
+    }
+    if (this.referenceOverlay) {
+      this.referenceOverlay.style.transform = transform;
+    }
   }
 
   /**

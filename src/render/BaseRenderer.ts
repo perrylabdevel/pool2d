@@ -56,4 +56,11 @@ export abstract class BaseRenderer {
    * Clear the canvas/screen
    */
   abstract clear(): void;
+
+  /**
+   * Optional hook for camera/screen shake when shots fire
+   */
+  triggerShotShake(_intensity: number): void {
+    // Default no-op
+  }
 }

@@ -56,6 +56,8 @@ npm run test
   - Hold **Shift** for ultra-fine aim mode
 - **Power mode**: Drag power bar to set power, release to shoot
   - Press **Space** to enter power mode quickly
+- **Micro aim dial**: Left-side dial applies ±2.5° offsets for ultra-fine cuts
+  - Works best after locking aim with **A**; double-click dial to reset to 0°
 - **Quick shoot**: Click near cue ball for a low-power tap shot
 
 ### Practice & Debug

@@ -1,6 +1,6 @@
 // Main game controller
 
-import { PhysicsWorld } from '../physics/Physics';
+import { PhysicsWorld, type PocketCaptureDetails } from '../physics/Physics';
 import { Ball } from '../physics/Shapes';
 import { Renderer3D } from '../render/Renderer3D';
 import { InputManager } from '../input/Input';
@@ -18,6 +18,7 @@ import { SettingsPanel } from '../ui/SettingsPanel';
 import { GeometryPanel } from '../ui/GeometryPanel';
 import { ModernGeometryPanel } from '../ui/ModernGeometryPanel';
 import { RenderLayerPanel } from '../ui/RenderLayerPanel';
+import { AudioPanel } from '../ui/AudioPanel';
 import { scenarioManager } from '../debug/ScenarioManager';
 import { Player, PlayerType, BallGroup } from './Player';
 import { GameStateMachine, GameState } from './GameStateMachine';
@@ -26,6 +27,9 @@ import { GameModeBase } from './modes/GameModeBase';
 import { TimeAttackMode, TimeAttackDifficulty } from './modes/TimeAttackMode';
 import { PerfectGameMode } from './modes/PerfectGameMode';
 import { SpeedPoolMode } from './modes/SpeedPoolMode';
+import type { PocketAnimationEvent } from '../render/ControlTypes';
+import { AudioManager } from '../sound/AudioManager';
+import type { AudioSettings } from '../ui/SettingsManager';
 
 export enum GameMode {
   PRACTICE,
@@ -69,8 +73,10 @@ export class Game {
   geometryPanel: GeometryPanel;
   modernGeometryPanel: ModernGeometryPanel;
   renderLayersPanel: RenderLayerPanel;
+  audioPanel: AudioPanel;
   rules: EightBallRules;
   predictor: Predictor;
+  audio: AudioManager;
   mode: GameMode;
   currentRuleset: string = 'TOURNAMENT'; // Tournament rules as default
   private lastBallScale: number;
@@ -111,10 +117,13 @@ export class Game {
   wasAimModeBeforeSpace: boolean = true;
   powerDragStartY: number = 0;
   spaceKeyHeld: boolean = false;
+  microAimDialValue: number = 0;
+  isDraggingMicroDial: boolean = false;
   
   // Cached prediction for frozen paths in power mode (normal mode only)
   cachedPrediction: ReturnType<Predictor['predictFirstContact']> | null = null;
   cachedDirection: { x: number; y: number } | null = null;
+  pocketAnimationEvents: PocketAnimationEvent[] = [];
   
   // Ball dragging (practice mode only)
   isDraggingBall: boolean = false;
@@ -125,6 +134,7 @@ export class Game {
     
     // Now create physics world - it will read the correct CONFIG values
     this.world = new PhysicsWorld();
+    this.world.onBallPocketed = (details) => this.handleBallPocketed(details);
     this.renderer = new Renderer3D(gameCanvas);
     this.input = new InputManager(gameCanvas);
     this.debug = new DebugDraw(debugCanvas);
@@ -132,8 +142,22 @@ export class Game {
     this.geometryPanel = new GeometryPanel(this.hud.settingsManager, () => this.restart());
     this.modernGeometryPanel = new ModernGeometryPanel(this.hud.settingsManager, () => this.restart());
     this.renderLayersPanel = new RenderLayerPanel(this.hud.settingsManager, this.renderer);
+    this.audioPanel = new AudioPanel(this.hud.settingsManager);
     this.rules = new EightBallRules(RULES_PRESETS[this.currentRuleset]);
     this.predictor = new Predictor();
+    this.audio = new AudioManager();
+    this.audio.setSettings(this.hud.settingsManager.getAudioSettings());
+    window.addEventListener('settings:audio-changed', (event) => {
+      const detail = (event as CustomEvent<{ settings: AudioSettings }>).detail;
+      if (detail?.settings) {
+        this.audio.setSettings(detail.settings);
+      }
+    });
+    window.addEventListener('audio:preview', (event) => {
+      const detail = (event as CustomEvent<{ event: string }>).detail;
+      if (!detail?.event) return;
+      this.handleAudioPreview(detail.event);
+    });
     this.mode = GameMode.EIGHT_BALL;
     this.lastBallScale = CONFIG.BALL_SCALE ?? 1;
 
@@ -215,18 +239,21 @@ export class Game {
       if (this.waitingForPocketCall) return;
       this.handleBallDragStart(e);
       this.handlePowerBarMouseDown(e);
+      this.handleMicroDialMouseDown(e);
     });
     this.input.canvas.addEventListener('mousemove', (e) => {
       if (this.isPlayerInputBlocked()) return;
       if (this.waitingForPocketCall) return;
       this.handleBallDrag(e);
       this.handlePowerBarMouseMove(e);
+      this.handleMicroDialMouseMove(e);
     });
     this.input.canvas.addEventListener('mouseup', (e) => {
       if (this.isPlayerInputBlocked()) return;
       if (this.waitingForPocketCall) return;
       this.handleBallDragEnd(e);
       this.handlePowerBarMouseUp(e);
+      this.handleMicroDialMouseUp(e);
     });
     
     // Handle A key to toggle aim/power mode
@@ -305,6 +332,9 @@ export class Game {
   
   setupEventListeners() {
     window.addEventListener('resize', () => this.resize());
+    window.addEventListener('pointerdown', () => {
+      this.audio.ensureUnlocked().catch(() => {/* ignore */});
+    }, { once: true });
     window.addEventListener('renderer:resized', (event: Event) => {
       const detail = (event as CustomEvent<{ width: number; height: number; scale: number; offsetX: number; offsetY: number }>).detail;
       if (!detail) return;
@@ -487,6 +517,10 @@ export class Game {
     });
     this.hud.registerPanel('render-layer-panel', this.renderLayersPanel.getController(), {
       hotkeys: ['l'],
+      persistState: true,
+    });
+    this.hud.registerPanel('audio-panel', this.audioPanel.getController(), {
+      hotkeys: ['u'],
       persistState: true,
     });
     this.hud.panelManager.restoreLastPanel();
@@ -799,6 +833,7 @@ export class Game {
 
     // Rebuild physics world (recomputes rails/pockets from current CONFIG)
     this.world = new PhysicsWorld();
+    this.world.onBallPocketed = (details) => this.handleBallPocketed(details);
 
     // Recreate rules with current ruleset config
     this.rules = new EightBallRules(RULES_PRESETS[this.currentRuleset]);
@@ -822,6 +857,7 @@ export class Game {
   setupCollisionTracking() {
     // Hook up ball collision tracking for rules engine
     this.world.onBallCollision = (ballA, ballB) => {
+      this.playBallCollisionAudio(ballA, ballB);
       if (this.mode !== GameMode.EIGHT_BALL) return;
 
       // Track first contact with cue ball
@@ -835,6 +871,7 @@ export class Game {
     // Track rail contact
     if (this.world) {
       this.world.onRailCollision = (ball, rail) => {
+        this.playRailCollisionAudio(ball);
         if (this.mode !== GameMode.EIGHT_BALL) return;
         this.rules.recordRailContact(ball?.id);
       };
@@ -884,6 +921,7 @@ export class Game {
     this.cachedPrediction = null;
     this.cachedDirection = null;
     this.input.resetAimAngle();
+    this.isAimMode = false;
 
     // Record shot for capture system if active
     if (shotCapture.isCapturing()) {
@@ -908,10 +946,15 @@ export class Game {
     const velocity = power * CONFIG.CUE_POWER_MULTIPLIER;
     const vx = Math.cos(angle) * velocity;
     const vy = Math.sin(angle) * velocity;
-    
+
     this.cueBall.setVelocity(vx, vy);
     this.world.logShotSnapshot(angle, power);
     physicsRecorder.recordShot(angle, power);
+    const intensity = Math.max(0, Math.min(1, power / CONFIG.CUE_POWER_MAX));
+    if (CONFIG.HEAVY_SHOT_SHAKE_MAX_OFFSET_PX && this.renderer && typeof (this.renderer as any).triggerShotShake === 'function') {
+      (this.renderer as any).triggerShotShake(intensity);
+    }
+    this.audio.playCueHit(intensity);
     this.canShoot = false;
 
     if (this.mode === GameMode.EIGHT_BALL) {
@@ -920,7 +963,7 @@ export class Game {
 
     // Track shot in arcade mode
     if (this.arcadeMode) {
-      this.arcadeMode.onShotTaken(angle, power);
+    this.arcadeMode.onShotTaken(angle, power);
     }
   }
   
@@ -960,6 +1003,11 @@ export class Game {
       }
 
       this.canShoot = !matchOver;
+      if (!matchOver) {
+        this.isAimMode = true;
+        this.wasAimModeBeforeSpace = true;
+        this.input.resetAimAngle();
+      }
 
       if (this.cueBall && this.cueBall.pocketed && !matchOver) {
         this.respawnCueBall();
@@ -1123,6 +1171,75 @@ export class Game {
 
     this.hud.updatePlayerBalls(1, remainingForGroup(p1.group ?? null));
     this.hud.updatePlayerBalls(2, remainingForGroup(p2.group ?? null));
+  }
+
+  private handleBallPocketed(details: PocketCaptureDetails) {
+    const { ball, pocket, position, velocity } = details;
+    const iconMap: Map<number, string> | undefined = (window as any).__BALL_ICONS__;
+    const iconSrc = iconMap?.get(ball.id);
+    const event: PocketAnimationEvent = {
+      ballId: ball.id,
+      position: { x: position.x, y: position.y },
+      velocity: { x: velocity.x, y: velocity.y },
+      pocket: { id: pocket.id ?? null, x: pocket.x, y: pocket.y },
+      radius: ball.radius,
+      timestamp: performance.now(),
+      icon: iconSrc,
+    };
+
+    this.pocketAnimationEvents.push(event);
+    if (this.pocketAnimationEvents.length > 48) {
+      this.pocketAnimationEvents.splice(0, this.pocketAnimationEvents.length - 48);
+    }
+
+    if (typeof this.renderer.queuePocketAnimation === 'function') {
+      this.renderer.queuePocketAnimation(event);
+    }
+
+    const speed = Math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
+    const intensity = Math.max(0, Math.min(1, speed / 220));
+    if (intensity > 0.05) {
+      this.audio.playPocketDrop(intensity);
+    }
+  }
+
+  private playBallCollisionAudio(ballA: Ball, ballB: Ball) {
+    const relVx = ballA.vx - ballB.vx;
+    const relVy = ballA.vy - ballB.vy;
+    const relSpeed = Math.sqrt(relVx * relVx + relVy * relVy);
+    const intensity = Math.max(0, Math.min(1, relSpeed / 200));
+    if (intensity > 0.03) {
+      this.audio.playBallCollision(intensity);
+    }
+  }
+
+  private playRailCollisionAudio(ball?: Ball | null) {
+    if (!ball) return;
+    const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
+    const intensity = Math.max(0, Math.min(1, speed / 180));
+    if (intensity > 0.02) {
+      this.audio.playRailHit(intensity);
+    }
+  }
+
+  private handleAudioPreview(eventKey: string) {
+    const intensity = 0.75;
+    switch (eventKey) {
+      case 'CUE':
+        this.audio.playCueHit(intensity);
+        break;
+      case 'BALL':
+        this.audio.playBallCollision(intensity);
+        break;
+      case 'RAIL':
+        this.audio.playRailHit(intensity);
+        break;
+      case 'POCKET':
+        this.audio.playPocketDrop(intensity);
+        break;
+      default:
+        break;
+    }
   }
 
   private getHudChipSizePx(): number {
@@ -1331,9 +1448,9 @@ export class Game {
     // If no object balls found, use default sensitivity
     if (minDistance === Infinity) {
       return 1.0;
-    }
+  }
 
-    // Map distance to sensitivity using linear interpolation
+  // Map distance to sensitivity using linear interpolation
     // Short shots (< MIN_DISTANCE): full sensitivity (1.0)
     // Long shots (> MAX_DISTANCE): minimum sensitivity (MIN_SENSITIVITY)
     if (minDistance <= CONFIG.DISTANCE_AIM_MIN_DISTANCE) {
@@ -1348,6 +1465,39 @@ export class Game {
     }
   }
 
+  private getMicroAimOffsetDegrees(): number {
+    const maxDegrees = CONFIG.MICRO_AIM_MAX_DEGREES ?? 0;
+    return maxDegrees * this.microAimDialValue;
+  }
+
+  private getMicroAimOffsetRadians(): number {
+    return this.getMicroAimOffsetDegrees() * Math.PI / 180;
+  }
+
+  private applyMicroAimOffset(angle: number): number {
+    if (!this.microAimDialValue) return angle;
+    let adjusted = angle + this.getMicroAimOffsetRadians();
+    const tau = Math.PI * 2;
+    while (adjusted <= -Math.PI) adjusted += tau;
+    while (adjusted > Math.PI) adjusted -= tau;
+    return adjusted;
+  }
+
+  private setMicroAimDialValue(value: number) {
+    const clamped = Math.max(-1, Math.min(1, value));
+    const snapped = Math.abs(clamped) < 0.01 ? 0 : clamped;
+    if (Math.abs(snapped - this.microAimDialValue) < 1e-4) return;
+    this.microAimDialValue = snapped;
+    this.cachedPrediction = null;
+    this.cachedDirection = null;
+  }
+
+  private updateMicroDialFromMouse(bounds: { x: number; y: number; width: number; height: number }, mouseY: number) {
+    const relative = Math.max(0, Math.min(1, (mouseY - bounds.y) / bounds.height));
+    const normalized = (0.5 - relative) * 2;
+    this.setMicroAimDialValue(normalized);
+  }
+
   render() {
     const alpha = this.accumulator / CONFIG.PHYSICS_DT;
 
@@ -1359,7 +1509,8 @@ export class Game {
       const aimSensitivity = this.calculateAimSensitivity();
 
       // Use locked angle in power mode, live angle in aim mode
-      const angle = this.isAimMode ? this.input.getAimAngle(this.cueBall, aimSensitivity) : this.lockedAngle;
+      const baseAngle = this.isAimMode ? this.input.getAimAngle(this.cueBall, aimSensitivity) : this.lockedAngle;
+      const angle = this.applyMicroAimOffset(baseAngle);
       
       // Predict first contact (always run to clip aim line at rails/balls)
       const direction = {
@@ -1427,7 +1578,12 @@ export class Game {
         }
       }
       
-      this.renderer.drawCueAndPowerBar(this.cueBall, angle, this.currentPower, this.aimAssist, true, this.isAimMode, prediction);
+      const microDialState = {
+        value: this.microAimDialValue,
+        degrees: this.getMicroAimOffsetDegrees(),
+        isActive: this.isDraggingMicroDial,
+      };
+      this.renderer.drawCueAndPowerBar(this.cueBall, angle, this.currentPower, this.aimAssist, true, this.isAimMode, prediction, microDialState);
     }
 
     // Highlight pockets when waiting for pocket call
@@ -1541,19 +1697,63 @@ export class Game {
       this.cueBall &&
       !this.cueBall.pocketed;
 
+    let shotFired = false;
     if (canShootNow) {
-      this.shoot(this.lockedAngle, this.currentPower);
+      const shotAngle = this.applyMicroAimOffset(this.lockedAngle);
+      this.shoot(shotAngle, this.currentPower);
       this.currentPower = 0;
-      this.isAimMode = true; // Reset to aim mode after shooting
+      shotFired = true;
     }
 
     if (this.isSpacePowerMode && !this.spaceKeyHeld) {
       this.isSpacePowerMode = false;
-      this.isAimMode = this.wasAimModeBeforeSpace;
-      if (this.wasAimModeBeforeSpace) {
-        this.currentPower = 0;
+      if (!shotFired) {
+        this.isAimMode = this.wasAimModeBeforeSpace;
+        if (this.wasAimModeBeforeSpace) {
+          this.currentPower = 0;
+        }
       }
     }
+  }
+
+  handleMicroDialMouseDown(e: MouseEvent) {
+    if (!this.canShoot || !this.cueBall || this.cueBall.pocketed) return;
+    const bounds = this.renderer.getMicroDialBounds();
+    if (!bounds) return;
+
+    const rect = this.input.canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    if (
+      mouseX >= bounds.x &&
+      mouseX <= bounds.x + bounds.width &&
+      mouseY >= bounds.y &&
+      mouseY <= bounds.y + bounds.height
+    ) {
+      if (e.detail >= 2) {
+        this.setMicroAimDialValue(0);
+        this.isDraggingMicroDial = false;
+        return;
+      }
+      this.isDraggingMicroDial = true;
+      this.updateMicroDialFromMouse(bounds, mouseY);
+    }
+  }
+
+  handleMicroDialMouseMove(e: MouseEvent) {
+    if (!this.isDraggingMicroDial) return;
+    const bounds = this.renderer.getMicroDialBounds();
+    if (!bounds) return;
+
+    const rect = this.input.canvas.getBoundingClientRect();
+    const mouseY = e.clientY - rect.top;
+    this.updateMicroDialFromMouse(bounds, mouseY);
+  }
+
+  handleMicroDialMouseUp(_e: MouseEvent) {
+    if (!this.isDraggingMicroDial) return;
+    this.isDraggingMicroDial = false;
   }
   
   handleBallDragStart(e: MouseEvent) {

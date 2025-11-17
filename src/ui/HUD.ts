@@ -185,11 +185,11 @@ export class HUD {
     ballsContainer.innerHTML = '';
 
     if (!remainingIds) {
-      // Unknown group yet – show 7 neutral placeholders
+      // Unknown group yet – show 7 empty chips (same style as pocketed balls)
       for (let i = 0; i < 7; i++) {
-        const dot = document.createElement('span');
-        dot.className = 'ball-dot';
-        ballsContainer.appendChild(dot);
+        const chip = document.createElement('span');
+        chip.className = 'ball-chip empty placeholder';
+        ballsContainer.appendChild(chip);
       }
       return;
     }
