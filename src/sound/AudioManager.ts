@@ -1,74 +1,63 @@
 import { DEFAULT_AUDIO_SETTINGS, type AudioSettings } from '../ui/SettingsManager';
 
-type EventKey = 'cue' | 'ball' | 'rail' | 'pocket';
+// Audio file paths - will be loaded dynamically
+const AUDIO_PATHS = {
+  ballCollisionLight: '/src/assets/audio/ball-collision-light.wav',
+  ballCollisionMedium: '/src/assets/audio/ball-collision-medium.wav',
+  ballCollisionHard: '/src/assets/audio/ball-collision-hard.wav',
+  cueHit1: '/src/assets/audio/cue-hit-1.wav',
+  cueHit2: '/src/assets/audio/cue-hit-2.wav',
+  railHit1: '/src/assets/audio/rail-hit-1.wav',
+  railHit2: '/src/assets/audio/rail-hit-2.wav',
+  pocketDrop: '/src/assets/audio/pocket-drop.wav',
+};
 
-type EventConfig = {
-  volume: keyof AudioSettings;
-  baseFreq: keyof AudioSettings;
-  attack: keyof AudioSettings;
-  sustain: keyof AudioSettings;
-  release: keyof AudioSettings;
-  waveform: keyof AudioSettings;
-  freqIntensityScale: number;
-  freqEndRatio: number;
-  sustainBase: number;
-  sustainRange: number;
+type AudioSample = {
+  buffer: AudioBuffer | null;
+  url: string;
+};
+
+type SampleSet = {
+  samples: AudioSample[];
+  volumeKey: keyof AudioSettings;
 };
 
 export class AudioManager {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
-  private sources: OscillatorNode[] = [];
   private settings: AudioSettings = { ...DEFAULT_AUDIO_SETTINGS };
+  private loadingPromises: Promise<void>[] = [];
+  private isLoaded = false;
+  private lastPlayTime: Record<string, number> = {}; // Prevent sound spam
+  private activeSources: AudioBufferSourceNode[] = []; // Track active sounds for limiting
 
-  private eventConfig: Record<EventKey, EventConfig> = {
-    cue: {
-      volume: 'cueHits',
-      baseFreq: 'cueBaseFreq',
-      attack: 'cueAttack',
-      sustain: 'cueSustain',
-      release: 'cueRelease',
-      waveform: 'cueWaveform',
-      freqIntensityScale: 40,
-      freqEndRatio: 0.65,
-      sustainBase: 0.15,
-      sustainRange: 0.45,
+  // Sample banks for each sound type
+  private sampleSets: Record<string, SampleSet> = {
+    ballCollision: {
+      samples: [
+        { buffer: null, url: AUDIO_PATHS.ballCollisionLight },
+        { buffer: null, url: AUDIO_PATHS.ballCollisionMedium },
+        { buffer: null, url: AUDIO_PATHS.ballCollisionHard },
+      ],
+      volumeKey: 'ballCollisions',
     },
-    ball: {
-      volume: 'ballCollisions',
-      baseFreq: 'ballBaseFreq',
-      attack: 'ballAttack',
-      sustain: 'ballSustain',
-      release: 'ballRelease',
-      waveform: 'ballWaveform',
-      freqIntensityScale: 25,
-      freqEndRatio: 0.6,
-      sustainBase: 0.12,
-      sustainRange: 0.35,
+    cueHit: {
+      samples: [
+        { buffer: null, url: AUDIO_PATHS.cueHit1 },
+        { buffer: null, url: AUDIO_PATHS.cueHit2 },
+      ],
+      volumeKey: 'cueHits',
     },
-    rail: {
-      volume: 'railHits',
-      baseFreq: 'railBaseFreq',
-      attack: 'railAttack',
-      sustain: 'railSustain',
-      release: 'railRelease',
-      waveform: 'railWaveform',
-      freqIntensityScale: 35,
-      freqEndRatio: 0.55,
-      sustainBase: 0.08,
-      sustainRange: 0.25,
+    railHit: {
+      samples: [
+        { buffer: null, url: AUDIO_PATHS.railHit1 },
+        { buffer: null, url: AUDIO_PATHS.railHit2 },
+      ],
+      volumeKey: 'railHits',
     },
-    pocket: {
-      volume: 'pocketDrops',
-      baseFreq: 'pocketBaseFreq',
-      attack: 'pocketAttack',
-      sustain: 'pocketSustain',
-      release: 'pocketRelease',
-      waveform: 'pocketWaveform',
-      freqIntensityScale: 20,
-      freqEndRatio: 0.4,
-      sustainBase: 0.18,
-      sustainRange: 0.4,
+    pocketDrop: {
+      samples: [{ buffer: null, url: AUDIO_PATHS.pocketDrop }],
+      volumeKey: 'pocketDrops',
     },
   };
 
@@ -82,6 +71,36 @@ export class AudioManager {
     return this.ctx;
   }
 
+  /**
+   * Load all audio samples
+   */
+  async loadSamples(): Promise<void> {
+    const ctx = this.audioContext;
+
+    for (const setKey in this.sampleSets) {
+      const sampleSet = this.sampleSets[setKey];
+
+      for (const sample of sampleSet.samples) {
+        const promise = fetch(sample.url)
+          .then((response) => response.arrayBuffer())
+          .then((arrayBuffer) => ctx.decodeAudioData(arrayBuffer))
+          .then((audioBuffer) => {
+            sample.buffer = audioBuffer;
+          })
+          .catch((error) => {
+            console.warn(`Failed to load audio sample: ${sample.url}`, error);
+            // Continue even if some samples fail to load
+          });
+
+        this.loadingPromises.push(promise);
+      }
+    }
+
+    await Promise.all(this.loadingPromises);
+    this.isLoaded = true;
+    console.log('All audio samples loaded successfully');
+  }
+
   async ensureUnlocked() {
     const ctx = this.audioContext;
     if (ctx.state === 'suspended') {
@@ -90,6 +109,11 @@ export class AudioManager {
       } catch (err) {
         console.warn('Audio resume failed', err);
       }
+    }
+
+    // Load samples if not already loaded
+    if (!this.isLoaded && this.loadingPromises.length === 0) {
+      await this.loadSamples();
     }
   }
 
@@ -100,68 +124,147 @@ export class AudioManager {
     }
   }
 
-  private playEvent(event: EventKey, intensity: number) {
-    const cfg = this.eventConfig[event];
-    const level = this.settings[cfg.volume] as number;
-    if (level <= 0) return;
+  /**
+   * Play an audio sample with variations
+   */
+  private playSample(
+    sampleSetKey: string,
+    intensity: number,
+    pitchVariation: number = 0.1,
+    volumeVariation: number = 0.1,
+    minInterval: number = 0.02 // Minimum time between same sound type (20ms)
+  ) {
+    const sampleSet = this.sampleSets[sampleSetKey];
+    if (!sampleSet) return;
 
+    const volume = this.settings[sampleSet.volumeKey] as number;
+    if (volume <= 0) return;
+
+    // Prevent sound spam - throttle rapid repeated sounds
     const ctx = this.audioContext;
     const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
+    const lastTime = this.lastPlayTime[sampleSetKey] || 0;
 
-    const baseFreq = this.settings[cfg.baseFreq] as number;
-    const attack = this.settings[cfg.attack] as number;
-    const sustainSetting = this.settings[cfg.sustain] as number;
-    const release = this.settings[cfg.release] as number;
-    const waveform = this.settings[cfg.waveform] as OscillatorType;
+    if (now - lastTime < minInterval) {
+      return; // Skip this sound, too soon after last one
+    }
+    this.lastPlayTime[sampleSetKey] = now;
 
-    osc.type = waveform;
-    osc.frequency.setValueAtTime(baseFreq + cfg.freqIntensityScale * intensity, now);
-    osc.frequency.exponentialRampToValueAtTime(baseFreq * cfg.freqEndRatio, now + Math.max(0.01, attack + 0.05));
+    // Limit simultaneous sounds to prevent buildup
+    const maxSimultaneous = 6;
+    if (this.activeSources.length >= maxSimultaneous) {
+      // Stop oldest sound to make room
+      const oldest = this.activeSources.shift();
+      if (oldest) {
+        try {
+          oldest.stop();
+        } catch (e) {
+          // Already stopped, ignore
+        }
+      }
+    }
 
-    const sustainLevel = Math.max(
-      0.0001,
-      level * sustainSetting * (cfg.sustainBase + cfg.sustainRange * intensity)
+    // Select sample based on intensity
+    const sampleIndex = Math.min(
+      Math.floor(intensity * sampleSet.samples.length),
+      sampleSet.samples.length - 1
     );
 
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.linearRampToValueAtTime(sustainLevel, now + attack);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + attack + release);
+    const sample = sampleSet.samples[sampleIndex];
+    if (!sample.buffer) {
+      console.warn(`Audio buffer not loaded for ${sampleSetKey}[${sampleIndex}]`);
+      return;
+    }
 
-    osc.connect(gain);
-    gain.connect(this.masterGain ?? ctx.destination);
-    osc.start(now);
-    osc.stop(now + attack + release + 0.05);
+    // Create audio source
+    const source = ctx.createBufferSource();
+    source.buffer = sample.buffer;
 
-    this.sources.push(osc);
-    osc.onended = () => {
-      this.sources = this.sources.filter((s) => s !== osc);
+    // Add pitch variation (playback rate)
+    const pitchJitter = 1.0 + (Math.random() - 0.5) * 2 * pitchVariation;
+    source.playbackRate.value = pitchJitter;
+
+    // Create gain node for volume control
+    const gainNode = ctx.createGain();
+
+    // Calculate final volume with MUCH better scaling
+    // Use square root to compress dynamic range - prevents loud sounds from being too loud
+    const intensityScaled = Math.sqrt(intensity); // 0.5 intensity becomes 0.707 instead of 0.5
+    const volumeJitter = 1.0 + (Math.random() - 0.5) * 2 * volumeVariation;
+
+    // Final volume: base volume * compressed intensity * small variation
+    // Max volume is capped at 0.7 to prevent distortion
+    const finalVolume = Math.min(0.7, volume * intensityScaled * volumeJitter * 0.6);
+    gainNode.gain.value = Math.max(0, finalVolume);
+
+    // Connect nodes
+    source.connect(gainNode);
+    gainNode.connect(this.masterGain ?? ctx.destination);
+
+    // Play sound
+    source.start(now);
+
+    // Track active source
+    this.activeSources.push(source);
+
+    // Clean up after playback
+    source.onended = () => {
+      gainNode.disconnect();
+      source.disconnect();
+      // Remove from active sources
+      const index = this.activeSources.indexOf(source);
+      if (index > -1) {
+        this.activeSources.splice(index, 1);
+      }
     };
   }
 
   stopAll() {
-    this.sources.forEach((osc) => {
+    // Stop all active sounds
+    this.activeSources.forEach((source) => {
       try {
-        osc.stop();
-      } catch {}
+        source.stop();
+      } catch (e) {
+        // Already stopped, ignore
+      }
     });
-    this.sources = [];
+    this.activeSources = [];
+    this.lastPlayTime = {};
   }
 
-  playCueHit(intensity: number) {
-    this.playEvent('cue', intensity);
-  }
-
+  /**
+   * Play ball collision sound
+   * Intensity-based sample selection with pitch and volume variation
+   */
   playBallCollision(intensity: number) {
-    this.playEvent('ball', intensity);
+    // Throttle rapid ball collisions to 30ms intervals
+    this.playSample('ballCollision', intensity, 0.05, 0.08, 0.03);
   }
 
+  /**
+   * Play cue hit sound
+   * Random sample selection with subtle variation
+   */
+  playCueHit(intensity: number) {
+    // No throttling needed for cue hits (player-initiated)
+    this.playSample('cueHit', Math.random(), 0.03, 0.06, 0.0);
+  }
+
+  /**
+   * Play rail hit sound
+   * Random sample selection with moderate variation
+   */
   playRailHit(intensity: number) {
-    this.playEvent('rail', intensity);
+    // Throttle rail hits to 25ms intervals
+    this.playSample('railHit', Math.random(), 0.06, 0.08, 0.025);
   }
 
+  /**
+   * Play pocket drop sound
+   * Single sample with subtle variation
+   */
   playPocketDrop(intensity: number) {
-    this.playEvent('pocket', intensity);
+    // No throttling needed for pocket drops (infrequent)
+    this.playSample('pocketDrop', intensity, 0.04, 0.06, 0.0);
   }
 }
