@@ -132,7 +132,8 @@ export class AudioManager {
     intensity: number,
     pitchVariation: number = 0.1,
     volumeVariation: number = 0.1,
-    minInterval: number = 0.02 // Minimum time between same sound type (20ms)
+    minInterval: number = 0.02, // Minimum time between same sound type (20ms)
+    useRandomSelection: boolean = false // For sounds with multiple variations but no intensity levels
   ) {
     const sampleSet = this.sampleSets[sampleSetKey];
     if (!sampleSet) return;
@@ -164,11 +165,18 @@ export class AudioManager {
       }
     }
 
-    // Select sample based on intensity
-    const sampleIndex = Math.min(
-      Math.floor(intensity * sampleSet.samples.length),
-      sampleSet.samples.length - 1
-    );
+    // Select sample based on intensity OR randomly
+    let sampleIndex: number;
+    if (useRandomSelection) {
+      // Random selection for variety (cue hits, rail hits)
+      sampleIndex = Math.floor(Math.random() * sampleSet.samples.length);
+    } else {
+      // Intensity-based selection (ball collisions: light/medium/hard)
+      sampleIndex = Math.min(
+        Math.floor(intensity * sampleSet.samples.length),
+        sampleSet.samples.length - 1
+      );
+    }
 
     const sample = sampleSet.samples[sampleIndex];
     if (!sample.buffer) {
@@ -192,9 +200,12 @@ export class AudioManager {
     const intensityScaled = Math.sqrt(intensity); // 0.5 intensity becomes 0.707 instead of 0.5
     const volumeJitter = 1.0 + (Math.random() - 0.5) * 2 * volumeVariation;
 
+    // Sound-specific volume adjustment for ball collisions
+    const soundTypeMultiplier = sampleSetKey === 'ballCollision' ? 0.45 : 0.6;
+
     // Final volume: base volume * compressed intensity * small variation
     // Max volume is capped at 0.7 to prevent distortion
-    const finalVolume = Math.min(0.7, volume * intensityScaled * volumeJitter * 0.6);
+    const finalVolume = Math.min(0.7, volume * intensityScaled * volumeJitter * soundTypeMultiplier);
     gainNode.gain.value = Math.max(0, finalVolume);
 
     // Connect nodes
@@ -243,20 +254,22 @@ export class AudioManager {
 
   /**
    * Play cue hit sound
-   * Random sample selection with subtle variation
+   * Uses intensity for volume, random file selection for variety
    */
   playCueHit(intensity: number) {
-    // No throttling needed for cue hits (player-initiated)
-    this.playSample('cueHit', Math.random(), 0.03, 0.06, 0.0);
+    // Use intensity for volume control (cue power)
+    // Random file selection for variety between 2 cue hit samples
+    this.playSample('cueHit', intensity, 0.03, 0.06, 0.0, true);
   }
 
   /**
    * Play rail hit sound
-   * Random sample selection with moderate variation
+   * Uses intensity for volume, random file selection for variety
    */
   playRailHit(intensity: number) {
-    // Throttle rail hits to 25ms intervals
-    this.playSample('railHit', Math.random(), 0.06, 0.08, 0.025);
+    // Use intensity for volume control (ball speed at rail impact)
+    // Random file selection for variety between 2 rail hit samples
+    this.playSample('railHit', intensity, 0.06, 0.08, 0.025, true);
   }
 
   /**
