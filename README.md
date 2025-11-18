@@ -142,7 +142,7 @@ All tunables live in `src/config.ts` and can be overridden live via the settings
   - `DISTANCE_AIM_MAX_DISTANCE`: 60" (distance at which maximum scaling is applied)
   - `DISTANCE_AIM_MIN_SENSITIVITY`: 0.35 (sensitivity multiplier at max distance)
 
-For coordinate details, pocket derivations, and naming conventions, see `geometry.md`.
+For coordinate details, pocket derivations, and naming conventions, see `docs/geometry/geometry.md`.
 
 Display and scaling internals: see `docs/display-architecture.md` for how canvases, camera framing, and scaling work together.
 
@@ -154,6 +154,17 @@ Display and scaling internals: see `docs/display-architecture.md` for how canvas
 4. Adjust friction, cushion restitution, or pocket geometry on the fly and repeat
 
 This loop keeps physics tuning reproducible and easy to share across machines.
+
+## Documentation
+
+- `docs/audio/audio-setup.md` – step-by-step instructions for installing/replacing audio files and tuning the Quiet Room mixer
+- `docs/audio/audio-status.md` – current audio implementation notes plus placeholder status
+- `docs/audio/elevenlabs-prompts.md` – narration/VO prompt scripts
+- `docs/audio/rail-hit-prompts.md` & `docs/audio/rail-hit-extreme-prompts.md` – AI prompt references for rail recordings
+- `docs/geometry/geometry.md` & `docs/geometry/coordinate-system.md` – coordinate conventions and derivations
+- `docs/rules/eight-ball-rules.md` – current rule presets and rationale
+- `docs/specs.md` – high-level component specs/backlog
+- `docs/todo.md` – active engineering checklist
 
 ## License
 

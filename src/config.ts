@@ -1,6 +1,6 @@
 // All game configuration and tunables
 // Coordinate system: Origin (0,0) at table center, +X=East, +Y=North (up)
-// See geometry.md for authoritative geometry contract
+// See docs/geometry/geometry.md for authoritative geometry contract
 
 export const CONFIG = {
   // Physics

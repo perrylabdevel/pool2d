@@ -14,9 +14,9 @@ Project TODO
 
 - Docs
   - Expand README with Rules panel instructions once implemented
-  - Keep EIGHT_BALL_RULES.md in sync with enforcement
+  - Keep docs/rules/eight-ball-rules.md in sync with enforcement
 
 - Audio polish
   - Extend Audio Mixer with per-event sample selection / EQ / reverb depth
-  - Allow separate ADSR envelopes (attack/decay/sustain/release) per sound
+  - Add stereo imaging and positional damping once ball positions feed the mixer
   - Add live preview visualization / waveform for each sound slot

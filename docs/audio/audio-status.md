@@ -22,8 +22,8 @@ I created a script that generated 8 basic placeholder WAV files:
 ### 2. ✅ Build Successful
 The project compiles successfully with all audio files included.
 
-### 3. ✅ Sample-Based AudioManager
-Completely rewritten audio system using real audio samples instead of synthesis.
+### 3. ✅ Sample-Based AudioManager + Quiet Room Chain
+Completely rewritten audio system using real audio samples instead of synthesis, now routed through a controllable low-pass filter and soft compressor for the “quiet room” vibe.
 
 ## Current Audio Quality
 
@@ -34,6 +34,7 @@ Completely rewritten audio system using real audio samples instead of synthesis.
 - Basic harmonics and noise added
 - Better than pure synthesis but not realistic
 - Good enough to test the system functionality
+- Quiet-room processing keeps the placeholders from sounding overly harsh until you add nicer recordings
 
 ## Testing Instructions
 
@@ -51,8 +52,11 @@ Completely rewritten audio system using real audio samples instead of synthesis.
    - Sink a ball → Pocket drop sound
 
 4. **Try the audio mixer:**
-   - Open audio settings panel
+   - Open the audio panel
    - Adjust volume sliders to verify they work
+   - Use the Quiet Room sliders:
+     - **High-Cut Dampening**: increase to make shots feel softer/closer
+     - **Soft Compression**: increase to keep loud breaks from overpowering quiet taps
    - Preview each sound type
 
 ## Next Steps: Get REAL Sounds
@@ -121,6 +125,7 @@ That's it! No code changes needed.
 - Random volume variation (±8-10%)
 - Master volume control
 - Individual sound type volume controls
+- Quiet Room low-pass + compressor routing with per-user sliders
 - Settings persistence
 - Graceful error handling
 
@@ -151,8 +156,8 @@ node scripts/generate-placeholder-audio.js
 **New Files:**
 - ✅ `scripts/generate-placeholder-audio.js` - Audio generator
 - ✅ `src/assets/audio/*.wav` - 8 placeholder audio files
-- ✅ `AUDIO_SETUP.md` - Complete documentation
-- ✅ `AUDIO_STATUS.md` - This file
+- ✅ `docs/audio/audio-setup.md` - Complete documentation (see Docs section)
+- ✅ `docs/audio/audio-status.md` - This file
 
 **Modified Files:**
 - ✅ `src/sound/AudioManager.ts` - Complete rewrite (synthesis → samples)

@@ -2,14 +2,14 @@ import { DEFAULT_AUDIO_SETTINGS, type AudioSettings } from '../ui/SettingsManage
 
 // Audio file paths - will be loaded dynamically
 const AUDIO_PATHS = {
-  ballCollisionLight: '/src/assets/audio/ball-collision-light.wav',
-  ballCollisionMedium: '/src/assets/audio/ball-collision-medium.wav',
-  ballCollisionHard: '/src/assets/audio/ball-collision-hard.wav',
-  cueHit1: '/src/assets/audio/cue-hit-1.wav',
-  cueHit2: '/src/assets/audio/cue-hit-2.wav',
-  railHit1: '/src/assets/audio/rail-hit-1.wav',
-  railHit2: '/src/assets/audio/rail-hit-2.wav',
-  pocketDrop: '/src/assets/audio/pocket-drop.wav',
+  ballCollisionLight: new URL('../assets/audio/ball-collision-light.wav', import.meta.url).href,
+  ballCollisionMedium: new URL('../assets/audio/ball-collision-medium.wav', import.meta.url).href,
+  ballCollisionHard: new URL('../assets/audio/ball-collision-hard.wav', import.meta.url).href,
+  cueHit1: new URL('../assets/audio/cue-hit-1.wav', import.meta.url).href,
+  cueHit2: new URL('../assets/audio/cue-hit-2.wav', import.meta.url).href,
+  railHit1: new URL('../assets/audio/rail-hit-1.wav', import.meta.url).href,
+  railHit2: new URL('../assets/audio/rail-hit-2.wav', import.meta.url).href,
+  pocketDrop: new URL('../assets/audio/pocket-drop.wav', import.meta.url).href,
 };
 
 type AudioSample = {
@@ -25,6 +25,8 @@ type SampleSet = {
 export class AudioManager {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
+  private filterNode: BiquadFilterNode | null = null;
+  private compressor: DynamicsCompressorNode | null = null;
   private settings: AudioSettings = { ...DEFAULT_AUDIO_SETTINGS };
   private loadingPromises: Promise<void>[] = [];
   private isLoaded = false;
@@ -61,12 +63,58 @@ export class AudioManager {
     },
   };
 
+  private initializeAudioGraph() {
+    if (!this.ctx || this.masterGain) return;
+
+    this.masterGain = this.ctx.createGain();
+    this.filterNode = this.ctx.createBiquadFilter();
+    this.filterNode.type = 'lowpass';
+    this.filterNode.Q.value = 0.9;
+
+    this.compressor = this.ctx.createDynamicsCompressor();
+    this.compressor.attack.value = 0.003;
+    this.compressor.release.value = 0.25;
+
+    this.filterNode.connect(this.compressor);
+    this.compressor.connect(this.masterGain);
+    this.masterGain.connect(this.ctx.destination);
+
+    this.updateProcessingChain();
+  }
+
+  private updateProcessingChain() {
+    if (!this.ctx) return;
+
+    if (this.masterGain) {
+      this.masterGain.gain.value = this.settings.master;
+    }
+
+    if (this.filterNode) {
+      const dampening = this.settings.dampening ?? DEFAULT_AUDIO_SETTINGS.dampening;
+      const minFreq = 900;
+      const maxFreq = 5200;
+      const freq = maxFreq - (maxFreq - minFreq) * dampening;
+      this.filterNode.frequency.value = freq;
+      this.filterNode.Q.value = 0.7 + dampening * 0.6;
+    }
+
+    if (this.compressor) {
+      const softness = this.settings.compression ?? DEFAULT_AUDIO_SETTINGS.compression;
+      const threshold = -8 - softness * 28; // -8dB (light) to roughly -36dB (heavy)
+      const ratio = 1.5 + softness * 5; // 1.5:1 up to ~6.5:1
+      const knee = 18 - softness * 10;
+      this.compressor.threshold.value = threshold;
+      this.compressor.ratio.value = ratio;
+      this.compressor.knee.value = knee;
+      this.compressor.attack.value = 0.004 + softness * 0.02;
+      this.compressor.release.value = 0.12 + softness * 0.2;
+    }
+  }
+
   private get audioContext(): AudioContext {
     if (!this.ctx) {
       this.ctx = new AudioContext();
-      this.masterGain = this.ctx.createGain();
-      this.masterGain.gain.value = this.settings.master;
-      this.masterGain.connect(this.ctx.destination);
+      this.initializeAudioGraph();
     }
     return this.ctx;
   }
@@ -119,9 +167,7 @@ export class AudioManager {
 
   setSettings(settings: AudioSettings) {
     this.settings = { ...settings };
-    if (this.masterGain) {
-      this.masterGain.gain.value = this.settings.master;
-    }
+    this.updateProcessingChain();
   }
 
   /**
@@ -208,9 +254,10 @@ export class AudioManager {
     const finalVolume = Math.min(0.7, volume * intensityScaled * volumeJitter * soundTypeMultiplier);
     gainNode.gain.value = Math.max(0, finalVolume);
 
-    // Connect nodes
+    // Connect nodes through the quiet-room processing chain
     source.connect(gainNode);
-    gainNode.connect(this.masterGain ?? ctx.destination);
+    const destination = this.filterNode ?? this.masterGain ?? ctx.destination;
+    gainNode.connect(destination);
 
     // Play sound
     source.start(now);

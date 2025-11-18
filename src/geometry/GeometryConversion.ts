@@ -1,7 +1,7 @@
 /**
  * Geometry Conversion Utilities
  *
- * ⚠️ CRITICAL: Before modifying this file, read COORDINATE_SYSTEM.md to understand:
+ * ⚠️ CRITICAL: Before modifying this file, read docs/geometry/coordinate-system.md to understand:
  * - Center-origin coordinate system (0,0 at table center, not corner!)
  * - CORNER_JAW_X is absolute position from center, NOT offset from corner
  * - Mouth/throat widths are full widths, side jaw X values are half-widths

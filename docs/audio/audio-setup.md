@@ -25,10 +25,14 @@ The audio system has been converted from **synthesized sounds** to **sample-base
 3. **Rail Hits** - 2 samples (random selection)
 4. **Pocket Drops** - 1 sample
 
-### Volume Control
-The audio panel volume sliders still work:
-- Master volume
-- Individual sound type volumes (ball collisions, cue hits, rail hits, pocket drops)
+### Mixer Controls
+Open the **Audio Mixer** panel from the HUD to tailor the mix:
+- **Master** and **per-event sliders** (Cue, Ball, Rail, Pocket) still control gain
+- New **Quiet Room** section
+  - **High-Cut Dampening** sweeps a low-pass filter to tame harsh highs
+  - **Soft Compression** adds gentle limiting so big shots do not overpower quieter sounds
+
+All sliders persist via the settings manager, so your preferred mix loads automatically.
 
 ## Setup Instructions
 
@@ -169,12 +173,14 @@ All sounds from **directory.audio** are licensed under:
 - Pitch variation via `playbackRate` property
 - Volume control via `GainNode`
 - Automatic cleanup after playback finishes
+- Signals route through a shared low-pass filter and soft compressor before reaching the master gain, matching the Quiet Room controls
 
 ### Performance
 - ~8 files × ~50KB each = **~400KB total** (estimate)
 - All samples loaded into memory (efficient)
 - No disk I/O during gameplay
 - Minimal CPU usage (native Web Audio API)
+- Optional dampening/compression nodes add negligible overhead but dramatically improve the “quiet room” feel
 
 ## Future Enhancements (Optional)
 
@@ -184,6 +190,7 @@ All sounds from **directory.audio** are licensed under:
 3. **Room reverb** - Add subtle reverb for pool hall ambience
 4. **Rolling sounds** - Continuous quiet sound when balls are moving
 5. **Different ball materials** - Aramith vs. phenolic resin options
+6. **Impulse responses** - Swap the Quiet Room low-pass/compressor for convolution reverb presets when a fuller hall ambience is desired
 
 ## Code Reference
 

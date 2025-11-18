@@ -24,29 +24,11 @@ export interface UIColors {
 export interface AudioSettings {
   master: number;
   cueHits: number;
-  cueBaseFreq: number;
-  cueAttack: number;
-  cueSustain: number;
-  cueRelease: number;
-  cueWaveform: OscillatorType;
   ballCollisions: number;
-  ballBaseFreq: number;
-  ballAttack: number;
-  ballSustain: number;
-  ballRelease: number;
-  ballWaveform: OscillatorType;
   railHits: number;
-  railBaseFreq: number;
-  railAttack: number;
-  railSustain: number;
-  railRelease: number;
-  railWaveform: OscillatorType;
   pocketDrops: number;
-  pocketBaseFreq: number;
-  pocketAttack: number;
-  pocketSustain: number;
-  pocketRelease: number;
-  pocketWaveform: OscillatorType;
+  dampening: number;
+  compression: number;
 }
 
 export interface PhysicsSettings {
@@ -177,31 +159,13 @@ const DEFAULT_PHYSICS_SETTINGS: PhysicsSettings = {
 };
 
 export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
-  master: 0.9,
-  cueHits: 1.0,
-  cueBaseFreq: 90,
-  cueAttack: 0.01,
-  cueSustain: 0.6,
-  cueRelease: 0.22,
-  cueWaveform: 'sine',
-  ballCollisions: 0.9,
-  ballBaseFreq: 180,
-  ballAttack: 0.005,
-  ballSustain: 0.55,
-  ballRelease: 0.14,
-  ballWaveform: 'triangle',
-  railHits: 0.8,
-  railBaseFreq: 220,
-  railAttack: 0.005,
-  railSustain: 0.4,
-  railRelease: 0.18,
-  railWaveform: 'triangle',
-  pocketDrops: 1.0,
-  pocketBaseFreq: 80,
-  pocketAttack: 0.01,
-  pocketSustain: 0.7,
-  pocketRelease: 0.35,
-  pocketWaveform: 'sine',
+  master: 0.85,
+  cueHits: 0.75,
+  ballCollisions: 0.85,
+  railHits: 0.65,
+  pocketDrops: 0.95,
+  dampening: 0.65,
+  compression: 0.55,
 };
 
 export class SettingsManager {
@@ -267,32 +231,11 @@ export class SettingsManager {
     const clamp = this.clamp.bind(this);
     merged.master = clamp(merged.master ?? DEFAULT_AUDIO_SETTINGS.master, 0, 1);
     merged.cueHits = clamp(merged.cueHits ?? DEFAULT_AUDIO_SETTINGS.cueHits, 0, 1);
-    merged.cueBaseFreq = clamp(merged.cueBaseFreq ?? DEFAULT_AUDIO_SETTINGS.cueBaseFreq, 40, 400);
-    merged.cueAttack = clamp(merged.cueAttack ?? DEFAULT_AUDIO_SETTINGS.cueAttack, 0.001, 0.2);
-    merged.cueSustain = clamp(merged.cueSustain ?? DEFAULT_AUDIO_SETTINGS.cueSustain, 0, 1);
-    merged.cueRelease = clamp(merged.cueRelease ?? DEFAULT_AUDIO_SETTINGS.cueRelease, 0.05, 0.6);
-    merged.cueWaveform = (merged.cueWaveform ?? DEFAULT_AUDIO_SETTINGS.cueWaveform) as OscillatorType;
-
     merged.ballCollisions = clamp(merged.ballCollisions ?? DEFAULT_AUDIO_SETTINGS.ballCollisions, 0, 1);
-    merged.ballBaseFreq = clamp(merged.ballBaseFreq ?? DEFAULT_AUDIO_SETTINGS.ballBaseFreq, 60, 500);
-    merged.ballAttack = clamp(merged.ballAttack ?? DEFAULT_AUDIO_SETTINGS.ballAttack, 0.001, 0.2);
-    merged.ballSustain = clamp(merged.ballSustain ?? DEFAULT_AUDIO_SETTINGS.ballSustain, 0, 1);
-    merged.ballRelease = clamp(merged.ballRelease ?? DEFAULT_AUDIO_SETTINGS.ballRelease, 0.05, 0.5);
-    merged.ballWaveform = (merged.ballWaveform ?? DEFAULT_AUDIO_SETTINGS.ballWaveform) as OscillatorType;
-
     merged.railHits = clamp(merged.railHits ?? DEFAULT_AUDIO_SETTINGS.railHits, 0, 1);
-    merged.railBaseFreq = clamp(merged.railBaseFreq ?? DEFAULT_AUDIO_SETTINGS.railBaseFreq, 80, 600);
-    merged.railAttack = clamp(merged.railAttack ?? DEFAULT_AUDIO_SETTINGS.railAttack, 0.001, 0.2);
-    merged.railSustain = clamp(merged.railSustain ?? DEFAULT_AUDIO_SETTINGS.railSustain, 0, 1);
-    merged.railRelease = clamp(merged.railRelease ?? DEFAULT_AUDIO_SETTINGS.railRelease, 0.05, 0.5);
-    merged.railWaveform = (merged.railWaveform ?? DEFAULT_AUDIO_SETTINGS.railWaveform) as OscillatorType;
-
     merged.pocketDrops = clamp(merged.pocketDrops ?? DEFAULT_AUDIO_SETTINGS.pocketDrops, 0, 1);
-    merged.pocketBaseFreq = clamp(merged.pocketBaseFreq ?? DEFAULT_AUDIO_SETTINGS.pocketBaseFreq, 40, 300);
-    merged.pocketAttack = clamp(merged.pocketAttack ?? DEFAULT_AUDIO_SETTINGS.pocketAttack, 0.001, 0.2);
-    merged.pocketSustain = clamp(merged.pocketSustain ?? DEFAULT_AUDIO_SETTINGS.pocketSustain, 0, 1);
-    merged.pocketRelease = clamp(merged.pocketRelease ?? DEFAULT_AUDIO_SETTINGS.pocketRelease, 0.1, 0.7);
-    merged.pocketWaveform = (merged.pocketWaveform ?? DEFAULT_AUDIO_SETTINGS.pocketWaveform) as OscillatorType;
+    merged.dampening = clamp(merged.dampening ?? DEFAULT_AUDIO_SETTINGS.dampening, 0, 1);
+    merged.compression = clamp(merged.compression ?? DEFAULT_AUDIO_SETTINGS.compression, 0, 1);
     return merged;
   }
 
