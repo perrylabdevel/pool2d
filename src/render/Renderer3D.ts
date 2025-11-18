@@ -31,6 +31,7 @@ import { BaseRenderer } from './BaseRenderer';
 import type { MicroDialRenderState, PocketAnimationEvent } from './ControlTypes';
 
 const SIDE_POCKET_VISUAL_INSET = 3.5; // Keep side pocket visuals just inside the cushion edge
+const EMPTY_CHIP_BORDER = 'rgba(255, 255, 255, 0.15)';
 
 type FrameClipInfo = { outerX: number; outerY: number; radius: number };
 type PocketDropAnimation = {
@@ -3907,26 +3908,116 @@ export class Renderer3D extends BaseRenderer {
     const rect = this.getSideBarRect('right', barWidth, barHeight);
     const barX = rect.x;
     const barY = rect.y;
+    const ctx = this.uiCtx;
 
-    // Background
-    this.uiCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-    this.uiCtx.fillRect(barX, barY, barWidth, barHeight);
+    // Background with subtle plate behind the color fill plus inner padding
+    ctx.fillStyle = 'rgba(28, 32, 39, 0.65)';
+    ctx.fillRect(barX, barY, barWidth, barHeight);
+    const innerPadding = 3;
+    const innerX = barX + innerPadding;
+    const innerY = barY + innerPadding;
+    const innerWidth = barWidth - innerPadding * 2;
+    const innerHeight = barHeight - innerPadding * 2;
 
-    // Power fill with gradient (top (max) to bottom (zero))
+    // Power gradient is fully filled; motion is communicated via cue overlay
     const powerPercent = Math.max(0, Math.min(1, power / CONFIG.CUE_POWER_MAX));
-    const fillHeight = barHeight * powerPercent;
-    const gradient = this.uiCtx.createLinearGradient(barX, barY, barX, barY + barHeight);
-    gradient.addColorStop(0, '#00ff00');
-    gradient.addColorStop(0.5, '#ffff00');
-    gradient.addColorStop(1, '#ff0000');
+    const gradient = ctx.createLinearGradient(innerX, innerY, innerX, innerY + innerHeight);
+    gradient.addColorStop(0, 'rgba(255, 230, 109, 0.85)');
+    gradient.addColorStop(0.6, 'rgba(255, 155, 47, 0.8)');
+    gradient.addColorStop(1, 'rgba(255, 59, 48, 0.75)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(innerX, innerY, innerWidth, innerHeight);
 
-    this.uiCtx.fillStyle = gradient;
-    this.uiCtx.fillRect(barX, barY, barWidth, fillHeight);
+    // Cue overlay: clipped so the shaft slides downward as power increases
+    const cueWidth = Math.max(3, innerWidth * 0.5);
+    const cueLength = innerHeight * 0.92;
+    const cueX = innerX + (innerWidth - cueWidth) / 2;
+    const ferruleHeight = Math.max(4, cueWidth * 0.3);
+    const tipHeight = Math.max(4, cueWidth * 0.25);
+    const cueTopMin = innerY + 10;
+    const cueTopMax = innerY + innerHeight - tipHeight - 6;
+    const cueY = cueTopMin + Math.max(0, cueTopMax - cueTopMin) * powerPercent;
 
-    // Border
-    this.uiCtx.strokeStyle = isAimMode ? '#888888' : '#ffffff';
-    this.uiCtx.lineWidth = isAimMode ? 1 : 3;
-    this.uiCtx.strokeRect(barX, barY, barWidth, barHeight);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(innerX, innerY, innerWidth, innerHeight);
+    ctx.clip();
+
+    const cueStickHex = (CONFIG as any).CUE_STICK_COLOR || '#8B4513';
+    const cueStickRGB = parseHexColor(cueStickHex);
+    const cueStickBright = toRgba(lightenColor(cueStickRGB, 0.25), 1);
+    const cueStickMid = toRgba(cueStickRGB, 1);
+    const cueStickShadow = toRgba(darkenColor(cueStickRGB, 0.25), 1);
+
+    const buttWidth = cueWidth;
+    const tipWidthInner = Math.max(2, cueWidth * 0.45);
+    const tipOffset = (buttWidth - tipWidthInner) / 2;
+
+    // Draw cue core with tapered polygon
+    ctx.fillStyle = cueStickMid;
+    ctx.beginPath();
+    ctx.moveTo(cueX + tipOffset, cueY);
+    ctx.lineTo(cueX + tipOffset + tipWidthInner, cueY);
+    ctx.lineTo(cueX + buttWidth, cueY + cueLength);
+    ctx.lineTo(cueX, cueY + cueLength);
+    ctx.closePath();
+    ctx.fill();
+
+    // Highlight and shadow trims for cylindrical feel along the taper
+    ctx.fillStyle = cueStickBright;
+    ctx.beginPath();
+    ctx.moveTo(cueX + tipOffset + tipWidthInner * 0.2, cueY);
+    ctx.lineTo(cueX + tipOffset + tipWidthInner * 0.5, cueY);
+    ctx.lineTo(cueX + buttWidth * 0.55, cueY + cueLength);
+    ctx.lineTo(cueX + buttWidth * 0.35, cueY + cueLength);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = cueStickShadow;
+    ctx.beginPath();
+    ctx.moveTo(cueX + tipOffset + tipWidthInner * 0.75, cueY);
+    ctx.lineTo(cueX + tipOffset + tipWidthInner, cueY);
+    ctx.lineTo(cueX + buttWidth, cueY + cueLength);
+    ctx.lineTo(cueX + buttWidth * 0.8, cueY + cueLength);
+    ctx.closePath();
+    ctx.fill();
+
+    // Glow outline to keep cue visible over the heatmap gradient
+    ctx.save();
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+    ctx.lineWidth = 1.5;
+    ctx.shadowColor = 'rgba(255, 255, 255, 0.4)';
+    ctx.shadowBlur = 4;
+    ctx.beginPath();
+    ctx.moveTo(cueX + tipOffset, cueY);
+    ctx.lineTo(cueX + tipOffset + tipWidthInner, cueY);
+    ctx.lineTo(cueX + buttWidth, cueY + cueLength);
+    ctx.lineTo(cueX, cueY + cueLength);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.restore();
+
+    // Cue ferrule + tip
+    ctx.fillStyle = '#f7f0d2';
+    ctx.fillRect(cueX + tipOffset, cueY, tipWidthInner, ferruleHeight);
+    const cueTipHex = (CONFIG as any).CUE_TIP_COLOR || '#4A90E2';
+    const cueTipRGB = parseHexColor(cueTipHex);
+    ctx.fillStyle = toRgba(cueTipRGB, 1);
+    ctx.fillRect(cueX + tipOffset, cueY - tipHeight, tipWidthInner, tipHeight);
+
+    ctx.restore();
+
+    // Border adopts the empty ball chip outline color for consistency
+    ctx.strokeStyle = EMPTY_CHIP_BORDER;
+    ctx.lineWidth = isAimMode ? 1 : 2;
+    ctx.strokeRect(barX, barY, barWidth, barHeight);
+    const metallicGradient = ctx.createLinearGradient(innerX, innerY, innerX, innerY + innerHeight);
+    metallicGradient.addColorStop(0, 'rgba(196, 208, 214, 0.85)');
+    metallicGradient.addColorStop(0.5, 'rgba(126, 140, 148, 0.9)');
+    metallicGradient.addColorStop(1, 'rgba(212, 219, 224, 0.85)');
+    ctx.strokeStyle = metallicGradient;
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(innerX, innerY, innerWidth, innerHeight);
 
     this.drawMicroDial2D(microDialState);
   }
@@ -3947,11 +4038,24 @@ export class Renderer3D extends BaseRenderer {
     const handleX = barX + barWidth / 2;
 
     ctx.save();
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.fillStyle = 'rgba(28, 32, 39, 0.65)';
     ctx.fillRect(barX, barY, barWidth, barHeight);
-    ctx.strokeStyle = isActive ? '#ffffff' : '#888888';
+    const innerPadding = 3;
+    const innerX = barX + innerPadding;
+    const innerY = barY + innerPadding;
+    const innerWidth = barWidth - innerPadding * 2;
+    const innerHeight = barHeight - innerPadding * 2;
+
+    ctx.strokeStyle = EMPTY_CHIP_BORDER;
     ctx.lineWidth = isActive ? 2 : 1.5;
     ctx.strokeRect(barX, barY, barWidth, barHeight);
+    const dialMetallic = ctx.createLinearGradient(innerX, innerY, innerX, innerY + innerHeight);
+    dialMetallic.addColorStop(0, 'rgba(196, 208, 214, 0.85)');
+    dialMetallic.addColorStop(0.5, 'rgba(126, 140, 148, 0.9)');
+    dialMetallic.addColorStop(1, 'rgba(212, 219, 224, 0.85)');
+    ctx.strokeStyle = dialMetallic;
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(innerX, innerY, innerWidth, innerHeight);
 
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
     ctx.lineWidth = 1;
@@ -3984,7 +4088,7 @@ export class Renderer3D extends BaseRenderer {
         gradient.addColorStop(1, 'rgba(255, 138, 101, 0.1)');
       }
       ctx.fillStyle = gradient;
-      ctx.fillRect(barX + 5, Math.min(fromY, toY), barWidth - 10, Math.abs(toY - fromY));
+      ctx.fillRect(innerX + 2, Math.min(fromY, toY), innerWidth - 4, Math.abs(toY - fromY));
     }
 
     const handleRadius = barWidth / 2 - 6;
