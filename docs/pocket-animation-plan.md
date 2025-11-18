@@ -24,9 +24,10 @@
    - For 2D fallback: render an overlay sprite that lerps position toward pocket center while scaling down and fading.
 
 3. **Timing & easing**
-   - Use ~300–400 ms duration.
-   - Position curve: ease-in (fast start) + ease-out as it disappears.
-   - Opacity/scale: fade from 1 → 0.6 while shrinking by ~30% to imply depth.
+   - Uses separate durations for drop and roll phases (configurable via `POCKET_ANIMATION_DROP_DURATION_MS` and `POCKET_ANIMATION_ROLL_DURATION_MS`).
+   - **Drop phase**: Ball drops from capture position to pocket center with smoothstep easing.
+   - **Roll phase**: Ball rolls from pocket center inward toward table center underneath the felt, only visible through circular pocket opening (clipped).
+   - No fade or shrink - ball remains full size and opaque, clipped by pocket geometry for realistic depth perception.
 
 4. **Audio & haptics hooks**
    - Trigger existing pocket SFX (if any) slightly earlier.
@@ -35,7 +36,11 @@
 
 5. **Cleanup**
    - After animation completes, remove the temporary mesh/sprite and release references to avoid leaks.
-   - Config toggles now exist (`POCKET_ANIMATION_DURATION_MS`, `POCKET_ANIMATION_DROP_DEPTH`) so timing/depth tweaks are one-line changes.
+   - Config toggles now exist:
+     - `POCKET_ANIMATION_DROP_DURATION_MS` (default: 300ms) - duration of drop phase
+     - `POCKET_ANIMATION_ROLL_DURATION_MS` (default: 500ms) - duration of roll phase
+     - `POCKET_ANIMATION_DROP_DEPTH` - visual drop depth (unused in current implementation)
+     - `POCKET_ANIMATION_UNDERFELT_PX` (default: 10px) - distance ball rolls under felt during roll phase
 
 ### Implementation Touchpoints
 - `src/physics/Physics.ts`: emit pocket events (maybe via `Game` callback `onBallPocketed`).

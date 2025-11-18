@@ -66,8 +66,14 @@ export const CONFIG = {
   OBJECT_PATH_PERCENTAGE: 1.0, // Multiplier for object ball path length (0.5 = 50% length)
   SHOW_AIM_INFO: true, // Display aim angle, distance, speed, and cut angle overlay
   AIM_INFO_SCALE: 1.0, // Scale multiplier for aim info indicators (0.5 = 50% size, 2.0 = 200% size)
-  POCKET_ANIMATION_DURATION_MS: 340,
+  // Pocket visual animation tuning
+  POCKET_ANIMATION_DROP_DURATION_MS: 300, // duration of drop phase
+  POCKET_ANIMATION_ROLL_DURATION_MS: 500, // duration of roll phase
   POCKET_ANIMATION_DROP_DEPTH: 0.35, // visual drop depth in inches ~ depth perception
+  POCKET_ANIMATION_SHRINK_FACTOR: 0.2, // 0..1 fraction of radius shrink at max depth
+  POCKET_ANIMATION_FADE_START: 0.9, // fraction of timeline where fade-out begins
+  POCKET_ANIMATION_CLIP_START: 0.45, // fraction where pocket clipping begins (to avoid early pop)
+  POCKET_ANIMATION_UNDERFELT_PX: 10, // how far ball rolls under felt (in screen px, scaled)
   POCKET_CAPTURE_SPEED_THRESHOLD: 45, // in/s speed above which we damp pocket entry
   POCKET_CAPTURE_DAMPING: 0.25, // velocity multiplier applied in pocket throat
   POCKET_CAPTURE_PULL_DISTANCE: 0.8, // additional inches pulled toward pocket center before removal

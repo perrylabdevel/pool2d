@@ -92,7 +92,7 @@ export class Renderer extends BaseRenderer {
   render(world: PhysicsWorld, alpha: number) {
     this.refreshDerivedGeometry(); // Update geometry if CONFIG changed
     this.clear();
-    
+
     this.ctx.save();
     
     // Set up world->canvas transform
@@ -1274,7 +1274,9 @@ export class Renderer extends BaseRenderer {
 
   private processPocketAnimationQueue() {
     if (!this.queuedPocketEvents.length) return;
-    const duration = CONFIG.POCKET_ANIMATION_DURATION_MS ?? 400;
+    const dropDuration = CONFIG.POCKET_ANIMATION_DROP_DURATION_MS ?? 300;
+    const rollDuration = CONFIG.POCKET_ANIMATION_ROLL_DURATION_MS ?? 500;
+    const duration = dropDuration + rollDuration;
     const now = performance.now();
     while (this.queuedPocketEvents.length) {
       const event = this.queuedPocketEvents.shift()!;
@@ -1297,22 +1299,68 @@ export class Renderer extends BaseRenderer {
   }
 
   private drawPocketAnimationSprite(event: PocketAnimationEvent, progress: number, centerX: number, centerY: number) {
-    const eased = progress * progress * (3 - 2 * progress);
     const startScreenX = centerX + event.position.x * this.scale;
     const startScreenY = centerY - event.position.y * this.scale;
     const endScreenX = centerX + event.pocket.x * this.scale;
-    const dropOffset = (CONFIG.POCKET_ANIMATION_DROP_DEPTH ?? 1.5) * this.scale;
-    const endScreenY = centerY - event.pocket.y * this.scale + dropOffset * eased;
-    const x = startScreenX + (endScreenX - startScreenX) * eased;
-    const y = startScreenY + (endScreenY - startScreenY) * eased;
-    const baseRadius = event.radius * this.scale;
-    const radius = Math.max(4, baseRadius * (1 - 0.35 * eased));
-    const alpha = Math.max(0, 1 - eased);
+    const endScreenY = centerY - event.pocket.y * this.scale;
 
+    const baseRadius = event.radius * this.scale;
+    const shrink = (CONFIG as any).POCKET_ANIMATION_SHRINK_FACTOR ?? 0.2;
+
+    // Get separate durations for drop and roll phases
+    const dropDuration = CONFIG.POCKET_ANIMATION_DROP_DURATION_MS ?? 300;
+    const rollDuration = CONFIG.POCKET_ANIMATION_ROLL_DURATION_MS ?? 500;
+    const totalDuration = dropDuration + rollDuration;
+    const dropPhaseEnd = dropDuration / totalDuration;
+
+    const dropDepth = (CONFIG.POCKET_ANIMATION_DROP_DEPTH ?? 0.35) * this.scale;
+    const rollDistance = (CONFIG.POCKET_ANIMATION_UNDERFELT_PX ?? 10) * this.scale;
+
+    // Pocket opening radius for clipping
+    const pocketOpeningRadius = (CONFIG.POCKET_VISUAL_RADIUS_SIDE ?? 2.5) * this.scale;
+
+    let x: number, y: number, radius: number;
+
+    // Ball stays full size always - no shrinking
+    radius = baseRadius;
+
+    if (progress < dropPhaseEnd) {
+      // Phase 1: Ball drops into pocket (visible while dropping)
+      const dropT = progress / dropPhaseEnd;
+      const eased = dropT * dropT * (3 - 2 * dropT);
+
+      x = startScreenX + (endScreenX - startScreenX) * eased;
+      y = startScreenY + (endScreenY - startScreenY) * eased;
+    } else {
+      // Phase 2: Ball rolls underneath felt from pocket center inward toward table center
+      const rollT = (progress - dropPhaseEnd) / (1 - dropPhaseEnd);
+      const eased = rollT * rollT * (3 - 2 * rollT);
+
+      // Direction from pocket toward table center (inward)
+      const dirX = centerX - endScreenX;
+      const dirY = centerY - endScreenY;
+      const len = Math.hypot(dirX, dirY) || 1;
+
+      // Start at pocket center, roll inward toward table center
+      x = endScreenX + (dirX / len) * rollDistance * eased;
+      y = endScreenY + (dirY / len) * rollDistance * eased;
+    }
+
+    // Clip to circular pocket opening - ball only visible through the "hole"
     this.ctx.save();
-    this.ctx.globalAlpha = alpha;
+    this.ctx.beginPath();
+    this.ctx.arc(endScreenX, endScreenY, pocketOpeningRadius, 0, Math.PI * 2);
+    this.ctx.clip();
+
     const fill = this.getBallColor(event.ballId);
-    const gradient = this.ctx.createRadialGradient(x - radius * 0.2, y - radius * 0.2, radius * 0.1, x, y, radius);
+    const gradient = this.ctx.createRadialGradient(
+      x - radius * 0.2,
+      y - radius * 0.2,
+      radius * 0.1,
+      x,
+      y,
+      radius
+    );
     gradient.addColorStop(0, fill.light);
     gradient.addColorStop(1, fill.dark);
     this.ctx.fillStyle = gradient;

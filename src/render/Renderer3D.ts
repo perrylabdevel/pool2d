@@ -2837,9 +2837,6 @@ export class Renderer3D extends BaseRenderer {
   }
   
   render(world: PhysicsWorld, alpha: number) {
-    // Clear UI canvas
-    this.uiCtx.clearRect(0, 0, this.uiCanvas.width, this.uiCanvas.height);
-
     // Ensure stencil is applied after any async/late mesh creation
     if (this.frameStencilMesh && !this.stencilAppliedOnce) {
       this.applyStencilToTableMeshes();
@@ -2887,6 +2884,10 @@ export class Renderer3D extends BaseRenderer {
     
     // Render the scene
     this.renderer.render(this.scene, this.camera);
+
+    // Clear UI canvas BEFORE drawing new UI elements (pocket animations, cue, etc.)
+    // This must happen after WebGL render but before any UI canvas drawing
+    this.uiCtx.clearRect(0, 0, this.uiCanvas.width, this.uiCanvas.height);
 
     this.processPocketAnimationQueue();
     this.drawPocketAnimations();
@@ -4868,7 +4869,9 @@ export class Renderer3D extends BaseRenderer {
 
   private processPocketAnimationQueue() {
     if (!this.queuedPocketEvents.length) return;
-    const duration = CONFIG.POCKET_ANIMATION_DURATION_MS ?? 400;
+    const dropDuration = CONFIG.POCKET_ANIMATION_DROP_DURATION_MS ?? 300;
+    const rollDuration = CONFIG.POCKET_ANIMATION_ROLL_DURATION_MS ?? 500;
+    const duration = dropDuration + rollDuration;
     const now = performance.now();
     while (this.queuedPocketEvents.length) {
       const event = this.queuedPocketEvents.shift()!;
@@ -4891,22 +4894,63 @@ export class Renderer3D extends BaseRenderer {
   }
 
   private drawPocketAnimationSprite(event: PocketAnimationEvent, progress: number, ctx: CanvasRenderingContext2D) {
-    const eased = progress * progress * (3 - 2 * progress);
     const startScreen = this.worldToScreen(event.position.x, event.position.y);
     const endScreen = this.worldToScreen(event.pocket.x, event.pocket.y);
-    const dropOffset = CONFIG.POCKET_ANIMATION_DROP_DEPTH ?? 1.5;
-    const x = startScreen.x + (endScreen.x - startScreen.x) * eased;
-    const y = startScreen.y + (endScreen.y - startScreen.y + dropOffset * this.scale) * eased;
-    const baseRadius = Math.max(3, event.radius * this.scale);
-    const radius = Math.max(4, baseRadius * (1 - 0.35 * eased));
-    const alpha = Math.max(0, 1 - eased);
-    const colors = this.getBallColor(event.ballId);
+    const centerScreen = this.worldToScreen(0, 0);
 
+    const baseRadius = Math.max(3, event.radius * this.scale);
+    const shrink = (CONFIG as any).POCKET_ANIMATION_SHRINK_FACTOR ?? 0.2;
+
+    // Get separate durations for drop and roll phases
+    const dropDuration = CONFIG.POCKET_ANIMATION_DROP_DURATION_MS ?? 300;
+    const rollDuration = CONFIG.POCKET_ANIMATION_ROLL_DURATION_MS ?? 500;
+    const totalDuration = dropDuration + rollDuration;
+    const dropPhaseEnd = dropDuration / totalDuration;
+
+    const dropDepth = (CONFIG.POCKET_ANIMATION_DROP_DEPTH ?? 0.35) * this.scale;
+    const rollDistance = (CONFIG.POCKET_ANIMATION_UNDERFELT_PX ?? 10) * this.scale;
+
+    // Pocket opening radius for clipping
+    const pocketOpeningRadius = (CONFIG.POCKET_VISUAL_RADIUS_SIDE ?? 2.5) * this.scale;
+
+    let x: number, y: number, radius: number;
+
+    // Ball stays full size always - no shrinking
+    radius = baseRadius;
+
+    if (progress < dropPhaseEnd) {
+      // Phase 1: Ball drops into pocket (visible while dropping)
+      const dropT = progress / dropPhaseEnd;
+      const eased = dropT * dropT * (3 - 2 * dropT);
+
+      x = startScreen.x + (endScreen.x - startScreen.x) * eased;
+      y = startScreen.y + (endScreen.y - startScreen.y) * eased;
+    } else {
+      // Phase 2: Ball rolls underneath felt from pocket center inward toward table center
+      const rollT = (progress - dropPhaseEnd) / (1 - dropPhaseEnd);
+      const eased = rollT * rollT * (3 - 2 * rollT);
+
+      // Direction from pocket toward table center (inward)
+      const dirX = centerScreen.x - endScreen.x;
+      const dirY = centerScreen.y - endScreen.y;
+      const len = Math.hypot(dirX, dirY) || 1;
+
+      // Start at pocket center, roll inward toward table center
+      x = endScreen.x + (dirX / len) * rollDistance * eased;
+      y = endScreen.y + (dirY / len) * rollDistance * eased;
+    }
+
+    // Clip to circular pocket opening - ball only visible through the "hole"
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(endScreen.x, endScreen.y, pocketOpeningRadius, 0, Math.PI * 2);
+    ctx.clip();
+
+    const colors = this.getBallColor(event.ballId);
     const gradient = ctx.createRadialGradient(x - radius * 0.3, y - radius * 0.3, radius * 0.15, x, y, radius);
     gradient.addColorStop(0, colors.light);
     gradient.addColorStop(1, colors.dark);
 
-    ctx.globalAlpha = alpha;
     ctx.fillStyle = gradient;
     ctx.beginPath();
     ctx.arc(x, y, radius, 0, Math.PI * 2);
@@ -4921,6 +4965,8 @@ export class Renderer3D extends BaseRenderer {
     ctx.lineWidth = 1.2;
     ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
     ctx.stroke();
+
+    ctx.restore();
   }
 
   private getBallColor(ballId: number) {
