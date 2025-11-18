@@ -21,6 +21,7 @@ export class AudioPanel {
     this.bindSliders();
     this.setupResetButton();
     this.setupPreviewButtons();
+    this.setupMuteButtons();
   }
 
   private createPanel(): HTMLElement {
@@ -36,19 +37,24 @@ export class AudioPanel {
 
     panel.innerHTML = `
       <div class="panel-header">
-        <h3>🔊 Audio Mixer</h3>
+        <h3>Audio Mixer</h3>
       </div>
       <div class="panel-content">
         <div class="settings-group">
           <h4 class="settings-group-title">Master</h4>
-          ${this.sliderRow('AUDIO_MASTER_VOLUME', 'Master Volume', 0, 1, 0.01, audio.master)}
+          ${this.masterRow(audio.master, !!audio.muteMaster)}
+        </div>
+        <div class="settings-group">
+          <h4 class="settings-group-title">Music & Ambience</h4>
+          ${this.eventRow('Music Track', 'MUSIC', 'AUDIO_MUSIC_VOL', audio.music, !!audio.muteMusic)}
+          ${this.eventRow('Background Loop', 'BACKGROUND', 'AUDIO_BACKGROUND_VOL', audio.background, !!audio.muteBackground, true)}
         </div>
         <div class="settings-group">
           <h4 class="settings-group-title">Event Levels</h4>
-          ${this.eventRow('Cue Hits', 'CUE', 'AUDIO_CUE_VOL', audio.cueHits)}
-          ${this.eventRow('Ball Collisions', 'BALL', 'AUDIO_BALL_VOL', audio.ballCollisions)}
-          ${this.eventRow('Rail Impacts', 'RAIL', 'AUDIO_RAIL_VOL', audio.railHits)}
-          ${this.eventRow('Pocket Drops', 'POCKET', 'AUDIO_POCKET_VOL', audio.pocketDrops)}
+          ${this.eventRow('Cue Hits', 'CUE', 'AUDIO_CUE_VOL', audio.cueHits, !!audio.muteCueHits)}
+          ${this.eventRow('Ball Collisions', 'BALL', 'AUDIO_BALL_VOL', audio.ballCollisions, !!audio.muteBallCollisions)}
+          ${this.eventRow('Rail Impacts', 'RAIL', 'AUDIO_RAIL_VOL', audio.railHits, !!audio.muteRailHits)}
+          ${this.eventRow('Pocket Drops', 'POCKET', 'AUDIO_POCKET_VOL', audio.pocketDrops, !!audio.mutePocketDrops)}
         </div>
         <div class="settings-group">
           <h4 class="settings-group-title">Quiet Room</h4>
@@ -71,11 +77,58 @@ export class AudioPanel {
     return panel;
   }
 
-  private eventRow(title: string, key: string, sliderId: string, volume: number): string {
+  private masterRow(volume: number, muted: boolean): string {
     return `
       <div class="event-control">
-        ${this.sliderRow(sliderId, `${title} Volume`, 0, 1, 0.01, volume)}
-        <button type="button" class="panel-btn audio-preview" data-audio-event="${key}">▶ Preview</button>
+        ${this.sliderRow('AUDIO_MASTER_VOLUME', 'Master Volume', 0, 1, 0.01, volume)}
+        <div class="event-actions">
+          <button
+            type="button"
+            class="panel-btn panel-icon-btn audio-mute ${muted ? 'is-muted' : ''}"
+            data-audio-mute-key="MASTER"
+            aria-label="${muted ? 'Unmute master' : 'Mute master'}"
+            title="${muted ? 'Unmute master' : 'Mute master'}"
+          >
+            ${muted ? '🔇' : '🔊'}
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  private eventRow(
+    title: string,
+    key: string,
+    sliderId: string,
+    volume: number,
+    muted: boolean,
+    isBackground: boolean = false
+  ): string {
+    const muteKey = isBackground ? 'BACKGROUND' : key;
+    const label = `${title} Volume`;
+    return `
+      <div class="event-control">
+        ${this.sliderRow(sliderId, label, 0, 1, 0.01, volume)}
+        <div class="event-actions">
+          <button
+            type="button"
+            class="panel-btn panel-icon-btn audio-preview"
+            data-audio-event="${key}"
+            aria-label="Preview ${title}"
+            title="Preview ${title}"
+          >
+            ▶
+          </button>
+          <button
+            type="button"
+            class="panel-btn panel-icon-btn audio-mute ${muted ? 'is-muted' : ''}"
+            data-audio-mute-key="${muteKey}"
+            aria-label="${muted ? `Unmute ${title}` : `Mute ${title}`}"
+            title="${muted ? `Unmute ${title}` : `Mute ${title}`}"
+          >
+            ${muted ? '🔇' : '🔊'}
+          </button>
+        </div>
       </div>
     `;
   }
@@ -99,6 +152,8 @@ export class AudioPanel {
 
     const configs: SliderBindConfig<AudioSettings>[] = [
       { sliderId: 'AUDIO_MASTER_VOLUME', labelId: 'AUDIO_MASTER_VOLUME-value', onChange: (v) => this.update('master', clamp01(v!)), formatValue: formatPercent },
+      { sliderId: 'AUDIO_MUSIC_VOL', labelId: 'AUDIO_MUSIC_VOL-value', onChange: (v) => this.update('music', clamp01(v!)), formatValue: formatPercent },
+      { sliderId: 'AUDIO_BACKGROUND_VOL', labelId: 'AUDIO_BACKGROUND_VOL-value', onChange: (v) => this.update('background', clamp01(v!)), formatValue: formatPercent },
       { sliderId: 'AUDIO_CUE_VOL', labelId: 'AUDIO_CUE_VOL-value', onChange: (v) => this.update('cueHits', clamp01(v!)), formatValue: formatPercent },
       { sliderId: 'AUDIO_BALL_VOL', labelId: 'AUDIO_BALL_VOL-value', onChange: (v) => this.update('ballCollisions', clamp01(v!)), formatValue: formatPercent },
       { sliderId: 'AUDIO_RAIL_VOL', labelId: 'AUDIO_RAIL_VOL-value', onChange: (v) => this.update('railHits', clamp01(v!)), formatValue: formatPercent },
@@ -129,6 +184,48 @@ export class AudioPanel {
     });
   }
 
+  private setupMuteButtons() {
+    const buttons = this.panel.querySelectorAll<HTMLButtonElement>('.audio-mute');
+    buttons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const key = btn.dataset.audioMuteKey;
+        if (!key) return;
+
+        const current = this.settingsManager.getAudioSettings();
+        let update: Partial<AudioSettings> | null = null;
+
+        switch (key) {
+          case 'MASTER':
+            update = { muteMaster: !current.muteMaster };
+            break;
+          case 'MUSIC':
+            update = { muteMusic: !current.muteMusic };
+            break;
+          case 'BACKGROUND':
+            update = { muteBackground: !current.muteBackground };
+            break;
+          case 'CUE':
+            update = { muteCueHits: !current.muteCueHits };
+            break;
+          case 'BALL':
+            update = { muteBallCollisions: !current.muteBallCollisions };
+            break;
+          case 'RAIL':
+            update = { muteRailHits: !current.muteRailHits };
+            break;
+          case 'POCKET':
+            update = { mutePocketDrops: !current.mutePocketDrops };
+            break;
+        }
+
+        if (!update) return;
+
+        this.settingsManager.saveAudioSettings(update);
+        this.loadSettings();
+      });
+    });
+  }
+
   private update(key: keyof AudioSettings, value: number) {
     this.settingsManager.saveAudioSettings({ [key]: value } as Partial<AudioSettings>);
   }
@@ -139,6 +236,8 @@ export class AudioPanel {
     const formatControl = (v: number) => (v <= 0.01 ? 'Off' : `${Math.round(v * 100)}%`);
     const sliderMap: Array<[keyof AudioSettings, string, (v: number) => string]> = [
       ['master', 'AUDIO_MASTER_VOLUME', formatPercent],
+      ['music', 'AUDIO_MUSIC_VOL', formatPercent],
+      ['background', 'AUDIO_BACKGROUND_VOL', formatPercent],
       ['cueHits', 'AUDIO_CUE_VOL', formatPercent],
       ['ballCollisions', 'AUDIO_BALL_VOL', formatPercent],
       ['railHits', 'AUDIO_RAIL_VOL', formatPercent],
@@ -152,9 +251,56 @@ export class AudioPanel {
       const label = this.panel.querySelector<HTMLElement>(`#${id}-value`);
       if (label) label.textContent = formatter(audio[key] as number);
     });
+
+    const muteButtons = this.panel.querySelectorAll<HTMLButtonElement>('.audio-mute');
+    muteButtons.forEach((btn) => {
+      const key = btn.dataset.audioMuteKey;
+      if (!key) return;
+
+      let isMuted = false;
+      switch (key) {
+        case 'MASTER':
+          isMuted = !!audio.muteMaster;
+          break;
+        case 'MUSIC':
+          isMuted = !!audio.muteMusic;
+          break;
+        case 'BACKGROUND':
+          isMuted = !!audio.muteBackground;
+          break;
+        case 'CUE':
+          isMuted = !!audio.muteCueHits;
+          break;
+        case 'BALL':
+          isMuted = !!audio.muteBallCollisions;
+          break;
+        case 'RAIL':
+          isMuted = !!audio.muteRailHits;
+          break;
+        case 'POCKET':
+          isMuted = !!audio.mutePocketDrops;
+          break;
+      }
+
+      btn.classList.toggle('is-muted', isMuted);
+      const labelEl = btn.closest('.event-control')?.querySelector('.slider-title');
+      const labelText = labelEl?.textContent ?? 'Audio';
+      const title =
+        key === 'MASTER'
+          ? isMuted
+            ? 'Unmute master'
+            : 'Mute master'
+          : isMuted
+          ? `Unmute ${labelText}`
+          : `Mute ${labelText}`;
+      btn.title = title;
+      btn.setAttribute('aria-label', title);
+      btn.textContent = isMuted ? '🔇' : '🔊';
+    });
   }
 
   getController() {
     return this.controller;
   }
 }
+

@@ -1,6 +1,6 @@
-# Pool 2D – Tournament Grade Billiards
+# RailRush – Tournament Grade Billiards
 
-Pool 2D is a tournament-accurate billiards sandbox built with TypeScript, Vite, and a WebGL/Three.js renderer. It pairs deterministic 120 Hz physics with live-tunable geometry, scenario tooling, and deep debugging instrumentation for validating shots, pockets, and table setup.
+RailRush is a tournament-accurate billiards sandbox built with TypeScript, Vite, and a WebGL/Three.js renderer. It pairs deterministic 120 Hz physics with live-tunable geometry, scenario tooling, and deep debugging instrumentation for validating shots, pockets, and table setup.
 
 ## Highlights
 

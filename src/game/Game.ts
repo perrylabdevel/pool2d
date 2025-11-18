@@ -332,9 +332,18 @@ export class Game {
   
   setupEventListeners() {
     window.addEventListener('resize', () => this.resize());
-    window.addEventListener('pointerdown', () => {
-      this.audio.ensureUnlocked().catch(() => {/* ignore */});
-    }, { once: true });
+    window.addEventListener(
+      'pointerdown',
+      () => {
+        this.audio.startBackgroundLoop().catch(() => {
+          /* ignore */
+        });
+        this.audio.startMusicLoop().catch(() => {
+          /* ignore */
+        });
+      },
+      { once: true }
+    );
     window.addEventListener('renderer:resized', (event: Event) => {
       const detail = (event as CustomEvent<{ width: number; height: number; scale: number; offsetX: number; offsetY: number }>).detail;
       if (!detail) return;
@@ -1236,6 +1245,16 @@ export class Game {
         break;
       case 'POCKET':
         this.audio.playPocketDrop(intensity);
+        break;
+      case 'MUSIC':
+        this.audio.startMusicLoop().catch(() => {
+          /* ignore */
+        });
+        break;
+      case 'BACKGROUND':
+        this.audio.startBackgroundLoop().catch(() => {
+          /* ignore */
+        });
         break;
       default:
         break;

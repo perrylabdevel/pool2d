@@ -1,4 +1,4 @@
-# Pool 2D Coordinate System Reference
+# RailRush Coordinate System Reference
 
 **CRITICAL**: This document defines the coordinate system used throughout the project. **Read this before modifying any geometry code.**
 

@@ -1,6 +1,6 @@
 # 8-Ball Rules Implementation Status
 
-This document tracks the implementation status of standard 8-ball rules in Pool 2D.
+This document tracks the implementation status of standard 8-ball rules in RailRush.
 
 ## Overview
 

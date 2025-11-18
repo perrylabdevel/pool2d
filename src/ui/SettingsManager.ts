@@ -23,12 +23,21 @@ export interface UIColors {
 
 export interface AudioSettings {
   master: number;
+  music: number;
+  background: number;
   cueHits: number;
   ballCollisions: number;
   railHits: number;
   pocketDrops: number;
   dampening: number;
   compression: number;
+  muteMaster?: boolean;
+  muteMusic?: boolean;
+  muteBackground?: boolean;
+  muteCueHits?: boolean;
+  muteBallCollisions?: boolean;
+  muteRailHits?: boolean;
+  mutePocketDrops?: boolean;
 }
 
 export interface PhysicsSettings {
@@ -160,12 +169,21 @@ const DEFAULT_PHYSICS_SETTINGS: PhysicsSettings = {
 
 export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
   master: 0.85,
+  music: 0.65,
+  background: 0.5,
   cueHits: 0.75,
   ballCollisions: 0.85,
   railHits: 0.65,
   pocketDrops: 0.95,
   dampening: 0.65,
   compression: 0.55,
+  muteMaster: false,
+  muteMusic: false,
+  muteBackground: false,
+  muteCueHits: false,
+  muteBallCollisions: false,
+  muteRailHits: false,
+  mutePocketDrops: false,
 };
 
 export class SettingsManager {
@@ -230,12 +248,21 @@ export class SettingsManager {
     } as AudioSettings;
     const clamp = this.clamp.bind(this);
     merged.master = clamp(merged.master ?? DEFAULT_AUDIO_SETTINGS.master, 0, 1);
+    merged.music = clamp(merged.music ?? DEFAULT_AUDIO_SETTINGS.music, 0, 1);
+    merged.background = clamp(merged.background ?? DEFAULT_AUDIO_SETTINGS.background, 0, 1);
     merged.cueHits = clamp(merged.cueHits ?? DEFAULT_AUDIO_SETTINGS.cueHits, 0, 1);
     merged.ballCollisions = clamp(merged.ballCollisions ?? DEFAULT_AUDIO_SETTINGS.ballCollisions, 0, 1);
     merged.railHits = clamp(merged.railHits ?? DEFAULT_AUDIO_SETTINGS.railHits, 0, 1);
     merged.pocketDrops = clamp(merged.pocketDrops ?? DEFAULT_AUDIO_SETTINGS.pocketDrops, 0, 1);
     merged.dampening = clamp(merged.dampening ?? DEFAULT_AUDIO_SETTINGS.dampening, 0, 1);
     merged.compression = clamp(merged.compression ?? DEFAULT_AUDIO_SETTINGS.compression, 0, 1);
+    merged.muteMaster = Boolean(merged.muteMaster);
+    merged.muteMusic = Boolean(merged.muteMusic);
+    merged.muteBackground = Boolean(merged.muteBackground);
+    merged.muteCueHits = Boolean(merged.muteCueHits);
+    merged.muteBallCollisions = Boolean(merged.muteBallCollisions);
+    merged.muteRailHits = Boolean(merged.muteRailHits);
+    merged.mutePocketDrops = Boolean(merged.mutePocketDrops);
     return merged;
   }
 

@@ -2,6 +2,8 @@ import { DEFAULT_AUDIO_SETTINGS, type AudioSettings } from '../ui/SettingsManage
 
 // Audio file paths - will be loaded dynamically
 const AUDIO_PATHS = {
+  backgroundLoop: new URL('../assets/audio/background-loop.wav', import.meta.url).href,
+  musicTrack: new URL('../assets/audio/music-track.wav', import.meta.url).href,
   ballCollisionLight: new URL('../assets/audio/ball-collision-light.wav', import.meta.url).href,
   ballCollisionMedium: new URL('../assets/audio/ball-collision-medium.wav', import.meta.url).href,
   ballCollisionHard: new URL('../assets/audio/ball-collision-hard.wav', import.meta.url).href,
@@ -27,6 +29,12 @@ export class AudioManager {
   private masterGain: GainNode | null = null;
   private filterNode: BiquadFilterNode | null = null;
   private compressor: DynamicsCompressorNode | null = null;
+  private backgroundGain: GainNode | null = null;
+  private backgroundSource: AudioBufferSourceNode | null = null;
+  private backgroundBuffer: AudioBuffer | null = null;
+  private musicGain: GainNode | null = null;
+  private musicSource: AudioBufferSourceNode | null = null;
+  private musicBuffer: AudioBuffer | null = null;
   private settings: AudioSettings = { ...DEFAULT_AUDIO_SETTINGS };
   private loadingPromises: Promise<void>[] = [];
   private isLoaded = false;
@@ -35,6 +43,14 @@ export class AudioManager {
 
   // Sample banks for each sound type
   private sampleSets: Record<string, SampleSet> = {
+    background: {
+      samples: [{ buffer: null, url: AUDIO_PATHS.backgroundLoop }],
+      volumeKey: 'background',
+    },
+    music: {
+      samples: [{ buffer: null, url: AUDIO_PATHS.musicTrack }],
+      volumeKey: 'music',
+    },
     ballCollision: {
       samples: [
         { buffer: null, url: AUDIO_PATHS.ballCollisionLight },
@@ -82,11 +98,40 @@ export class AudioManager {
     this.updateProcessingChain();
   }
 
+  private getEffectiveMasterGain(): number {
+    const master = this.settings.master ?? DEFAULT_AUDIO_SETTINGS.master;
+    return this.settings.muteMaster ? 0 : master;
+  }
+
+  private getEventVolume(volumeKey: keyof AudioSettings): number {
+    let baseVolume = (this.settings[volumeKey] as number) ?? (DEFAULT_AUDIO_SETTINGS[volumeKey] as number);
+    if (typeof baseVolume !== 'number') {
+      baseVolume = 0;
+    }
+
+    switch (volumeKey) {
+      case 'music':
+        return this.settings.muteMusic ? 0 : baseVolume;
+      case 'cueHits':
+        return this.settings.muteCueHits ? 0 : baseVolume;
+      case 'ballCollisions':
+        return this.settings.muteBallCollisions ? 0 : baseVolume;
+      case 'railHits':
+        return this.settings.muteRailHits ? 0 : baseVolume;
+      case 'pocketDrops':
+        return this.settings.mutePocketDrops ? 0 : baseVolume;
+      case 'background':
+        return this.settings.muteBackground ? 0 : baseVolume;
+      default:
+        return baseVolume;
+    }
+  }
+
   private updateProcessingChain() {
     if (!this.ctx) return;
 
     if (this.masterGain) {
-      this.masterGain.gain.value = this.settings.master;
+      this.masterGain.gain.value = this.getEffectiveMasterGain();
     }
 
     if (this.filterNode) {
@@ -109,6 +154,9 @@ export class AudioManager {
       this.compressor.attack.value = 0.004 + softness * 0.02;
       this.compressor.release.value = 0.12 + softness * 0.2;
     }
+
+    this.updateBackgroundVolume();
+    this.updateMusicVolume();
   }
 
   private get audioContext(): AudioContext {
@@ -147,6 +195,15 @@ export class AudioManager {
     await Promise.all(this.loadingPromises);
     this.isLoaded = true;
     console.log('All audio samples loaded successfully');
+
+    const backgroundSet = this.sampleSets.background;
+    if (backgroundSet && backgroundSet.samples[0]?.buffer) {
+      this.backgroundBuffer = backgroundSet.samples[0].buffer;
+    }
+    const musicSet = this.sampleSets.music;
+    if (musicSet && musicSet.samples[0]?.buffer) {
+      this.musicBuffer = musicSet.samples[0].buffer;
+    }
   }
 
   async ensureUnlocked() {
@@ -159,15 +216,154 @@ export class AudioManager {
       }
     }
 
-    // Load samples if not already loaded
-    if (!this.isLoaded && this.loadingPromises.length === 0) {
-      await this.loadSamples();
+    // Ensure samples are fully loaded before continuing
+    if (!this.isLoaded) {
+      if (this.loadingPromises.length === 0) {
+        // First load
+        await this.loadSamples();
+      } else {
+        // Load already in progress – wait for it
+        await Promise.all(this.loadingPromises);
+        this.isLoaded = true;
+      }
     }
   }
 
   setSettings(settings: AudioSettings) {
     this.settings = { ...settings };
     this.updateProcessingChain();
+  }
+
+  private updateBackgroundVolume() {
+    if (!this.backgroundGain) return;
+    const volume = this.getEventVolume('background');
+    this.backgroundGain.gain.value = Math.max(0, Math.min(1, volume));
+  }
+
+  private updateMusicVolume() {
+    if (!this.musicGain) return;
+    const volume = this.getEventVolume('music');
+    this.musicGain.gain.value = Math.max(0, Math.min(1, volume));
+  }
+
+  async startBackgroundLoop() {
+    await this.ensureUnlocked();
+
+    const ctx = this.audioContext;
+
+    if (!this.backgroundBuffer) {
+      const backgroundSet = this.sampleSets.background;
+      if (backgroundSet && backgroundSet.samples[0]?.buffer) {
+        this.backgroundBuffer = backgroundSet.samples[0].buffer;
+      }
+    }
+
+    if (!this.backgroundBuffer) {
+      console.warn('Background audio buffer not loaded');
+      return;
+    }
+
+    this.stopBackgroundLoop();
+
+    const source = ctx.createBufferSource();
+    source.buffer = this.backgroundBuffer;
+    source.loop = true;
+
+    const gainNode = ctx.createGain();
+    this.backgroundGain = gainNode;
+    this.updateBackgroundVolume();
+
+    // Background ambience bypasses Quiet Room processing (no filter/compression)
+    const destination = this.masterGain ?? ctx.destination;
+    source.connect(gainNode);
+    gainNode.connect(destination);
+
+    source.start();
+    this.backgroundSource = source;
+
+    source.onended = () => {
+      gainNode.disconnect();
+      source.disconnect();
+      if (this.backgroundSource === source) {
+        this.backgroundSource = null;
+        this.backgroundGain = null;
+      }
+    };
+  }
+
+  stopBackgroundLoop() {
+    if (this.backgroundSource) {
+      try {
+        this.backgroundSource.stop();
+      } catch (e) {
+      }
+      this.backgroundSource.disconnect();
+      this.backgroundSource = null;
+    }
+    if (this.backgroundGain) {
+      this.backgroundGain.disconnect();
+      this.backgroundGain = null;
+    }
+  }
+
+  async startMusicLoop() {
+    await this.ensureUnlocked();
+
+    const ctx = this.audioContext;
+
+    if (!this.musicBuffer) {
+      const musicSet = this.sampleSets.music;
+      if (musicSet && musicSet.samples[0]?.buffer) {
+        this.musicBuffer = musicSet.samples[0].buffer;
+      }
+    }
+
+    if (!this.musicBuffer) {
+      console.warn('Music audio buffer not loaded');
+      return;
+    }
+
+    this.stopMusicLoop();
+
+    const source = ctx.createBufferSource();
+    source.buffer = this.musicBuffer;
+    source.loop = true;
+
+    const gainNode = ctx.createGain();
+    this.musicGain = gainNode;
+    this.updateMusicVolume();
+
+    // Music track bypasses Quiet Room processing (no filter/compression)
+    const destination = this.masterGain ?? ctx.destination;
+    source.connect(gainNode);
+    gainNode.connect(destination);
+
+    source.start();
+    this.musicSource = source;
+
+    source.onended = () => {
+      gainNode.disconnect();
+      source.disconnect();
+      if (this.musicSource === source) {
+        this.musicSource = null;
+        this.musicGain = null;
+      }
+    };
+  }
+
+  stopMusicLoop() {
+    if (this.musicSource) {
+      try {
+        this.musicSource.stop();
+      } catch (e) {
+      }
+      this.musicSource.disconnect();
+      this.musicSource = null;
+    }
+    if (this.musicGain) {
+      this.musicGain.disconnect();
+      this.musicGain = null;
+    }
   }
 
   /**
@@ -184,7 +380,7 @@ export class AudioManager {
     const sampleSet = this.sampleSets[sampleSetKey];
     if (!sampleSet) return;
 
-    const volume = this.settings[sampleSet.volumeKey] as number;
+    const volume = this.getEventVolume(sampleSet.volumeKey);
     if (volume <= 0) return;
 
     // Prevent sound spam - throttle rapid repeated sounds
@@ -288,6 +484,8 @@ export class AudioManager {
     });
     this.activeSources = [];
     this.lastPlayTime = {};
+    this.stopBackgroundLoop();
+    this.stopMusicLoop();
   }
 
   /**

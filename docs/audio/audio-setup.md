@@ -24,10 +24,16 @@ The audio system has been converted from **synthesized sounds** to **sample-base
 2. **Cue Hits** - 2 samples (random selection)
 3. **Rail Hits** - 2 samples (random selection)
 4. **Pocket Drops** - 1 sample
+5. **Background Ambience** - 1 looping "room tone" track
+6. **Music Track** - 1 looping music bed
 
 ### Mixer Controls
 Open the **Audio Mixer** panel from the HUD to tailor the mix:
 - **Master** and **per-event sliders** (Cue, Ball, Rail, Pocket) still control gain
+- New **Music & Ambience** section
+  - **Music Track** controls the looping music bed level (with preview + mute)
+  - **Background Loop** controls the room tone / ambience level (with preview + mute)
+- New **per-row mute icons** for each mixer row (Master, Music, Background, Cue, Ball, Rail, Pocket)
 - New **Quiet Room** section
   - **High-Cut Dampening** sweeps a low-pass filter to tame harsh highs
   - **Soft Compression** adds gentle limiting so big shots do not overpower quieter sounds

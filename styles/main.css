@@ -1003,6 +1003,45 @@ button:active {
   font-weight: 500;
 }
 
+.event-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.event-control .slider-group {
+  flex: 1;
+}
+
+.event-actions {
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
+}
+
+.panel-icon-btn {
+  flex: 0;
+  padding: 6px 8px;
+  min-width: 0;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  font-size: 14px;
+}
+
+.panel-icon-btn.audio-preview {
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.panel-icon-btn.audio-mute.is-muted {
+  border-color: rgba(244, 67, 54, 0.7);
+  color: #ffb3ae;
+  background: rgba(244, 67, 54, 0.2);
+}
+
 .panel-hint {
   font-size: 11px;
   color: #888;

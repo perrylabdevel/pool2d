@@ -16,6 +16,9 @@ Project TODO
   - Expand README with Rules panel instructions once implemented
   - Keep docs/rules/eight-ball-rules.md in sync with enforcement
 
+- Branding cleanup
+  - Rename technical identifiers (storage keys, filenames, package name, etc.) from pool2d to RailRush and migrate persisted settings
+
 - Audio polish
   - Extend Audio Mixer with per-event sample selection / EQ / reverb depth
   - Add stereo imaging and positional damping once ball positions feed the mixer
