@@ -63,7 +63,7 @@ body {
   left: 0;
   width: 100vw;
   height: 100vh;
-  background: #1a1a1a;
+  background: radial-gradient(circle at center, #0D1424 0%, #000B1A 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -78,23 +78,43 @@ body {
 
 .loading-content {
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
 }
 
 .loading-content h1 {
-  font-size: 48px;
-  margin-bottom: 32px;
-  color: #4CAF50;
-  font-weight: 700;
+  font-family: 'Impact', 'Arial Black', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  font-size: 64px;
+  margin-bottom: 0;
+  background: linear-gradient(to bottom, #fff 20%, #ccc 50%, #999 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+  filter: drop-shadow(0 0 10px rgba(0, 180, 255, 0.4));
+  animation: pulse-glow 2s infinite;
+}
+
+@keyframes pulse-glow {
+  0% { filter: drop-shadow(0 0 10px rgba(0, 180, 255, 0.4)); }
+  50% { filter: drop-shadow(0 0 25px rgba(0, 180, 255, 0.7)); }
+  100% { filter: drop-shadow(0 0 10px rgba(0, 180, 255, 0.4)); }
 }
 
 .loading-spinner {
-  width: 60px;
-  height: 60px;
+  width: 64px;
+  height: 64px;
   border: 4px solid rgba(255, 255, 255, 0.1);
-  border-top-color: #4CAF50;
+  border-top-color: #00B4FF;
+  border-right-color: #00B4FF;
   border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin: 0 auto 24px;
+  animation: spin 0.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  box-shadow: 0 0 15px rgba(0, 180, 255, 0.3);
+  margin: 0;
 }
 
 @keyframes spin {
@@ -102,9 +122,12 @@ body {
 }
 
 #loading-text {
-  font-size: 16px;
-  color: rgba(255, 255, 255, 0.7);
-  margin-top: 16px;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-top: 0;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 #app {
@@ -117,9 +140,11 @@ body {
 #hud {
   position: relative;
   z-index: 10;
-  background: rgba(0, 0, 0, 0.85);
-  padding: 8px 16px;
+  background: linear-gradient(180deg, rgba(13, 20, 36, 0.95) 0%, rgba(0, 11, 26, 0.9) 100%);
+  padding: 12px 24px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
 }
 
 /* New HUD header layout */
@@ -127,22 +152,25 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 16px;
+  gap: 24px;
 }
 
 .hud-player {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
-  padding: 6px 10px;
+  border-radius: 12px;
+  padding: 8px 16px;
+  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  min-width: 240px;
 }
 
 .hud-player.active {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(90deg, rgba(0, 180, 255, 0.1), rgba(0, 180, 255, 0.02));
+  border-color: rgba(0, 180, 255, 0.4);
+  box-shadow: 0 0 15px rgba(0, 180, 255, 0.15);
 }
 
 .hud-player.right {
@@ -150,108 +178,131 @@ body {
   text-align: right;
 }
 
+.hud-player.right.active {
+  background: linear-gradient(-90deg, rgba(0, 180, 255, 0.1), rgba(0, 180, 255, 0.02));
+}
+
 .hud-player .avatar {
-  width: 72px;
-  height: 72px;
-  border-radius: 8px;
-  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.2), rgba(255,255,255,0.05));
-  border: 2px solid rgba(255, 255, 255, 0.15);
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
-  transition: all 0.3s ease;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.1), rgba(255,255,255,0.02));
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+  position: relative;
+  overflow: hidden;
+}
+
+.hud-player .avatar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: linear-gradient(135deg, transparent 40%, rgba(255,255,255,0.1) 100%);
 }
 
 .hud-player.active .avatar {
-  border-color: var(--active-player-color);
-  box-shadow: 0 0 15px color-mix(in srgb, var(--active-player-color) 40%, transparent);
+  border-color: var(--color-arcade-blue);
+  box-shadow: 0 0 15px rgba(0, 180, 255, 0.4);
 }
 
 .hud-player .meta {
   display: flex;
   flex-direction: column;
+  gap: 4px;
+  flex: 1;
 }
 
 .hud-player .name {
-  font-size: 14px;
-  font-weight: 700;
+  font-family: var(--font-heading);
+  font-size: 18px;
+  letter-spacing: 0.5px;
   color: #fff;
+  text-transform: uppercase;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+}
+
+.hud-player.active .name {
+  color: var(--color-arcade-blue);
+  text-shadow: 0 0 10px rgba(0, 180, 255, 0.4);
 }
 
 .hud-player .balls-remaining {
   display: flex;
-  gap: 4px;
-  margin-top: 4px;
+  gap: 6px;
+  margin-top: 2px;
+  height: 28px;
+  align-items: center;
 }
 
-/* Small ball chips with numbers */
+.hud-player.right .balls-remaining {
+  justify-content: flex-end;
+}
+
+/* Ball Chips */
 .ball-chip {
-  width: var(--ball-chip-size, 42px);
-  height: var(--ball-chip-size, 42px);
+  width: var(--ball-chip-size, 32px);
+  height: var(--ball-chip-size, 32px);
   border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: calc(var(--ball-chip-size, 42px) * 0.5);
-  font-weight: 700;
-  color: #0b0b0b;
-  border: 1.5px solid transparent;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
-  position: relative;
-  z-index: 0;
+  overflow: hidden;
 }
 
-.ball-chip::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  border: inherit;
-  background:
-    linear-gradient(transparent, transparent) padding-box,
-    linear-gradient(180deg, var(--ball-chip-outline-top), var(--ball-chip-outline-bottom)) border-box;
-  background-clip: padding-box, border-box;
-  background-origin: padding-box, border-box;
-  pointer-events: none;
-  z-index: 0;
+.ball-chip.solids,
+.ball-chip.stripes {
+  /* Use neutral glass background; actual color comes from the image */
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02));
+}
+
+/* Fallback if no image (optional, or just keep dark) */
+.ball-chip:not(.has-image):not(.empty) {
+  background: radial-gradient(circle at 30% 30%, #444, #222);
+}
+
+.ball-chip.has-image {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .ball-chip.empty {
-  background: transparent;
-  border-width: 1px;
-  border-color: transparent;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px dashed rgba(255, 255, 255, 0.15);
   box-shadow: none;
 }
 
-.ball-chip.empty::after {
-  background:
-    linear-gradient(transparent, transparent) padding-box,
-    linear-gradient(180deg, var(--ball-chip-placeholder-outline-top), var(--ball-chip-placeholder-outline-bottom)) border-box;
-}
-
-.ball-chip.solids { background: transparent; }
-.ball-chip.stripes { background: transparent; position: relative; }
-
-/* Ensure empty state overrides any gradient backgrounds */
-.ball-chip.empty.solids,
-.ball-chip.empty.stripes {
-  background: transparent;
-}
-
-.ball-chip.stripes:not(.has-image):not(.empty)::after { content: none; display: none; }
-
-.ball-chip .num { display: none; }
-
-.ball-chip.has-image { background: transparent; }
-
 .ball-chip img {
-  position: absolute;
-  inset: 0;
   width: 100%;
   height: 100%;
-  display: block;
+  object-fit: cover;
   border-radius: 50%;
-  z-index: 1;
-  image-rendering: -webkit-optimize-contrast;
-  image-rendering: high-quality;
+}
+
+/* Menu Button */
+#hud-menu-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05));
+  border: 1px solid rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+#hud-menu-btn:hover {
+  background: rgba(255,255,255,0.15);
+  border-color: rgba(255,255,255,0.3);
+  transform: scale(1.05);
+  box-shadow: 0 0 15px rgba(255,255,255,0.1);
 }
 
 .hud-timer.hidden {

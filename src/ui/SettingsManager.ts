@@ -40,6 +40,15 @@ export interface AudioSettings {
   mutePocketDrops?: boolean;
 }
 
+export interface GameStats {
+  gamesPlayed: number;
+  wins: number;
+  losses: number;
+  ballsPotted: number;
+  winStreak: number;
+  maxWinStreak: number;
+}
+
 export interface PhysicsSettings {
   BALL_RESTITUTION: number;
   BALL_BALL_FRICTION: number;
@@ -138,6 +147,7 @@ const STORAGE_KEYS = {
   RENDER_SETTINGS: 'pool2d_render_settings',
   MODERN_GEOMETRY_SETTINGS: 'pool2d_modern_geometry_settings',
   AUDIO_SETTINGS: 'pool2d_audio_settings',
+  GAME_STATS: 'pool2d_game_stats',
 };
 
 const DEFAULT_GAME_SETTINGS: GameSettings = {
@@ -200,6 +210,15 @@ export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
   mutePocketDrops: false,
 };
 
+export const DEFAULT_GAME_STATS: GameStats = {
+  gamesPlayed: 0,
+  wins: 0,
+  losses: 0,
+  ballsPotted: 0,
+  winStreak: 0,
+  maxWinStreak: 0,
+};
+
 export class SettingsManager {
   private gameSettings: GameSettings;
   private uiColors: UIColors;
@@ -208,6 +227,7 @@ export class SettingsManager {
   private renderSettings: RenderSettings;
   private modernGeometrySettings: ModernPocketGeometry | null;
   private audioSettings: AudioSettings;
+  private gameStats: GameStats;
 
   constructor() {
     this.gameSettings = this.loadGameSettings();
@@ -217,6 +237,7 @@ export class SettingsManager {
     this.renderSettings = this.loadRenderSettings();
     this.modernGeometrySettings = this.loadModernGeometrySettings();
     this.audioSettings = this.loadAudioSettings();
+    this.gameStats = this.loadGameStats();
     
     // Apply loaded settings
     this.applyPhysicsSettings();
@@ -245,6 +266,7 @@ export class SettingsManager {
     } catch (e) {
       console.warn('Failed to save game settings:', e);
     }
+    window.dispatchEvent(new CustomEvent('settings:game-changed', { detail: { settings: this.getGameSettings() } }));
   }
 
   getGameSettings(): GameSettings {
@@ -317,6 +339,41 @@ export class SettingsManager {
       console.warn('Failed to reset audio settings:', e);
     }
     window.dispatchEvent(new CustomEvent('settings:audio-changed', { detail: { settings: this.getAudioSettings() } }));
+  }
+
+  // Game Stats
+  loadGameStats(): GameStats {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.GAME_STATS);
+      if (stored) {
+        return { ...DEFAULT_GAME_STATS, ...JSON.parse(stored) };
+      }
+    } catch (e) {
+      console.warn('Failed to load game stats:', e);
+    }
+    return { ...DEFAULT_GAME_STATS };
+  }
+
+  saveGameStats(stats: Partial<GameStats>) {
+    this.gameStats = { ...this.gameStats, ...stats };
+    try {
+      localStorage.setItem(STORAGE_KEYS.GAME_STATS, JSON.stringify(this.gameStats));
+    } catch (e) {
+      console.warn('Failed to save game stats:', e);
+    }
+  }
+
+  getGameStats(): GameStats {
+    return { ...this.gameStats };
+  }
+
+  resetGameStats() {
+    this.gameStats = { ...DEFAULT_GAME_STATS };
+    try {
+      localStorage.setItem(STORAGE_KEYS.GAME_STATS, JSON.stringify(this.gameStats));
+    } catch (e) {
+      console.warn('Failed to reset game stats:', e);
+    }
   }
 
   // UI Colors
@@ -706,12 +763,14 @@ export class SettingsManager {
       localStorage.removeItem(STORAGE_KEYS.RENDER_SETTINGS);
       localStorage.removeItem(STORAGE_KEYS.GEOMETRY_SETTINGS);
       localStorage.removeItem(STORAGE_KEYS.MODERN_GEOMETRY_SETTINGS);
+      localStorage.removeItem(STORAGE_KEYS.GAME_STATS);
       
       this.gameSettings = { ...DEFAULT_GAME_SETTINGS };
       this.uiColors = { ...DEFAULT_UI_COLORS };
       this.physicsSettings = { ...DEFAULT_PHYSICS_SETTINGS };
       this.geometrySettings = this.loadGeometrySettings();
       this.modernGeometrySettings = null;
+      this.gameStats = { ...DEFAULT_GAME_STATS };
       this.renderSettings = {
         ...defaultRenderLayerSettings,
         canvasScale: 1,

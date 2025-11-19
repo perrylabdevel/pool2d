@@ -5,6 +5,8 @@ import type { PanelRegistrationOptions } from './panels/PanelManager';
 import { UIPanel } from './panels/UIPanel';
 import { GameSettingsPanel } from './GameSettingsPanel';
 
+import { inGameMenu } from './InGameMenu';
+
 export class HUD {
   fpsElement: HTMLElement | null;
   upsElement: HTMLElement | null;
@@ -43,13 +45,31 @@ export class HUD {
     });
     this.setupControls();
     this.loadSettings();
+    
+    // Listen for settings changes
+    window.addEventListener('settings:game-changed', (event) => {
+      const detail = (event as CustomEvent<{ settings: any }>).detail;
+      if (detail?.settings) {
+        this.showStats = detail.settings.showFPS;
+        if (this.statsElement) {
+          this.statsElement.style.display = this.showStats ? 'flex' : 'none';
+        }
+      }
+    });
   }
   
   setupControls() {
     const pauseBtn = document.getElementById('pause-btn');
+    const hudMenuBtn = document.getElementById('hud-menu-btn');
     const restartBtn = document.getElementById('restart-btn');
     const settingsBtn = document.getElementById('settings-btn');
     const debugToggle = document.getElementById('debug-toggle');
+
+    if (hudMenuBtn) {
+      hudMenuBtn.addEventListener('click', () => {
+        inGameMenu.open();
+      });
+    }
 
     if (pauseBtn) {
       pauseBtn.addEventListener('click', () => {

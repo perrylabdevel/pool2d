@@ -1,0 +1,134 @@
+:root {
+  /* --- Color Palette: Miniclip / Arcade Style --- */
+  
+  /* Brand Colors */
+  --color-arcade-blue: #00B4FF;
+  --color-arcade-green: #66FF00;
+  --color-arcade-gold: #FFD700;
+  --color-arcade-red: #FF3333;
+  
+  /* Backgrounds */
+  --color-deep-navy: #000B1A;
+  --color-menu-bg: #0D1424;
+  --color-panel-bg: rgba(13, 20, 36, 0.95);
+  
+  /* Chrome / Metallic Gradients */
+  --menu-chrome-start: #E0E5EC;
+  --menu-chrome-end: #A3B1C6;
+  --menu-chrome-gradient: linear-gradient(180deg, var(--menu-chrome-start) 0%, var(--menu-chrome-end) 100%);
+  --menu-chrome-border: linear-gradient(180deg, #FFFFFF 0%, #708090 100%);
+  
+  /* Glass / Frost */
+  --menu-glass-bg: rgba(13, 20, 36, 0.85);
+  --menu-glass-blur: blur(12px);
+
+  /* --- Glows & Shadows --- */
+  --glow-intensity-low: 0 0 10px rgba(0, 180, 255, 0.4);
+  --glow-intensity-medium: 0 0 20px rgba(0, 180, 255, 0.6);
+  --glow-intensity-high: 0 0 30px rgba(0, 180, 255, 0.8);
+  
+  --glow-gold-low: 0 0 10px rgba(255, 215, 0, 0.4);
+  --glow-gold-medium: 0 0 20px rgba(255, 215, 0, 0.6);
+
+  --shadow-elevation-low: 0 4px 6px rgba(0, 0, 0, 0.3);
+  --shadow-elevation-high: 0 10px 20px rgba(0, 0, 0, 0.5);
+  
+  /* --- Typography --- */
+  /* Condensed heading font stack */
+  --font-heading: 'Impact', 'Arial Black', 'Helvetica Inserat', 'Bitstream Vera Sans Bold', sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  /* --- Motion --- */
+  --motion-fast: 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --motion-normal: 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --motion-bounce: 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* --- Utility Classes --- */
+
+/* Typography Utilities */
+.u-font-heading {
+  font-family: var(--font-heading);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* Chrome / Metallic Text Effect */
+.u-chrome-text {
+  background: linear-gradient(to bottom, #fff 20%, #ccc 50%, #999 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+  filter: drop-shadow(0 0 2px rgba(255,255,255,0.3));
+}
+
+.u-gold-text {
+  background: linear-gradient(to bottom, #FFF7CC 0%, #FFD700 50%, #B8860B 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+  filter: drop-shadow(0 0 5px rgba(255, 215, 0, 0.5));
+}
+
+/* Container Styles */
+.u-frosted-glass {
+  background: var(--menu-glass-bg);
+  backdrop-filter: var(--menu-glass-blur);
+  -webkit-backdrop-filter: var(--menu-glass-blur);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: var(--shadow-elevation-high);
+}
+
+/* Border Styles */
+.u-neon-border-blue {
+  border: 1px solid var(--color-arcade-blue);
+  box-shadow: var(--glow-intensity-low), inset 0 0 10px rgba(0, 180, 255, 0.2);
+}
+
+.u-neon-border-gold {
+  border: 1px solid var(--color-arcade-gold);
+  box-shadow: var(--glow-gold-low), inset 0 0 10px rgba(255, 215, 0, 0.2);
+}
+
+.u-metallic-border {
+  position: relative;
+  border: 2px solid transparent;
+  background: linear-gradient(#0D1424, #0D1424) padding-box,
+              var(--menu-chrome-border) border-box;
+}
+
+/* Animation Utilities */
+.u-pulse-glow {
+  animation: u-pulse-glow-anim 2s infinite;
+}
+
+@keyframes u-pulse-glow-anim {
+  0% { box-shadow: 0 0 5px rgba(0, 180, 255, 0.4); }
+  50% { box-shadow: 0 0 20px rgba(0, 180, 255, 0.8); }
+  100% { box-shadow: 0 0 5px rgba(0, 180, 255, 0.4); }
+}
+
+.u-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.u-shimmer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(to right, transparent, rgba(255,255,255,0.2), transparent);
+  transform: skewX(-25deg);
+  animation: u-shimmer-anim 3s infinite;
+}
+
+@keyframes u-shimmer-anim {
+  0% { left: -100%; }
+  20% { left: 200%; }
+  100% { left: 200%; }
+}

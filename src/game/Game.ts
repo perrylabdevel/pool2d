@@ -104,6 +104,7 @@ export class Game {
   fpsTime: number = 0;
   upsSteps: number = 0;
   upsTime: number = 0;
+  isPaused: boolean = false;
   
   // Shooting state
   canShoot: boolean = true;
@@ -153,6 +154,17 @@ export class Game {
         this.audio.setSettings(detail.settings);
       }
     });
+    window.addEventListener('settings:game-changed', (event) => {
+      const detail = (event as CustomEvent<{ settings: any }>).detail;
+      if (detail?.settings) {
+        this.aimAssist = !!detail.settings.aimAssist;
+        // Update other live game settings if needed
+        if (this.ai) {
+            const diff = this.mapAIDifficulty(detail.settings.aiDifficulty ?? 'MEDIUM');
+            this.ai.difficulty = diff;
+        }
+      }
+    });
     window.addEventListener('audio:preview', (event) => {
       const detail = (event as CustomEvent<{ event: string }>).detail;
       if (!detail?.event) return;
@@ -160,6 +172,10 @@ export class Game {
     });
     this.mode = GameMode.EIGHT_BALL;
     this.lastBallScale = CONFIG.BALL_SCALE ?? 1;
+
+    // Initialize settings
+    const initialGameSettings = this.hud.settingsManager.getGameSettings();
+    this.aimAssist = initialGameSettings.aimAssist;
 
     // Initialize turn-based gameplay components (only for EIGHT_BALL mode)
     this.players = [];
@@ -461,7 +477,7 @@ export class Game {
         this.debug.setBallInHandOverlayEnabled(next);
         this.syncDebugModeWithRenderer();
       }
-      if (e.key === 'l' || e.key === 'L') {
+      if ((e.key === 'l' || e.key === 'L') && !e.shiftKey) {
         // Toggle verbose BIH console logging at runtime via a global flag
         const w: any = (typeof window !== 'undefined') ? window : {};
         w.__BIH_LOG__ = !w.__BIH_LOG__;
@@ -505,6 +521,19 @@ export class Game {
         }, 300);
       });
     }
+
+    // Listen for pause/resume events from UI
+    window.addEventListener('game:pause', () => {
+      this.isPaused = true;
+      // Stop physics loop but maybe keep rendering for background?
+      // For now, just setting the flag. The loop needs to respect it.
+    });
+
+    window.addEventListener('game:resume', () => {
+      this.isPaused = false;
+      // Reset lastTime to avoid huge time jump delta
+      this.lastTime = performance.now();
+    });
   }
 
   private syncDebugModeWithRenderer() {
@@ -1637,7 +1666,9 @@ export class Game {
     const dt = Math.min((now - this.lastTime) / 1000, 0.1);
     this.lastTime = now;
     
-    this.update(dt);
+    if (!this.isPaused) {
+      this.update(dt);
+    }
     this.render();
                           
     // Update FPS

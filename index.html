@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>RailRush - Tournament Grade Billiards</title>
+    <link rel="stylesheet" href="/styles/design-tokens.css" />
     <link rel="stylesheet" href="/styles/main.css" />
   </head>
   <body>
@@ -88,8 +89,10 @@
                 </div>
               </div>
 
-              <!-- Center Timer (hidden for now) -->
-              <div id="hud-timer" class="hud-timer hidden" aria-hidden="true"></div>
+              <!-- Menu Button (Center) -->
+              <button id="hud-menu-btn" class="icon-btn" aria-label="Open Menu" style="border-radius: 50%; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center;">
+                <span style="font-size: 24px;">☰</span>
+              </button>
 
               <!-- Right Player -->
               <div id="player2-info" class="hud-player right" role="region" aria-label="Player 2 Information">

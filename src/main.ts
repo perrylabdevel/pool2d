@@ -1,6 +1,10 @@
 // Main entry point
 
 import { Game } from './game/Game';
+import './ui/ModalService';
+import './ui/DockBridge';
+import './ui/HomeHub';
+import './ui/InGameMenu';
 
 function main() {
   const gameCanvas = document.getElementById('game-canvas') as HTMLCanvasElement;

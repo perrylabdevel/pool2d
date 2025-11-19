@@ -275,7 +275,7 @@ export class PanelManager extends EventTarget {
 
   private shouldIgnoreKey(event: KeyboardEvent): boolean {
     if (event.defaultPrevented) return true;
-    if (event.metaKey || event.ctrlKey || event.altKey) return true;
+    if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return true;
     if (isEditableElement(event.target)) return true;
     return false;
   }
