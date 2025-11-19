@@ -81,6 +81,19 @@ Implications:
 - Cue stick is drawn on the UI 2D canvas.
 - The cue line is no longer clamped to rails; it can extend into the padded world area so it doesn’t clip when the cue ball is near rails.
 - World padding is sized to accommodate cue length + a safety margin.
+- The cue shaft/tip strokes terminate exactly at the cue-ball surface (no spin offsets yet) and a thin center guide is rendered so the visual aim always matches the actual strike line.
+- Ghost/trajectory overlays reuse that same surface point as their origin; until english is implemented there’s never a visible offset between the cue sprite, aim guide, and ghost ball preview.
+- Power bar cue graphic mirrors the table cue: the full stick is rendered in the sidebar, sliding through the panel as power increases so the tip only becomes visible at full draw.
+- Power bar and micro dial heights track ~75 % of the table frame on screen; widths scale with that height so the controls stay proportionate regardless of layout.
+- While dragging either sidebar control, aim updates are temporarily suppressed so trackpad drags don’t nudge the table cue.
+  
+## Side Controls (Power Bar & Micro Dial)
+
+- `Renderer3D.getSideBarRect` positions the controls relative to the table frame, keeping them centered vertically beside the rails.
+- `Renderer3D.getSidebarSize` derives height/width from the current framed table size, ensuring the cue overlay and dial travel match the visible panel even when the table scales.
+- The power bar renders a fixed-length cue that translates vertically; the translation range is derived from the panel height so the tip/ferrule exit the panel at zero power and fully re-enter at 100 %.
+- `Game.handlePowerBar*` toggles `Input.setAimSuppressed(true|false)` so dragging the bar (mouse or trackpad) doesn’t feed into aim calculations; aim resumes immediately once the drag ends.
+- The micro dial shares the same bounds helper so pointer hitboxes remain aligned with the resized panel.
 
 ## Debug Overlay
 

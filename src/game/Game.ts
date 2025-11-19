@@ -1664,6 +1664,7 @@ export class Game {
       this.isDraggingPower = true;
       this.powerDragStartY = e.clientY;
       this.currentPower = CONFIG.CUE_POWER_MIN;
+      this.input.setAimSuppressed(true);
       return;
     }
 
@@ -1682,6 +1683,7 @@ export class Game {
       // Reverse: pulling down increases power (mouseY closer to bottom = higher power)
       this.currentPower = ((mouseY - bounds.y) / bounds.height) * CONFIG.CUE_POWER_MAX;
       this.currentPower = Math.max(CONFIG.CUE_POWER_MIN, Math.min(CONFIG.CUE_POWER_MAX, this.currentPower));
+      this.input.setAimSuppressed(true);
     }
   }
   
@@ -1710,6 +1712,7 @@ export class Game {
     if (!this.isDraggingPower) return;
 
     this.isDraggingPower = false;
+    this.input.setAimSuppressed(false);
 
     const canShootNow =
       this.currentPower >= CONFIG.CUE_POWER_MIN &&

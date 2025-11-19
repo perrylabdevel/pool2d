@@ -3743,7 +3743,7 @@ export class Renderer3D extends BaseRenderer {
       // Shadow/dark side
       this.uiCtx.strokeStyle = this.shadeColor(cueStickColor, -0.4);
       this.uiCtx.lineWidth = lineWidth;
-      this.uiCtx.lineCap = 'round';
+      this.uiCtx.lineCap = 'butt';
       this.uiCtx.beginPath();
       this.uiCtx.moveTo(tipStartScreen.x, tipStartScreen.y);
       this.uiCtx.lineTo(cueEnd.x, cueEnd.y);
@@ -3752,6 +3752,7 @@ export class Renderer3D extends BaseRenderer {
       // Mid-tone
       this.uiCtx.strokeStyle = cueStickColor;
       this.uiCtx.lineWidth = lineWidth * 0.7;
+      this.uiCtx.lineCap = 'butt';
       this.uiCtx.beginPath();
       this.uiCtx.moveTo(tipStartScreen.x, tipStartScreen.y);
       this.uiCtx.lineTo(cueEnd.x, cueEnd.y);
@@ -3760,6 +3761,16 @@ export class Renderer3D extends BaseRenderer {
       // Highlight (top edge)
       this.uiCtx.strokeStyle = this.shadeColor(cueStickColor, 0.3);
       this.uiCtx.lineWidth = lineWidth * 0.3;
+      this.uiCtx.lineCap = 'butt';
+      this.uiCtx.beginPath();
+      this.uiCtx.moveTo(tipStartScreen.x, tipStartScreen.y);
+      this.uiCtx.lineTo(cueEnd.x, cueEnd.y);
+      this.uiCtx.stroke();
+
+      // Crisp guide along cue centerline so the shaft always visually points at the cue ball
+      this.uiCtx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+      this.uiCtx.lineWidth = Math.max(1, lineWidth * 0.18);
+      this.uiCtx.lineCap = 'butt';
       this.uiCtx.beginPath();
       this.uiCtx.moveTo(tipStartScreen.x, tipStartScreen.y);
       this.uiCtx.lineTo(cueEnd.x, cueEnd.y);
@@ -3772,7 +3783,7 @@ export class Renderer3D extends BaseRenderer {
     // Tip shadow
     this.uiCtx.strokeStyle = this.shadeColor(cueTipColor, -0.3);
     this.uiCtx.lineWidth = tipWidth;
-    this.uiCtx.lineCap = 'round';
+    this.uiCtx.lineCap = 'butt';
     this.uiCtx.beginPath();
     this.uiCtx.moveTo(tipStartScreen.x, tipStartScreen.y);
     this.uiCtx.lineTo(tipEndScreen.x, tipEndScreen.y);
@@ -3781,6 +3792,7 @@ export class Renderer3D extends BaseRenderer {
     // Tip mid-tone
     this.uiCtx.strokeStyle = cueTipColor;
     this.uiCtx.lineWidth = tipWidth * 0.6;
+    this.uiCtx.lineCap = 'butt';
     this.uiCtx.beginPath();
     this.uiCtx.moveTo(tipStartScreen.x, tipStartScreen.y);
     this.uiCtx.lineTo(tipEndScreen.x, tipEndScreen.y);
@@ -3789,6 +3801,7 @@ export class Renderer3D extends BaseRenderer {
     // Tip highlight
     this.uiCtx.strokeStyle = this.shadeColor(cueTipColor, 0.4);
     this.uiCtx.lineWidth = tipWidth * 0.25;
+    this.uiCtx.lineCap = 'butt';
     this.uiCtx.beginPath();
     this.uiCtx.moveTo(tipStartScreen.x, tipStartScreen.y);
     this.uiCtx.lineTo(tipEndScreen.x, tipEndScreen.y);
@@ -3904,8 +3917,7 @@ export class Renderer3D extends BaseRenderer {
   }
   
   drawPowerBar2D(power: number, isAimMode: boolean, microDialState?: MicroDialRenderState) {
-    const barWidth = 30;
-    const barHeight = 200;
+    const { width: barWidth, height: barHeight } = this.getSidebarSize();
     const rect = this.getSideBarRect('right', barWidth, barHeight);
     const barX = rect.x;
     const barY = rect.y;
@@ -3914,7 +3926,7 @@ export class Renderer3D extends BaseRenderer {
     // Background with subtle plate behind the color fill plus inner padding
     ctx.fillStyle = 'rgba(28, 32, 39, 0.65)';
     ctx.fillRect(barX, barY, barWidth, barHeight);
-    const innerPadding = 3;
+    const innerPadding = Math.max(3, barWidth * 0.08);
     const innerX = barX + innerPadding;
     const innerY = barY + innerPadding;
     const innerWidth = barWidth - innerPadding * 2;
@@ -3937,7 +3949,9 @@ export class Renderer3D extends BaseRenderer {
     const tipHeight = Math.max(4, cueWidth * 0.25);
     const cueTopMin = innerY + 10;
     const cueTopMax = innerY + innerHeight - tipHeight - 6;
-    const cueY = cueTopMin + Math.max(0, cueTopMax - cueTopMin) * powerPercent;
+    const cueTravel = Math.max(0, cueTopMax - cueTopMin);
+    const cueY = cueTopMin + cueTravel * powerPercent;
+    const adjustedCueLength = cueLength;
 
     ctx.save();
     ctx.beginPath();
@@ -3959,8 +3973,8 @@ export class Renderer3D extends BaseRenderer {
     ctx.beginPath();
     ctx.moveTo(cueX + tipOffset, cueY);
     ctx.lineTo(cueX + tipOffset + tipWidthInner, cueY);
-    ctx.lineTo(cueX + buttWidth, cueY + cueLength);
-    ctx.lineTo(cueX, cueY + cueLength);
+    ctx.lineTo(cueX + buttWidth, cueY + adjustedCueLength);
+    ctx.lineTo(cueX, cueY + adjustedCueLength);
     ctx.closePath();
     ctx.fill();
 
@@ -3969,8 +3983,8 @@ export class Renderer3D extends BaseRenderer {
     ctx.beginPath();
     ctx.moveTo(cueX + tipOffset + tipWidthInner * 0.2, cueY);
     ctx.lineTo(cueX + tipOffset + tipWidthInner * 0.5, cueY);
-    ctx.lineTo(cueX + buttWidth * 0.55, cueY + cueLength);
-    ctx.lineTo(cueX + buttWidth * 0.35, cueY + cueLength);
+    ctx.lineTo(cueX + buttWidth * 0.55, cueY + adjustedCueLength);
+    ctx.lineTo(cueX + buttWidth * 0.35, cueY + adjustedCueLength);
     ctx.closePath();
     ctx.fill();
 
@@ -3978,8 +3992,8 @@ export class Renderer3D extends BaseRenderer {
     ctx.beginPath();
     ctx.moveTo(cueX + tipOffset + tipWidthInner * 0.75, cueY);
     ctx.lineTo(cueX + tipOffset + tipWidthInner, cueY);
-    ctx.lineTo(cueX + buttWidth, cueY + cueLength);
-    ctx.lineTo(cueX + buttWidth * 0.8, cueY + cueLength);
+    ctx.lineTo(cueX + buttWidth, cueY + adjustedCueLength);
+    ctx.lineTo(cueX + buttWidth * 0.8, cueY + adjustedCueLength);
     ctx.closePath();
     ctx.fill();
 
@@ -3992,8 +4006,8 @@ export class Renderer3D extends BaseRenderer {
     ctx.beginPath();
     ctx.moveTo(cueX + tipOffset, cueY);
     ctx.lineTo(cueX + tipOffset + tipWidthInner, cueY);
-    ctx.lineTo(cueX + buttWidth, cueY + cueLength);
-    ctx.lineTo(cueX, cueY + cueLength);
+    ctx.lineTo(cueX + buttWidth, cueY + adjustedCueLength);
+    ctx.lineTo(cueX, cueY + adjustedCueLength);
     ctx.closePath();
     ctx.stroke();
     ctx.restore();
@@ -4024,8 +4038,7 @@ export class Renderer3D extends BaseRenderer {
   }
 
   private drawMicroDial2D(state?: MicroDialRenderState) {
-    const barWidth = 30;
-    const barHeight = 200;
+    const { width: barWidth, height: barHeight } = this.getSidebarSize();
     const rect = this.getSideBarRect('left', barWidth, barHeight);
     const barX = rect.x;
     const barY = rect.y;
@@ -4041,7 +4054,7 @@ export class Renderer3D extends BaseRenderer {
     ctx.save();
     ctx.fillStyle = 'rgba(28, 32, 39, 0.65)';
     ctx.fillRect(barX, barY, barWidth, barHeight);
-    const innerPadding = 3;
+    const innerPadding = Math.max(3, barWidth * 0.08);
     const innerX = barX + innerPadding;
     const innerY = barY + innerPadding;
     const innerWidth = barWidth - innerPadding * 2;
@@ -4217,7 +4230,16 @@ export class Renderer3D extends BaseRenderer {
     if (prediction.type === 'none') return;
     
     // Draw line from cue ball to contact point (for all collision types)
-    const cueBallScreen = this.worldToScreen(cueBallPos.x, cueBallPos.y);
+    // Start cue path visualization at the ball surface (matches cue render)
+    const shotDirLen = Math.hypot(shotDirection.x, shotDirection.y) || 1;
+    const shotDirX = shotDirection.x / shotDirLen;
+    const shotDirY = shotDirection.y / shotDirLen;
+    const cueStartOffset = (CONFIG.BALL_RADIUS ?? 0) + (CONFIG.AIM_LINE_OFFSET ?? 0);
+    const cueBallSurface = {
+      x: cueBallPos.x + shotDirX * cueStartOffset,
+      y: cueBallPos.y + shotDirY * cueStartOffset,
+    };
+    const cueBallScreen = this.worldToScreen(cueBallSurface.x, cueBallSurface.y);
     const contactScreen = this.worldToScreen(prediction.contactPoint.x, prediction.contactPoint.y);
     
     this.uiCtx.strokeStyle = 'rgba(0, 255, 255, 0.4)';
@@ -4839,17 +4861,15 @@ export class Renderer3D extends BaseRenderer {
   }
   
   getPowerBarBounds() {
-    const barWidth = 30;
-    const barHeight = 200;
-    const rect = this.getSideBarRect('right', barWidth, barHeight);
-    return { x: rect.x, y: rect.y, width: barWidth, height: barHeight };
+    const { width, height } = this.getSidebarSize();
+    const rect = this.getSideBarRect('right', width, height);
+    return { x: rect.x, y: rect.y, width, height };
   }
 
   getMicroDialBounds() {
-    const barWidth = 30;
-    const barHeight = 200;
-    const rect = this.getSideBarRect('left', barWidth, barHeight);
-    return { x: rect.x, y: rect.y, width: barWidth, height: barHeight };
+    const { width, height } = this.getSidebarSize();
+    const rect = this.getSideBarRect('left', width, height);
+    return { x: rect.x, y: rect.y, width, height };
   }
 
   private getSideBarRect(side: 'left' | 'right', width: number, height: number) {
@@ -4859,8 +4879,29 @@ export class Renderer3D extends BaseRenderer {
     const frameScreen = this.worldToScreen(frameWorldX, 0);
     const offsetFromFrame = 20;
     const x = side === 'right' ? frameScreen.x + offsetFromFrame : frameScreen.x - offsetFromFrame - width;
-    const y = (this.uiCanvas.height - height) / 2;
+    const bounds = this.getTableFrameScreenBounds();
+    let y = bounds.centerY - height / 2;
+    const maxY = Math.max(0, this.uiCanvas.height - height);
+    y = Math.max(0, Math.min(maxY, y));
     return { x, y, width, height };
+  }
+
+  private getSidebarSize() {
+    const bounds = this.getTableFrameScreenBounds();
+    const height = Math.max(160, bounds.height * 0.75);
+    const width = Math.max(36, height * 0.08);
+    return { width, height };
+  }
+
+  private getTableFrameScreenBounds() {
+    const geom = getTableGeometry();
+    const halfHeight = geom.frameOutline.outerHalfHeight;
+    const topScreen = this.worldToScreen(0, halfHeight).y;
+    const bottomScreen = this.worldToScreen(0, -halfHeight).y;
+    const top = Math.min(topScreen, bottomScreen);
+    const bottom = Math.max(topScreen, bottomScreen);
+    const height = Math.abs(bottom - top);
+    return { top, bottom, height, centerY: (top + bottom) / 2 };
   }
 
   queuePocketAnimation(event: PocketAnimationEvent) {

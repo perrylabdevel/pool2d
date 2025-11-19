@@ -21,6 +21,7 @@ export class InputManager {
   // Power bar state
   isDraggingPowerBar: boolean = false;
   powerBarDragStart: number = 0;
+  private aimSuppressed: boolean = false;
 
   // Callbacks
   onShoot?: (angle: number, power: number) => void;
@@ -82,6 +83,9 @@ export class InputManager {
     const pos = this.screenToGame(e.clientX, e.clientY);
     this.mouseTargetX = pos.x;
     this.mouseTargetY = pos.y;
+    if (this.aimSuppressed) {
+      return;
+    }
     if (this.fineAimActive) {
       const factor = CONFIG.FINE_AIM_SENSITIVITY;
       this.mouseX += (this.mouseTargetX - this.mouseX) * factor;
@@ -176,6 +180,14 @@ export class InputManager {
   setFineAimActive(active: boolean) {
     this.fineAimActive = active;
     if (!active) {
+      this.mouseX = this.mouseTargetX;
+      this.mouseY = this.mouseTargetY;
+    }
+  }
+
+  setAimSuppressed(suppressed: boolean) {
+    this.aimSuppressed = suppressed;
+    if (!suppressed) {
       this.mouseX = this.mouseTargetX;
       this.mouseY = this.mouseTargetY;
     }
