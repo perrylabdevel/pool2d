@@ -92,11 +92,11 @@ export class Game {
   ai: PoolAI | null;
   aiThinkingStartTime: number;
   aiSelectedShot: any | null;
-  aiShotAnim: { phase: 'warmup' | 'approach' | 'pause' | 'strike'; elapsed: number; aimAngle: number; targetPower: number; seed: number; w1: number; w2: number; aAmpDeg: number; pAmp: number; warmupDur: number; approachDur: number; pauseDur: number; strikeDur: number } | null;
+  private aiShotAnim!: { phase: 'warmup' | 'approach' | 'pause' | 'strike'; elapsed: number; aimAngle: number; targetPower: number; seed: number; w1: number; w2: number; aAmpDeg: number; pAmp: number; warmupDur: number; approachDur: number; pauseDur: number; strikeDur: number } | null;
 
   // Arcade modes
   arcadeMode: GameModeBase | null;
-  
+
   // Game loop
   accumulator: number = 0;
   lastTime: number = 0;
@@ -105,7 +105,7 @@ export class Game {
   upsSteps: number = 0;
   upsTime: number = 0;
   isPaused: boolean = false;
-  
+
   // Shooting state
   canShoot: boolean = true;
   cueBall: Ball | null = null;
@@ -120,19 +120,19 @@ export class Game {
   spaceKeyHeld: boolean = false;
   microAimDialValue: number = 0;
   isDraggingMicroDial: boolean = false;
-  
+
   // Cached prediction for frozen paths in power mode (normal mode only)
   cachedPrediction: ReturnType<Predictor['predictFirstContact']> | null = null;
   cachedDirection: { x: number; y: number } | null = null;
   pocketAnimationEvents: PocketAnimationEvent[] = [];
-  
+
   // Ball dragging (practice mode only)
   isDraggingBall: boolean = false;
-  
+
   constructor(gameCanvas: HTMLCanvasElement, debugCanvas: HTMLCanvasElement) {
     // Create HUD first - it initializes SettingsManager which loads and applies saved CONFIG values
     this.hud = new HUD();
-    
+
     // Now create physics world - it will read the correct CONFIG values
     this.world = new PhysicsWorld();
     this.world.onBallPocketed = (details) => this.handleBallPocketed(details);
@@ -160,8 +160,8 @@ export class Game {
         this.aimAssist = !!detail.settings.aimAssist;
         // Update other live game settings if needed
         if (this.ai) {
-            const diff = this.mapAIDifficulty(detail.settings.aiDifficulty ?? 'MEDIUM');
-            this.ai.difficulty = diff;
+          const diff = this.mapAIDifficulty(detail.settings.aiDifficulty ?? 'MEDIUM');
+          this.ai.difficulty = diff;
         }
       }
     });
@@ -195,7 +195,7 @@ export class Game {
     this.setupCollisionTracking();
     this.initializeGame();
     scenarioManager.attach(this);
-    
+
     // Log helpful tips
     console.log('💡 Tips:');
     if (this.mode === GameMode.PRACTICE) {
@@ -224,7 +224,7 @@ export class Game {
     console.log('  - Press S to open Physics Settings panel');
     console.log('  - Press Shift+D for Debug view');
   }
-  
+
   isPlayerInputBlocked(): boolean {
     // Block input during AI's turn in 8-ball mode
     if (this.mode === GameMode.EIGHT_BALL) {
@@ -257,21 +257,21 @@ export class Game {
       this.handlePowerBarMouseDown(e);
       this.handleMicroDialMouseDown(e);
     });
-    this.input.canvas.addEventListener('mousemove', (e) => {
+    window.addEventListener('mousemove', (e) => {
       if (this.isPlayerInputBlocked()) return;
       if (this.waitingForPocketCall) return;
       this.handleBallDrag(e);
       this.handlePowerBarMouseMove(e);
       this.handleMicroDialMouseMove(e);
     });
-    this.input.canvas.addEventListener('mouseup', (e) => {
+    window.addEventListener('mouseup', (e) => {
       if (this.isPlayerInputBlocked()) return;
       if (this.waitingForPocketCall) return;
       this.handleBallDragEnd(e);
       this.handlePowerBarMouseUp(e);
       this.handleMicroDialMouseUp(e);
     });
-    
+
     // Handle A key to toggle aim/power mode
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Shift') {
@@ -332,20 +332,20 @@ export class Game {
         }
       }
     });
-    
+
     this.rules.onFoul = (message) => {
       this.hud.showFoul(this.formatFoulMessage(message));
     };
-    
+
     this.rules.onTurnChange = (player) => {
       this.hud.setTurn(player);
     };
-    
+
     this.rules.onGameOver = (winner) => {
       this.hud.showFoul(`Player ${winner} wins!`);
     };
   }
-  
+
   setupEventListeners() {
     window.addEventListener('resize', () => this.resize());
     window.addEventListener(
@@ -381,7 +381,7 @@ export class Game {
           (this.renderer as any).generateBallIcons(iconSizePx).then((map: Map<number, string>) => {
             (window as any).__BALL_ICONS__ = map;
             this.updateHUDPlayerBalls();
-          }).catch(() => {/* ignore */});
+          }).catch(() => {/* ignore */ });
         }
       };
       clearTimeout((this as any)._chipIconTimer);
@@ -407,12 +407,12 @@ export class Game {
       }
       // No action for pure color/intensity/layer changes
     });
-    
+
     // Instant geometry apply: rebuild world and renderer without full reload
     window.addEventListener('settings:geometry-apply', () => {
       this.restart();
     });
-    
+
     window.addEventListener('keydown', (e) => {
       // Require Shift+D to toggle debug mode (prevents accidental triggers)
       if ((e.key === 'd' || e.key === 'D') && e.shiftKey) {
@@ -494,7 +494,16 @@ export class Game {
         this.syncDebugModeWithRenderer();
       }
     });
-    
+
+    // React to AI difficulty changes from settings panel
+    window.addEventListener('game:ai-difficulty-changed', (e: Event) => {
+      const value = (e as CustomEvent<{ value: 'EASY' | 'MEDIUM' | 'HARD' | 'EXPERT' }>).detail?.value ?? 'MEDIUM';
+      const diff = this.mapAIDifficulty(value);
+      if (this.ai) {
+        this.ai.difficulty = diff;
+      }
+    });
+
     // Wire up debug toggle button
     const debugBtn = document.getElementById('debug-toggle');
     if (debugBtn) {
@@ -503,13 +512,13 @@ export class Game {
         this.syncDebugModeWithRenderer();
       });
     }
-    
+
     // Wire up restart button
     const restartBtn = document.getElementById('restart-btn');
     if (restartBtn) {
       restartBtn.addEventListener('click', () => this.restart());
     }
-    
+
     // Wire up shot capture button
     const captureShotBtn = document.getElementById('capture-shot-btn');
     if (captureShotBtn) {
@@ -525,14 +534,26 @@ export class Game {
     // Listen for pause/resume events from UI
     window.addEventListener('game:pause', () => {
       this.isPaused = true;
-      // Stop physics loop but maybe keep rendering for background?
-      // For now, just setting the flag. The loop needs to respect it.
+      // Reset drag states to prevent stuck interactions
+      this.isDraggingBall = false;
+      this.isDraggingPower = false;
+      this.isDraggingMicroDial = false;
+      this.input.canvas.style.cursor = 'default';
+      this.world.skipCuePocketCheck = false;
     });
 
     window.addEventListener('game:resume', () => {
       this.isPaused = false;
       // Reset lastTime to avoid huge time jump delta
       this.lastTime = performance.now();
+    });
+
+    // Auto-pause on window blur
+    window.addEventListener('blur', () => {
+      if (!this.isPaused) {
+        this.isPaused = true;
+        window.dispatchEvent(new CustomEvent('game:pause'));
+      }
     });
   }
 
@@ -563,10 +584,10 @@ export class Game {
     });
     this.hud.panelManager.restoreLastPanel();
   }
-  
+
   initializeGame() {
     this.world.balls = [];
-    
+
     // Create cue ball with randomized initial rotation
     this.cueBall = new Ball(
       0,
@@ -606,13 +627,13 @@ export class Game {
         this.world.addBall(ball);
       });
     });
-    
+
     // Initialize 3D scene
     this.renderer.initializeTable();
     this.renderer.initializeRails(this.world.rails);
     const geometry = getTableGeometry();
     this.renderer.initializePockets(geometry.pockets);
-    
+
     // Connect debug overlay to renderer for coordinate projection
     this.debug.setRenderer(this.renderer);
 
@@ -626,7 +647,7 @@ export class Game {
         (this.renderer as any).generateBallIcons(iconSizePx).then((map: Map<number, string>) => {
           (window as any).__BALL_ICONS__ = map;
           this.updateHUDPlayerBalls();
-        }).catch(() => {/* ignore icon errors */});
+        }).catch(() => {/* ignore icon errors */ });
       };
 
       // Defer until ball models/textures are loaded to ensure real textures are used
@@ -771,7 +792,7 @@ export class Game {
     this.hud.setTurn(1, false);
   }
 
-  private mapAIDifficulty(value: 'EASY'|'MEDIUM'|'HARD'|'EXPERT'): AIDifficulty {
+  private mapAIDifficulty(value: 'EASY' | 'MEDIUM' | 'HARD' | 'EXPERT'): AIDifficulty {
     switch (value) {
       case 'EASY': return AIDifficulty.EASY;
       case 'HARD': return AIDifficulty.HARD;
@@ -866,8 +887,8 @@ export class Game {
     this.input.canvas.style.cursor = 'default';
 
     // Clear HUD messages
-    this.hud.foulBanner?.classList.add('hidden');
-    if (this.hud.foulBanner) this.hud.foulBanner.textContent = '';
+    // notificationService handles this automatically
+
 
     // Rebuild physics world (recomputes rails/pockets from current CONFIG)
     this.world = new PhysicsWorld();
@@ -931,7 +952,7 @@ export class Game {
     this.cueBall.prevY = this.cueBall.y;
     this.cueBall.lastPocketId = null;
   }
-  
+
   resize() {
     this.renderer.resize();
     this.input.updateScale(this.renderer.scale);
@@ -943,7 +964,7 @@ export class Game {
       this.renderer.canvasOffsetY
     );
   }
-  
+
   shoot(angle: number, power: number) {
     if (!this.cueBall || this.cueBall.pocketed) return;
     if (!this.canShoot) return;
@@ -979,7 +1000,7 @@ export class Game {
       }
       shotCapture.recordShotStart(this.cueBall, angle, power, prediction);
     }
-    
+
     // Apply power multiplier for realistic velocity
     const velocity = power * CONFIG.CUE_POWER_MULTIPLIER;
     const vx = Math.cos(angle) * velocity;
@@ -1001,10 +1022,10 @@ export class Game {
 
     // Track shot in arcade mode
     if (this.arcadeMode) {
-    this.arcadeMode.onShotTaken(angle, power);
+      this.arcadeMode.onShotTaken(angle, power);
     }
   }
-  
+
   update(dt: number) {
     this.accumulator += dt;
 
@@ -1018,7 +1039,7 @@ export class Game {
         this.upsSteps++;
       }
     }
-    
+
     // Check if all balls are sleeping
     const allSleeping = this.world.balls.every(b => b.pocketed || b.sleeping);
     const matchOver =
@@ -1179,8 +1200,8 @@ export class Game {
     const remainingForGroup = (group: BallGroup | null): number[] | null => {
       if (group === null) return null;
       const targetIds = group === BallGroup.SOLIDS
-        ? [1,2,3,4,5,6,7]
-        : [9,10,11,12,13,14,15];
+        ? [1, 2, 3, 4, 5, 6, 7]
+        : [9, 10, 11, 12, 13, 14, 15];
       const remaining = targetIds.filter(id => {
         const b = balls.find(x => x.id === id);
         return b && !b.pocketed;
@@ -1471,7 +1492,7 @@ export class Game {
       }
     }
   }
-  
+
   /**
    * Calculate aim sensitivity multiplier based on distance to nearest object ball
    * Returns 1.0 for short shots, lower values (finer control) for long shots
@@ -1496,9 +1517,9 @@ export class Game {
     // If no object balls found, use default sensitivity
     if (minDistance === Infinity) {
       return 1.0;
-  }
+    }
 
-  // Map distance to sensitivity using linear interpolation
+    // Map distance to sensitivity using linear interpolation
     // Short shots (< MIN_DISTANCE): full sensitivity (1.0)
     // Long shots (> MAX_DISTANCE): minimum sensitivity (MIN_SENSITIVITY)
     if (minDistance <= CONFIG.DISTANCE_AIM_MIN_DISTANCE) {
@@ -1508,7 +1529,7 @@ export class Game {
     } else {
       // Linear interpolation between min and max distance
       const t = (minDistance - CONFIG.DISTANCE_AIM_MIN_DISTANCE) /
-                (CONFIG.DISTANCE_AIM_MAX_DISTANCE - CONFIG.DISTANCE_AIM_MIN_DISTANCE);
+        (CONFIG.DISTANCE_AIM_MAX_DISTANCE - CONFIG.DISTANCE_AIM_MIN_DISTANCE);
       return 1.0 - t * (1.0 - CONFIG.DISTANCE_AIM_MIN_SENSITIVITY);
     }
   }
@@ -1559,18 +1580,18 @@ export class Game {
       // Use locked angle in power mode, live angle in aim mode
       const baseAngle = this.isAimMode ? this.input.getAimAngle(this.cueBall, aimSensitivity) : this.lockedAngle;
       const angle = this.applyMicroAimOffset(baseAngle);
-      
+
       // Predict first contact (always run to clip aim line at rails/balls)
       const direction = {
         x: Math.cos(angle),
         y: Math.sin(angle),
       };
-      
+
       // In normal mode (not debug), use cached prediction when in power mode
       // This freezes the trajectory paths when transitioning from aim to power
       let prediction;
       let useCachedPrediction = false;
-      
+
       if (this.isAimMode || this.debug.isEnabled()) {
         // Aim mode or debug mode: always recalculate
         prediction = this.predictor.predictFirstContact(
@@ -1579,7 +1600,7 @@ export class Game {
           this.world,
           this.cueBall
         );
-        
+
         // Cache for power mode (normal mode only)
         if (this.isAimMode && !this.debug.isEnabled()) {
           this.cachedPrediction = prediction;
@@ -1600,7 +1621,7 @@ export class Game {
           );
         }
       }
-      
+
       // Use physics simulation for aim assist, fall back to ray-cast for cue line clipping
       let shotPaths = null;
       if (this.aimAssist && this.debug.isEnabled()) {
@@ -1612,7 +1633,7 @@ export class Game {
           this.currentPower
         );
       }
-      
+
       // Draw trajectory lines if aim assist is enabled
       if (this.aimAssist) {
         if (this.debug.isEnabled() && shotPaths) {
@@ -1625,7 +1646,7 @@ export class Game {
           this.renderer.drawSimpleMathTrajectoryLines(prediction, { x: this.cueBall.x, y: this.cueBall.y }, drawDirection, this.predictor);
         }
       }
-      
+
       const microDialState = {
         value: this.microAimDialValue,
         degrees: this.getMicroAimOffsetDegrees(),
@@ -1652,45 +1673,45 @@ export class Game {
 
     this.fpsFrames++;
   }
-  
+
   start() {
     this.lastTime = performance.now();
     this.fpsTime = this.lastTime;
     this.upsTime = this.lastTime;
-    
+
     this.loop();
   }
-  
+
   loop = () => {
     const now = performance.now();
     const dt = Math.min((now - this.lastTime) / 1000, 0.1);
     this.lastTime = now;
-    
+
     if (!this.isPaused) {
       this.update(dt);
     }
     this.render();
-                          
+
     // Update FPS
     if (now - this.fpsTime >= 1000) {
       this.hud.updateFPS(this.fpsFrames);
       this.fpsFrames = 0;
       this.fpsTime = now;
     }
-    
+
     // Update UPS
     if (now - this.upsTime >= 1000) {
       this.hud.updateUPS(this.upsSteps);
       this.upsSteps = 0;
       this.upsTime = now;
     }
-    
+
     requestAnimationFrame(this.loop);
   };
-  
+
   handlePowerBarMouseDown(e: MouseEvent) {
     if (!this.canShoot || !this.cueBall || this.cueBall.pocketed) return;
-    
+
     if (this.isSpacePowerMode) {
       this.isDraggingPower = true;
       this.powerDragStartY = e.clientY;
@@ -1703,7 +1724,7 @@ export class Game {
     const rect = this.input.canvas.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
-    
+
     if (
       mouseX >= bounds.x &&
       mouseX <= bounds.x + bounds.width &&
@@ -1717,10 +1738,10 @@ export class Game {
       this.input.setAimSuppressed(true);
     }
   }
-  
+
   handlePowerBarMouseMove(e: MouseEvent) {
     if (!this.isDraggingPower) return;
-    
+
     if (this.isSpacePowerMode) {
       const dragDistance = Math.abs(this.powerDragStartY - e.clientY);
       this.currentPower = Math.max(
@@ -1733,12 +1754,12 @@ export class Game {
     const bounds = this.renderer.getPowerBarBounds();
     const rect = this.input.canvas.getBoundingClientRect();
     const mouseY = e.clientY - rect.top;
-    
+
     // Reverse: pulling down increases power (mouseY closer to bottom = higher power)
     this.currentPower = ((mouseY - bounds.y) / bounds.height) * CONFIG.CUE_POWER_MAX;
     this.currentPower = Math.max(CONFIG.CUE_POWER_MIN, Math.min(CONFIG.CUE_POWER_MAX, this.currentPower));
   }
-  
+
   handlePowerBarMouseUp(_e: MouseEvent) {
     if (!this.isDraggingPower) return;
 
@@ -1808,25 +1829,25 @@ export class Game {
     if (!this.isDraggingMicroDial) return;
     this.isDraggingMicroDial = false;
   }
-  
+
   handleBallDragStart(e: MouseEvent) {
     const isBallInHandPhase = this.isBallInHandPhase();
     // Allow drag during official ball-in-hand or practice mode when balls are at rest
     if (!this.canShoot && !isBallInHandPhase) return;
     if (!e.shiftKey && !isBallInHandPhase) return;
     if (!this.cueBall || this.cueBall.pocketed) return;
-    
+
     // Convert screen coords to game coords (same transform as renderer)
     const rect = this.input.canvas.getBoundingClientRect();
     const canvasCenterX = this.renderer.canvas.width / 2;
     const canvasCenterY = this.renderer.canvas.height / 2;
-    
+
     const screenX = e.clientX - rect.left;
     const screenY = e.clientY - rect.top;
-    
+
     const mouseX = (screenX - canvasCenterX) / this.renderer.scale;
     const mouseY = -(screenY - canvasCenterY) / this.renderer.scale; // Flip Y
-    
+
     // Check if clicking on cue ball - must click directly on the ball
     const dx = mouseX - this.cueBall.x;
     const dy = mouseY - this.cueBall.y;
@@ -1869,7 +1890,7 @@ export class Game {
       }
     }
   }
-  
+
   handleBallDrag(e: MouseEvent) {
     if (!this.isDraggingBall || !this.cueBall) return;
 
@@ -1877,13 +1898,13 @@ export class Game {
     const rect = this.input.canvas.getBoundingClientRect();
     const canvasCenterX = this.renderer.canvas.width / 2;
     const canvasCenterY = this.renderer.canvas.height / 2;
-    
+
     const screenX = e.clientX - rect.left;
     const screenY = e.clientY - rect.top;
-    
+
     const mouseX = (screenX - canvasCenterX) / this.renderer.scale;
     const mouseY = -(screenY - canvasCenterY) / this.renderer.scale; // Flip Y
-    
+
     // If it was flagged pocketed due to a previous step, un-pocket during manual placement
     // and zero motion so it renders and stays put.
     if (this.cueBall.pocketed) {
@@ -1935,7 +1956,7 @@ export class Game {
   }
 
   // Push a ball inside the play area defined by rail segments using inward normals.
-  
+
   handleBallDragEnd(_e: MouseEvent) {
     if (this.isDraggingBall) {
       this.isDraggingBall = false;
@@ -2257,9 +2278,5 @@ export class Game {
     return true;
   }
 }
-    // React to AI difficulty changes from settings panel
-    window.addEventListener('game:ai-difficulty-changed', (e: Event) => {
-      const value = (e as CustomEvent<{ value: 'EASY'|'MEDIUM'|'HARD'|'EXPERT' }>).detail?.value ?? 'MEDIUM';
-      const diff = this.mapAIDifficulty(value);
-      this.ai = new PoolAI(diff);
-    });
+// React to AI difficulty changes from settings panel
+

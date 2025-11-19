@@ -1,3 +1,5 @@
+import { uiSoundService } from './UISoundService';
+
 export interface ModalOptions {
   title?: string;
   content: HTMLElement;
@@ -46,9 +48,17 @@ export class ModalService {
     // Bind escape key to close
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && this.currentModal) {
+        e.preventDefault(); // Prevent default browser behavior
+        e.stopImmediatePropagation(); // Prevent other listeners (like InGameMenu) from seeing this
         this.close();
       }
-    });
+    }, true); // Use capture phase to catch it before bubbling listeners if needed, or just rely on order.
+    // Actually, standard bubbling order: Document -> Body. If we bind to window, we are at the top.
+    // But InGameMenu also binds to window.
+    // To ensure we run BEFORE InGameMenu, we might want capture phase or rely on registration order.
+    // Since ModalService is likely instantiated before InGameMenu (it's a dependency), its listener might run first if order is preserved.
+    // However, 'stopImmediatePropagation' only works if we are on the same element and running first, or capturing.
+    // Let's use capture phase {capture: true} to ensure we get it first.
   }
 
   show(options: ModalOptions) {
@@ -77,14 +87,7 @@ export class ModalService {
 
     const modal = document.createElement('div');
     modal.className = `modal-shell u-metallic-border ${options.className || ''}`;
-    modal.style.background = 'var(--color-panel-bg)';
-    modal.style.borderRadius = '16px';
-    modal.style.minWidth = '400px';
-    modal.style.maxWidth = '90vw';
-    modal.style.maxHeight = '90vh';
-    modal.style.display = 'flex';
-    modal.style.flexDirection = 'column';
-    modal.style.boxShadow = 'var(--shadow-elevation-high)';
+    // Sizing/layout handled by CSS .modal-shell now
     modal.style.transform = 'scale(0.9)';
     modal.style.transition = 'transform var(--motion-bounce)';
 
@@ -106,12 +109,7 @@ export class ModalService {
 
       const closeBtn = document.createElement('button');
       closeBtn.innerHTML = '&times;';
-      closeBtn.className = 'modal-close-btn';
-      closeBtn.style.background = 'transparent';
-      closeBtn.style.border = 'none';
-      closeBtn.style.color = '#fff';
-      closeBtn.style.fontSize = '28px';
-      closeBtn.style.cursor = 'pointer';
+      closeBtn.className = 'btn-arcade-icon';
       closeBtn.onclick = () => this.close();
 
       header.appendChild(title);
@@ -139,6 +137,7 @@ export class ModalService {
 
     this.container.appendChild(modal);
     this.currentModal = modal;
+    uiSoundService.play('modal-open');
 
     // Show overlay
     this.overlay.classList.remove('hidden');
@@ -174,6 +173,7 @@ export class ModalService {
       if (this.currentModal === modal) {
           this.currentModal = null;
           this.overlay.classList.add('hidden');
+          uiSoundService.play('modal-close');
           if (this.onCloseCallback) {
               this.onCloseCallback();
               this.onCloseCallback = null;
@@ -185,6 +185,60 @@ export class ModalService {
 
   isOpen(): boolean {
       return !!this.currentModal;
+  }
+
+  confirm(options: { title: string; message: string; confirmText?: string; cancelText?: string; onConfirm: () => void }) {
+    const container = document.createElement('div');
+    container.style.display = 'flex';
+    container.style.flexDirection = 'column';
+    container.style.gap = '20px';
+    container.style.padding = '10px 0';
+    container.style.textAlign = 'center';
+
+    const msg = document.createElement('p');
+    msg.textContent = options.message;
+    msg.style.fontSize = '16px';
+    msg.style.color = 'rgba(255,255,255,0.8)';
+    msg.style.lineHeight = '1.5';
+    container.appendChild(msg);
+
+    const footer = document.createElement('div');
+    footer.style.display = 'flex';
+    footer.style.gap = '12px';
+    footer.style.justifyContent = 'center';
+    footer.style.width = '100%';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = options.cancelText || 'Cancel';
+    cancelBtn.className = 'btn-arcade btn-arcade-glass';
+    cancelBtn.style.flex = '1';
+    cancelBtn.onclick = () => this.close();
+
+    const confirmBtn = document.createElement('button');
+    confirmBtn.textContent = options.confirmText || 'Confirm';
+    confirmBtn.className = 'btn-arcade btn-arcade-danger'; // Default to danger for confirmations usually (destructive)
+    confirmBtn.style.flex = '1';
+    confirmBtn.onclick = () => {
+        options.onConfirm();
+        this.close();
+    };
+
+    footer.appendChild(cancelBtn);
+    footer.appendChild(confirmBtn);
+
+    this.show({
+        title: options.title,
+        content: container,
+        footer: footer,
+        className: 'confirm-modal' // Specific class for sizing overrides if needed
+    });
+    
+    // Override size for confirm modals to be smaller
+    if (this.currentModal) {
+        this.currentModal.style.minWidth = '300px';
+        this.currentModal.style.width = '400px';
+        this.currentModal.style.height = 'auto';
+    }
   }
 }
 

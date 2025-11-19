@@ -6,13 +6,13 @@ import { UIPanel } from './panels/UIPanel';
 import { GameSettingsPanel } from './GameSettingsPanel';
 
 import { inGameMenu } from './InGameMenu';
+import { notificationService } from './NotificationService';
 
 export class HUD {
   fpsElement: HTMLElement | null;
   upsElement: HTMLElement | null;
   modeElement: HTMLElement | null;
   turnElement: HTMLElement | null;
-  foulBanner: HTMLElement | null;
   player1Panel: HTMLElement | null;
   player2Panel: HTMLElement | null;
   statsElement: HTMLElement | null;
@@ -27,7 +27,6 @@ export class HUD {
     this.upsElement = document.getElementById('ups');
     this.modeElement = document.getElementById('mode-indicator');
     this.turnElement = document.getElementById('turn-indicator');
-    this.foulBanner = document.getElementById('foul-banner');
     this.player1Panel = document.getElementById('player1-info');
     this.player2Panel = document.getElementById('player2-info');
     this.statsElement = document.getElementById('stats');
@@ -36,7 +35,9 @@ export class HUD {
     this.gameSettingsPanel = new GameSettingsPanel(this.settingsManager, {
       onStatsVisibilityChange: (visible) => {
         this.showStats = visible;
-        this.statsElement.style.display = visible ? 'flex' : 'none';
+        if (this.statsElement) {
+          this.statsElement.style.display = visible ? 'flex' : 'none';
+        }
       },
     });
     this.registerPanel('game-settings', this.gameSettingsPanel.getController(), {
@@ -169,12 +170,7 @@ export class HUD {
   }
   
   showFoul(message: string) {
-    if (!this.foulBanner) return;
-    this.foulBanner.textContent = message;
-    this.foulBanner.classList.remove('hidden');
-    setTimeout(() => {
-      this.foulBanner?.classList.add('hidden');
-    }, 3000);
+    notificationService.show(message, 'error', 4000);
   }
 
   setPlayerName(player: number, name: string) {
@@ -423,35 +419,16 @@ export class HUD {
       pockets.forEach((pocket) => {
         const button = document.createElement('button');
         button.textContent = pocket.label;
-        button.style.cssText = `
-          padding: 20px 40px;
-          font-size: 18px;
-          font-weight: 600;
-          color: #fff;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          border: 2px solid rgba(255, 255, 255, 0.3);
-          border-radius: 12px;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-        `;
-
-        button.addEventListener('mouseenter', () => {
-          button.style.transform = 'translateY(-2px) scale(1.05)';
-          button.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.5)';
-          button.style.borderColor = 'rgba(255, 255, 255, 0.6)';
-        });
-
-        button.addEventListener('mouseleave', () => {
-          button.style.transform = '';
-          button.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.4)';
-          button.style.borderColor = 'rgba(255, 255, 255, 0.3)';
-        });
-
-        button.addEventListener('click', () => {
+        button.className = 'btn-arcade btn-arcade-glass';
+        // Custom layout styles for the grid
+        button.style.padding = '20px 40px';
+        button.style.fontSize = '18px';
+        button.style.height = '100%';
+        
+        button.onclick = () => {
           overlay.remove();
           resolve(pocket.id);
-        });
+        };
 
         buttonContainer.appendChild(button);
       });

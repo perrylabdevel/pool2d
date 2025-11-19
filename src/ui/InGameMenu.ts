@@ -37,46 +37,30 @@ export class InGameMenu {
     const createBtn = (label: string, onClick: () => void, variant: 'primary' | 'secondary' | 'danger' = 'primary') => {
       const btn = document.createElement('button');
       btn.textContent = label;
-      btn.className = 'u-metallic-border';
       
-      let bg = 'rgba(255,255,255,0.1)';
-      let color = '#fff';
-      let border = '1px solid rgba(255,255,255,0.2)';
-      
-      if (variant === 'primary') {
-          bg = 'linear-gradient(135deg, var(--color-arcade-blue) 0%, #0077AA 100%)';
-          border = '1px solid var(--color-arcade-blue)';
-      } else if (variant === 'danger') {
-          bg = 'rgba(255, 50, 50, 0.2)';
-          border = '1px solid rgba(255, 50, 50, 0.4)';
-          color = '#ffaaaa';
+      let className = 'btn-arcade';
+      if (variant === 'primary') className += ' btn-arcade-primary';
+      else if (variant === 'secondary') className += ' btn-arcade-glass';
+      else if (variant === 'danger') {
+          // We don't have a danger class yet in design-tokens, let's add inline or just use glass + red overrides
+          // Actually, let's use glass and add a specific style for now, or just standard glass
+          className += ' btn-arcade-glass';
+          btn.style.borderColor = 'rgba(255, 50, 50, 0.4)';
+          btn.style.color = '#ffaaaa';
+          btn.style.background = 'rgba(255, 50, 50, 0.1)';
       }
       
-      btn.style.background = bg;
-      btn.style.color = color;
-      btn.style.border = border;
-      btn.style.borderRadius = '8px';
-      btn.style.padding = '16px 32px';
-      btn.style.fontSize = '18px';
-      btn.style.fontWeight = 'bold';
-      btn.style.cursor = 'pointer';
+      btn.className = className;
       btn.style.width = '100%';
-      btn.style.transition = 'all 0.2s ease';
-      
-      btn.onmouseenter = () => {
-          btn.style.transform = 'scale(1.05)';
-          btn.style.boxShadow = '0 0 15px rgba(255,255,255,0.2)';
-      };
-      btn.onmouseleave = () => {
-          btn.style.transform = 'scale(1)';
-          btn.style.boxShadow = 'none';
-      };
+      btn.style.fontSize = '18px'; // specific override for menu
       
       btn.onclick = onClick;
       return btn;
     };
 
     container.appendChild(createBtn('RESUME', () => {
+        // Explicitly resume immediately to prevent any modal lifecycle issues
+        window.dispatchEvent(new CustomEvent('game:resume'));
         modalService.close();
     }, 'primary'));
     

@@ -196,20 +196,18 @@ export class ShopModal {
       if (currentCueId === cue.id) {
         actionBtn.textContent = 'EQUIPPED';
         actionBtn.disabled = true;
-        actionBtn.style.background = 'rgba(255,255,255,0.1)';
+        actionBtn.className = 'btn-arcade'; // Base class only for shape
+        actionBtn.style.background = 'rgba(255,255,255,0.05)';
         actionBtn.style.color = 'var(--color-arcade-green)';
         actionBtn.style.border = '1px solid var(--color-arcade-green)';
+        actionBtn.style.cursor = 'default';
       } else {
         actionBtn.textContent = 'EQUIP';
-        actionBtn.style.background = 'var(--color-arcade-blue)';
-        actionBtn.style.color = '#fff';
-        actionBtn.style.border = 'none';
+        actionBtn.className = 'btn-arcade btn-arcade-primary';
+        // Remove manual styles that are now covered by class
+        // actionBtn.style.background = 'var(--color-arcade-blue)';
       }
-      actionBtn.style.padding = '8px 16px';
-      actionBtn.style.borderRadius = '6px';
-      actionBtn.style.fontWeight = 'bold';
       actionBtn.style.width = '100%';
-      actionBtn.style.cursor = actionBtn.disabled ? 'default' : 'pointer';
       actionBtn.style.marginTop = '8px';
       
       actionBtn.onclick = (e) => {
@@ -259,13 +257,8 @@ export class ShopModal {
     
     const closeBtn = document.createElement('button');
     closeBtn.textContent = 'Back';
-    closeBtn.className = 'u-metallic-border';
-    closeBtn.style.background = 'rgba(255,255,255,0.1)';
-    closeBtn.style.color = '#fff';
+    closeBtn.className = 'btn-arcade btn-arcade-glass';
     closeBtn.style.padding = '10px 32px';
-    closeBtn.style.borderRadius = '6px';
-    closeBtn.style.cursor = 'pointer';
-    closeBtn.style.fontWeight = 'bold';
     closeBtn.onclick = () => {
         modalService.close();
         onClose?.();

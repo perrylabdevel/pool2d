@@ -111,28 +111,23 @@ export class ProfileModal {
 
     const resetBtn = document.createElement('button');
     resetBtn.textContent = 'Reset Stats';
-    resetBtn.style.background = 'transparent';
-    resetBtn.style.border = '1px solid rgba(255, 50, 50, 0.4)';
-    resetBtn.style.color = '#ffaaaa';
-    resetBtn.style.padding = '10px 20px';
-    resetBtn.style.borderRadius = '6px';
-    resetBtn.style.cursor = 'pointer';
+    resetBtn.className = 'btn-arcade btn-arcade-danger';
     resetBtn.onclick = () => {
-        if (confirm('Are you sure you want to reset your stats?')) {
-            this.settingsManager.resetGameStats();
-            this.open(); // Refresh
-        }
+        modalService.confirm({
+            title: 'RESET STATS',
+            message: 'Are you sure you want to reset all your game statistics? This cannot be undone.',
+            confirmText: 'YES, RESET',
+            onConfirm: () => {
+                this.settingsManager.resetGameStats();
+                this.open(); // Refresh
+            }
+        });
     };
 
     const closeBtn = document.createElement('button');
     closeBtn.textContent = 'Back';
-    closeBtn.className = 'u-metallic-border';
-    closeBtn.style.background = 'rgba(255,255,255,0.1)';
-    closeBtn.style.color = '#fff';
+    closeBtn.className = 'btn-arcade btn-arcade-glass';
     closeBtn.style.padding = '10px 32px';
-    closeBtn.style.borderRadius = '6px';
-    closeBtn.style.cursor = 'pointer';
-    closeBtn.style.fontWeight = 'bold';
     closeBtn.onclick = () => {
         modalService.close();
         onClose?.();

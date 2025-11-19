@@ -246,6 +246,132 @@ export class HomeHub {
       }
   }
 
+  openModeDetails(mode: any) {
+      const container = document.createElement('div');
+      container.style.display = 'flex';
+      container.style.flexDirection = 'column';
+      container.style.gap = '24px';
+      container.style.textAlign = 'center';
+      container.style.padding = '20px 0';
+
+      // Large Icon & Title
+      const header = document.createElement('div');
+      header.style.marginBottom = '10px';
+      
+      const icon = document.createElement('div');
+      icon.textContent = mode.icon;
+      icon.style.fontSize = '64px';
+      icon.style.marginBottom = '16px';
+      icon.style.filter = `drop-shadow(0 0 20px ${mode.color})`;
+      
+      const title = document.createElement('h2');
+      title.textContent = mode.name;
+      title.className = 'u-font-heading u-chrome-text';
+      title.style.fontSize = '36px';
+      title.style.margin = '0';
+      
+      header.appendChild(icon);
+      header.appendChild(title);
+      container.appendChild(header);
+
+      // Mode Description
+      const desc = document.createElement('p');
+      desc.textContent = mode.desc; // Use the short desc for now, ideally we have a long one
+      desc.style.fontSize = '16px';
+      desc.style.color = 'rgba(255,255,255,0.8)';
+      desc.style.lineHeight = '1.5';
+      desc.style.maxWidth = '400px';
+      desc.style.margin = '0 auto';
+      container.appendChild(desc);
+
+      // Stakes / Rules (Mock data for now)
+      const rulesBox = document.createElement('div');
+      rulesBox.className = 'u-frosted-glass';
+      rulesBox.style.padding = '20px';
+      rulesBox.style.borderRadius = '12px';
+      rulesBox.style.textAlign = 'left';
+      rulesBox.style.background = 'rgba(0,0,0,0.3)';
+      
+      const rulesTitle = document.createElement('div');
+      rulesTitle.textContent = 'MATCH RULES';
+      rulesTitle.style.fontSize = '12px';
+      rulesTitle.style.fontWeight = 'bold';
+      rulesTitle.style.color = mode.color;
+      rulesTitle.style.marginBottom = '12px';
+      rulesTitle.style.letterSpacing = '1px';
+      
+      const rulesList = document.createElement('ul');
+      rulesList.style.margin = '0';
+      rulesList.style.paddingLeft = '20px';
+      rulesList.style.color = '#ccc';
+      rulesList.style.fontSize = '14px';
+      rulesList.style.lineHeight = '1.6';
+      
+      // Mock rules based on mode
+      const rules = [
+          'Standard WPA rules apply',
+          'Call pocket on 8-ball',
+          'Winner breaks next rack'
+      ];
+      if (mode.id === 'time-attack') rules[0] = 'Sink balls before time runs out';
+      if (mode.id === 'perfect') rules[0] = 'Any miss ends the run';
+
+      rules.forEach(r => {
+          const li = document.createElement('li');
+          li.textContent = r;
+          rulesList.appendChild(li);
+      });
+
+      rulesBox.appendChild(rulesTitle);
+      rulesBox.appendChild(rulesList);
+      container.appendChild(rulesBox);
+
+      // Footer with Back & Play
+      const footer = document.createElement('div');
+      footer.style.display = 'flex';
+      footer.style.gap = '16px';
+      footer.style.marginTop = '20px';
+      
+      const backBtn = document.createElement('button');
+      backBtn.textContent = 'BACK';
+      backBtn.className = 'btn-arcade btn-arcade-glass';
+      backBtn.style.flex = '1';
+      backBtn.onclick = () => {
+          // Re-open main hub
+          this.init();
+      };
+
+      const playBtn = document.createElement('button');
+      playBtn.textContent = 'PLAY GAME';
+      playBtn.className = 'btn-arcade btn-arcade-primary u-pulse-glow';
+      // Overriding primary color with mode specific color if needed, 
+      // but for consistency let's stick to the Gold Primary for "Go/Play" actions 
+      // unless we really want the mode color. 
+      // Actually, consistent Play buttons (Gold) are better UX than rainbow buttons.
+      // Let's stick to the class.
+      playBtn.style.flex = '2';
+      playBtn.style.fontSize = '18px';
+      playBtn.onclick = () => this.handleModeSelect(mode.id);
+
+      footer.appendChild(backBtn);
+      footer.appendChild(playBtn);
+
+      // Show Modal
+      modalService.show({
+          title: 'MODE BRIEFING',
+          content: container,
+          footer: footer,
+          className: 'mode-details-modal',
+          onClose: () => {
+             // If closed via X or background, we probably want to just close? 
+             // Or maybe go back to Hub? 
+             // Current behavior of 'onClose' in ModalService is it fires when closed.
+             // If we just swap modals (like back button does), we might not want this firing doubly.
+             // For now, let's assume standard close behavior is fine.
+          }
+      });
+  }
+
   handleModeSelect(modeId: string) {
     console.log(`Selected mode: ${modeId}`);
     

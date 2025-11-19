@@ -5,6 +5,7 @@ import './ui/ModalService';
 import './ui/DockBridge';
 import './ui/HomeHub';
 import './ui/InGameMenu';
+import './ui/UISoundService';
 
 function main() {
   const gameCanvas = document.getElementById('game-canvas') as HTMLCanvasElement;

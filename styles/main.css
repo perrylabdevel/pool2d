@@ -35,6 +35,7 @@
       'dock-right';
   }
 }
+
 :root {
   --active-player-color: #4CAF50;
   --turn-indicator-color: #FFC107;
@@ -94,15 +95,23 @@ body {
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
   filter: drop-shadow(0 0 10px rgba(0, 180, 255, 0.4));
   animation: pulse-glow 2s infinite;
 }
 
 @keyframes pulse-glow {
-  0% { filter: drop-shadow(0 0 10px rgba(0, 180, 255, 0.4)); }
-  50% { filter: drop-shadow(0 0 25px rgba(0, 180, 255, 0.7)); }
-  100% { filter: drop-shadow(0 0 10px rgba(0, 180, 255, 0.4)); }
+  0% {
+    filter: drop-shadow(0 0 10px rgba(0, 180, 255, 0.4));
+  }
+
+  50% {
+    filter: drop-shadow(0 0 25px rgba(0, 180, 255, 0.7));
+  }
+
+  100% {
+    filter: drop-shadow(0 0 10px rgba(0, 180, 255, 0.4));
+  }
 }
 
 .loading-spinner {
@@ -118,7 +127,9 @@ body {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 #loading-text {
@@ -186,7 +197,7 @@ body {
   width: 64px;
   height: 64px;
   border-radius: 50%;
-  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.1), rgba(255,255,255,0.02));
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02));
   border: 2px solid rgba(255, 255, 255, 0.1);
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
   position: relative;
@@ -198,7 +209,7 @@ body {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: linear-gradient(135deg, transparent 40%, rgba(255,255,255,0.1) 100%);
+  background: linear-gradient(135deg, transparent 40%, rgba(255, 255, 255, 0.1) 100%);
 }
 
 .hud-player.active .avatar {
@@ -219,7 +230,7 @@ body {
   letter-spacing: 0.5px;
   color: #fff;
   text-transform: uppercase;
-  text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
 }
 
 .hud-player.active .name {
@@ -288,9 +299,9 @@ body {
   width: 48px;
   height: 48px;
   border-radius: 12px;
-  background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05));
-  border: 1px solid rgba(255,255,255,0.1);
-  color: rgba(255,255,255,0.8);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.8);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -299,10 +310,10 @@ body {
 }
 
 #hud-menu-btn:hover {
-  background: rgba(255,255,255,0.15);
-  border-color: rgba(255,255,255,0.3);
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
   transform: scale(1.05);
-  box-shadow: 0 0 15px rgba(255,255,255,0.1);
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.1);
 }
 
 .hud-timer.hidden {
@@ -310,7 +321,8 @@ body {
 }
 
 .hud-meta {
-  display: none; /* keep indicators present but not visible for now */
+  display: none;
+  /* keep indicators present but not visible for now */
 }
 
 #top-bar {
@@ -349,8 +361,15 @@ body {
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 0.7; }
-  50% { opacity: 1; }
+
+  0%,
+  100% {
+    opacity: 0.7;
+  }
+
+  50% {
+    opacity: 1;
+  }
 }
 
 #controls {
@@ -530,7 +549,7 @@ button:active {
   align-items: center;
   min-height: 0;
   padding: 0 24px 24px;
-  background: linear-gradient(180deg, rgba(10, 10, 10, 0.95), rgba(5, 5, 5, 0.98));
+  background: radial-gradient(circle at center, var(--color-menu-bg) 0%, var(--color-deep-navy) 100%);
 }
 
 #canvas-container {
@@ -543,7 +562,7 @@ button:active {
   height: 100%;
   max-width: 100%;
   max-height: 100%;
-  background: #0a0a0a;
+  background: var(--color-deep-navy);
   box-sizing: border-box;
   border-radius: 18px;
   overflow: hidden;
@@ -1146,6 +1165,7 @@ button:active {
   padding-bottom: 8px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
+
 .render-layer-content {
   display: flex;
   flex-direction: column;

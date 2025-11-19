@@ -51,6 +51,7 @@ export class AudioPanel {
         </div>
         <div class="settings-group">
           <h4 class="settings-group-title">Event Levels</h4>
+          ${this.eventRow('UI Sounds', 'UI', 'AUDIO_UI_VOL', audio.uiSounds, !!audio.muteUISounds, false, true)}
           ${this.eventRow('Cue Hits', 'CUE', 'AUDIO_CUE_VOL', audio.cueHits, !!audio.muteCueHits)}
           ${this.eventRow('Ball Collisions', 'BALL', 'AUDIO_BALL_VOL', audio.ballCollisions, !!audio.muteBallCollisions)}
           ${this.eventRow('Rail Impacts', 'RAIL', 'AUDIO_RAIL_VOL', audio.railHits, !!audio.muteRailHits)}
@@ -102,7 +103,8 @@ export class AudioPanel {
     sliderId: string,
     volume: number,
     muted: boolean,
-    isBackground: boolean = false
+    isBackground: boolean = false,
+    isUIPreview: boolean = false
   ): string {
     const muteKey = isBackground ? 'BACKGROUND' : key;
     const label = `${title} Volume`;
@@ -114,6 +116,7 @@ export class AudioPanel {
             type="button"
             class="panel-btn panel-icon-btn audio-preview"
             data-audio-event="${key}"
+            ${isUIPreview ? 'data-ui-preview="true"' : ''}
             aria-label="Preview ${title}"
             title="Preview ${title}"
           >
@@ -154,6 +157,7 @@ export class AudioPanel {
       { sliderId: 'AUDIO_MASTER_VOLUME', labelId: 'AUDIO_MASTER_VOLUME-value', onChange: (v) => this.update('master', clamp01(v!)), formatValue: formatPercent },
       { sliderId: 'AUDIO_MUSIC_VOL', labelId: 'AUDIO_MUSIC_VOL-value', onChange: (v) => this.update('music', clamp01(v!)), formatValue: formatPercent },
       { sliderId: 'AUDIO_BACKGROUND_VOL', labelId: 'AUDIO_BACKGROUND_VOL-value', onChange: (v) => this.update('background', clamp01(v!)), formatValue: formatPercent },
+      { sliderId: 'AUDIO_UI_VOL', labelId: 'AUDIO_UI_VOL-value', onChange: (v) => this.update('uiSounds', clamp01(v!)), formatValue: formatPercent },
       { sliderId: 'AUDIO_CUE_VOL', labelId: 'AUDIO_CUE_VOL-value', onChange: (v) => this.update('cueHits', clamp01(v!)), formatValue: formatPercent },
       { sliderId: 'AUDIO_BALL_VOL', labelId: 'AUDIO_BALL_VOL-value', onChange: (v) => this.update('ballCollisions', clamp01(v!)), formatValue: formatPercent },
       { sliderId: 'AUDIO_RAIL_VOL', labelId: 'AUDIO_RAIL_VOL-value', onChange: (v) => this.update('railHits', clamp01(v!)), formatValue: formatPercent },
@@ -177,6 +181,10 @@ export class AudioPanel {
     const buttons = this.panel.querySelectorAll<HTMLButtonElement>('.audio-preview');
     buttons.forEach((btn) => {
       btn.addEventListener('click', () => {
+        if (btn.dataset.uiPreview === 'true') {
+          window.dispatchEvent(new CustomEvent('ui-sound:preview'));
+          return;
+        }
         const event = btn.dataset.audioEvent;
         if (!event) return;
         window.dispatchEvent(new CustomEvent('audio:preview', { detail: { event } }));
@@ -203,6 +211,9 @@ export class AudioPanel {
             break;
           case 'BACKGROUND':
             update = { muteBackground: !current.muteBackground };
+            break;
+          case 'UI':
+            update = { muteUISounds: !current.muteUISounds };
             break;
           case 'CUE':
             update = { muteCueHits: !current.muteCueHits };
@@ -238,6 +249,7 @@ export class AudioPanel {
       ['master', 'AUDIO_MASTER_VOLUME', formatPercent],
       ['music', 'AUDIO_MUSIC_VOL', formatPercent],
       ['background', 'AUDIO_BACKGROUND_VOL', formatPercent],
+      ['uiSounds', 'AUDIO_UI_VOL', formatPercent],
       ['cueHits', 'AUDIO_CUE_VOL', formatPercent],
       ['ballCollisions', 'AUDIO_BALL_VOL', formatPercent],
       ['railHits', 'AUDIO_RAIL_VOL', formatPercent],
@@ -267,6 +279,9 @@ export class AudioPanel {
           break;
         case 'BACKGROUND':
           isMuted = !!audio.muteBackground;
+          break;
+        case 'UI':
+          isMuted = !!audio.muteUISounds;
           break;
         case 'CUE':
           isMuted = !!audio.muteCueHits;

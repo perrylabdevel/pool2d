@@ -29,6 +29,7 @@ export interface AudioSettings {
   ballCollisions: number;
   railHits: number;
   pocketDrops: number;
+  uiSounds: number;
   dampening: number;
   compression: number;
   muteMaster?: boolean;
@@ -38,6 +39,7 @@ export interface AudioSettings {
   muteBallCollisions?: boolean;
   muteRailHits?: boolean;
   mutePocketDrops?: boolean;
+  muteUISounds?: boolean;
 }
 
 export interface GameStats {
@@ -199,6 +201,7 @@ export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
   ballCollisions: 0.85,
   railHits: 0.65,
   pocketDrops: 0.95,
+  uiSounds: 0.7,
   dampening: 0.65,
   compression: 0.55,
   muteMaster: false,
@@ -208,6 +211,7 @@ export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
   muteBallCollisions: false,
   muteRailHits: false,
   mutePocketDrops: false,
+  muteUISounds: false,
 };
 
 export const DEFAULT_GAME_STATS: GameStats = {
@@ -290,6 +294,7 @@ export class SettingsManager {
     merged.ballCollisions = clamp(merged.ballCollisions ?? DEFAULT_AUDIO_SETTINGS.ballCollisions, 0, 1);
     merged.railHits = clamp(merged.railHits ?? DEFAULT_AUDIO_SETTINGS.railHits, 0, 1);
     merged.pocketDrops = clamp(merged.pocketDrops ?? DEFAULT_AUDIO_SETTINGS.pocketDrops, 0, 1);
+    merged.uiSounds = clamp(merged.uiSounds ?? DEFAULT_AUDIO_SETTINGS.uiSounds, 0, 1);
     merged.dampening = clamp(merged.dampening ?? DEFAULT_AUDIO_SETTINGS.dampening, 0, 1);
     merged.compression = clamp(merged.compression ?? DEFAULT_AUDIO_SETTINGS.compression, 0, 1);
     merged.muteMaster = Boolean(merged.muteMaster);
@@ -299,6 +304,7 @@ export class SettingsManager {
     merged.muteBallCollisions = Boolean(merged.muteBallCollisions);
     merged.muteRailHits = Boolean(merged.muteRailHits);
     merged.mutePocketDrops = Boolean(merged.mutePocketDrops);
+    merged.muteUISounds = Boolean(merged.muteUISounds);
     return merged;
   }
 

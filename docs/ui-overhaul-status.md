@@ -2,7 +2,10 @@
 
 ## ✅ Completed
 - **Design System**: Implemented neon/arcade aesthetic with `design-tokens.css`.
-- **Modal System**: Robust `ModalService` with swapping, back navigation, and click-outside-to-close.
+- **Button Kit**: Standardized all buttons with `.btn-arcade` classes (Primary, Glass, Danger, Icon).
+- **Modal System**: Robust `ModalService` with swapping, back navigation, and `confirm()` dialogs.
+- **Notification System**: Replaced legacy banners with `NotificationService` (Toast messages for fouls/updates).
+- **UI Sound Kit**: Synth-driven hover/click/modal/toast cues via `UISoundService`, with mixer controls and modern settings sliders for Master/Music/UI channels.
 - **Home Hub**: Main menu with mode selection, hero banner, and footer navigation.
 - **Settings Modal**: General, Audio, Graphics, and Customization tabs.
 - **In-Game Menu**: Pause/Resume functionality with Hub navigation.
@@ -12,9 +15,7 @@
 - **Dock Bridge**: Legacy dev tools accessible via `Shift+L`.
 
 ## 🚧 In Progress / Future
-- **Mode Details**: Expand mode cards to show specific stakes/rules before launching.
-- **Animations**: Polish transition effects for modal entry/exit.
-- **Sound**: Add SFX for UI interactions (button clicks, modal opens).
+- **Pause-on-swipe bug**: Fixed. Canvas now retains focus during shots when dragging past edges, and game auto-pauses on window blur.
 
 ## Legacy Access
 The physics tuning and debug panels are preserved for development use.

@@ -1,23 +1,23 @@
 :root {
   /* --- Color Palette: Miniclip / Arcade Style --- */
-  
+
   /* Brand Colors */
   --color-arcade-blue: #00B4FF;
   --color-arcade-green: #66FF00;
   --color-arcade-gold: #FFD700;
   --color-arcade-red: #FF3333;
-  
+
   /* Backgrounds */
   --color-deep-navy: #000B1A;
   --color-menu-bg: #0D1424;
   --color-panel-bg: rgba(13, 20, 36, 0.95);
-  
+
   /* Chrome / Metallic Gradients */
   --menu-chrome-start: #E0E5EC;
   --menu-chrome-end: #A3B1C6;
   --menu-chrome-gradient: linear-gradient(180deg, var(--menu-chrome-start) 0%, var(--menu-chrome-end) 100%);
   --menu-chrome-border: linear-gradient(180deg, #FFFFFF 0%, #708090 100%);
-  
+
   /* Glass / Frost */
   --menu-glass-bg: rgba(13, 20, 36, 0.85);
   --menu-glass-blur: blur(12px);
@@ -26,13 +26,13 @@
   --glow-intensity-low: 0 0 10px rgba(0, 180, 255, 0.4);
   --glow-intensity-medium: 0 0 20px rgba(0, 180, 255, 0.6);
   --glow-intensity-high: 0 0 30px rgba(0, 180, 255, 0.8);
-  
+
   --glow-gold-low: 0 0 10px rgba(255, 215, 0, 0.4);
   --glow-gold-medium: 0 0 20px rgba(255, 215, 0, 0.6);
 
   --shadow-elevation-low: 0 4px 6px rgba(0, 0, 0, 0.3);
   --shadow-elevation-high: 0 10px 20px rgba(0, 0, 0, 0.5);
-  
+
   /* --- Typography --- */
   /* Condensed heading font stack */
   --font-heading: 'Impact', 'Arial Black', 'Helvetica Inserat', 'Bitstream Vera Sans Bold', sans-serif;
@@ -59,8 +59,8 @@
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  text-shadow: 0 2px 4px rgba(0,0,0,0.5);
-  filter: drop-shadow(0 0 2px rgba(255,255,255,0.3));
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.3));
 }
 
 .u-gold-text {
@@ -68,7 +68,7 @@
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
   filter: drop-shadow(0 0 5px rgba(255, 215, 0, 0.5));
 }
 
@@ -96,7 +96,7 @@
   position: relative;
   border: 2px solid transparent;
   background: linear-gradient(#0D1424, #0D1424) padding-box,
-              var(--menu-chrome-border) border-box;
+    var(--menu-chrome-border) border-box;
 }
 
 /* Animation Utilities */
@@ -105,9 +105,17 @@
 }
 
 @keyframes u-pulse-glow-anim {
-  0% { box-shadow: 0 0 5px rgba(0, 180, 255, 0.4); }
-  50% { box-shadow: 0 0 20px rgba(0, 180, 255, 0.8); }
-  100% { box-shadow: 0 0 5px rgba(0, 180, 255, 0.4); }
+  0% {
+    box-shadow: 0 0 5px rgba(0, 180, 255, 0.4);
+  }
+
+  50% {
+    box-shadow: 0 0 20px rgba(0, 180, 255, 0.8);
+  }
+
+  100% {
+    box-shadow: 0 0 5px rgba(0, 180, 255, 0.4);
+  }
 }
 
 .u-shimmer {
@@ -122,13 +130,267 @@
   left: -100%;
   width: 50%;
   height: 100%;
-  background: linear-gradient(to right, transparent, rgba(255,255,255,0.2), transparent);
+  background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.2), transparent);
   transform: skewX(-25deg);
   animation: u-shimmer-anim 3s infinite;
 }
 
 @keyframes u-shimmer-anim {
-  0% { left: -100%; }
-  20% { left: 200%; }
-  100% { left: 200%; }
+  0% {
+    left: -100%;
+  }
+
+  20% {
+    left: 200%;
+  }
+
+  100% {
+    left: 200%;
+  }
+}
+
+/* --- Modal Shell (Moved from inline styles) --- */
+.modal-shell {
+  background: var(--color-panel-bg);
+  border-radius: 16px;
+  width: 85vw;
+  max-width: 1200px;
+  min-width: 400px;
+  max-height: 90vh;
+  box-shadow: var(--shadow-elevation-high);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* Mobile: Full Screen Modals */
+@media (max-width: 768px) {
+  .modal-shell {
+    min-width: 100vw;
+    width: 100vw;
+    height: 100vh;
+    max-width: 100vw;
+    max-height: 100vh;
+    border-radius: 0;
+    border: none;
+  }
+}
+
+/* --- Button Kit --- */
+.btn-arcade {
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 10px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all var(--motion-fast);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  text-decoration: none;
+}
+
+.btn-arcade:active {
+  transform: scale(0.96);
+}
+
+/* Primary (Gold/Action) */
+.btn-arcade-primary {
+  background: linear-gradient(135deg, var(--color-arcade-gold) 0%, #FFB700 100%);
+  border: 1px solid #B8860B;
+  color: #000;
+  box-shadow: var(--glow-gold-low);
+  text-shadow: none;
+}
+
+.btn-arcade-primary:hover {
+  background: linear-gradient(135deg, #FFE55C 0%, #FFC800 100%);
+  box-shadow: var(--glow-gold-medium);
+  transform: translateY(-2px);
+}
+
+/* Secondary (Glass/Ghost) */
+.btn-arcade-glass {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff;
+  backdrop-filter: blur(4px);
+}
+
+.btn-arcade-glass:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* Danger (Red/Destructive) */
+.btn-arcade-danger {
+  background: rgba(255, 50, 50, 0.1);
+  border: 1px solid rgba(255, 50, 50, 0.4);
+  color: #ffaaaa;
+  backdrop-filter: blur(4px);
+}
+
+.btn-arcade-danger:hover {
+  background: rgba(255, 50, 50, 0.2);
+  border-color: rgba(255, 50, 50, 0.6);
+  color: #fff;
+  transform: translateY(-2px);
+  box-shadow: 0 0 10px rgba(255, 50, 50, 0.2);
+}
+
+/* Icon Button (Close, Settings, etc.) */
+.btn-arcade-icon {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  padding: 8px;
+  font-size: 24px;
+  line-height: 1;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+}
+
+.btn-arcade-icon:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+/* --- Custom Form Controls --- */
+
+/* Arcade Toggle (Switch) */
+.arcade-toggle {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 26px;
+}
+
+.arcade-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.arcade-toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.1);
+  transition: .3s cubic-bezier(0.4, 0.0, 0.2, 1);
+  border-radius: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.arcade-toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: rgba(255, 255, 255, 0.8);
+  transition: .3s cubic-bezier(0.4, 0.0, 0.2, 1);
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.arcade-toggle input:checked+.arcade-toggle-slider {
+  background-color: rgba(0, 180, 255, 0.2);
+  border-color: var(--color-arcade-blue);
+  box-shadow: 0 0 10px rgba(0, 180, 255, 0.2);
+}
+
+.arcade-toggle input:checked+.arcade-toggle-slider:before {
+  transform: translateX(24px);
+  background-color: var(--color-arcade-blue);
+  box-shadow: 0 0 10px var(--color-arcade-blue);
+}
+
+.arcade-toggle input:focus+.arcade-toggle-slider {
+  box-shadow: 0 0 1px var(--color-arcade-blue);
+}
+
+/* Arcade Slider (Range) */
+.arcade-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  outline: none;
+  opacity: 0.8;
+  transition: opacity .2s;
+  cursor: pointer;
+}
+
+.arcade-slider:hover {
+  opacity: 1;
+}
+
+/* Slider Thumb - Webkit */
+.arcade-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--color-arcade-blue);
+  cursor: pointer;
+  box-shadow: 0 0 10px var(--color-arcade-blue);
+  border: 2px solid #fff;
+  margin-top: -6px;
+  /* Centers thumb on track */
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+
+.arcade-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+  box-shadow: 0 0 15px var(--color-arcade-blue);
+}
+
+.arcade-slider::-webkit-slider-thumb:active {
+  transform: scale(0.95);
+  box-shadow: 0 0 20px var(--color-arcade-blue);
+}
+
+/* Slider Track - Webkit */
+.arcade-slider::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 6px;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  border: none;
+}
+
+/* Firefox Styles */
+.arcade-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--color-arcade-blue);
+  cursor: pointer;
+  box-shadow: 0 0 10px var(--color-arcade-blue);
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+
+.arcade-slider::-moz-range-track {
+  width: 100%;
+  height: 6px;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  border: none;
 }

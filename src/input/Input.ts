@@ -37,13 +37,13 @@ export class InputManager {
   
   setupListeners() {
     this.canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
-    this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
-    this.canvas.addEventListener('mouseup', (e) => this.handleMouseUp(e));
+    window.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+    window.addEventListener('mouseup', (e) => this.handleMouseUp(e));
     
     // Touch support
     this.canvas.addEventListener('touchstart', (e) => this.handleTouchStart(e));
-    this.canvas.addEventListener('touchmove', (e) => this.handleTouchMove(e));
-    this.canvas.addEventListener('touchend', (e) => this.handleTouchEnd(e));
+    window.addEventListener('touchmove', (e) => this.handleTouchMove(e));
+    window.addEventListener('touchend', (e) => this.handleTouchEnd(e));
   }
   
   updateScale(scale: number) {
