@@ -2902,6 +2902,9 @@ export class Renderer3D extends BaseRenderer {
     const cached = this.ballIconCaches.get(size);
     if (cached) return cached;
 
+    const prevToneMappingExposure = this.renderer.toneMappingExposure;
+    this.renderer.toneMappingExposure = Math.min(prevToneMappingExposure * 1.2, prevToneMappingExposure + 0.35);
+
     // Use main WebGL context via an offscreen render target (avoids cross-context texture issues)
     const rt = new THREE.WebGLRenderTarget(size, size, {
       depthBuffer: false,
@@ -2914,30 +2917,48 @@ export class Renderer3D extends BaseRenderer {
     camera.position.set(0, 0, 2.6);
     camera.lookAt(0, 0, 0);
 
-    // Very bright lighting for clear, visible icons
-    scene.add(new THREE.AmbientLight(0xffffff, 2.0));  // Much brighter ambient
-    const dir = new THREE.DirectionalLight(0xffffff, 1.5);  // Brighter directional
-    dir.position.set(2.2, 3.0, 4.0);
-    scene.add(dir);
-    // Add front light to eliminate shadows
-    const frontLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    frontLight.position.set(0, 0, 5);
-    scene.add(frontLight);
+    const applyIconLighting = () => {
+      // Warmer key and cooler fill for color separation on the stripes
+      const ambient = new THREE.AmbientLight(0xffffff, 0.9);
+      scene.add(ambient);
+
+      const hemi = new THREE.HemisphereLight(0xfff2d9, 0x101010, 0.7);
+      scene.add(hemi);
+
+      const key = new THREE.DirectionalLight(0xfff1d6, 2.2);
+      key.position.set(3.0, 2.6, 4.4);
+      scene.add(key);
+
+      const fill = new THREE.DirectionalLight(0xdfe8ff, 1.15);
+      fill.position.set(-2.4, -1.8, 3.2);
+      scene.add(fill);
+
+      const rim = new THREE.PointLight(0xffffff, 0.65);
+      rim.position.set(-1.2, 2.0, 3.1);
+      scene.add(rim);
+
+      const top = new THREE.DirectionalLight(0xffffff, 0.9);
+      top.position.set(0.1, 0.1, 5.0);
+      scene.add(top);
+    };
 
     const ids = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15];
     const result = new Map<number, string>();
 
-    // Per-ball orientation - X=270° (3π/2) and Y=90° (π/2) shows numbers/stripes correctly
-    const orientation: Record<number, { rx: number; ry: number }> = {
-      1: { rx: Math.PI * 1.5, ry: Math.PI * 0.5 }, 2: { rx: Math.PI * 1.5, ry: Math.PI * 0.5 },
-      3: { rx: Math.PI * 1.5, ry: Math.PI * 0.5 }, 4: { rx: Math.PI * 1.5, ry: Math.PI * 0.5 },
-      5: { rx: Math.PI * 1.5, ry: Math.PI * 0.5 }, 6: { rx: Math.PI * 1.5, ry: Math.PI * 0.5 },
-      7: { rx: Math.PI * 1.5, ry: Math.PI * 0.5 }, 8: { rx: Math.PI * 1.5, ry: Math.PI * 0.5 },
-      9: { rx: Math.PI * 1.5, ry: Math.PI * 0.5 }, 10: { rx: Math.PI * 1.5, ry: Math.PI * 0.5 },
-      11: { rx: Math.PI * 1.5, ry: Math.PI * 0.5 }, 12: { rx: Math.PI * 1.5, ry: Math.PI * 0.5 },
-      13: { rx: Math.PI * 1.5, ry: Math.PI * 0.5 }, 14: { rx: Math.PI * 1.5, ry: Math.PI * 0.5 },
-      15: { rx: Math.PI * 1.5, ry: Math.PI * 0.5 },
-    };
+    const deg = THREE.MathUtils.degToRad;
+    const orientation = new Map<number, { rx: number; ry: number }>();
+    const defaultSolid = { rx: Math.PI * 1.5 - deg(1), ry: Math.PI * 0.5 + deg(4) };
+    const darkSolid = { rx: defaultSolid.rx - deg(1.5), ry: defaultSolid.ry + deg(4) };
+    const solidIds = [1, 2, 3, 5, 6];
+    solidIds.forEach((id) => orientation.set(id, defaultSolid));
+    [4, 7].forEach((id) => orientation.set(id, darkSolid));
+    orientation.set(8, { rx: defaultSolid.rx - deg(1), ry: defaultSolid.ry + deg(6) });
+
+    const stripePitch = Math.PI * 1.48;
+    const stripeYaw = Math.PI * 0.5 - deg(20);
+    const accentStripeYaw = stripeYaw - deg(6);
+    [9, 10, 11, 13, 14].forEach((id) => orientation.set(id, { rx: stripePitch, ry: stripeYaw }));
+    [12, 15].forEach((id) => orientation.set(id, { rx: stripePitch, ry: accentStripeYaw }));
 
     const buildMesh = async (id: number): Promise<THREE.Mesh> => {
       const baseRadius = (CONFIG.BALL_BASE_RADIUS ?? CONFIG.BALL_RADIUS);
@@ -2955,9 +2976,12 @@ export class Renderer3D extends BaseRenderer {
         const scale = targetRadius / Math.max(1e-6, radius);
         geom.scale(scale, scale, scale);
         mat = template.material.clone();
+        mat.roughness = Math.max(0.08, Math.min(0.4, mat.roughness ?? 0.3));
+        mat.metalness = Math.min(0.65, Math.max(0.25, mat.metalness ?? 0.35));
+        mat.envMapIntensity = 1.2;
       } else {
         geom = new THREE.SphereGeometry(baseRadius, 48, 48);
-        mat = new THREE.MeshStandardMaterial({ color: CONFIG.BALL_COLORS[id - 1] || '#ffffff', roughness: 0.32, metalness: 0.38 });
+        mat = new THREE.MeshStandardMaterial({ color: CONFIG.BALL_COLORS[id - 1] || '#ffffff', roughness: 0.22, metalness: 0.55 });
       }
 
       // Reuse the template's texture map if present
@@ -2971,59 +2995,56 @@ export class Renderer3D extends BaseRenderer {
       }
 
       const mesh = new THREE.Mesh(geom, mat);
-      // Slight rotation to expose number/stripe; can tune per id
-      const ori = orientation[id] || { rx: 0, ry: Math.PI * 0.5 };
+      // Slight rotation to expose number/stripe; stripes rotate more to show color
+      const ori = orientation.get(id) ?? { rx: Math.PI * 1.5, ry: Math.PI * 0.5 };
       mesh.rotation.x = ori.rx;
       mesh.rotation.y = ori.ry;
       return mesh;
     };
 
-    for (const id of ids) {
-      // Clear scene and rebuild lights
-      while (scene.children.length > 0) scene.remove(scene.children[0]);
-      scene.add(new THREE.AmbientLight(0xffffff, 2.0));
-      const dir2 = new THREE.DirectionalLight(0xffffff, 1.5);
-      dir2.position.set(2.2, 3.0, 4.0);
-      scene.add(dir2);
-      const frontLight2 = new THREE.DirectionalLight(0xffffff, 0.8);
-      frontLight2.position.set(0, 0, 5);
-      scene.add(frontLight2);
+    try {
+      for (const id of ids) {
+        // Clear scene and rebuild lights
+        while (scene.children.length > 0) scene.remove(scene.children[0]);
+        applyIconLighting();
 
-      const mesh = await buildMesh(id);
-      mesh.position.set(0, 0, 0);
-      scene.add(mesh);
+        const mesh = await buildMesh(id);
+        mesh.position.set(0, 0, 0);
+        scene.add(mesh);
 
-      const prevTarget = this.renderer.getRenderTarget();
-      this.renderer.setRenderTarget(rt);
-      this.renderer.clear();
-      this.renderer.render(scene, camera);
-      this.renderer.setRenderTarget(prevTarget);
+        const prevTarget = this.renderer.getRenderTarget();
+        this.renderer.setRenderTarget(rt);
+        this.renderer.clear();
+        this.renderer.render(scene, camera);
+        this.renderer.setRenderTarget(prevTarget);
 
-      const pixels = new Uint8Array(size * size * 4);
-      this.renderer.readRenderTargetPixels(rt, 0, 0, size, size, pixels);
-      const canvas2D = document.createElement('canvas');
-      canvas2D.width = size;
-      canvas2D.height = size;
-      const ctx = canvas2D.getContext('2d');
-      const imgData = ctx!.createImageData(size, size);
-      for (let y = 0; y < size; y++) {
-        const src = (size - 1 - y) * size * 4;
-        const dst = y * size * 4;
-        imgData.data.set(pixels.subarray(src, src + size * 4), dst);
+        const pixels = new Uint8Array(size * size * 4);
+        this.renderer.readRenderTargetPixels(rt, 0, 0, size, size, pixels);
+        const canvas2D = document.createElement('canvas');
+        canvas2D.width = size;
+        canvas2D.height = size;
+        const ctx = canvas2D.getContext('2d');
+        const imgData = ctx!.createImageData(size, size);
+        for (let y = 0; y < size; y++) {
+          const src = (size - 1 - y) * size * 4;
+          const dst = y * size * 4;
+          imgData.data.set(pixels.subarray(src, src + size * 4), dst);
+        }
+        ctx!.putImageData(imgData, 0, 0);
+        const url = canvas2D.toDataURL('image/png');
+        result.set(id, url);
+
+        // Cleanup mesh resources (geometry/material were cloned)
+        if (mesh.geometry) mesh.geometry.dispose();
+        if (mesh.material) (mesh.material as THREE.Material).dispose();
       }
-      ctx!.putImageData(imgData, 0, 0);
-      const url = canvas2D.toDataURL('image/png');
-      result.set(id, url);
 
-      // Cleanup mesh resources (geometry/material were cloned)
-      if (mesh.geometry) mesh.geometry.dispose();
-      if (mesh.material) (mesh.material as THREE.Material).dispose();
+      this.ballIconCaches.set(size, result);
+      return result;
+    } finally {
+      rt.dispose();
+      this.renderer.toneMappingExposure = prevToneMappingExposure;
     }
-
-    // Cleanup render target
-    rt.dispose();
-    this.ballIconCaches.set(size, result);
-    return result;
   }
 
   toggleMeasurementOverlay(force?: boolean) {
