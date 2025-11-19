@@ -84,6 +84,7 @@ export class Game {
   private currentCalledPocketId: string | null = null;
   private waitingForPocketCall: boolean = false;
   private pendingBallInHandForAI: boolean = false;
+  private pausedByBlur: boolean = false;
 
   // Turn-based gameplay
   players: Player[];
@@ -546,12 +547,29 @@ export class Game {
       this.isPaused = false;
       // Reset lastTime to avoid huge time jump delta
       this.lastTime = performance.now();
+      this.pausedByBlur = false;
     });
 
     // Auto-pause on window blur
     window.addEventListener('blur', () => {
       if (!this.isPaused) {
-        this.isPaused = true;
+        this.pausedByBlur = true;
+        window.dispatchEvent(new CustomEvent('game:pause'));
+      }
+    });
+
+    const tryResumeFromFocus = () => {
+      if (this.pausedByBlur) {
+        window.dispatchEvent(new CustomEvent('game:resume'));
+      }
+    };
+
+    window.addEventListener('focus', tryResumeFromFocus);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        tryResumeFromFocus();
+      } else if (!this.isPaused) {
+        this.pausedByBlur = true;
         window.dispatchEvent(new CustomEvent('game:pause'));
       }
     });

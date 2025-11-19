@@ -2933,12 +2933,14 @@ export class Renderer3D extends BaseRenderer {
       fill.position.set(-2.4, -1.8, 3.2);
       scene.add(fill);
 
-      const rim = new THREE.PointLight(0xffffff, 0.65);
-      rim.position.set(-1.2, 2.0, 3.1);
+      // Reduced rim intensity and moved to lower-left to shift highlight off the number decal
+      const rim = new THREE.PointLight(0xffffff, 0.45);
+      rim.position.set(-2.5, -1.5, 4.0);
       scene.add(rim);
 
-      const top = new THREE.DirectionalLight(0xffffff, 0.9);
-      top.position.set(0.1, 0.1, 5.0);
+      // Softened top light to reduce direct washout
+      const top = new THREE.DirectionalLight(0xffffff, 0.7);
+      top.position.set(0.0, 0.5, 5.0);
       scene.add(top);
     };
 
