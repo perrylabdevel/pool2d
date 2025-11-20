@@ -1,23 +1,18 @@
 Project TODO
 
-- Rules UI Panel
-  - Preset selector (Casual/Tournament/APA/Practice/House)
-  - Toggles: legal break, rail contact, slop, BIH anywhere, BIH disallow touching, early-8 loss, 8-with-foul loss
-  - Options: 8-on-break behavior (WIN/SPOT+LOSE/SPOT+CONTINUE), break-scratch placement (KITCHEN/ANYWHERE)
-  - Shot clock input (0 = off)
+- Rules UX polish
+  - Build non-blocking HUD pocket selector + illegal-break choice dialog
+  - Surface active rules preset in HUD header (text + icon indicator)
+  - Extend called-shot flow beyond 8-ball (when `requireCalledShots` enabled)
 
-- Rules enforcement follow-ups
-  - Legal break exact rule (4 balls contact cushions OR pocketed) instead of simplified check
-  - BIH placement: enforce non-touching vs. other balls during drag
-  - Kitchen-only placement mode when specified (break scratch)
-  - Called-shots UI (per-table overrides later)
+- Docs & knowledge base
+  - Keep `docs/rules/eight-ball-rules.md` aligned with current enforcement and planned UX
+  - Fold `docs/ui-overhaul-plan.md` + `ui-overhaul-status.md` into a single living UI architecture doc
+  - Convert `docs/pocket-animation-plan.md` into a tuning/how-to guide that references live CONFIG hooks
+  - Add Audio pipeline summary + asset instructions to README “Audio & Accessibility” section (link to prompts)
 
-- Docs
-  - Expand README with Rules panel instructions once implemented
-  - Keep docs/rules/eight-ball-rules.md in sync with enforcement
-
-- Branding cleanup
-  - Rename technical identifiers (storage keys, filenames, package name, etc.) from pool2d to RailRush and migrate persisted settings
+- Branding & persistence
+  - Rename storage keys/package metadata from `pool2d` to `RailRush` and migrate saved settings
 
 - Audio polish
   - Extend Audio Mixer with per-event sample selection / EQ / reverb depth

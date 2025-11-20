@@ -1,12 +1,12 @@
-# 8-Ball Rules Implementation Status
+# 8-Ball Rules – Current Implementation & Roadmap
 
-This document tracks the implementation status of standard 8-ball rules in RailRush.
+This document tracks how the RailRush rules engine behaves today and what gaps remain.
 
 ## Overview
 
 8-ball is a call-shot game played with a cue ball and fifteen object balls, numbered 1 through 15. One player must pocket balls 1-7 (solids), while the other player has 9-15 (stripes). The player pocketing their group first and then legally pocketing the 8-ball wins the game.
 
-**Implementation Status:** ⚠️ **PARTIAL** - Core rules working, many edge cases and standard rules missing
+**Implementation Status:** ✅ **Core rules complete** – advanced UX (illegal-break choices, non-blocking called shots, full preset UI) still pending.
 
 **Rules Philosophy:** Pool rules vary widely by venue (bar rules, tournament rules, league rules). We've implemented a **configurable rules system** (`RulesConfig.ts`) that allows switching between presets:
 - **CASUAL** - Relaxed bar rules, slop counts, no rail contact
@@ -22,37 +22,43 @@ This document tracks the implementation status of standard 8-ball rules in RailR
 ### Game Setup & Break
 - ✅ **Triangle rack** - All 15 balls racked in standard triangle formation
 - ✅ **Break shot** - Game starts with break from behind head string
-- ✅ **8-ball on break win** - Pocketing 8-ball on legal break = instant win
+- ✅ **8-ball on break win** - Honors preset (`allow8BallBreakWin`)
 - ✅ **8-ball on break scratch** - Honors `scratch8BallOnBreakLoss` (loss when enabled, otherwise spotted + foul)
+- ⚠️ **Illegal break resolution** - Cushion contact counts are tracked, but the opponent is auto-granted BIH instead of choosing accept/re-rack/re-break (see roadmap)
 
 ### Group Assignment
 - ✅ **Open table after break** - Table is open until first ball pocketed
-- ✅ **Group assignment by first pocket** - First ball pocketed determines groups
-  - Player pocketing a solid gets solids (1-7)
-  - Player pocketing a stripe gets stripes (9-15)
-- ✅ **Group tracking** - Both players' groups tracked in `Player.group` and `EightBallRules`
+- ✅ **Group assignment by first pocket** - First made ball determines solids/stripes
+- ✅ **HUD chips** - Remaining balls per player are surfaced in the HUD header using Renderer3D-generated thumbnails
 
-### Legal Shots
-- ✅ **Must hit own group first** - After groups assigned, must contact your group before any other ball
-- ✅ **Can shoot any ball before groups assigned** - Any ball (except 8) is legal before group assignment
-- ✅ **8-ball legal only after clearing group** - Can only shoot 8-ball after all your balls are pocketed
+### Legal Shots & Pocket Calls
+- ✅ **Must hit own group first** (post assignment)
+- ✅ **Open table until assignment**
+- ✅ **8-ball locked until group cleared**
+- ✅ **Called-pocket workflow**
+  - When a shot requires a call (8-ball or `requireCalledShots`), the HUD prompts the player to click one of six pockets
+  - Renderer highlights pockets during selection; Game remembers `currentCalledPocketId`
+  - During the shot the renderer highlights the called pocket; rules validate actual capture vs. call
+- ⚠️ **Non-blocking selector** – Current approach suppresses aim/power inputs until a pocket is chosen; roadmap aims to provide HUD-side buttons so aiming can continue during selection
 
-### Fouls
-- ✅ **Cue ball scratch** - Pocketing cue ball = foul
-- ✅ **No ball contact** - Cue ball doesn't contact any ball = foul
-- ✅ **Wrong group first** - Hitting opponent's group first = foul
-- ✅ **Ball-in-hand after foul** - Opponent gets cue ball in hand anywhere on table
+### Fouls & Ball-In-Hand
+- ✅ **Cue ball scratch** - Pocketing the cue ball is a foul
+- ✅ **No ball contact** - Shot that contacts nothing is a foul
+- ✅ **Wrong group first** - Contacting opponent ball first after assignment triggers foul
+- ✅ **Ball-in-hand** - Opponent receives cue ball in hand anywhere (`ballInHandAnywhere`) or kitchen-only (`breakScratchPlacement`) depending on preset; kitchen clamping enforced after break scratches
+- ⚠️ **BIH collision clamp** - `bihDisallowTouchingBalls` is partially enforced (HUD messaging warns, but drag UI still allows overlaps); needs collision-aware placement
 
 ### Win/Loss Conditions
-- ✅ **Legal 8-ball win** - Pocketing 8-ball after clearing your group = win
-- ✅ **Early 8-ball loss** - Pocketing 8-ball before clearing your group = loss
-- ✅ **8-ball foul loss** - Pocketing 8-ball with a foul = loss
+- ✅ **Legal 8-ball win** - Pocket 8 after clearing your group and calling the correct pocket (when required)
+- ✅ **Early 8-ball loss**
+- ✅ **8-ball foul loss**
+- ✅ **8-ball on break behavior** - Honors preset for win vs. spot
 
-### Turn Management
-- ✅ **Turn switching on miss** - Miss or foul = turn switches to opponent
-- ✅ **Continue on legal pocket** - Legally pocketing your ball = continue shooting
-- ✅ **Foul handling** - Fouls trigger ball-in-hand and turn switch
-- ✅ **AI scratch recovery** - If the human scratches on the break, AI auto-accepts ball-in-hand and fires a fallback break shot instead of passing
+### Turn Management & AI
+- ✅ **Turn switching** - Miss or foul flips turn
+- ✅ **Continue on legal pocket**
+- ✅ **AI scratch recovery** - AI immediately takes over break shots after human scratch
+- ✅ **AI + presets** - AI respects the active preset, including kitchen BIH and called-pocket requirements
 
 ---
 
@@ -60,27 +66,12 @@ This document tracks the implementation status of standard 8-ball rules in RailR
 
 `RulesConfig.ts` is fully wired into `EightBallRules` and `Game.ts`. Numeric keys (`1`–`4`) restart the current table with CASUAL / TOURNAMENT / APA / PRACTICE presets, and the HUD logs the active ruleset in the console. The sections below summarize how each toggle behaves today.
 
-### Optional Rules
+### Optional Rules – Implementation Notes
 
-#### 1. **Rail Contact Rule** ✅ (with caveats)
-- **Behavior:** `PhysicsWorld` raises `onRailCollision`, `Game.setupCollisionTracking()` forwards it to `EightBallRules.recordRailContact()`, and `endShot()` enforces `config.requireRailContact` whenever no ball drops.
-- **Gaps:** No per-ball attribution yet—very light grazes can be missed if the collision callback does not fire.
-- **Relevant files:** `Physics.ts`, `Game.ts`, `EightBallRules.ts`
-
-#### 2. **Legal Break Requirements** ⚠️ PARTIAL
-- **Behavior:** If `config.requireLegalBreak` is true, we validate that either a ball is pocketed or at least four object balls contact cushions (tracked via `onRailCollision`). Otherwise it's a foul with ball-in-hand.
-- **Missing:** Cushion counts are tracked, but opponent choices (accept / re-rack / re-break) are not exposed.
-- **Relevant files:** `EightBallRules.handleBreak()`, `Physics.ts` (future rail-count tracking)
-
-#### 3. **Called 8-Ball Pocket** ✅ (focused)
-- **Behavior:** When `requireCalled8Ball` (or `requireCalledShots`) is enabled and a player has cleared their group, humans are prompted to select one of the six pockets before shooting the 8-ball and AI auto-selects the nearest pocket. `EightBallRules` compares the actual pocket to the declared call.
-- **Missing:** Still no UX for calling *every* shot (`requireCalledShots` simply piggybacks on the 8-ball workflow), and the prompt is a blocking dialog rather than an in-HUD control.
-- **Relevant files:** `Game.ts`, `Physics.ts`, `EightBallRules.ts`
-
-#### 4. **Ball-in-Hand Placement Rules** ⚠️ PARTIAL
-- **Behavior:** Cue ball dragging now enforces kitchen-only placement after a break scratch whenever the ruleset requires it (using `breakScratchPlacement` / `ballInHandAnywhere`), including HUD guidance.
-- **Needed:** Validate ball-in-hand placement against other balls (`bihDisallowTouchingBalls`) and extend placement UI beyond the break-scratch scenario.
-- **Relevant files:** `Game.ts` ball-drag logic, `geometry/Placement.ts`
+1. **Rail Contact Rule** – ✅ enforced via `PhysicsWorld` rail callbacks; light contact misses remain rare
+2. **Legal Break Requirements** – ⚠️ counts cushion impacts + pockets but always grants BIH (no accept/re-rack UI yet)
+3. **Called 8-Ball / Called Shots** – ✅ blocking HUD selector ensures calls are recorded; needs non-blocking UX + full-table workflow when `requireCalledShots` is `true`
+4. **Ball-In-Hand Placement** – ⚠️ kitchen clamp implemented; collision-free placement flagged as future work when `bihDisallowTouchingBalls` is `true`
 
 ### Advanced / Missing Rules
 
@@ -93,19 +84,13 @@ This document tracks the implementation status of standard 8-ball rules in RailR
 
 ---
 
-## 🐛 Known Issues
+## 🐛 Known Gaps
 
-### Issue 1: Legal Break Still Lacks Opponent Choice
-**Current Behavior:** Failure to meet legal break requirements always becomes ball-in-hand for the opponent.
-**Expected Behavior:** Should present options (accept table, request re-rack, shooter re-break) per league/tournament rules.
-**Location:** `EightBallRules.handleBreak()`
-**Priority:** MEDIUM
-
-### Issue 2: `requireCalledShots` Still Ignored
-**Current Behavior:** Only the 8-ball workflow uses the new call mechanic; enabling `requireCalledShots` behaves the same as `requireCalled8Ball`.
-**Expected Behavior:** When `requireCalledShots` is true, every shot (not just the 8-ball) should require a declared pocket via an in-game UI, not the temporary dialog.
-**Location:** `Game.ts`, `EightBallRules.handle8BallPocketed()`
-**Priority:** MEDIUM
+1. **Illegal Break Options** – Need a ModalService dialog to offer accept/re-rack/re-break per preset instead of auto BIH.
+2. **Non-blocking Pocket Calls** – Current HUD prompt pauses input; selector should live in the HUD header or modal footer so aiming continues.
+3. **Full Called-Shot Support** – When `requireCalledShots` is enabled, the system should request pockets for every ball, not piggyback on the 8-ball workflow.
+4. **BIH Collision Guard** – Enforce `bihDisallowTouchingBalls` by preventing drag placements that intersect other balls.
+5. **Shots Clock / Push-Out / Three-Foul** – Config keys exist but UI + state machines still missing.
 
 ---
 
@@ -113,26 +98,26 @@ This document tracks the implementation status of standard 8-ball rules in RailR
 
 Based on gameplay impact and how close the systems already are:
 
-### Phase 1: Legal Break UX + Placement Polish
-1. ✅ `RulesConfig.ts` presets + wiring (done)
-2. ✅ **Honor `scratch8BallOnBreakLoss`** – now follows config.
-3. ✅ **Improve legal-break check** – counts cushion contacts for the “four balls to rails” requirement.
-4. ✅ **Kitchen-only ball-in-hand** – clamps cue ball placement when configs demand it.
-5. 🔧 **Offer post-break options** – accept table / re-rack / re-break prompt after illegal break.
+### Phase 1 – UX polish
+1. ✅ Presets + wiring
+2. ✅ Legal-break cushion tracking + `scratch8BallOnBreakLoss`
+3. ✅ Kitchen-only BIH enforcement
+4. 🔧 Illegal-break options dialog (accept / re-rack / re-break)
+5. 🔧 Non-blocking pocket selector + full called-shot UI
 
-### Phase 2: Add Missing UI / Rule Hooks
-6. ⏳ **Called-shots UI upgrade** – replace the temporary dialog with an in-HUD selector and make `requireCalledShots` apply to every ball, not just the 8-ball.
-7. ⏳ **Ruleset indicator in HUD** – optional quality-of-life reminder.
+### Phase 2 – HUD surfacing
+6. 🔧 HUD rules indicator (active preset + called-pocket status)
+7. 🔧 BIH placement guard (prevent overlaps when `bihDisallowTouchingBalls`)
 
-### Phase 3: Advanced / Tournament Features
-8. ⏳ **Shot clock** – timer UI + foul on timeout (`shotClockSeconds`).
-9. ⏳ **Push-out support** – new GameState after break, UI toggle, and turn handoff.
-10. ⏳ **Three-foul tracking** – consecutive foul counters + auto-loss.
+### Phase 3 – Advanced levers
+8. ⏳ Shot clock UI + foul on timeout (`shotClockSeconds`)
+9. ⏳ Push-out turn state + UI toggle
+10. ⏳ Three-foul tracking + auto-loss messaging
 
-### Phase 4: Stretch Goals
-11. ⏳ Jumped ball handling (once physics supports verticality)
+### Phase 4 – Stretch & tournament extras
+11. ⏳ Jumped ball handling (requires vertical physics)
 12. ⏳ Stalemate / three-position detection
-13. ⏳ Intentional foul penalties (potentially manual admin control)
+13. ⏳ Intentional foul penalties / admin overrides
 
 ---
 

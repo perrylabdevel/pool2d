@@ -1,20 +1,20 @@
 # RailRush – Tournament Grade Billiards
 
-RailRush is a tournament-accurate billiards sandbox built with TypeScript, Vite, and a WebGL/Three.js renderer. It pairs deterministic 120 Hz physics with live-tunable geometry, scenario tooling, and deep debugging instrumentation for validating shots, pockets, and table setup.
+RailRush is a tournament-grade billiards sandbox built with TypeScript, Vite, and a WebGL/Three.js renderer. It pairs deterministic 120 Hz physics with live-tunable geometry, cinematic UI, and deep debugging instrumentation for validating shots, pockets, and table setup.
 
 ## Highlights
 
 - **Tournament Physics**
-  - 120 Hz fixed timestep with adaptive sub-stepping for break-speed shots
+  - 120 Hz fixed timestep with adaptive sub-stepping for break-speed shots
   - Pair-tracked impulse solver (single normal + friction impulse per contact)
   - Rolling (0.55) and sliding (0.65) friction controls, configurable sleep threshold
   - Corner/side pocket capture radii and jaw geometry adjustable in real time
 
-- **3D Renderer & UI**
-  - Three.js top-down table with PBR felt, FBX ball meshes, and layered 2D UI canvases
-  - Compact HUD with icon controls, inline player badges, and foul/turn indicators
-  - Render-layer manager for toggling table/frame/overlays, reference images, and measurements
-  - Table Scale slider (Settings → Table Scale) for high-DPI displays without touching physics
+- **Cinematic UI & Renderer**
+  - Three.js top-down table with PBR felt, FBX ball meshes, layered 2D overlays, and HUD ball chips rendered from in-engine thumbnails
+  - Home Hub modal (Miniclip-inspired) for launching modes, settings, profile, and shop flows
+  - ModalService stack with pause/in-game menus, NotificationService toasts, and DockBridge (Shift+L) for legacy panel access
+  - Render-layer manager plus HUD controls tuned by design tokens; table scale slider (Settings → Display) keeps physics untouched
 
 - **Prediction & Debugging**
   - Aim assistant with ghost-ball visualization and axis-aware trajectory highlighting
@@ -25,12 +25,15 @@ RailRush is a tournament-accurate billiards sandbox built with TypeScript, Vite,
   - Physics Recorder for frame snapshots, events, and markdown export
 
 - **Rules & Practice**
-  - Practice mode with ball-in-hand drag placement
-  - 8-ball mode with AI opponent, fouls, ball-in-hand, and win handling
-  - AI immediately takes over break shots after opponent scratches, firing a fallback power shot instead of yielding
-  - Player input blocking during AI turns to prevent interference
-  - Geometry panel to tweak jaw offsets, capture radii, and throat angles without code changes
-  - Frame radius slider shapes a dedicated frame outline so rail physics stay constant while visuals curve
+  - Practice sandbox with drag-to-place cue ball, restart, and geometry/physics live edits
+  - 8-ball mode with AI opponent, fouls, called-pocket workflow, and BIH enforcement
+  - Time Attack, Perfect Game, Speed Pool, and Shot Playback modes for alternative pacing
+  - Geometry panel to tweak jaws/capture radii without code changes
+  - Frame radius slider shapes decorative frame independently of rail physics
+- **Audio & Accessibility**
+  - Sample-driven AudioManager with background ambience, music bed, and Quiet Room filter/compressor chain
+  - Audio Mixer panel (master/music/background/UI/cue/ball/rail/pocket sliders, per-row mute, previews)
+  - UISoundService for hover/click/modal tones respecting mixer settings
 
 ## Quick Start
 
@@ -61,20 +64,29 @@ npm run test
 - **Quick shoot**: Click near cue ball for a low-power tap shot
 
 ### Practice & Debug
-- **Ball-in-hand**: Click and drag cue ball to reposition (during ball-in-hand phase)
-  - Physics pauses during drag to prevent ball collisions
-  - Cue and aim assist hidden during placement
-- **S**: Physics settings (friction, power, aim-line offsets, solver, table scale)
-- **D**: Debug overlay (normals, velocities, contacts)
-- **G**: Geometry editor (pocket/jaw tuning)
+- **Ball-in-hand**: Click and drag cue ball (physics pauses, cue hidden)
+- **S**: Physics settings (friction, solver, aim offsets, scale)
+- **Shift + D**: Toggle Debug overlay; **B** shows ball-in-hand diagnostics
+- **G**: Geometry editor (legacy panel) or **J** for Modern Geometry controls
 - **M**: Measurement overlay toggle
-- **Shift + O**: Reference overlay toggle
-- **R**: Restart table (fully resets all game state)
+- **Shift + O**: Reference overlay image toggle
+- **R**: Restart table
 
-### HUD Buttons
-- **⚙️ Physics**: Live physics/display tuning (includes aim-line/ghost-ball offset controls)
-- **🎛️ Geometry**: Jaw, pocket, and frame editor
-- **🐛 Debug / 📸 Capture / ↻ Restart**: Toggle overlays, capture shots, reset
+### UI & Modes
+- **ESC**: Pause menu (resume/settings/quit to Home Hub)
+- **Shift + L**: Toggle legacy dock panels via DockBridge
+- **H / ?**: Open Help modal (also linked from Home Hub)
+- **HUD Menu button**: Opens Home Hub overlay while pausing play
+- **1 / 2 / 3 / 4**: Switch rules presets (Casual / Tournament / APA / Practice)
+- **8 / T / P / V**: Jump to 8-ball, Time Attack, Perfect Game, or Speed Pool modes (Practice returns with same key)
+
+## Modes
+
+- **Practice** – sandbox with BIH, quick restarts, instant panel access
+- **8-Ball vs AI** – configurable ruleset, called-pocket flow before 8-ball, foul handling, AI scratch recovery
+- **Time Attack / Speed Pool** – arcade scoring variants with HUD stat strings
+- **Perfect Game** – miss ends the run; great for aim drills
+- **Playback** – inspect recorded shots via PhysicsRecorder exports
 
 ## Architecture Overview
 
@@ -83,37 +95,42 @@ src/
 ├── config.ts          # Physics, geometry, render defaults
 ├── main.ts            # Bootstraps canvases, starts Game loop
 ├── game/Game.ts       # Fixed-timestep loop, input wiring, rule integration
+├── ui/HomeHub.ts      # Modal launcher + mode cards + footer actions
+├── ui/ModalService.ts # Modal stack, animations, confirm dialogs
+├── ui/InGameMenu.ts   # ESC menu tied into ModalService hub
+├── ui/HubSettings.ts  # Settings surfaced inside modal chrome
+├── ui/UIPanels/*.ts   # Legacy dock panels (physics, geometry, render layers)
 ├── physics/
 │   ├── Physics.ts     # World step, adaptive sub-stepping, pocket capture
 │   ├── Collision.ts   # Detection + impulse solver (normal + friction)
 │   ├── Prediction.ts  # Raycast + sim-based aim assistance
 │   └── Shapes.ts      # Ball, rail, pocket primitives
 ├── render/
-│   ├── Renderer3D.ts  # Three.js renderer + UI overlay canvases
-│   ├── Renderer.ts    # Legacy 2D canvas renderer (debug)
+│   ├── Renderer3D.ts  # Three.js renderer + HUD chips + pocket animations
+│   ├── Renderer.ts    # Legacy 2D canvas renderer (debug tooling)
 │   └── RenderLayers.ts# Layer toggles/order defaults
+├── sound/AudioManager.ts # Sample playback, mixer integration, Quiet Room chain
 ├── ui/
-│   ├── HUD.ts         # HUD, fouls, FPS/UPS, mode display
-│   ├── SettingsPanel.ts   # Physics/display sliders with persistence
+│   ├── HUD.ts         # HUD, fouls, FPS/UPS, mode display, pocket selector
+│   ├── UISoundService.ts # UI synth cues (hover/click/modal/toast)
+│   ├── AudioPanel.ts  # Mixer UI w/ previews + mute
 │   ├── SettingsManager.ts # Local-storage backed settings store
-│   └── GeometryPanel.ts   # Live pocket/rail editor
+│   └── Geometry panels, Shop/Profile modals, Notification service, etc.
 ├── ai/PoolAI.ts       # AI opponent with difficulty levels
 ├── debug/             # Shot capture, physics recorder, debug overlay
 └── rules/EightBall.ts # 8-ball rule engine
 ```
 
-## Rules Presets
+## Rules & Pocket Calls
 
-The default ruleset is now `HOUSE_8BALL` (your house rules). Summary:
-
-- Break: legal break required; 8 on break is spotted and shooter loses turn; break scratch = loss if 8 was pocketed; break scratch placement = kitchen.
-- Shot legality: rail contact required when no ball is pocketed; called shots OFF; slop ON.
-- Sets/Turn: assign solids/stripes after first pocket; wrong set first = foul; continue after any legal make.
-- Ball‑in‑hand: anywhere after any foul; BIH placement should not touch other balls (enforcement TODO).
-- Endgame: early 8 = loss; 8 with a foul = loss; called 8 required OFF.
-- Advanced: push‑out OFF; three‑foul OFF; shot clock 0 (editable later).
-
-Hotkeys still allow switching presets (1/2/3/4 for Casual/Tournament/APA/Practice). A Rules panel UI is planned; see TODO.
+- Default preset: `HOUSE_8BALL` (rail contact, legal break, slop on, kitchen BIH after break scratch).
+- Hotkeys 1–4 swap presets instantly; HUD logs active rules.
+- Called-pocket workflow:
+  1. Game detects when a call is required (8-ball or presets).
+  2. HUD overlays a pocket selector; click a pocket to commit.
+  3. Renderer highlights called pocket during the shot.
+- Fouls trigger NotificationService banners, BIH drag guidance, and AI safeguards (AI auto-breaks after your scratch).
+- Upcoming work (see `docs/rules/eight-ball-rules.md` and `docs/todo.md`): illegal-break choice dialogs, non-blocking pocket selector, full called-shot UX.
 
 
 ## Configuration Snapshot
@@ -157,13 +174,14 @@ This loop keeps physics tuning reproducible and easy to share across machines.
 
 ## Documentation
 
-- `docs/audio/audio-setup.md` – step-by-step instructions for installing/replacing audio files and tuning the Quiet Room mixer
-- `docs/audio/audio-status.md` – current audio implementation notes plus placeholder status
-- `docs/audio/elevenlabs-prompts.md` – narration/VO prompt scripts
-- `docs/audio/rail-hit-prompts.md` & `docs/audio/rail-hit-extreme-prompts.md` – AI prompt references for rail recordings
-- `docs/geometry/geometry.md` & `docs/geometry/coordinate-system.md` – coordinate conventions and derivations
-- `docs/rules/eight-ball-rules.md` – current rule presets and rationale
+- `docs/display-architecture.md` – canvas framing, hub overlays, scaling strategy
+- `docs/audio/*` – setup/status plus prompt banks for replacing placeholder sounds
+- `docs/geometry/*.md` – coordinate conventions and derived jaw math
+- `docs/rules/eight-ball-rules.md` – rule coverage and remaining gaps
+- `docs/ui-overhaul-plan.md` – Home Hub / modal architecture and roadmap
+- `docs/ui-overhaul-status.md` – live UI checklist & follow-ups
 - `docs/specs.md` – high-level component specs/backlog
+- `docs/pocket-animation-plan.md` – pocket animation system + tuning
 - `docs/todo.md` – active engineering checklist
 
 ## License

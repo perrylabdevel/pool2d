@@ -1,84 +1,57 @@
-# Pocket Capture Enhancements Plan
+# Pocket Capture Animation – Tuning Guide
 
-## Goals
-- Animate object balls as they drop into pockets instead of disappearing instantly.
-- Investigate whether fast-moving balls require additional physics adjustments at the moment of pocket capture.
-- Explore approaches that make shots *feel* heavier/more physical.
+Pocket animations now ship in both the 3D renderer and legacy 2D fallback. This guide documents the data flow, config hooks, and troubleshooting steps so you can tweak the drop/roll behavior without digging through the entire codebase.
 
-## Current Behavior Snapshot
-- Pocket capture happens inside `PhysicsWorld.onPocketCapture` / `PocketDetector` (see `src/physics/Physics.ts`).
-  - When a ball intersects a pocket capture radius it is flagged `pocketed`, velocity is zeroed, and the ball mesh disappears on the next render.
-- Renderers (`Renderer3D.drawBalls` / `Renderer.drawBalls`) simply skip pocketed balls, so there is no exit animation.
-- CONFIG already exposes pocket radii, shelf depths, and restitution but nothing for post-capture animation.
+## Data Flow
 
-## Plan: Pocket Drop Animation
-1. **Capture trajectory snapshot**
-   - When `PhysicsWorld` decides a ball is pocketed, emit an event that includes the contact position, velocity vector, and timestamp.
-   - Create a lightweight queue (e.g., `recentPocketCaptures: Array<{ ballId, pos, vel, time }>` in `Game` or renderer).
+1. **Physics → Game**
+   - `PhysicsWorld.onBallPocketed` (in `src/physics/Physics.ts`) fires whenever a ball crosses the capture radius.
+   - `Game.handleBallPocketed` assembles a `PocketAnimationEvent` containing ball id, world-space position, pocket center, and exit velocity.
+   - Events are pushed onto `this.pocketAnimationEvents` (bounded queue).
+2. **Game → Renderer**
+   - Each frame, `Game` forwards events to the active renderer via `renderer.queuePocketAnimation(event)`.
+3. **Renderer queue**
+   - `Renderer3D.queuePocketAnimation` stores events in `queuedPocketEvents`, processed in `processPocketAnimationQueue()`.
+   - Each event spawns a `PocketDropAnimation` struct with `startTime` and total duration = drop + roll.
+   - `drawPocketAnimations()` runs every frame, lerping ball sprites between `event.position` (capture) and `event.pocket` (center) while simulating the roll under felt.
+4. **Legacy Renderer**
+   - `src/render/Renderer.ts` implements the same queue to keep debug/2D mode consistent.
 
-2. **Spawn animation instance**
-   - Renderer (2D + 3D variants) watches for new captures and instantiates a short-lived animation object per ball.
-   - For 3D: create a separate Three.js mesh (or reuse the ball mesh but detach physics updates) and run a keyframed animation:
-     - Translate along pocket centerline downwards.
-     - Add a small rotation + fade to simulate rolling out of view.
-   - For 2D fallback: render an overlay sprite that lerps position toward pocket center while scaling down and fading.
+## Config Knobs (`src/config.ts`)
 
-3. **Timing & easing**
-   - Uses separate durations for drop and roll phases (configurable via `POCKET_ANIMATION_DROP_DURATION_MS` and `POCKET_ANIMATION_ROLL_DURATION_MS`).
-   - **Drop phase**: Ball drops from capture position to pocket center with smoothstep easing.
-   - **Roll phase**: Ball rolls from pocket center inward toward table center underneath the felt, only visible through circular pocket opening (clipped).
-   - No fade or shrink - ball remains full size and opaque, clipped by pocket geometry for realistic depth perception.
+| Config Key | Default | Description |
+| --- | --- | --- |
+| `POCKET_ANIMATION_DROP_DURATION_MS` | `300` | Time spent descending from capture position to pocket throat |
+| `POCKET_ANIMATION_ROLL_DURATION_MS` | `500` | Time rolling under felt toward table center |
+| `POCKET_ANIMATION_DROP_DEPTH` | `0.8` | World inches used when computing the visual vertical offset (affects shading only) |
+| `POCKET_ANIMATION_UNDERFELT_PX` | `10` | Screen-space distance used to offset the under-felt roll |
 
-4. **Audio & haptics hooks**
-   - Trigger existing pocket SFX (if any) slightly earlier.
-   - Layer a low-frequency “thud” (currently synthesized) whose tonality can be tuned via the Audio Mixer panel.
-   - Longer term: allow per-pocket samples or randomized pitch offsets.
+Changing these values triggers the animation math immediately—no restart required. Use the Settings panel (Render → Pocket Animations) if exposed, otherwise edit `config.ts` and reload.
 
-5. **Cleanup**
-   - After animation completes, remove the temporary mesh/sprite and release references to avoid leaks.
-   - Config toggles now exist:
-     - `POCKET_ANIMATION_DROP_DURATION_MS` (default: 300ms) - duration of drop phase
-     - `POCKET_ANIMATION_ROLL_DURATION_MS` (default: 500ms) - duration of roll phase
-     - `POCKET_ANIMATION_DROP_DEPTH` - visual drop depth (unused in current implementation)
-     - `POCKET_ANIMATION_UNDERFELT_PX` (default: 10px) - distance ball rolls under felt during roll phase
+## How to Tune
 
-### Implementation Touchpoints
-- `src/physics/Physics.ts`: emit pocket events (maybe via `Game` callback `onBallPocketed`).
-- `src/game/Game.ts`: store animation queue and pass to renderers every frame.
-- `src/render/Renderer3D.ts` & `src/render/Renderer.ts`: manage visual effect instances.
+1. **Slow-mo Validation**
+   - Enable the debug overlay (`Shift + D`) and reduce `CONFIG.PHYSICS_DT` multiplier (Settings panel → Slow Motion) to watch drop curves frame by frame.
+2. **Match Real Tables**
+   - Increase `POCKET_ANIMATION_DROP_DURATION_MS` for deep buckets; reduce for “snap” pockets.
+   - Adjust `POCKET_ANIMATION_UNDERFELT_PX` to control how far balls appear to roll underneath before disappearing.
+3. **Sync With Audio**
+   - Pocket SFX fire when the physics event happens. If you lengthen the drop dramatically, consider offsetting the Audio Mixer cue by a few ms (future enhancement: add `CONFIG.POCKET_AUDIO_DELAY_MS`).
+4. **Performance Watch-outs**
+   - The renderer caps `pocketAnimationEvents` at 48 entries. If you see warnings about dropped events, reduce durations or clear the queue after large multi-ball shots.
 
-## Fast Ball Pocket Tuning
-- Today, once a ball crosses the capture radius it is simply flagged and removed. For very fast shots, we may need:
-  1. **Velocity clamping in pocket funnels**: apply extra damping once the ball is inside the pocket throat to avoid jitter before removal.
-  2. **Extended shelf collision**: optionally simulate one extra integration step where gravity-like acceleration pulls the ball downward. This would soak energy and keeps behavior consistent at high speeds.
-- Activation idea:
-  - Check `speed > threshold` when pocketing. If true, run a short “pocket settle” routine that scales velocity by, e.g., 0.2 and aligns direction toward pocket center before final removal.
-  - Config gate: add `CONFIG.POCKET_CAPTURE_DAMPING` and `CONFIG.POCKET_CAPTURE_GRAVITY` toggles for experimentation.
+## Troubleshooting
 
-## Making Balls Feel Heavier
-Ideas spanning visuals and physics:
-1. **Sound design**
-   - Lower-pitched cue/pocket sounds, short reverb tails, and layered low-frequency thuds instantly imply weight.
+- **Animation never plays** – ensure `Game` is calling `renderer.queuePocketAnimation`. Custom renderers must expose that method.
+- **Sprites misaligned with pockets** – verify `Renderer3D.worldToScreen()` uses the current scale/offset (check `renderer:resized` event wiring).
+- **Animation lingers indefinitely** – `POCKET_ANIMATION_DROP_DURATION_MS + POCKET_ANIMATION_ROLL_DURATION_MS` should be > 0; renderer clamps progress to `[0,1]`. Confirm `performance.now()` monotonicity (dev tools paused timelines can stretch animations).
+- **Too many overlapping sprites** – reduce durations or clip `pocketAnimationEvents` (Game already keeps the last 48 entries). For high-speed capture tests, temporarily disable the queue via renderer flag.
 
-2. **Camera & controller feedback**
-   - Slight screen shake or HUD vibration when the cue strikes hard shots.
+## Future Ideas (optional)
 
-3. **Motion cues in physics**
-   - Increase rolling friction a little so balls decelerate more noticeably after impact (`CONFIG.ROLLING_FRICTION`).
-   - Introduce micro “settle” wobble when balls stop: a tiny oscillation + quick fade indicates inertia.
+- **Velocity-aware easing** – Map entry speed to drop depth or roll distance.
+- **Pocket-type themes** – Use different easing/lighting for corner vs. side pockets.
+- **Audio hooks** – Delay or layer pocket thuds based on drop duration (requires AudioManager API addition).
+- **Capture damping** – Expose `POCKET_CAPTURE_DAMPING` in `config.ts` so physics can slow fast movers before the animation starts.
 
-4. **Visual shading**
-   - In `Renderer3D`, deepen shadow intensity directly beneath balls (contact shadow plane) so they appear grounded.
-   - Add subtle motion blur streaks for high-velocity shots; heavy objects usually blur less but show streaks when fast.
-
-5. **Cue animation**
-   - Amplify cue recoil proportional to shot power so the strike reads as kinetic and weighty.
-    - Audio panel now controls cue-hit tone/decay; consider linking recoil magnitude to those mixer settings.
-
-## Next Steps / Open Questions
-1. Prototype the pocket animation event pipeline and validate in both renderers.
-2. Expose pocket capture damping constants to CONFIG for experimentation with high-speed shots.
-3. Prioritize the "weight" cues (audio vs. physics vs. visuals) and test them incrementally to measure perceived realism gains.
-4. Expand Audio Mixer to support sample selection / EQ for each event for finer control.
-
-These enhancements can be staged independently; start with the pocket animation since that immediately solves the “poof” issue, then iterate on physics/audio cues for weight.
+For the related rules UX and shot-weight cues, see `docs/rules/eight-ball-rules.md` and `docs/audio/audio-status.md`.
