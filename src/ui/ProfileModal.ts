@@ -31,8 +31,8 @@ export class ProfileModal {
     const avatar = document.createElement('div');
     avatar.style.width = '80px';
     avatar.style.height = '80px';
-    avatar.style.borderRadius = '50%';
-    avatar.style.background = 'radial-gradient(circle at 30% 30%, #4CAF50, #2E7D32)';
+    avatar.style.borderRadius = '12px';
+    avatar.style.background = 'linear-gradient(135deg, #4CAF50, #2E7D32)';
     avatar.style.boxShadow = '0 0 20px rgba(76, 175, 80, 0.4)';
     avatar.style.border = '3px solid rgba(255,255,255,0.2)';
 

@@ -2919,27 +2919,27 @@ export class Renderer3D extends BaseRenderer {
 
     const applyIconLighting = () => {
       // Warmer key and cooler fill for color separation on the stripes
-      const ambient = new THREE.AmbientLight(0xffffff, 0.9);
+      const ambient = new THREE.AmbientLight(0xffffff, 1.2);
       scene.add(ambient);
 
-      const hemi = new THREE.HemisphereLight(0xfff2d9, 0x101010, 0.7);
+      const hemi = new THREE.HemisphereLight(0xfff2d9, 0x101010, 0.9);
       scene.add(hemi);
 
-      const key = new THREE.DirectionalLight(0xfff1d6, 2.2);
+      const key = new THREE.DirectionalLight(0xfff1d6, 2.8);
       key.position.set(3.0, 2.6, 4.4);
       scene.add(key);
 
-      const fill = new THREE.DirectionalLight(0xdfe8ff, 1.15);
+      const fill = new THREE.DirectionalLight(0xdfe8ff, 1.5);
       fill.position.set(-5.5, -2.5, 3.2);
       scene.add(fill);
 
       // Reduced rim intensity and moved to lower-left to shift highlight off the number decal
-      const rim = new THREE.PointLight(0xffffff, 0.45);
+      const rim = new THREE.PointLight(0xffffff, 0.6);
       rim.position.set(-6.0, -3.0, 4.0);
       scene.add(rim);
 
       // Softened top light to reduce direct washout
-      const top = new THREE.DirectionalLight(0xffffff, 0.7);
+      const top = new THREE.DirectionalLight(0xffffff, 0.9);
       top.position.set(0.0, 3.0, 3.0);
       scene.add(top);
     };

@@ -30,6 +30,9 @@ import { SpeedPoolMode } from './modes/SpeedPoolMode';
 import type { PocketAnimationEvent } from '../render/ControlTypes';
 import { AudioManager } from '../sound/AudioManager';
 import type { AudioSettings } from '../ui/SettingsManager';
+import { PlaybackController } from './PlaybackController';
+import { MatchData } from '../debug/PhysicsRecorder';
+import { PlaybackPanel } from '../ui/PlaybackPanel';
 
 export enum GameMode {
   PRACTICE,
@@ -37,6 +40,7 @@ export enum GameMode {
   TIME_ATTACK,
   PERFECT_GAME,
   SPEED_POOL,
+  PLAYBACK,
 }
 
 const POCKET_LABELS: Record<string, string> = {
@@ -98,6 +102,13 @@ export class Game {
   // Arcade modes
   arcadeMode: GameModeBase | null;
 
+  // Playback
+  playbackController: PlaybackController;
+  playbackPanelUI: PlaybackPanel;
+
+  // UI
+  gameSettingsPanel: any; // Should be GameSettingsPanel type but avoiding import cycle if possible, or just import it.
+
   // Game loop
   accumulator: number = 0;
   lastTime: number = 0;
@@ -147,6 +158,10 @@ export class Game {
     this.audioPanel = new AudioPanel(this.hud.settingsManager);
     this.rules = new EightBallRules(RULES_PRESETS[this.currentRuleset]);
     this.predictor = new Predictor();
+    this.playbackController = new PlaybackController(this.world);
+    this.playbackPanelUI = new PlaybackPanel(this.hud.settingsManager, this.playbackController, () => {
+      this.stopPlayback();
+    });
     this.audio = new AudioManager();
     this.audio.setSettings(this.hud.settingsManager.getAudioSettings());
     window.addEventListener('settings:audio-changed', (event) => {
@@ -227,6 +242,10 @@ export class Game {
   }
 
   isPlayerInputBlocked(): boolean {
+    // Block input during playback
+    if (this.mode === GameMode.PLAYBACK) {
+      return true;
+    }
     // Block input during AI's turn in 8-ball mode
     if (this.mode === GameMode.EIGHT_BALL) {
       if (this.pendingBallInHandForAI) {
@@ -430,26 +449,26 @@ export class Game {
       }
       if (e.key === 's' || e.key === 'S') {
         if (e.shiftKey) {
-             // Shift+S: Open Settings Modal
-             const hub = (window as any).homeHub;
-             if (hub) hub.openSettings();
-             return;
+          // Shift+S: Open Settings Modal
+          const hub = (window as any).homeHub;
+          if (hub) hub.openSettings();
+          return;
         }
         // Regular S: Toggle Physics Settings Panel (existing behavior)
       }
 
       if ((e.key === 'p' || e.key === 'P') && e.shiftKey) {
-          // Shift+P: Open Profile Modal
-          const hub = (window as any).homeHub;
-          if (hub) hub.openProfile();
-          return;
+        // Shift+P: Open Profile Modal
+        const hub = (window as any).homeHub;
+        if (hub) hub.openProfile();
+        return;
       }
 
       if ((e.key === 'c' || e.key === 'C') && e.shiftKey) {
-          // Shift+C: Open Shop (Cues)
-          const hub = (window as any).homeHub;
-          if (hub) hub.openShop();
-          return;
+        // Shift+C: Open Shop (Cues)
+        const hub = (window as any).homeHub;
+        if (hub) hub.openShop();
+        return;
       }
 
       // Existing shortcuts
@@ -613,6 +632,21 @@ export class Game {
   }
 
   private registerPanels() {
+    // Debug hotkey for playback
+    window.addEventListener('keydown', (e) => {
+      if (e.shiftKey && (e.key === 'R' || e.key === 'r')) {
+        console.log('📼 Starting playback from recorder...');
+        const data = physicsRecorder.getMatchData();
+        this.startPlayback(data);
+      }
+    });
+
+
+
+    this.hud.registerPanel('playback-panel', this.playbackPanelUI.getController(), {
+      hotkeys: [],
+      persistState: false,
+    });
     this.hud.registerPanel('physics-settings', this.settings.getController(), {
       hotkeys: ['s'],
       persistState: true,
@@ -723,12 +757,20 @@ export class Game {
 
     this.resize();
     this.rules.startGame();
+
+    // Start recording automatically for playback features
+    physicsRecorder.start();
+
     this.currentCalledPocketId = null;
     this.rules.setCalledPocket(null);
 
     // Set mode display with ruleset if in 8-Ball mode
     if (this.mode === GameMode.PRACTICE) {
       this.hud.setMode('Practice Mode');
+    } else if (this.mode === GameMode.PLAYBACK) {
+      // Playback mode initialization handled by startPlayback
+      // We just need to ensure we don't overwrite it
+      return;
     } else {
       const rulesetName = getRulesDescription(this.rules.config);
       this.hud.setMode(`8-Ball (${rulesetName})`);
@@ -1078,6 +1120,12 @@ export class Game {
   }
 
   update(dt: number) {
+    if (this.mode === GameMode.PLAYBACK) {
+      // console.log('📼 Updating playback controller...'); // Commented out to avoid spam, but useful if needed
+      this.playbackController.update(dt);
+      return;
+    }
+
     this.accumulator += dt;
 
     // Skip physics simulation while dragging cue ball during ball-in-hand
@@ -1603,6 +1651,45 @@ export class Game {
     return adjusted;
   }
 
+  startPlayback(data: MatchData) {
+    if (!data || (!data.shots.length && !data.snapshots?.length)) {
+      console.warn('⚠️ No playback data available');
+      // @ts-ignore - notificationService is global or imported in HUD but we need access
+      // Actually, we can import it or just use console for now, or access via HUD if exposed.
+      // HUD doesn't expose it directly.
+      // Let's just log for now and maybe alert.
+      alert('No recording data found! Please play a few shots first.');
+      return;
+    }
+
+    console.log('📼 startPlayback called with data:', {
+      shots: data.shots.length,
+      snapshots: data.snapshots?.length,
+      duration: data.duration
+    });
+
+    this.mode = GameMode.PLAYBACK;
+    console.log('📼 Mode set to PLAYBACK (' + this.mode + ')');
+
+    this.playbackController.loadMatch(data);
+    this.playbackController.play();
+    this.hud.setMode('Replay');
+    this.hud.hideTurnIndicator();
+
+    // Show Playback UI
+    this.hud.panelManager.openPanel('playback-panel');
+    this.playbackPanelUI.updateDuration(data.duration);
+  }
+
+  stopPlayback() {
+    console.log('📼 stopPlayback called');
+    this.playbackController.pause();
+    this.mode = GameMode.PRACTICE; // Default back to practice
+    this.restart();
+
+    this.hud.panelManager.closePanel('playback-panel');
+  }
+
   private setMicroAimDialValue(value: number) {
     const clamped = Math.max(-1, Math.min(1, value));
     const snapped = Math.abs(clamped) < 0.01 ? 0 : clamped;
@@ -1624,7 +1711,7 @@ export class Game {
     this.renderer.render(this.world, alpha);
 
     // Draw cue line and power bar if can shoot (hide during ball-in-hand drag only)
-    if (this.canShoot && this.cueBall && !this.cueBall.pocketed && !this.isDraggingBall) {
+    if (this.mode !== GameMode.PLAYBACK && this.canShoot && this.cueBall && !this.cueBall.pocketed && !this.isDraggingBall) {
       // Calculate aim sensitivity based on distance to nearest object ball
       const aimSensitivity = this.calculateAimSensitivity();
 

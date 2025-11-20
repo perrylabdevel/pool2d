@@ -152,7 +152,8 @@ class UISoundService {
   private getProfile(event: UISoundEvent): SoundProfile {
     switch (event) {
       case 'button-hover':
-        return { startFreq: 640, endFreq: 720, duration: 0.08, type: 'triangle', volume: 0.4 };
+        // Disable hover sounds for buttons as they can be annoying in modals
+        return { startFreq: 640, endFreq: 720, duration: 0.08, type: 'triangle', volume: 0.0 };
       case 'button-click':
         return { startFreq: 420, endFreq: 360, duration: 0.12, type: 'square', volume: 0.55 };
       case 'modal-open':

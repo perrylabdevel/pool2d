@@ -1,0 +1,271 @@
+import { PhysicsWorld } from '../physics/Physics';
+import { MatchData, PhysicsSnapshot } from '../debug/PhysicsRecorder';
+
+export class PlaybackController {
+    private world: PhysicsWorld;
+    private matchData: MatchData | null = null;
+
+    // Playback state
+    isPlaying: boolean = false;
+    currentTime: number = 0;
+    playbackSpeed: number = 1.0;
+    duration: number = 0;
+
+    // Navigation state
+    currentShotIndex: number = -1;
+
+    // Events
+    onTimeUpdate?: (time: number) => void;
+    onStateChange?: (isPlaying: boolean) => void;
+    onShotChange?: (shotIndex: number) => void;
+
+    constructor(world: PhysicsWorld) {
+        this.world = world;
+    }
+
+    loadMatch(data: MatchData) {
+        this.matchData = data;
+        this.duration = data.duration;
+        this.currentTime = 0;
+        this.currentShotIndex = -1;
+        this.isPlaying = false;
+        this.playbackSpeed = 1.0;
+
+        // Reset world to initial state
+        this.seek(0);
+
+        console.log('📼 Match loaded:', {
+            duration: this.duration,
+            shots: data.shots.length,
+            events: data.events.length
+        });
+    }
+
+    play() {
+        if (!this.matchData) return;
+        this.isPlaying = true;
+        this.onStateChange?.(true);
+    }
+
+    pause() {
+        this.isPlaying = false;
+        this.onStateChange?.(false);
+    }
+
+    togglePlay() {
+        if (this.isPlaying) this.pause();
+        else this.play();
+    }
+
+    setSpeed(speed: number) {
+        this.playbackSpeed = speed;
+    }
+
+    update(dt: number) {
+        if (!this.isPlaying || !this.matchData) return;
+
+        // Advance time
+        const newTime = this.currentTime + dt * this.playbackSpeed;
+
+        if (newTime >= this.duration) {
+            this.currentTime = this.duration;
+            this.pause();
+            this.seek(this.duration);
+        } else {
+            this.seek(newTime);
+        }
+    }
+
+    seek(time: number) {
+        if (!this.matchData) return;
+
+        // Clamp time
+        this.currentTime = Math.max(0, Math.min(time, this.duration));
+
+        // Use global snapshots for interpolation
+        if (this.matchData.snapshots && this.matchData.snapshots.length > 0) {
+            this.applySnapshotInterpolation(this.matchData.snapshots, this.currentTime);
+        }
+
+        this.updateCurrentShotIndex(this.currentTime);
+        this.onTimeUpdate?.(this.currentTime);
+    }
+
+    private updateWorldState(time: number) {
+        // Deprecated in favor of direct seek logic using global snapshots
+        // But kept if needed for specific shot logic later
+        this.seek(time);
+    }
+
+    private applySnapshotInterpolation(snapshots: PhysicsSnapshot[], time: number) {
+        if (snapshots.length === 0) return;
+
+        // Binary search for the two snapshots surrounding 'time'
+        let low = 0;
+        let high = snapshots.length - 1;
+
+        if (time <= snapshots[0].time) {
+            this.applyState(snapshots[0]);
+            return;
+        }
+        if (time >= snapshots[high].time) {
+            this.applyState(snapshots[high]);
+            return;
+        }
+
+        while (low <= high) {
+            const mid = Math.floor((low + high) / 2);
+            if (snapshots[mid].time < time) {
+                low = mid + 1;
+            } else {
+                high = mid - 1;
+            }
+        }
+
+        // Now 'high' is the index before 'time', and 'low' is the index after 'time'
+        // snapshots[high] <= time <= snapshots[low]
+        // actually binary search usually leaves low > high. 
+        // The element at 'high' is the largest element <= time.
+        // The element at 'low' is the smallest element > time.
+
+        const prev = snapshots[high];
+        const next = snapshots[low];
+
+        if (!prev || !next) {
+            // Should not happen given boundary checks, but fallback
+            this.applyState(prev || next || snapshots[0]);
+            return;
+        }
+
+        // Interpolate
+        const total = next.time - prev.time;
+        const alpha = total > 0.0001 ? (time - prev.time) / total : 0;
+
+        this.interpolateState(prev, next, alpha);
+    }
+
+    private applyState(snapshot: PhysicsSnapshot) {
+        // Sync world balls to snapshot
+        // We might need to create/destroy balls if the count mismatches, 
+        // but usually pool games have fixed ball set. 
+        // For now, assume balls exist or we update their properties.
+
+        snapshot.balls.forEach(snapBall => {
+            const ball = this.world.getBallById(snapBall.id);
+            if (!ball) {
+                // If ball doesn't exist in world but is in snapshot, we might need to spawn it?
+                // For now, let's assume the world is initialized with all balls.
+                // Or we could just skip.
+                return;
+            }
+
+            // Keep renderer interpolation coherent by syncing "previous" state before overriding positions.
+            ball.saveState();
+            ball.x = snapBall.x;
+            ball.y = snapBall.y;
+            ball.vx = snapBall.vx;
+            ball.vy = snapBall.vy;
+            ball.pocketed = snapBall.pocketed;
+            ball.sleeping = snapBall.sleeping;
+
+            if (snapBall.quaternion) {
+                ball.rotX = snapBall.quaternion[0];
+                ball.rotY = snapBall.quaternion[1];
+                ball.rotZ = snapBall.quaternion[2];
+                ball.rotW = snapBall.quaternion[3];
+            }
+        });
+    }
+
+    private interpolateState(prev: PhysicsSnapshot, next: PhysicsSnapshot, alpha: number) {
+        prev.balls.forEach(prevBall => {
+            const nextBall = next.balls.find(b => b.id === prevBall.id);
+            if (!nextBall) return;
+
+            const ball = this.world.getBallById(prevBall.id);
+            if (!ball) return;
+
+            // Preserve previous frame values before writing interpolated state.
+            ball.saveState();
+
+            // Lerp position
+            ball.x = prevBall.x + (nextBall.x - prevBall.x) * alpha;
+            ball.y = prevBall.y + (nextBall.y - prevBall.y) * alpha;
+
+            // Lerp velocity (visual only)
+            ball.vx = prevBall.vx + (nextBall.vx - prevBall.vx) * alpha;
+            ball.vy = prevBall.vy + (nextBall.vy - prevBall.vy) * alpha;
+
+            // Discrete states take the 'prev' value until we hit 'next'
+            // Or maybe 'next' if alpha > 0.5? 
+            // Pocketed state should probably stick to prev until the exact moment it changes?
+            // Actually, if it's pocketed in next but not prev, it falls in between.
+            ball.pocketed = alpha > 0.9 ? nextBall.pocketed : prevBall.pocketed;
+            ball.sleeping = alpha > 0.9 ? nextBall.sleeping : prevBall.sleeping;
+
+            // Slerp rotation
+            if (prevBall.quaternion && nextBall.quaternion) {
+                // Simple lerp for now, full slerp if needed
+                // (Quaternion lerp needs normalization)
+                const q1 = prevBall.quaternion;
+                const q2 = nextBall.quaternion;
+
+                const rx = q1[0] + (q2[0] - q1[0]) * alpha;
+                const ry = q1[1] + (q2[1] - q1[1]) * alpha;
+                const rz = q1[2] + (q2[2] - q1[2]) * alpha;
+                const rw = q1[3] + (q2[3] - q1[3]) * alpha;
+
+                const len = Math.sqrt(rx * rx + ry * ry + rz * rz + rw * rw);
+                if (len > 0) {
+                    ball.rotX = rx / len;
+                    ball.rotY = ry / len;
+                    ball.rotZ = rz / len;
+                    ball.rotW = rw / len;
+                }
+            }
+        });
+    }
+
+    private updateCurrentShotIndex(time: number) {
+        if (!this.matchData) return;
+
+        let newIndex = -1;
+        for (let i = 0; i < this.matchData.shots.length; i++) {
+            const shot = this.matchData.shots[i];
+            const endTime = shot.endTime ?? this.duration;
+            if (time >= shot.startTime && time <= endTime) {
+                newIndex = i;
+                break;
+            }
+        }
+
+        if (newIndex !== this.currentShotIndex) {
+            this.currentShotIndex = newIndex;
+            this.onShotChange?.(newIndex);
+        }
+    }
+
+    nextShot() {
+        if (!this.matchData || this.matchData.shots.length === 0) return;
+
+        let targetIndex = this.currentShotIndex + 1;
+        if (targetIndex >= this.matchData.shots.length) {
+            targetIndex = 0; // Loop to start? Or stop? Let's loop.
+        }
+
+        const targetShot = this.matchData.shots[targetIndex];
+        this.seek(targetShot.startTime);
+    }
+
+    prevShot() {
+        if (!this.matchData || this.matchData.shots.length === 0) return;
+
+        let targetIndex = this.currentShotIndex - 1;
+        if (targetIndex < 0) {
+            targetIndex = this.matchData.shots.length - 1;
+        }
+
+        const targetShot = this.matchData.shots[targetIndex];
+        this.seek(targetShot.startTime);
+    }
+}
