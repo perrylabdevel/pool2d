@@ -5,8 +5,9 @@ import type { PanelRegistrationOptions } from './panels/PanelManager';
 import { UIPanel } from './panels/UIPanel';
 import { GameSettingsPanel } from './GameSettingsPanel';
 
-import { inGameMenu } from './InGameMenu';
+// import { inGameMenu } from './InGameMenu'; // Removed
 import { notificationService } from './NotificationService';
+import { uiStateMachine, UIState } from './UIStateMachine';
 
 export class HUD {
   fpsElement: HTMLElement | null;
@@ -68,24 +69,13 @@ export class HUD {
 
     if (hudMenuBtn) {
       hudMenuBtn.addEventListener('click', () => {
-        // Pause game and open main hub
-        window.dispatchEvent(new CustomEvent('game:pause'));
-        // Import homeHub dynamically or use global if available, but we can import it at top
-        // Since we already import InGameMenu, let's import HomeHub too.
-        // Actually, let's just use the global instance or import it.
-        // We need to add the import first.
-        import('./HomeHub').then(({ homeHub }) => {
-          homeHub.init(() => {
-            // On close, resume game
-            window.dispatchEvent(new CustomEvent('game:resume'));
-          });
-        });
+        uiStateMachine.transitionTo(UIState.LOBBY);
       });
     }
 
     if (pauseBtn) {
       pauseBtn.addEventListener('click', () => {
-        window.dispatchEvent(new CustomEvent('game:pause'));
+        uiStateMachine.transitionTo(UIState.IN_GAME_MENU);
       });
     }
 
@@ -278,7 +268,7 @@ export class HUD {
       const isRemaining = remainingSet.has(id);
       const isSolid = id >= 1 && id <= 7;
       const isStripe = id >= 9 && id <= 15;
-      const is8Ball = id === 8;
+      // const is8Ball = id === 8; // Unused
 
       let className = 'ball-chip';
       if (isSolid) className += ' solids';
