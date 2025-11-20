@@ -33,6 +33,7 @@ import type { AudioSettings } from '../ui/SettingsManager';
 import { PlaybackController } from './PlaybackController';
 import { MatchData } from '../debug/PhysicsRecorder';
 import { PlaybackPanel } from '../ui/PlaybackPanel';
+import { uiStateMachine, UIState } from '../ui/UIStateMachine';
 
 export enum GameMode {
   PRACTICE,
@@ -268,8 +269,11 @@ export class Game {
       return false;
     };
 
+    const isUIBlockingGameplay = () => uiStateMachine.state !== UIState.IN_GAME;
+
     // Handle mouse events (power bar, ball dragging)
     this.input.canvas.addEventListener('mousedown', (e) => {
+      if (isUIBlockingGameplay()) return;
       if (this.isPlayerInputBlocked()) return;
       // Don't handle ball drag or power bar during pocket selection
       if (this.waitingForPocketCall) return;
@@ -277,16 +281,29 @@ export class Game {
       this.handlePowerBarMouseDown(e);
       this.handleMicroDialMouseDown(e);
     });
+    const isPointerOverHudHeader = (e: MouseEvent) => {
+      const header = document.querySelector('.hud-header') as HTMLElement | null;
+      if (!header) return false;
+      const rect = header.getBoundingClientRect();
+      const x = e.clientX;
+      const y = e.clientY;
+      return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+    };
+
     window.addEventListener('mousemove', (e) => {
+      if (isUIBlockingGameplay()) return;
       if (this.isPlayerInputBlocked()) return;
       if (this.waitingForPocketCall) return;
+      if (isPointerOverHudHeader(e)) return;
       this.handleBallDrag(e);
       this.handlePowerBarMouseMove(e);
       this.handleMicroDialMouseMove(e);
     });
     window.addEventListener('mouseup', (e) => {
+      if (isUIBlockingGameplay()) return;
       if (this.isPlayerInputBlocked()) return;
       if (this.waitingForPocketCall) return;
+      if (isPointerOverHudHeader(e)) return;
       this.handleBallDragEnd(e);
       this.handlePowerBarMouseUp(e);
       this.handleMicroDialMouseUp(e);
@@ -294,6 +311,7 @@ export class Game {
 
     // Handle A key to toggle aim/power mode
     window.addEventListener('keydown', (e) => {
+      if (isUIBlockingGameplay()) return;
       if (e.key === 'Shift') {
         this.input.setFineAimActive(true);
       }

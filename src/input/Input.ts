@@ -3,6 +3,7 @@
 
 import { Ball } from '../physics/Shapes';
 import { CONFIG } from '../config';
+import { uiStateMachine, UIState } from '../ui/UIStateMachine';
 
 export class InputManager {
   canvas: HTMLCanvasElement;
@@ -67,6 +68,7 @@ export class InputManager {
   }
   
   handleMouseDown(e: MouseEvent) {
+    if (uiStateMachine.state !== UIState.IN_GAME) return;
     // Fire click callback with world coordinates
     if (this.onClick) {
       const pos = this.screenToGame(e.clientX, e.clientY);
@@ -80,6 +82,7 @@ export class InputManager {
   }
   
   handleMouseMove(e: MouseEvent) {
+    if (uiStateMachine.state !== UIState.IN_GAME) return;
     const pos = this.screenToGame(e.clientX, e.clientY);
     this.mouseTargetX = pos.x;
     this.mouseTargetY = pos.y;
@@ -103,6 +106,7 @@ export class InputManager {
   }
   
   handleTouchStart(e: TouchEvent) {
+    if (uiStateMachine.state !== UIState.IN_GAME) return;
     e.preventDefault();
     if (this.onClick && e.touches.length > 0) {
       const touch = e.touches[0];
@@ -115,6 +119,7 @@ export class InputManager {
   }
   
   handleTouchMove(e: TouchEvent) {
+    if (uiStateMachine.state !== UIState.IN_GAME) return;
     e.preventDefault();
     if (e.touches.length > 0) {
       const touch = e.touches[0];

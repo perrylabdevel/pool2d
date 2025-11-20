@@ -1,7 +1,10 @@
 
+import { uiStateMachine, UIState } from './UIStateMachine';
+
 export class UIRoot {
   private gameCanvas: HTMLCanvasElement;
   private uiCanvas: HTMLCanvasElement;
+  private uiStageCanvas: HTMLCanvasElement;
   private debugCanvas: HTMLCanvasElement;
   private hud: HTMLElement;
   private dockRight: HTMLElement | null;
@@ -10,12 +13,17 @@ export class UIRoot {
   constructor() {
     this.gameCanvas = document.getElementById('game-canvas') as HTMLCanvasElement;
     this.uiCanvas = document.getElementById('ui-canvas') as HTMLCanvasElement;
+    this.uiStageCanvas = document.getElementById('ui-stage') as HTMLCanvasElement;
     this.debugCanvas = document.getElementById('debug-canvas') as HTMLCanvasElement;
     this.hud = document.getElementById('hud') as HTMLElement;
     this.dockRight = document.getElementById('dock-right');
     this.dockLeft = document.getElementById('dock-left');
 
     this.setupLayering();
+
+    // Sync initial visibility with current UI state and subscribe to changes
+    this.updateForState(uiStateMachine.state);
+    uiStateMachine.onStateChange((newState) => this.updateForState(newState));
   }
 
   private setupLayering() {
@@ -39,15 +47,25 @@ export class UIRoot {
     }
 
     // UI Stage (The new full screen canvas)
+    if (this.uiStageCanvas) {
+      this.uiStageCanvas.style.zIndex = '2';
+      this.uiStageCanvas.style.position = 'absolute';
+      this.uiStageCanvas.style.top = '0';
+      this.uiStageCanvas.style.left = '0';
+      // UI scenes need pointer events
+      this.uiStageCanvas.style.pointerEvents = 'auto';
+    }
+
+    // UI overlay canvas for gameplay HUD elements (cue, aim lines, etc.)
     if (this.uiCanvas) {
-      this.uiCanvas.style.zIndex = '2';
+      this.uiCanvas.style.zIndex = '3';
       this.uiCanvas.style.position = 'absolute';
       this.uiCanvas.style.top = '0';
       this.uiCanvas.style.left = '0';
-      // UI needs pointer events
+      this.uiCanvas.style.pointerEvents = 'none';
     }
 
-    // HUD Overlay
+    // HUD Overlay (DOM)
     if (this.hud) {
       this.hud.style.zIndex = '3';
       this.hud.style.position = 'absolute';
@@ -72,9 +90,22 @@ export class UIRoot {
     return this.uiCanvas;
   }
 
+  public getUIStageCanvas(): HTMLCanvasElement {
+    return this.uiStageCanvas;
+  }
+
   public setHUDVisibility(visible: boolean) {
     if (this.hud) {
       this.hud.style.display = visible ? 'block' : 'none';
+    }
+  }
+
+  private updateForState(state: UIState) {
+    // Only show the gameplay UI overlay canvas (cue, aim lines, etc.)
+    // while actually in the IN_GAME state. For lobby/menus, hide it so
+    // scene canvases are not visually mixed with the overlay.
+    if (this.uiCanvas) {
+      this.uiCanvas.style.display = state === UIState.IN_GAME ? 'block' : 'none';
     }
   }
 }

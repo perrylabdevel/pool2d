@@ -833,6 +833,11 @@ button:active {
   pointer-events: none;
 }
 
+#ui-stage {
+  position: absolute;
+  pointer-events: auto;
+}
+
 #debug-canvas {
   position: absolute;
   pointer-events: none;

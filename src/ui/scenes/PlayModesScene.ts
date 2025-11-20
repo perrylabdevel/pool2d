@@ -21,20 +21,20 @@ export class PlayModesScene implements UIScene {
 
     mount(): void {
         console.log('PlayModesScene mounted');
-        const canvas = document.getElementById('ui-canvas') as HTMLCanvasElement;
+        const canvas = document.getElementById('ui-stage') as HTMLCanvasElement;
         canvas.addEventListener('mousemove', this.onMouseMove);
         canvas.addEventListener('click', this.onClick);
     }
 
     unmount(): void {
         console.log('PlayModesScene unmounted');
-        const canvas = document.getElementById('ui-canvas') as HTMLCanvasElement;
+        const canvas = document.getElementById('ui-stage') as HTMLCanvasElement;
         canvas.removeEventListener('mousemove', this.onMouseMove);
         canvas.removeEventListener('click', this.onClick);
     }
 
     private onMouseMove = (e: MouseEvent) => {
-        const canvas = document.getElementById('ui-canvas') as HTMLCanvasElement;
+        const canvas = document.getElementById('ui-stage') as HTMLCanvasElement;
         const rect = canvas.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;

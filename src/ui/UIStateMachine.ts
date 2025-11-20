@@ -11,7 +11,9 @@ export enum UIState {
 type StateChangeListener = (newState: UIState, previousState: UIState) => void;
 
 export class UIStateMachine {
-    private currentState: UIState = UIState.LOBBY;
+    // Default to in-game so the table is the primary view,
+    // and we can explicitly navigate to LOBBY when needed.
+    private currentState: UIState = UIState.IN_GAME;
     private listeners: StateChangeListener[] = [];
 
     public get state(): UIState {

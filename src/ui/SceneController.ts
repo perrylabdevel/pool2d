@@ -35,7 +35,9 @@ export class SceneController {
     private transitionType: TransitionType = TransitionType.CROSS_FADE;
 
     constructor() {
-        this.canvas = uiRoot.getUICanvas();
+        // Use dedicated UI stage canvas for scenes so gameplay overlays
+        // on the HUD/UI canvas are not affected.
+        this.canvas = uiRoot.getUIStageCanvas();
         const context = this.canvas.getContext('2d');
         if (!context) {
             throw new Error('Failed to get 2D context for UI canvas');
@@ -78,7 +80,13 @@ export class SceneController {
             this.currentScene = nextScene || null;
             if (this.currentScene) {
                 this.currentScene.mount();
-                uiRoot.getUICanvas().style.display = 'block';
+                this.canvas.style.display = 'block';
+                this.canvas.style.pointerEvents = 'auto';
+            } else {
+                // No active scene (e.g. pure in-game)
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                this.canvas.style.display = 'none';
+                this.canvas.style.pointerEvents = 'none';
             }
             return;
         }
@@ -88,16 +96,18 @@ export class SceneController {
             this.nextScene.mount();
             this.isTransitioning = true;
             this.transitionProgress = 0;
-            uiRoot.getUICanvas().style.display = 'block';
+            this.canvas.style.display = 'block';
+            this.canvas.style.pointerEvents = 'auto';
 
             // Play sound
             uiSoundService.play('modal-open');
         } else if (!nextScene) {
             // Transition to nothing (e.g. in-game)
-            // For now just immediate
             if (this.currentScene) this.currentScene.unmount();
             this.currentScene = null;
             this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+            this.canvas.style.display = 'none';
+            this.canvas.style.pointerEvents = 'none';
         }
     }
 
@@ -115,9 +125,9 @@ export class SceneController {
         const dt = (timestamp - this.lastTime) / 1000;
         this.lastTime = timestamp;
 
-        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-
         if (this.isTransitioning && this.nextScene) {
+            // Only clear when we are actively rendering a scene/transition
+            this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
             this.transitionProgress += dt / this.transitionDuration;
 
             if (this.transitionProgress >= 1) {
@@ -126,13 +136,17 @@ export class SceneController {
                 if (this.currentScene) this.currentScene.unmount();
                 this.currentScene = this.nextScene;
                 this.nextScene = null;
-                this.currentScene.update(dt);
-                this.currentScene.render(this.ctx);
+                if (this.currentScene) {
+                    this.currentScene.update(dt);
+                    this.currentScene.render(this.ctx);
+                }
             } else {
                 // Render Transition
                 this.renderTransition(this.ctx);
             }
         } else if (this.currentScene) {
+            // Only clear when an active scene is present
+            this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
             this.currentScene.update(dt);
             this.currentScene.render(this.ctx);
         }

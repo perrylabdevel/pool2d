@@ -4,8 +4,6 @@ import { panelManager } from './panels/panelRegistry';
 import type { PanelRegistrationOptions } from './panels/PanelManager';
 import { UIPanel } from './panels/UIPanel';
 import { GameSettingsPanel } from './GameSettingsPanel';
-
-// import { inGameMenu } from './InGameMenu'; // Removed
 import { notificationService } from './NotificationService';
 import { uiStateMachine, UIState } from './UIStateMachine';
 
@@ -75,7 +73,7 @@ export class HUD {
 
     if (pauseBtn) {
       pauseBtn.addEventListener('click', () => {
-        uiStateMachine.transitionTo(UIState.IN_GAME_MENU);
+        uiStateMachine.transitionTo(UIState.LOBBY);
       });
     }
 
