@@ -5,18 +5,19 @@ This document explains how the visual display is composed, scaled, and kept alig
 ## Overview
 
 - World units are inches. Table play area is `100 x 50` inches with origin at center and +Y up.
-- Rendering uses an orthographic top‑down camera (`Renderer3D`).
-- Three layered surfaces are used:
-  - WebGL game canvas (table, balls, frame, lights)
-  - 2D UI canvas for overlays (aim lines, cue, measurements)
-  - Optional debug canvas (rails, pockets, clamp guides, etc.)
+- Rendering uses an orthographic top-down camera (`Renderer3D`).
+- Layered surfaces are used:
+  - WebGL game canvas (`#game-canvas`) - table, balls, frame, lights.
+  - UI scene canvas (`#ui-stage`) - full-screen UI scenes (Lobby, Play Modes, Shop, Profile, In-Game Menu).
+  - UI overlay canvas (`#ui-canvas`) - gameplay overlays (aim lines, cue, measurements).
+  - Optional debug canvas (`#debug-canvas`) - rails, pockets, clamp guides, etc.
 - Layout reacts to window/dock changes and dispatches a `renderer:resized` event so input and debug overlay stay aligned.
 
 ## Canvases & Alignment
 
-- `Renderer3D.resize()` computes canvas size and on‑screen offsets. It applies those offsets to:
-  - WebGL canvas (main)
-  - UI canvas (`#ui-canvas`)
+- `Renderer3D.resize()` computes canvas size and on-screen offsets. It applies those offsets to:
+  - WebGL canvas (`#game-canvas`)
+  - UI overlay canvas (`#ui-canvas`)
   - Reference overlay (if present)
 - After every resize, `Renderer3D` dispatches `window.dispatchEvent(new CustomEvent('renderer:resized', { detail }))` with:
   - `width`, `height`, `scale`, `offsetX`, `offsetY`

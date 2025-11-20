@@ -97,32 +97,90 @@ export class InGameMenuScene implements UIScene {
         const cx = width / 2;
         const cy = height / 2;
 
-        // Semi-transparent background
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        // Background - deep navy gradient similar to lobby
+        const bgGradient = ctx.createLinearGradient(0, 0, 0, height);
+        bgGradient.addColorStop(0, '#000B1A');
+        bgGradient.addColorStop(0.5, '#050B18');
+        bgGradient.addColorStop(1, '#02040A');
+        ctx.fillStyle = bgGradient;
         ctx.fillRect(0, 0, width, height);
 
         // Title
+        ctx.save();
         ctx.fillStyle = '#FFFFFF';
         ctx.font = 'bold 48px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('PAUSED', cx, cy - 150);
+        ctx.shadowColor = 'rgba(0, 180, 255, 0.7)';
+        ctx.shadowBlur = 16;
+        ctx.fillText('PAUSED', cx, cy - 170);
+        ctx.shadowBlur = 0;
+        ctx.restore();
+
+        // Central card panel
+        const panelWidth = 420;
+        const panelHeight = 260;
+        const panelX = cx - panelWidth / 2;
+        const panelY = cy - panelHeight / 2 - 10;
+        const panelRadius = 16;
+
+        const cardGradient = ctx.createLinearGradient(0, panelY, 0, panelY + panelHeight);
+        cardGradient.addColorStop(0, 'rgba(255,255,255,0.06)');
+        cardGradient.addColorStop(1, 'rgba(13,20,36,0.75)');
+
+        const drawRoundedRect = (x: number, y: number, w: number, h: number, r: number) => {
+            ctx.beginPath();
+            ctx.moveTo(x + r, y);
+            ctx.lineTo(x + w - r, y);
+            ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+            ctx.lineTo(x + w, y + h - r);
+            ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+            ctx.lineTo(x + r, y + h);
+            ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+            ctx.lineTo(x, y + r);
+            ctx.quadraticCurveTo(x, y, x + r, y);
+            ctx.closePath();
+        };
+
+        ctx.save();
+        drawRoundedRect(panelX, panelY, panelWidth, panelHeight, panelRadius);
+        ctx.fillStyle = cardGradient;
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.restore();
 
         // Buttons
         for (const btn of this.buttons) {
             const bx = cx + btn.x - btn.width / 2;
             const by = cy + btn.y - btn.height / 2;
 
-            ctx.fillStyle = btn === this.hoveredButton ? '#FFFFFF' : btn.color;
-            ctx.fillRect(bx, by, btn.width, btn.height);
+            ctx.save();
+            const btnRadius = 10;
+            drawRoundedRect(bx, by, btn.width, btn.height, btnRadius);
 
-            ctx.strokeStyle = '#000000';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(bx, by, btn.width, btn.height);
+            const baseGradient = ctx.createLinearGradient(bx, by, bx, by + btn.height);
+            if (btn === this.hoveredButton) {
+                baseGradient.addColorStop(0, 'rgba(255,255,255,0.25)');
+                baseGradient.addColorStop(1, 'rgba(255,255,255,0.10)');
+            } else {
+                baseGradient.addColorStop(0, 'rgba(255,255,255,0.18)');
+                baseGradient.addColorStop(1, 'rgba(255,255,255,0.06)');
+            }
+            ctx.fillStyle = baseGradient;
+            ctx.fill();
 
-            ctx.fillStyle = btn === this.hoveredButton ? btn.color : '#000000';
-            ctx.font = 'bold 20px Arial';
+            ctx.strokeStyle = btn.color;
+            ctx.lineWidth = btn === this.hoveredButton ? 2.5 : 2;
+            ctx.stroke();
+
+            ctx.fillStyle = '#000000';
+            ctx.font = 'bold 18px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
             ctx.fillText(btn.text, cx + btn.x, cy + btn.y);
+            ctx.restore();
         }
     }
 }

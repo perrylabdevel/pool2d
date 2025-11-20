@@ -7,21 +7,34 @@ export class LobbyScene implements UIScene {
     private hoveredButton: any = null;
     private keyHandler: ((e: KeyboardEvent) => void) | null = null;
 
-    constructor() {
-        this.setupButtons();
-        this.bindInput();
-    }
+  constructor() {
+    this.setupButtons();
+    this.bindInput();
+  }
 
-    private setupButtons() {
-        // Define buttons relative to screen center or fixed positions
-        // For now, simple center layout with a resume/back-to-table action
-        this.buttons = [
-            { id: 'resume', text: 'BACK TO TABLE', x: 0, y: -80, width: 260, height: 52, color: '#00B4FF' },
-            { id: 'play', text: 'PLAY MODES', x: 0, y: 10, width: 260, height: 52, color: '#FFD700' },
-            { id: 'shop', text: 'SHOP', x: 0, y: 90, width: 260, height: 48, color: '#4CAF50' },
-            { id: 'profile', text: 'PROFILE', x: 0, y: 150, width: 260, height: 48, color: '#2196F3' }
-        ];
-    }
+  private setupButtons() {
+    // Define logical button set; positions will be evenly distributed vertically.
+    const baseButtons = [
+      { id: 'resume', text: 'BACK TO TABLE' },
+      { id: 'play', text: 'PLAY MODES' },
+      { id: 'shop', text: 'SHOP' },
+      { id: 'profile', text: 'PROFILE' },
+    ];
+
+    const count = baseButtons.length;
+    const gap = 68; // vertical spacing between button centers
+    const startY = -((count - 1) * gap) / 2;
+
+    this.buttons = baseButtons.map((btn, index) => ({
+      id: btn.id,
+      text: btn.text,
+      x: 0,
+      y: startY + index * gap,
+      width: 260,
+      height: 52,
+      color: '#FFD700', // accent color is applied via primary-style gradient
+    }));
+  }
 
     private bindInput() {
         // We need to listen to pointer events on the canvas
@@ -112,36 +125,13 @@ export class LobbyScene implements UIScene {
         const cx = width / 2;
         const cy = height / 2;
 
-        // Background – deep navy gradient similar to app shell
+        // Background - subtle deep navy gradient
         const bgGradient = ctx.createLinearGradient(0, 0, 0, height);
         bgGradient.addColorStop(0, '#000B1A');
         bgGradient.addColorStop(0.5, '#050B18');
         bgGradient.addColorStop(1, '#02040A');
         ctx.fillStyle = bgGradient;
         ctx.fillRect(0, 0, width, height);
-
-        // Title
-        ctx.save();
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = 'bold 52px Arial';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.shadowColor = 'rgba(0, 180, 255, 0.7)';
-        ctx.shadowBlur = 18;
-        ctx.fillText('RAIL RUSH', cx, cy - 180);
-        ctx.shadowBlur = 0;
-        ctx.restore();
-
-        // Central card panel
-        const panelWidth = 420;
-        const panelHeight = 300;
-        const panelX = cx - panelWidth / 2;
-        const panelY = cy - panelHeight / 2 - 10;
-        const panelRadius = 16;
-
-        const cardGradient = ctx.createLinearGradient(0, panelY, 0, panelY + panelHeight);
-        cardGradient.addColorStop(0, 'rgba(255,255,255,0.06)');
-        cardGradient.addColorStop(1, 'rgba(13,20,36,0.75)');
 
         const drawRoundedRect = (x: number, y: number, w: number, h: number, r: number) => {
             ctx.beginPath();
@@ -157,43 +147,40 @@ export class LobbyScene implements UIScene {
             ctx.closePath();
         };
 
-        ctx.save();
-        drawRoundedRect(panelX, panelY, panelWidth, panelHeight, panelRadius);
-        ctx.fillStyle = cardGradient;
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(255,255,255,0.25)';
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-        ctx.restore();
-
-        // Buttons
+        // Buttons (four stacked options, styled like primary CTA buttons)
         for (const btn of this.buttons) {
             const bx = cx + btn.x - btn.width / 2;
             const by = cy + btn.y - btn.height / 2;
 
-            // Button background (glass/arcade style)
             ctx.save();
             const btnRadius = 10;
             drawRoundedRect(bx, by, btn.width, btn.height, btnRadius);
 
             const baseGradient = ctx.createLinearGradient(bx, by, bx, by + btn.height);
             if (btn === this.hoveredButton) {
-                baseGradient.addColorStop(0, 'rgba(255,255,255,0.25)');
-                baseGradient.addColorStop(1, 'rgba(255,255,255,0.10)');
+                // Hover: slightly brighter gold, similar to .btn-arcade-primary:hover
+                baseGradient.addColorStop(0, '#FFE55C');
+                baseGradient.addColorStop(1, '#DAA520');
             } else {
-                baseGradient.addColorStop(0, 'rgba(255,255,255,0.18)');
-                baseGradient.addColorStop(1, 'rgba(255,255,255,0.06)');
+                // Default: primary gold gradient like the DONE button
+                baseGradient.addColorStop(0, '#FFD700');
+                baseGradient.addColorStop(1, '#B8860B');
             }
             ctx.fillStyle = baseGradient;
             ctx.fill();
 
-            ctx.strokeStyle = btn.color;
-            ctx.lineWidth = btn === this.hoveredButton ? 2.5 : 2;
+            // Primary-style border
+            ctx.strokeStyle = '#FFD700';
+            ctx.lineWidth = 1.5;
             ctx.stroke();
+
+            // Light shadow for depth
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+            ctx.shadowBlur = 6;
 
             // Button label
             ctx.fillStyle = '#000000';
-            ctx.font = 'bold 18px Arial';
+            ctx.font = 'bold 16px Arial';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(btn.text, cx + btn.x, cy + btn.y);
