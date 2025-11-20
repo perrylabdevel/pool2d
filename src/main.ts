@@ -3,7 +3,7 @@
 import { Game } from './game/Game';
 import './ui/ModalService';
 import './ui/DockBridge';
-import './ui/HomeHub';
+import { homeHub } from './ui/HomeHub';
 import './ui/InGameMenu';
 import './ui/UISoundService';
 
@@ -18,6 +18,7 @@ function main() {
   
   const game = new Game(gameCanvas, debugCanvas);
   (window as any).poolGame = game;
+  (window as any).homeHub = homeHub; // Expose for global access (shortcuts)
   game.start();
 
   console.log('Pool 2D initialized');

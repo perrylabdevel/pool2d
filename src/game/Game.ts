@@ -278,6 +278,14 @@ export class Game {
       if (e.key === 'Shift') {
         this.input.setFineAimActive(true);
       }
+      // Help Modal Shortcut
+      if (e.key === 'h' || e.key === 'H' || e.key === '?') {
+        // We can access HomeHub via import if we export it, or just use the one attached to window if any
+        // Or better, import the instance
+        const hub = (window as any).homeHub || require('../ui/HomeHub').homeHub;
+        if (hub) hub.openHelp();
+      }
+
       if (e.key === 'a' || e.key === 'A') {
         if (this.isPlayerInputBlocked()) return;
         if (this.waitingForPocketCall) return;
@@ -420,6 +428,31 @@ export class Game {
         this.debug.toggle();
         this.syncDebugModeWithRenderer();
       }
+      if (e.key === 's' || e.key === 'S') {
+        if (e.shiftKey) {
+             // Shift+S: Open Settings Modal
+             const hub = (window as any).homeHub;
+             if (hub) hub.openSettings();
+             return;
+        }
+        // Regular S: Toggle Physics Settings Panel (existing behavior)
+      }
+
+      if ((e.key === 'p' || e.key === 'P') && e.shiftKey) {
+          // Shift+P: Open Profile Modal
+          const hub = (window as any).homeHub;
+          if (hub) hub.openProfile();
+          return;
+      }
+
+      if ((e.key === 'c' || e.key === 'C') && e.shiftKey) {
+          // Shift+C: Open Shop (Cues)
+          const hub = (window as any).homeHub;
+          if (hub) hub.openShop();
+          return;
+      }
+
+      // Existing shortcuts
       if (e.key === 'r' || e.key === 'R') {
         this.restart();
       }

@@ -58,7 +58,7 @@ export class Renderer3D extends BaseRenderer {
   private resizeObserver: ResizeObserver | null = null;
   private frameClipInfo: FrameClipInfo | null = null;
   private stencilAppliedOnce: boolean = false;
-  
+
   // 3D objects
   ballMeshes: Map<number, THREE.Object3D> = new Map();
   ballModels: Map<number, { geometry: THREE.BufferGeometry; material: THREE.MeshStandardMaterial }> = new Map();
@@ -159,7 +159,7 @@ export class Renderer3D extends BaseRenderer {
     const map = mat?.map ?? null;
     return map ?? null;
   }
-  
+
   // Resize reentrancy guard
   private _isResizing: boolean = false;
 
@@ -169,12 +169,12 @@ export class Renderer3D extends BaseRenderer {
   ghostBall: THREE.Mesh | null = null;
   trajectoryLines: THREE.Line[] = [];
   powerBarGroup: THREE.Group | null = null;
-  
+
   // Lighting
   ambientLight: THREE.AmbientLight;
   directionalLight: THREE.DirectionalLight;
   fillLight: THREE.HemisphereLight;
-  
+
   constructor(canvas: HTMLCanvasElement) {
     super(canvas, CONFIG.CANVAS_SCALE);
 
@@ -194,7 +194,7 @@ export class Renderer3D extends BaseRenderer {
     // Create Three.js scene
     this.scene = new THREE.Scene();
     this.scene.background = null; // Disabled - no background color
-    
+
     // Create orthographic camera (top-down view)
     const aspect = 1;
     const frustumSize = 100;
@@ -209,9 +209,9 @@ export class Renderer3D extends BaseRenderer {
     // Position camera directly above looking down
     this.camera.position.set(0, 0, 50);
     this.camera.lookAt(0, 0, 0);
-    
+
     // Create WebGL renderer
-    this.renderer = new THREE.WebGLRenderer({ 
+    this.renderer = new THREE.WebGLRenderer({
       canvas,
       antialias: true,
     });
@@ -223,7 +223,7 @@ export class Renderer3D extends BaseRenderer {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.setClearColor(0x000000, 0); // Transparent background
-    
+
     // Lighting
     this.ambientLight = new THREE.AmbientLight(0xffffff, CONFIG.AMBIENT_INTENSITY ?? 0.85);
     this.scene.add(this.ambientLight);
@@ -285,7 +285,7 @@ export class Renderer3D extends BaseRenderer {
           mat.needsUpdate = true;
         }
       });
-      
+
       // Update corner rectangle fill color
       this.updateRailFillMaterialColor();
 
@@ -514,7 +514,7 @@ export class Renderer3D extends BaseRenderer {
     console.log('⏳ Loading ball models...');
     console.log('📊 Performance Profile:');
     this.updateLoadingText('Loading ball models...');
-    
+
     const loadingManager = new THREE.LoadingManager();
     const embeddedTextureMap = new Map<string, string>();
 
@@ -531,7 +531,7 @@ export class Renderer3D extends BaseRenderer {
 
     const loader = new FBXLoader(loadingManager);
     const textureLoader = new THREE.TextureLoader(loadingManager);
-    
+
     // Enable texture compression for faster loading
     textureLoader.setCrossOrigin('anonymous');
     const textureMap: Record<number, string> = {
@@ -569,12 +569,12 @@ export class Renderer3D extends BaseRenderer {
       poolball27: 14,
       poolball28: 15
     };
-    
+
     try {
       // Preload all textures in parallel with progress tracking
       let texturesLoaded = 0;
       const totalTextures = Object.keys(textureMap).length;
-      
+
       const textureEntries = Object.entries(textureMap);
 
       const loadedTextures = await Promise.all(
@@ -652,14 +652,14 @@ export class Renderer3D extends BaseRenderer {
       });
       const source = fbx.getObjectByName('pooballl_grp') ?? fbx;
       const handled = new Set<number>();
-      
+
       source.traverse((child) => {
         if (!(child instanceof THREE.Mesh)) return;
         if (!child.name.startsWith('poolball')) return;
         const ballId = ballNameMap[child.name];
         if (ballId === undefined || handled.has(ballId)) return;
         handled.add(ballId);
-        
+
         const geometry = child.geometry.clone();
         geometry.computeBoundingBox();
         geometry.computeBoundingSphere();
@@ -673,7 +673,7 @@ export class Renderer3D extends BaseRenderer {
         const targetRadius = CONFIG.BALL_BASE_RADIUS ?? CONFIG.BALL_RADIUS;
         const scale = targetRadius / currentRadius;
         geometry.scale(scale, scale, scale);
-        
+
         const texture = textureCache.get(ballId);
 
         const materialParams: THREE.MeshStandardMaterialParameters = {
@@ -686,21 +686,21 @@ export class Renderer3D extends BaseRenderer {
         }
 
         const material = new THREE.MeshStandardMaterial(materialParams);
-        
+
         this.ballModels.set(ballId, { geometry, material });
       });
-      
+
       const geometryTime = performance.now() - geometryStart;
       console.log(`  ⏱️ Geometry processing: ${geometryTime.toFixed(0)}ms`);
-      
+
       this.ballModelsLoaded = this.ballModels.size > 0;
       if (this.ballModelsLoaded) {
         const elapsed = performance.now() - startTime;
         const seconds = (elapsed / 1000).toFixed(1);
         console.info(`✓ Loaded ${this.ballModels.size} FBX ball models in ${seconds}s (${elapsed.toFixed(0)}ms)`);
         console.info(`📊 Breakdown:`);
-        console.info(`  - FBX + Textures: ${fbxTime.toFixed(0)}ms (${(fbxTime/elapsed*100).toFixed(1)}%)`);
-        console.info(`  - Geometry processing: ${geometryTime.toFixed(0)}ms (${(geometryTime/elapsed*100).toFixed(1)}%)`);
+        console.info(`  - FBX + Textures: ${fbxTime.toFixed(0)}ms (${(fbxTime / elapsed * 100).toFixed(1)}%)`);
+        console.info(`  - Geometry processing: ${geometryTime.toFixed(0)}ms (${(geometryTime / elapsed * 100).toFixed(1)}%)`);
         if (fbxTime < 500) {
           console.info(`  ✨ Cache working! Load time reduced by ~75%`);
         } else {
@@ -714,7 +714,7 @@ export class Renderer3D extends BaseRenderer {
       this.ballModelsLoaded = false;
     }
   }
-  
+
   replaceBallsWithModels() {
     this.ballMeshes.forEach((mesh) => {
       this.scene.remove(mesh);
@@ -741,7 +741,7 @@ export class Renderer3D extends BaseRenderer {
     });
     this.ballMeshes.clear();
   }
-  
+
   hideLoadingScreen() {
     const loadingScreen = document.getElementById('loading-screen');
     if (loadingScreen) {
@@ -751,7 +751,7 @@ export class Renderer3D extends BaseRenderer {
       }, 500);
     }
   }
-  
+
   resize() {
     if (this._isResizing) return;
     this._isResizing = true;
@@ -762,7 +762,7 @@ export class Renderer3D extends BaseRenderer {
     const containerRect = container.getBoundingClientRect();
     const workspace = document.getElementById('workspace') as HTMLElement | null;
     const workspaceRect = workspace?.getBoundingClientRect() ?? measurementRect;
-    
+
     const dockInfo = (el: HTMLElement | null) => {
       if (!el) {
         return { visible: false as const, rect: null as DOMRect | null };
@@ -777,27 +777,27 @@ export class Renderer3D extends BaseRenderer {
         style.opacity !== '0';
       return { visible: visible as const, rect };
     };
-    
+
     const leftDockData = dockInfo(document.getElementById('dock-left') as HTMLElement | null);
     const rightDockData = dockInfo(document.getElementById('dock-right') as HTMLElement | null);
-    
+
     const leftBoundary = leftDockData.visible && leftDockData.rect ? leftDockData.rect.right : workspaceRect.left;
     const rightBoundary = rightDockData.visible && rightDockData.rect ? rightDockData.rect.left : workspaceRect.right;
     const horizontalSpace = Math.max(1, Math.floor(rightBoundary - leftBoundary));
     const verticalSpace = Math.max(1, Math.floor(measurementRect.height));
-    
+
     // External margin around canvas
     const externalMargin = 40;
-    
+
     // Desired world padding around table (inches). Keep in WORLD units to avoid divide-by-scale issues.
     // Note: We use a reasonable padding value, not the full cue length - it's okay if the cue extends off-screen
     const visualPadding = CONFIG.CUE_VISUAL_PADDING_IN ?? 20; // Reasonable visual padding
     const padWorldIn = Math.max(CONFIG.MIN_WORLD_PADDING_IN ?? 6, visualPadding);
-    
+
     // Calculate available space for canvas after external margins
     const availableWidth = Math.max(1, horizontalSpace - externalMargin * 2);
     const availableHeight = Math.max(1, verticalSpace - externalMargin * 2);
-    
+
     const scaleMultiplier = CONFIG.CANVAS_SCALE_MULTIPLIER ?? 1;
     const adjustedWidth = availableWidth; // do not pre-divide by multiplier; apply only once at the end
     const adjustedHeight = availableHeight;
@@ -808,26 +808,26 @@ export class Renderer3D extends BaseRenderer {
     const scaleY = adjustedHeight / (CONFIG.TABLE_HEIGHT + padWorldIn * 2);
     const baseScale = Math.max(0.01, Math.min(scaleX, scaleY));
     this.scale = Math.max(0.01, baseScale * scaleMultiplier);
-    
+
     // Set canvas size
     const width = Math.max(1, (CONFIG.TABLE_WIDTH + padWorldIn * 2) * this.scale);
     const height = Math.max(1, (CONFIG.TABLE_HEIGHT + padWorldIn * 2) * this.scale);
-    
+
     this.renderer.setSize(width, height);
     this.canvas.style.width = `${width}px`;
     this.canvas.style.height = `${height}px`;
-    
+
     const globalLeft = leftBoundary + (horizontalSpace - width) / 2;
     const globalTop = measurementRect.top + (verticalSpace - height) / 2;
-    
+
     // Translate offsets into the canvas container's coordinate space (accounts for differences between elements).
     const relativeOffsetX = globalLeft - containerRect.left;
     const relativeOffsetY = globalTop - containerRect.top;
-    
+
     // Store offsets for use by other canvases
     this.canvasOffsetX = relativeOffsetX;
     this.canvasOffsetY = relativeOffsetY;
-    
+
     const applyPosition = (el: HTMLElement | null) => {
       if (!el) return;
       el.style.left = `${relativeOffsetX}px`;
@@ -842,7 +842,7 @@ export class Renderer3D extends BaseRenderer {
     this.uiCanvas.style.width = `${width}px`;
     this.uiCanvas.style.height = `${height}px`;
     applyPosition(this.uiCanvas);
-    
+
     if (this.referenceOverlay) {
       this.referenceOverlay.style.width = `${width}px`;
       this.referenceOverlay.style.height = `${height}px`;
@@ -852,9 +852,9 @@ export class Renderer3D extends BaseRenderer {
     try {
       const detail = { width, height, scale: this.scale, offsetX: this.canvasOffsetX, offsetY: this.canvasOffsetY };
       window.dispatchEvent(new CustomEvent('renderer:resized', { detail }));
-    } catch {}
+    } catch { }
     this.updateCanvasZIndex();
-    
+
     // Update orthographic camera to exactly cover table + world padding
     const halfWorldW = (CONFIG.TABLE_WIDTH / 2) + padWorldIn;
     const halfWorldH = (CONFIG.TABLE_HEIGHT / 2) + padWorldIn;
@@ -1022,7 +1022,7 @@ export class Renderer3D extends BaseRenderer {
       pocketShadowIntensity: this.pocketShadowMaterial?.opacity ?? CONFIG.POCKET_SHADOW_INTENSITY ?? 0,
     };
   }
-  
+
   initializeTable() {
     const tableGeometry = getTableGeometry();
     this.refreshDerivedGeometry();
@@ -1285,18 +1285,18 @@ export class Renderer3D extends BaseRenderer {
     canvas.width = 1;
     canvas.height = 64;
     const ctx = canvas.getContext('2d')!;
-    
+
     const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
     gradient.addColorStop(0, 'rgba(0, 0, 0, 0.6)'); // Dark at bottom (inner edge)
     gradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.3)');
     gradient.addColorStop(1, 'rgba(0, 0, 0, 0)'); // Fade to transparent at top (outer edge)
-    
+
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
+
     const texture = new THREE.CanvasTexture(canvas);
     texture.needsUpdate = true;
-    
+
     return new THREE.MeshBasicMaterial({
       map: texture,
       transparent: true,
@@ -1376,7 +1376,7 @@ export class Renderer3D extends BaseRenderer {
     if (!ctx) {
       throw new Error('Renderer3D: rail highlight texture context missing');
     }
-    
+
     // Enhanced gradient with more prominent highlight (similar to pocket highlights)
     const gradient = ctx.createLinearGradient(0, 0, 0, sizeY);
     gradient.addColorStop(0, 'rgba(255, 255, 255, 1.0)');    // Bright white at top
@@ -2062,7 +2062,7 @@ export class Renderer3D extends BaseRenderer {
     // Recompute color to keep wider spreads softer
     this.updateRailShadowMaterialFromState();
   }
-  
+
   initializePockets(pockets: PocketDef[]) {
     this.lastPocketDefs = pockets.map(p => ({ ...p }));
     const sideMaterial = this.getPocketSideMaterial();
@@ -2263,7 +2263,7 @@ export class Renderer3D extends BaseRenderer {
 
       this.addPocketHighlight(pocket, visualRadius, angleRad, pocketY);
     });
-    
+
     this.initializeRailFillMesh();
     this.initializePocketCaps(pockets);
     this.applyPocketsVisibility(this.layerVisibility.showPockets);
@@ -2355,32 +2355,32 @@ export class Renderer3D extends BaseRenderer {
     // Offset each point outward along its segment normals to account for rail thickness
     const result: Vec2[] = [];
     const n = points.length;
-    
+
     for (let i = 0; i < n; i++) {
       const curr = points[i];
       const prev = points[(i - 1 + n) % n];
       const next = points[(i + 1) % n];
-      
+
       // Calculate normals from adjacent segments (pointing outward from center)
       const dx1 = curr.x - prev.x;
       const dy1 = curr.y - prev.y;
       const len1 = Math.sqrt(dx1 * dx1 + dy1 * dy1) || 1;
       const nx1 = -dy1 / len1; // Perpendicular
       const ny1 = dx1 / len1;
-      
+
       const dx2 = next.x - curr.x;
       const dy2 = next.y - curr.y;
       const len2 = Math.sqrt(dx2 * dx2 + dy2 * dy2) || 1;
       const nx2 = -dy2 / len2;
       const ny2 = dx2 / len2;
-      
+
       // Average the normals and ensure they point outward (away from center)
       let avgNx = (nx1 + nx2) / 2;
       let avgNy = (ny1 + ny2) / 2;
       const avgLen = Math.sqrt(avgNx * avgNx + avgNy * avgNy) || 1;
       avgNx /= avgLen;
       avgNy /= avgLen;
-      
+
       // Check if normal points toward center; if so, flip it
       const toCenterX = -curr.x;
       const toCenterY = -curr.y;
@@ -2389,7 +2389,7 @@ export class Renderer3D extends BaseRenderer {
         avgNx = -avgNx;
         avgNy = -avgNy;
       }
-      
+
       // Offset point outward
       result.push({
         x: curr.x + avgNx * offset,
@@ -2543,7 +2543,7 @@ export class Renderer3D extends BaseRenderer {
     this.pocketGradientTexture.needsUpdate = true;
     return this.pocketGradientTexture;
   }
-  
+
   createBall(ball: Ball): THREE.Object3D {
     const baseRadius = CONFIG.BALL_BASE_RADIUS ?? CONFIG.BALL_RADIUS / Math.max(0.001, CONFIG.BALL_SCALE ?? 1);
     if (this.ballModelsLoaded) {
@@ -2552,14 +2552,14 @@ export class Renderer3D extends BaseRenderer {
         const ballMesh = new THREE.Mesh(template.geometry, template.material);
         ballMesh.castShadow = true;
         ballMesh.receiveShadow = false;
-        
+
         if (ball.id === BALL_CUE) {
           this.addCueBallMeasles(ballMesh, baseRadius);
         }
 
         // Add black glow outline
         this.addBallGlow(ballMesh, baseRadius);
-        
+
         this.scene.add(ballMesh);
         this.applyBallRenderOrder(ballMesh);
         this.enforceRenderOrderControl(ballMesh);
@@ -2572,27 +2572,27 @@ export class Renderer3D extends BaseRenderer {
 
     // Fallback to procedural balls if FBX not loaded or template missing
     const geometry = new THREE.SphereGeometry(baseRadius, 32, 32);
-    
+
     // Create ball material
-    const color = ball.id === BALL_CUE 
+    const color = ball.id === BALL_CUE
       ? new THREE.Color(CONFIG.CUE_BALL_COLOR)
       : new THREE.Color(CONFIG.BALL_COLORS[ball.id - 1]);
-    
+
     const material = new THREE.MeshStandardMaterial({
       color,
       roughness: 0.3,
       metalness: 0.4
     });
-    
+
     const mesh = new THREE.Mesh(geometry, material);
     mesh.castShadow = true;
     mesh.receiveShadow = false;
-    
+
     // Add number texture for numbered balls
     if (ball.id !== BALL_CUE) {
       this.addBallNumber(mesh, ball.id);
     }
-    
+
     // Add stripe for striped balls
     if (ball.id >= 9 && ball.id <= 15) {
       this.addBallStripe(mesh, baseRadius);
@@ -2604,17 +2604,17 @@ export class Renderer3D extends BaseRenderer {
 
     // Add black glow outline
     this.addBallGlow(mesh, baseRadius);
-    
+
     this.scene.add(mesh);
     this.applyBallRenderOrder(mesh);
     this.enforceRenderOrderControl(mesh);
     mesh.visible = this.layerVisibility.showBalls;
     mesh.scale.setScalar(this.ballScale);
     this.ballMeshes.set(ball.id, mesh);
-    
+
     return mesh;
   }
-  
+
   private addCueBallMeasles(mesh: THREE.Mesh, radius: number) {
     const measles = CONFIG.CUE_BALL_MEASLES ?? [];
     const measleRatio = CONFIG.CUE_BALL_MEASLE_RADIUS_RATIO ?? 0;
@@ -2761,57 +2761,57 @@ export class Renderer3D extends BaseRenderer {
       }
     });
   }
-  
+
   addBallNumber(mesh: THREE.Mesh, ballId: number) {
     // Create canvas for number texture
     const canvas = document.createElement('canvas');
     canvas.width = 256;
     canvas.height = 256;
     const ctx = canvas.getContext('2d')!;
-    
+
     // Draw white circle background for striped balls
     if (ballId >= 9 && ballId <= 15) {
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
       ctx.arc(128, 128, 80, 0, Math.PI * 2);
       ctx.fill();
-      
+
       // Add subtle shadow/border
       ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
       ctx.lineWidth = 2;
       ctx.stroke();
     }
-    
+
     // Draw number with better styling
     ctx.fillStyle = ballId >= 9 && ballId <= 15 ? '#000000' : '#ffffff';
     ctx.font = 'bold 120px Arial';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    
+
     // Add text shadow for depth
     ctx.shadowColor = ballId >= 9 && ballId <= 15 ? 'rgba(0, 0, 0, 0.3)' : 'rgba(0, 0, 0, 0.8)';
     ctx.shadowBlur = 4;
     ctx.shadowOffsetX = 2;
     ctx.shadowOffsetY = 2;
-    
+
     ctx.fillText(ballId.toString(), 128, 128);
-    
+
     // Create texture from canvas
     const texture = new THREE.CanvasTexture(canvas);
     texture.needsUpdate = true;
-    
+
     // Create sprite for the number (always faces camera)
-    const spriteMaterial = new THREE.SpriteMaterial({ 
+    const spriteMaterial = new THREE.SpriteMaterial({
       map: texture,
       transparent: true
     });
     const sprite = new THREE.Sprite(spriteMaterial);
     sprite.scale.set(2, 2, 1); // Larger number
     sprite.position.set(0, 0, 0.01); // Slightly above ball surface
-    
+
     mesh.add(sprite);
   }
-  
+
   addBallStripe(mesh: THREE.Mesh, radius: number) {
     // Create white stripe band around the ball (flat horizontal band)
     // Use a thin cylinder that wraps around the equator
@@ -2832,10 +2832,10 @@ export class Renderer3D extends BaseRenderer {
     });
     const stripe = new THREE.Mesh(stripeGeometry, stripeMaterial);
     stripe.rotation.x = Math.PI / 2; // Rotate to be horizontal
-    
+
     mesh.add(stripe);
   }
-  
+
   render(world: PhysicsWorld, alpha: number) {
     // Ensure stencil is applied after any async/late mesh creation
     if (this.frameStencilMesh && !this.stencilAppliedOnce) {
@@ -2849,7 +2849,7 @@ export class Renderer3D extends BaseRenderer {
 
     const shakeOffset = this.computeShakeOffset();
     this.applyShakeTransform(shakeOffset.x, shakeOffset.y);
-    
+
     // Update ball positions and rotations
     world.balls.forEach((ball) => {
       if (ball.pocketed) {
@@ -2859,16 +2859,16 @@ export class Renderer3D extends BaseRenderer {
         }
         return;
       }
-      
+
       let mesh = this.ballMeshes.get(ball.id);
       if (!mesh) {
         mesh = this.createBall(ball);
       }
-      
+
       // Interpolate position
       const x = ball.prevX + (ball.x - ball.prevX) * alpha;
       const y = ball.prevY + (ball.y - ball.prevY) * alpha;
-      
+
       const shouldRenderBall = this.layerVisibility.showBalls;
       mesh.visible = shouldRenderBall;
       if (!shouldRenderBall) {
@@ -2878,10 +2878,10 @@ export class Renderer3D extends BaseRenderer {
       }
 
       mesh.position.set(x, y, CONFIG.BALL_RADIUS);
-      
+
       mesh.quaternion.set(ball.rotX, ball.rotY, ball.rotZ, ball.rotW);
     });
-    
+
     // Render the scene
     this.renderer.render(this.scene, this.camera);
 
@@ -2930,21 +2930,21 @@ export class Renderer3D extends BaseRenderer {
       scene.add(key);
 
       const fill = new THREE.DirectionalLight(0xdfe8ff, 1.15);
-      fill.position.set(-2.4, -1.8, 3.2);
+      fill.position.set(-5.5, -2.5, 3.2);
       scene.add(fill);
 
       // Reduced rim intensity and moved to lower-left to shift highlight off the number decal
       const rim = new THREE.PointLight(0xffffff, 0.45);
-      rim.position.set(-2.5, -1.5, 4.0);
+      rim.position.set(-6.0, -3.0, 4.0);
       scene.add(rim);
 
       // Softened top light to reduce direct washout
       const top = new THREE.DirectionalLight(0xffffff, 0.7);
-      top.position.set(0.0, 0.5, 5.0);
+      top.position.set(0.0, 3.0, 3.0);
       scene.add(top);
     };
 
-    const ids = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15];
+    const ids = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
     const result = new Map<number, string>();
 
     const deg = THREE.MathUtils.degToRad;
@@ -2978,7 +2978,7 @@ export class Renderer3D extends BaseRenderer {
         const scale = targetRadius / Math.max(1e-6, radius);
         geom.scale(scale, scale, scale);
         mat = template.material.clone();
-        mat.roughness = Math.max(0.08, Math.min(0.4, mat.roughness ?? 0.3));
+        mat.roughness = Math.max(0.14, Math.min(0.4, mat.roughness ?? 0.3));
         mat.metalness = Math.min(0.65, Math.max(0.25, mat.metalness ?? 0.35));
         mat.envMapIntensity = 1.2;
       } else {
@@ -3256,19 +3256,19 @@ export class Renderer3D extends BaseRenderer {
     wallColor?: string;
   }) {
     if (colors.grooveColor) {
-      try { this.grooveColor = new THREE.Color(colors.grooveColor); } catch {}
+      try { this.grooveColor = new THREE.Color(colors.grooveColor); } catch { }
       this.pocketGrooveMeshes.forEach((m) => {
         const mat = m.material as THREE.MeshBasicMaterial; mat.color = this.grooveColor.clone(); mat.needsUpdate = true;
       });
     }
     if (colors.rimColor) {
-      try { this.rimColor = new THREE.Color(colors.rimColor); } catch {}
+      try { this.rimColor = new THREE.Color(colors.rimColor); } catch { }
       this.pocketRimMeshes.forEach((m) => {
         const mat = m.material as THREE.MeshBasicMaterial; mat.color = this.rimColor.clone(); mat.needsUpdate = true;
       });
     }
     if (colors.bottomColor) {
-      try { this.pocketBottomColor = new THREE.Color(colors.bottomColor); } catch {}
+      try { this.pocketBottomColor = new THREE.Color(colors.bottomColor); } catch { }
       this.pocketBottomMeshes.forEach((m) => {
         const mat = m.material as THREE.MeshBasicMaterial; mat.color.copy(this.pocketBottomColor); mat.needsUpdate = true;
       });
@@ -3286,7 +3286,7 @@ export class Renderer3D extends BaseRenderer {
       });
     }
     if (colors.wallColor) {
-      try { this.pocketWallColor = new THREE.Color(colors.wallColor); } catch {}
+      try { this.pocketWallColor = new THREE.Color(colors.wallColor); } catch { }
       this.pocketMeshes.forEach((m) => {
         const mat = m.material as THREE.MeshBasicMaterial;
         mat.color.copy(this.pocketWallColor);
@@ -3623,47 +3623,47 @@ export class Renderer3D extends BaseRenderer {
 
     ctx.restore();
   }
-  
+
   // Helper to convert world coordinates to screen coordinates
   worldToScreen(worldX: number, worldY: number): { x: number; y: number } {
     // Project world coordinates through the camera
     const vector = new THREE.Vector3(worldX, worldY, 0);
     vector.project(this.camera);
-    
+
     // Convert from NDC (-1 to 1) to screen coordinates
     const screenX = (vector.x + 1) * this.uiCanvas.width / 2;
     const screenY = (-vector.y + 1) * this.uiCanvas.height / 2;
-    
+
     return { x: screenX, y: screenY };
   }
-  
+
   // Helper to clip a line at table boundaries (inside the rails)
   clipLineAtRails(start: { x: number; y: number }, end: { x: number; y: number }): { x: number; y: number } {
     // Use the actual rail boundaries from geometry
     const geom2 = getTableGeometry();
     const halfWidth = geom2.playWidthIn / 2;
     const halfHeight = geom2.playHeightIn / 2;
-    
+
     // Add a small margin to keep lines inside the play area
     const margin = CONFIG.BALL_RADIUS;
     const maxX = halfWidth - margin;
     const maxY = halfHeight - margin;
     const minX = -maxX;
     const minY = -maxY;
-    
+
     // Calculate direction
     const dx = end.x - start.x;
     const dy = end.y - start.y;
     const len = Math.sqrt(dx * dx + dy * dy);
-    
+
     if (len < 0.001) return end;
-    
+
     const dirX = dx / len;
     const dirY = dy / len;
-    
+
     // Find intersection with table boundaries
     let minT = len; // Start with full length
-    
+
     // Check each boundary
     if (dirX > 0.001) {
       const t = (maxX - start.x) / dirX;
@@ -3672,7 +3672,7 @@ export class Renderer3D extends BaseRenderer {
       const t = (minX - start.x) / dirX;
       if (t > 0 && t < minT) minT = t;
     }
-    
+
     if (dirY > 0.001) {
       const t = (maxY - start.y) / dirY;
       if (t > 0 && t < minT) minT = t;
@@ -3680,7 +3680,7 @@ export class Renderer3D extends BaseRenderer {
       const t = (minY - start.y) / dirY;
       if (t > 0 && t < minT) minT = t;
     }
-    
+
     // Return clipped endpoint
     return {
       x: start.x + dirX * minT,
@@ -3694,7 +3694,7 @@ export class Renderer3D extends BaseRenderer {
     const end = path[path.length - 1];
     return classifyAxisAlignmentFromVector(end.x - start.x, end.y - start.y);
   }
-  
+
   // Compatibility methods for existing code
   drawCueAndPowerBar(ball: Ball, angle: number, power: number, showGhost: boolean, showPowerBar: boolean, isAimMode: boolean, prediction?: PredictionResult, microDialState?: MicroDialRenderState) {
     // Remove old 3D elements if they exist
@@ -3710,7 +3710,7 @@ export class Renderer3D extends BaseRenderer {
       this.scene.remove(this.ghostBall);
       this.ghostBall = null;
     }
-    
+
     // Draw cue stick in 2D (clamped to play area so it doesn't clip off-canvas)
     const cueLength = CONFIG.CUE_LENGTH_IN ?? 20;
     // As power increases, cue pulls back away from ball (not toward it)
@@ -3829,7 +3829,7 @@ export class Renderer3D extends BaseRenderer {
     this.uiCtx.moveTo(tipStartScreen.x, tipStartScreen.y);
     this.uiCtx.lineTo(tipEndScreen.x, tipEndScreen.y);
     this.uiCtx.stroke();
-    
+
     // Draw aim line in 2D - clipped to contact point or rails
     let aimEndX = ball.x + Math.cos(angle) * CONFIG.AIM_LINE_LENGTH;
     let aimEndY = ball.y + Math.sin(angle) * CONFIG.AIM_LINE_LENGTH;
@@ -3853,15 +3853,15 @@ export class Renderer3D extends BaseRenderer {
       aimEndX = clipped.x;
       aimEndY = clipped.y;
     }
-    
+
     const aimEnd = this.worldToScreen(aimEndX, aimEndY);
-    
+
     // Start aim line at configured distance from the edge of the cue ball
     const offsetDistance = ball.radius + CONFIG.AIM_LINE_OFFSET;
     const aimStartX = ball.x + Math.cos(angle) * offsetDistance;
     const aimStartY = ball.y + Math.sin(angle) * offsetDistance;
     const aimStart = this.worldToScreen(aimStartX, aimStartY);
-    
+
     if (showGhost) {
       // Aim assist enabled: solid white with black glow
       // Draw black glow (outer)
@@ -3872,7 +3872,7 @@ export class Renderer3D extends BaseRenderer {
       this.uiCtx.moveTo(aimStart.x, aimStart.y);
       this.uiCtx.lineTo(aimEnd.x, aimEnd.y);
       this.uiCtx.stroke();
-      
+
       // Draw solid white line (inner)
       this.uiCtx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
       this.uiCtx.lineWidth = 3;
@@ -3892,7 +3892,7 @@ export class Renderer3D extends BaseRenderer {
       this.uiCtx.stroke();
       this.uiCtx.setLineDash([]);
     }
-    
+
     // Draw ghost ball in 2D if prediction exists
     if (showGhost && prediction && prediction.type === 'ball' && prediction.hitBall) {
       // Ghost ball center with configurable offset from contact point
@@ -3904,7 +3904,7 @@ export class Renderer3D extends BaseRenderer {
       const ghostX = prediction.contactPoint.x + Math.cos(offsetDir) * CONFIG.GHOST_BALL_OFFSET;
       const ghostY = prediction.contactPoint.y + Math.sin(offsetDir) * CONFIG.GHOST_BALL_OFFSET;
       const ghostScreen = this.worldToScreen(ghostX, ghostY);
-      
+
       // Draw ghost ball with black glow + white outline (matching path styling)
       // Draw black glow (outer)
       this.uiCtx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
@@ -3927,7 +3927,7 @@ export class Renderer3D extends BaseRenderer {
         console.warn('Renderer3D: skipping ghost ball draw due to non-positive radius', ghostRadius, this.scale, this.ballScale);
       }
     }
-    
+
     // Draw power bar in 2D
     if (showPowerBar) {
       this.drawPowerBar2D(power, isAimMode, microDialState);
@@ -3938,7 +3938,7 @@ export class Renderer3D extends BaseRenderer {
       this.drawAimInfo(ball, angle, power, prediction);
     }
   }
-  
+
   drawPowerBar2D(power: number, isAimMode: boolean, microDialState?: MicroDialRenderState) {
     const { width: barWidth, height: barHeight } = this.getSidebarSize();
     const rect = this.getSideBarRect('right', barWidth, barHeight);
@@ -3966,7 +3966,7 @@ export class Renderer3D extends BaseRenderer {
 
     // Cue overlay: clipped so the shaft slides downward as power increases
     const cueWidth = Math.max(3, innerWidth * 0.5);
-    const cueLength = innerHeight * 0.92;
+    const cueLength = innerHeight * 3.0;
     const cueX = innerX + (innerWidth - cueWidth) / 2;
     const ferruleHeight = Math.max(4, cueWidth * 0.3);
     const tipHeight = Math.max(4, cueWidth * 0.25);
@@ -4240,18 +4240,18 @@ export class Renderer3D extends BaseRenderer {
       this.uiCtx.fillText(metric.value, centerX, centerY + 10);
     });
   }
-  
+
   drawPrediction(_prediction: PredictionResult) {
     // Prediction is drawn as part of drawTrajectoryLines
   }
-  
+
   drawTrajectoryLines(prediction: PredictionResult, cueBallPos: { x: number; y: number }, shotDirection: { x: number; y: number }, predictor: any) {
     // Clear old 3D trajectory lines
     this.trajectoryLines.forEach(line => this.scene.remove(line));
     this.trajectoryLines = [];
-    
+
     if (prediction.type === 'none') return;
-    
+
     // Draw line from cue ball to contact point (for all collision types)
     // Start cue path visualization at the ball surface (matches cue render)
     const shotDirLen = Math.hypot(shotDirection.x, shotDirection.y) || 1;
@@ -4264,7 +4264,7 @@ export class Renderer3D extends BaseRenderer {
     };
     const cueBallScreen = this.worldToScreen(cueBallSurface.x, cueBallSurface.y);
     const contactScreen = this.worldToScreen(prediction.contactPoint.x, prediction.contactPoint.y);
-    
+
     this.uiCtx.strokeStyle = 'rgba(0, 255, 255, 0.4)';
     this.uiCtx.lineWidth = 1;
     this.uiCtx.setLineDash([5, 5]);
@@ -4273,7 +4273,7 @@ export class Renderer3D extends BaseRenderer {
     this.uiCtx.lineTo(contactScreen.x, contactScreen.y);
     this.uiCtx.stroke();
     this.uiCtx.setLineDash([]);
-    
+
     // Get trajectory predictions
     const trajectories = predictor.predictTrajectories(
       prediction,
@@ -4281,29 +4281,29 @@ export class Renderer3D extends BaseRenderer {
       shotDirection,
       50 // Line length in inches (much longer for visibility)
     );
-    
+
     // Draw object ball trajectory (yellow dashed line with arrowhead)
     if (trajectories.objectBallPath) {
       // Start from contact point (ghost ball center), not object ball position
       const start = { x: prediction.contactPoint.x, y: prediction.contactPoint.y };
-      
+
       // Calculate direction from trajectory data
       const dirX = trajectories.objectBallPath.end.x - trajectories.objectBallPath.start.x;
       const dirY = trajectories.objectBallPath.end.y - trajectories.objectBallPath.start.y;
       const length = Math.sqrt(dirX * dirX + dirY * dirY);
-      
+
       if (length > 0.0001) {
         const normX = dirX / length;
         const normY = dirY / length;
         const lineLength = 50; // Match the length passed to predictTrajectories
         const endRaw = { x: start.x + normX * lineLength, y: start.y + normY * lineLength };
-        
+
         // Clip the line at table boundaries
         const end = this.clipLineAtRails(start, endRaw);
-        
+
         const startScreen = this.worldToScreen(start.x, start.y);
         const endScreen = this.worldToScreen(end.x, end.y);
-        
+
         const orientation = classifyAxisAlignmentFromVector(normX, normY);
         const palette = getAxisPalette(orientation);
 
@@ -4316,7 +4316,7 @@ export class Renderer3D extends BaseRenderer {
         this.uiCtx.lineTo(endScreen.x, endScreen.y);
         this.uiCtx.stroke();
         this.uiCtx.setLineDash([]);
-        
+
         // Draw arrowhead at end
         const dx = endScreen.x - startScreen.x;
         const dy = endScreen.y - startScreen.y;
@@ -4324,7 +4324,7 @@ export class Renderer3D extends BaseRenderer {
         if (len > 0) {
           const arrowSize = 10;
           const angle = Math.atan2(dy, dx);
-          
+
           this.uiCtx.fillStyle = palette.debugFill;
           this.uiCtx.beginPath();
           this.uiCtx.moveTo(endScreen.x, endScreen.y);
@@ -4341,29 +4341,29 @@ export class Renderer3D extends BaseRenderer {
         }
       }
     }
-    
+
     // Draw cue ball trajectory (white dashed line with arrowhead)
     if (trajectories.cueBallPath) {
       // Start from contact point (ghost ball center)
       const start = { x: prediction.contactPoint.x, y: prediction.contactPoint.y };
-      
+
       // Calculate direction from trajectory data
       const dirX = trajectories.cueBallPath.end.x - trajectories.cueBallPath.start.x;
       const dirY = trajectories.cueBallPath.end.y - trajectories.cueBallPath.start.y;
       const length = Math.sqrt(dirX * dirX + dirY * dirY);
-      
+
       if (length > 0.0001) {
         const normX = dirX / length;
         const normY = dirY / length;
         const lineLength = 50; // Match the length passed to predictTrajectories
         const endRaw = { x: start.x + normX * lineLength, y: start.y + normY * lineLength };
-        
+
         // Clip the line at table boundaries
         const end = this.clipLineAtRails(start, endRaw);
-        
+
         const startScreen = this.worldToScreen(start.x, start.y);
         const endScreen = this.worldToScreen(end.x, end.y);
-        
+
         // Draw line
         this.uiCtx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
         this.uiCtx.lineWidth = 1;
@@ -4373,7 +4373,7 @@ export class Renderer3D extends BaseRenderer {
         this.uiCtx.lineTo(endScreen.x, endScreen.y);
         this.uiCtx.stroke();
         this.uiCtx.setLineDash([]);
-        
+
         // Draw arrowhead at end
         const dx = endScreen.x - startScreen.x;
         const dy = endScreen.y - startScreen.y;
@@ -4381,7 +4381,7 @@ export class Renderer3D extends BaseRenderer {
         if (len > 0) {
           const arrowSize = 10;
           const angle = Math.atan2(dy, dx);
-          
+
           this.uiCtx.fillStyle = 'rgba(255, 255, 255, 0.7)';
           this.uiCtx.beginPath();
           this.uiCtx.moveTo(endScreen.x, endScreen.y);
@@ -4399,7 +4399,7 @@ export class Renderer3D extends BaseRenderer {
       }
     }
   }
-  
+
   /**
    * Draw trajectories from physics simulation
    * More accurate than ray-cast prediction, especially for extreme angles
@@ -4411,11 +4411,11 @@ export class Renderer3D extends BaseRenderer {
     // Clear old 3D trajectory lines
     this.trajectoryLines.forEach(line => this.scene.remove(line));
     this.trajectoryLines = [];
-    
+
     if (!shotPaths.firstContact || shotPaths.cuePath.length < 2) return;
-    
+
     const firstContactBallId = shotPaths.firstContact?.hitBall?.id;
-    
+
     // Draw cue ball path up to first contact
     if (debugMode) {
       // Debug mode: cyan dashed line
@@ -4426,20 +4426,20 @@ export class Renderer3D extends BaseRenderer {
       // Normal mode: don't draw cue path before contact
       // (the aim line already shows this)
     }
-    
+
     if (debugMode) {
       this.uiCtx.beginPath();
-      
+
       for (let i = 0; i < shotPaths.cuePath.length; i++) {
         const point = shotPaths.cuePath[i];
         const screen = this.worldToScreen(point.x, point.y);
-        
+
         if (i === 0) {
           this.uiCtx.moveTo(screen.x, screen.y);
         } else {
           this.uiCtx.lineTo(screen.x, screen.y);
         }
-        
+
         // Stop at first contact
         if (shotPaths.firstContact && i > 0) {
           const prevPoint = shotPaths.cuePath[i - 1];
@@ -4448,73 +4448,73 @@ export class Renderer3D extends BaseRenderer {
             shotPaths.firstContact.contactPoint.y - prevPoint.y
           );
           const segmentDist = Math.hypot(point.x - prevPoint.x, point.y - prevPoint.y);
-          
+
           if (contactDist <= segmentDist) {
             break;
           }
         }
       }
-      
+
       this.uiCtx.stroke();
       this.uiCtx.setLineDash([]);
     }
-    
+
     // Helper functions for solid white + black glow styling
     const drawPathWithGlow = (path: Vec2[], glowColor: string, lineColor: string, lineWidth: number) => {
       if (path.length < 2) return;
-      
+
       // Draw black glow (outer)
       this.uiCtx.strokeStyle = glowColor;
       this.uiCtx.lineWidth = lineWidth + 4;
       this.uiCtx.lineCap = 'round';
       this.uiCtx.lineJoin = 'round';
       this.uiCtx.beginPath();
-      
+
       for (let i = 0; i < path.length; i++) {
         const point = path[i];
         const screen = this.worldToScreen(point.x, point.y);
-        
+
         if (i === 0) {
           this.uiCtx.moveTo(screen.x, screen.y);
         } else {
           this.uiCtx.lineTo(screen.x, screen.y);
         }
       }
-      
+
       this.uiCtx.stroke();
-      
+
       // Draw solid line (inner)
       this.uiCtx.strokeStyle = lineColor;
       this.uiCtx.lineWidth = lineWidth;
       this.uiCtx.lineCap = 'round';
       this.uiCtx.lineJoin = 'round';
       this.uiCtx.beginPath();
-      
+
       for (let i = 0; i < path.length; i++) {
         const point = path[i];
         const screen = this.worldToScreen(point.x, point.y);
-        
+
         if (i === 0) {
           this.uiCtx.moveTo(screen.x, screen.y);
         } else {
           this.uiCtx.lineTo(screen.x, screen.y);
         }
       }
-      
+
       this.uiCtx.stroke();
-      
+
       return path;
     };
-    
+
     const drawArrowWithGlow = (endPoint: Vec2, prevPoint: Vec2, glowColor: string, fillColor: string, arrowSize: number) => {
       const endScreen = this.worldToScreen(endPoint.x, endPoint.y);
       const dx = endPoint.x - prevPoint.x;
       const dy = endPoint.y - prevPoint.y;
       const len = Math.sqrt(dx * dx + dy * dy);
-      
+
       if (len > 0) {
         const angle = Math.atan2(dy, dx);
-        
+
         // Draw black glow for arrow
         this.uiCtx.fillStyle = glowColor;
         this.uiCtx.beginPath();
@@ -4529,7 +4529,7 @@ export class Renderer3D extends BaseRenderer {
         );
         this.uiCtx.closePath();
         this.uiCtx.fill();
-        
+
         // Draw white arrow fill
         this.uiCtx.fillStyle = fillColor;
         this.uiCtx.beginPath();
@@ -4546,7 +4546,7 @@ export class Renderer3D extends BaseRenderer {
         this.uiCtx.fill();
       }
     };
-    
+
     // Calculate shot complexity for adaptive path length
     // Complexity is based on cut angle - straighter shots = simpler
     let pathLengthMultiplier = 1.0;
@@ -4561,25 +4561,25 @@ export class Renderer3D extends BaseRenderer {
         );
         return dist < 0.5;
       });
-      
+
       if (contactIdx > 0) {
         const cueDir = {
           x: shotPaths.cuePath[contactIdx].x - shotPaths.cuePath[0].x,
           y: shotPaths.cuePath[contactIdx].y - shotPaths.cuePath[0].y
         };
         const cueDirLen = Math.hypot(cueDir.x, cueDir.y);
-        
+
         if (cueDirLen > 0.001) {
           cueDir.x /= cueDirLen;
           cueDir.y /= cueDirLen;
-          
+
           // Contact normal (direction object ball will travel)
           const normal = shotPaths.firstContact.contactNormal;
-          
+
           // Dot product gives cosine of angle between them
           const dot = cueDir.x * normal.x + cueDir.y * normal.y;
           const angle = Math.acos(Math.max(-1, Math.min(1, dot)));
-          
+
           // Angle ranges from 0 (straight on) to PI/2 (extreme cut)
           // Map to multiplier: 0° = 1.0, 45° = 0.5, 90° = 0.2
           const normalizedAngle = angle / (Math.PI / 2);
@@ -4587,14 +4587,14 @@ export class Renderer3D extends BaseRenderer {
         }
       }
     }
-    
+
     // Draw object ball trajectories
     shotPaths.objectPaths.forEach((path, ballId) => {
       if (path.length < 2) return;
-      
+
       // Filter: only show first contact ball unless debug mode is on
       if (!debugMode && ballId !== firstContactBallId) return;
-      
+
       // Shorten path based on shot complexity in normal mode
       let displayPath = path;
       if (!debugMode && pathLengthMultiplier < 1.0) {
@@ -4604,28 +4604,28 @@ export class Renderer3D extends BaseRenderer {
 
       const orientation = this.classifyAxisAlignmentFromPath(displayPath);
       const palette = getAxisPalette(orientation);
-      
+
       if (debugMode) {
         // Debug mode: yellow/orange dashed lines
         this.uiCtx.strokeStyle = palette.debugStroke;
         this.uiCtx.lineWidth = 2;
         this.uiCtx.setLineDash([10, 5]);
         this.uiCtx.beginPath();
-        
+
         for (let i = 0; i < displayPath.length; i++) {
           const point = displayPath[i];
           const screen = this.worldToScreen(point.x, point.y);
-          
+
           if (i === 0) {
             this.uiCtx.moveTo(screen.x, screen.y);
           } else {
             this.uiCtx.lineTo(screen.x, screen.y);
           }
         }
-        
+
         this.uiCtx.stroke();
         this.uiCtx.setLineDash([]);
-        
+
         // Draw arrowhead at the end
         const lastIdx = displayPath.length - 1;
         const endPoint = displayPath[lastIdx];
@@ -4634,11 +4634,11 @@ export class Renderer3D extends BaseRenderer {
         const dx = endPoint.x - prevPoint.x;
         const dy = endPoint.y - prevPoint.y;
         const len = Math.sqrt(dx * dx + dy * dy);
-        
+
         if (len > 0) {
           const arrowSize = 10;
           const angle = Math.atan2(dy, dx);
-          
+
           this.uiCtx.fillStyle = palette.debugFill;
           this.uiCtx.beginPath();
           this.uiCtx.moveTo(endScreen.x, endScreen.y);
@@ -4658,7 +4658,7 @@ export class Renderer3D extends BaseRenderer {
         drawPathWithGlow(displayPath, palette.glow, palette.line, 3);
       }
     });
-    
+
     // Draw cue ball rebound path (after contact)
     if (shotPaths.firstContact && shotPaths.cuePath.length > 2) {
       // Find where contact happened in the cue path
@@ -4671,17 +4671,17 @@ export class Renderer3D extends BaseRenderer {
         );
         return dist < 0.5;
       });
-      
+
       if (contactIdx > 0 && contactIdx < shotPaths.cuePath.length - 1) {
         // Get cue ball path after contact
         let cueBallReboundPath = shotPaths.cuePath.slice(contactIdx);
-        
+
         // Shorten path based on shot complexity in normal mode
         if (!debugMode && pathLengthMultiplier < 1.0) {
           const targetLength = Math.floor(cueBallReboundPath.length * pathLengthMultiplier);
           cueBallReboundPath = cueBallReboundPath.slice(0, Math.max(2, targetLength));
         }
-        
+
         if (cueBallReboundPath.length >= 2) {
           if (debugMode) {
             // Debug mode: cyan dashed line
@@ -4689,21 +4689,21 @@ export class Renderer3D extends BaseRenderer {
             this.uiCtx.lineWidth = 2;
             this.uiCtx.setLineDash([10, 5]);
             this.uiCtx.beginPath();
-            
+
             for (let i = 0; i < cueBallReboundPath.length; i++) {
               const point = cueBallReboundPath[i];
               const screen = this.worldToScreen(point.x, point.y);
-              
+
               if (i === 0) {
                 this.uiCtx.moveTo(screen.x, screen.y);
               } else {
                 this.uiCtx.lineTo(screen.x, screen.y);
               }
             }
-            
+
             this.uiCtx.stroke();
             this.uiCtx.setLineDash([]);
-            
+
             // Draw arrowhead
             const lastIdx = cueBallReboundPath.length - 1;
             const endPoint = cueBallReboundPath[lastIdx];
@@ -4712,11 +4712,11 @@ export class Renderer3D extends BaseRenderer {
             const dx = endPoint.x - prevPoint.x;
             const dy = endPoint.y - prevPoint.y;
             const len = Math.sqrt(dx * dx + dy * dy);
-            
+
             if (len > 0) {
               const arrowSize = 10;
               const angle = Math.atan2(dy, dx);
-              
+
               this.uiCtx.fillStyle = 'rgba(0, 255, 255, 0.9)';
               this.uiCtx.beginPath();
               this.uiCtx.moveTo(endScreen.x, endScreen.y);
@@ -4739,7 +4739,7 @@ export class Renderer3D extends BaseRenderer {
       }
     }
   }
-  
+
   /**
    * Draw simple math-based trajectory lines (for non-debug mode)
    * Uses predictTrajectories method for simple collision math
@@ -4756,7 +4756,7 @@ export class Renderer3D extends BaseRenderer {
     predictor: any
   ) {
     if (prediction.type === 'none') return;
-    
+
     // Calculate shot complexity for adaptive path length
     // Complexity is based on cut angle - straighter shots get longer paths
     let pathLengthMultiplier = 1.0;
@@ -4764,17 +4764,17 @@ export class Renderer3D extends BaseRenderer {
       // Dot product between shot direction and contact normal
       const dot = shotDirection.x * prediction.contactNormal.x + shotDirection.y * prediction.contactNormal.y;
       const angle = Math.acos(Math.max(-1, Math.min(1, dot)));
-      
+
       // Angle ranges from 0 (straight on) to PI/2 (extreme cut)
       // Map to multiplier: 0° = 1.0 (full length), 90° = 0.3 (30% length)
       const normalizedAngle = angle / (Math.PI / 2);
       pathLengthMultiplier = 1.0 - (normalizedAngle * 0.7);
     }
-    
+
     // Base line length adjusted by complexity and user percentage setting
     const baseLength = 50;
     const adjustedLength = baseLength * pathLengthMultiplier * CONFIG.OBJECT_PATH_PERCENTAGE;
-    
+
     // Get simple trajectory predictions
     const trajectories = predictor.predictTrajectories(
       prediction,
@@ -4782,7 +4782,7 @@ export class Renderer3D extends BaseRenderer {
       shotDirection,
       adjustedLength
     );
-    
+
     const drawLineWithGlow = (
       start: { x: number; y: number },
       end: { x: number; y: number },
@@ -4792,7 +4792,7 @@ export class Renderer3D extends BaseRenderer {
     ) => {
       const startScreen = this.worldToScreen(start.x, start.y);
       const endScreen = this.worldToScreen(end.x, end.y);
-      
+
       // Draw black glow (outer)
       this.uiCtx.strokeStyle = glowColor;
       this.uiCtx.lineWidth = lineWidth + 4;
@@ -4801,7 +4801,7 @@ export class Renderer3D extends BaseRenderer {
       this.uiCtx.moveTo(startScreen.x, startScreen.y);
       this.uiCtx.lineTo(endScreen.x, endScreen.y);
       this.uiCtx.stroke();
-      
+
       // Draw solid white line (inner)
       this.uiCtx.strokeStyle = lineColor;
       this.uiCtx.lineWidth = lineWidth;
@@ -4810,10 +4810,10 @@ export class Renderer3D extends BaseRenderer {
       this.uiCtx.moveTo(startScreen.x, startScreen.y);
       this.uiCtx.lineTo(endScreen.x, endScreen.y);
       this.uiCtx.stroke();
-      
+
       return { startScreen, endScreen };
     };
-    
+
     // Draw object ball trajectory (solid white with black glow)
     if (trajectories.objectBallPath) {
       const dirX = trajectories.objectBallPath.end.x - trajectories.objectBallPath.start.x;
@@ -4827,7 +4827,7 @@ export class Renderer3D extends BaseRenderer {
         const start = { x: prediction.hitBall.x, y: prediction.hitBall.y };
         const endRaw = { x: start.x + normX * adjustedLength, y: start.y + normY * adjustedLength };
         const end = this.clipLineAtRails(start, endRaw);
-        
+
         const orientation = classifyAxisAlignmentFromVector(normX, normY);
         const palette = getAxisPalette(orientation);
 
@@ -4840,7 +4840,7 @@ export class Renderer3D extends BaseRenderer {
         );
       }
     }
-    
+
     // Draw cue ball trajectory (solid white with black glow)
     // Cue ball path is much shorter than object ball path
     if (trajectories.cueBallPath) {
@@ -4871,7 +4871,7 @@ export class Renderer3D extends BaseRenderer {
         const cueBallLength = adjustedLength * 0.25;
         const endRaw = { x: start.x + normX * cueBallLength, y: start.y + normY * cueBallLength };
         const end = this.clipLineAtRails(start, endRaw);
-        
+
         drawLineWithGlow(
           start,
           end,
@@ -4882,7 +4882,7 @@ export class Renderer3D extends BaseRenderer {
       }
     }
   }
-  
+
   getPowerBarBounds() {
     const { width, height } = this.getSidebarSize();
     const rect = this.getSideBarRect('right', width, height);

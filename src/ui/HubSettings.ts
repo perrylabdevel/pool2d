@@ -276,6 +276,14 @@ export class HubSettings {
     musicRow.appendChild(createToggle('Music', !!settings.muteMusic, (next) => this.settingsManager.saveAudioSettings({ muteMusic: next })));
     div.appendChild(musicRow);
 
+    const ambienceRow = document.createElement('div');
+    ambienceRow.style.display = 'grid';
+    ambienceRow.style.gridTemplateColumns = '1fr minmax(120px, auto)';
+    ambienceRow.style.gap = '12px';
+    ambienceRow.appendChild(createSliderBlock('Ambience', settings.background, (v) => this.settingsManager.saveAudioSettings({ background: v })));
+    ambienceRow.appendChild(createToggle('Ambience', !!settings.muteBackground, (next) => this.settingsManager.saveAudioSettings({ muteBackground: next })));
+    div.appendChild(ambienceRow);
+
     const sfxBlock = createSliderBlock('All Effects', settings.cueHits, (v) => this.settingsManager.saveAudioSettings({ cueHits: v, ballCollisions: v, pocketDrops: v, railHits: v }));
     div.appendChild(sfxBlock);
 

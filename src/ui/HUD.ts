@@ -19,9 +19,9 @@ export class HUD {
   settingsManager: SettingsManager;
   panelManager = panelManager;
   private gameSettingsPanel: GameSettingsPanel;
-  
+
   showStats: boolean = true;
-  
+
   constructor() {
     this.fpsElement = document.getElementById('fps');
     this.upsElement = document.getElementById('ups');
@@ -30,7 +30,7 @@ export class HUD {
     this.player1Panel = document.getElementById('player1-info');
     this.player2Panel = document.getElementById('player2-info');
     this.statsElement = document.getElementById('stats');
-    
+
     this.settingsManager = new SettingsManager();
     this.gameSettingsPanel = new GameSettingsPanel(this.settingsManager, {
       onStatsVisibilityChange: (visible) => {
@@ -46,7 +46,7 @@ export class HUD {
     });
     this.setupControls();
     this.loadSettings();
-    
+
     // Listen for settings changes
     window.addEventListener('settings:game-changed', (event) => {
       const detail = (event as CustomEvent<{ settings: any }>).detail;
@@ -58,7 +58,7 @@ export class HUD {
       }
     });
   }
-  
+
   setupControls() {
     const pauseBtn = document.getElementById('pause-btn');
     const hudMenuBtn = document.getElementById('hud-menu-btn');
@@ -68,7 +68,18 @@ export class HUD {
 
     if (hudMenuBtn) {
       hudMenuBtn.addEventListener('click', () => {
-        inGameMenu.open();
+        // Pause game and open main hub
+        window.dispatchEvent(new CustomEvent('game:pause'));
+        // Import homeHub dynamically or use global if available, but we can import it at top
+        // Since we already import InGameMenu, let's import HomeHub too.
+        // Actually, let's just use the global instance or import it.
+        // We need to add the import first.
+        import('./HomeHub').then(({ homeHub }) => {
+          homeHub.init(() => {
+            // On close, resume game
+            window.dispatchEvent(new CustomEvent('game:resume'));
+          });
+        });
       });
     }
 
@@ -109,19 +120,19 @@ export class HUD {
       this.statsElement.style.display = this.showStats ? 'flex' : 'none';
     }
   }
-  
+
   updateFPS(fps: number) {
     if (this.fpsElement) this.fpsElement.textContent = `FPS: ${Math.round(fps)}`;
   }
-  
+
   updateUPS(ups: number) {
     if (this.upsElement) this.upsElement.textContent = `UPS: ${Math.round(ups)}`;
   }
-  
+
   setMode(mode: string) {
     if (this.modeElement) this.modeElement.textContent = mode;
   }
-  
+
   setTurn(player: number, isAI: boolean = false) {
     if (this.turnElement) {
       if (isAI) {
@@ -168,7 +179,7 @@ export class HUD {
       this.turnElement.classList.remove('ai-thinking');
     }
   }
-  
+
   showFoul(message: string) {
     notificationService.show(message, 'error', 4000);
   }
@@ -212,7 +223,7 @@ export class HUD {
     const remainingSet = new Set(remainingIds);
     // Infer group from remaining ids
     const isSolidsGroup = remainingIds.some(id => id >= 1 && id <= 7);
-    const groupIds = isSolidsGroup ? [1,2,3,4,5,6,7] : [9,10,11,12,13,14,15];
+    const groupIds = isSolidsGroup ? [1, 2, 3, 4, 5, 6, 7] : [9, 10, 11, 12, 13, 14, 15];
 
     const icons: Map<number, string> | undefined = (window as any).__BALL_ICONS__;
     for (const id of groupIds) {
@@ -424,7 +435,7 @@ export class HUD {
         button.style.padding = '20px 40px';
         button.style.fontSize = '18px';
         button.style.height = '100%';
-        
+
         button.onclick = () => {
           overlay.remove();
           resolve(pocket.id);

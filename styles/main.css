@@ -170,8 +170,8 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: transparent;
+  border: none;
   border-radius: 12px;
   padding: 8px 16px;
   transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
@@ -179,9 +179,9 @@ body {
 }
 
 .hud-player.active {
-  background: linear-gradient(90deg, rgba(0, 180, 255, 0.1), rgba(0, 180, 255, 0.02));
-  border-color: rgba(0, 180, 255, 0.4);
-  box-shadow: 0 0 15px rgba(0, 180, 255, 0.15);
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
 }
 
 .hud-player.right {
@@ -190,18 +190,19 @@ body {
 }
 
 .hud-player.right.active {
-  background: linear-gradient(-90deg, rgba(0, 180, 255, 0.1), rgba(0, 180, 255, 0.02));
+  background: transparent;
 }
 
 .hud-player .avatar {
   width: 64px;
   height: 64px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02));
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.02) 100%);
   border: 2px solid rgba(255, 255, 255, 0.1);
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
   position: relative;
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .hud-player .avatar::after {
