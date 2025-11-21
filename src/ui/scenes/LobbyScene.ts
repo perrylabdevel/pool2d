@@ -6,7 +6,8 @@ import {
     drawRoundedRect
 } from '../components/UIComponents';
 import { SettingsManager } from '../SettingsManager';
-import { GameMode } from '../../game/Game';
+import { Game, GameMode } from '../../game/Game';
+import { GameState } from '../../game/GameStateMachine';
 import { ConfirmScene } from './ConfirmScene';
 
 type ButtonVariant = 'nav';
@@ -31,6 +32,7 @@ export class LobbyScene implements UIScene {
     private cameFromGame: boolean = false;
 
     private cardImage: HTMLImageElement | null = null;
+    private readonly cardImageSrc = new URL('../../assets/img/look.jpeg', import.meta.url).href;
     /**
      * Sprite coordinates pulled from look.jpeg (2720x1568) to match each lobby card.
      * Values are {sx, sy, sw, sh} in source image space.
@@ -45,14 +47,12 @@ export class LobbyScene implements UIScene {
     };
 
     mount(): void {
-        // Track if we came from an active game
-        this.cameFromGame = true;
         this.canvas = document.getElementById('ui-stage') as HTMLCanvasElement;
         if (!this.canvas) return;
 
         // Load card image
         this.cardImage = new Image();
-        this.cardImage.src = 'src/assets/img/look.jpeg';
+        this.cardImage.src = this.cardImageSrc;
         // Force redraw when image loads
         this.cardImage.onload = () => {
             // We don't have a main loop that redraws constantly unless dirty, 
@@ -240,14 +240,31 @@ export class LobbyScene implements UIScene {
         }
     };
 
+    public setCameFromGame(fromGame: boolean) {
+        // Persist knowledge that we have an active game session behind menus
+        this.cameFromGame = fromGame || this.cameFromGame;
+    }
+
+    private getActiveGame(): Game | null {
+        const game = (window as any).poolGame as Game | undefined;
+        return game ?? null;
+    }
+
     private isGameInProgress(): boolean {
-        const game = (window as any).poolGame;
+        if (!this.cameFromGame) return false;
+        const game = this.getActiveGame();
         if (!game) return false;
 
-        // If we mounted this lobby scene, it means we came from a game
-        // (either via ESC or via initial load, but better safe than sorry)
-        // Once a play button is clicked and a new game starts, we can reset this flag
-        return this.cameFromGame;
+        const stateMachine = game.stateMachine;
+        const isGameOver = stateMachine ? stateMachine.state === GameState.GAME_OVER : false;
+        if (isGameOver) return false;
+
+        const hasShotStarted = Boolean(game.hasStartedRack);
+        const ballsMoving = Boolean(
+            game.world?.balls?.some(b => Math.abs(b.vx) > 0.05 || Math.abs(b.vy) > 0.05)
+        );
+
+        return hasShotStarted || ballsMoving;
     }
 
     update(_dt: number): void { }

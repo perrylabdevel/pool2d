@@ -70,6 +70,10 @@ export class SceneController {
 
     private bindStateChanges() {
         uiStateMachine.onStateChange((newState, _prevState, transition) => {
+            const lobbyScene = this.scenes.get(UIState.LOBBY) as LobbyScene | undefined;
+            if (lobbyScene && typeof lobbyScene.setCameFromGame === 'function') {
+                lobbyScene.setCameFromGame(_prevState === UIState.IN_GAME);
+            }
             // Show CONFIRM scene immediately without transition
             const immediate = newState === UIState.CONFIRM || _prevState === UIState.CONFIRM;
             this.switchScene(newState, immediate, transition);
@@ -78,6 +82,16 @@ export class SceneController {
 
     public switchScene(state: UIState, immediate = false, transition: TransitionType = TransitionType.CROSS_FADE) {
         const nextScene = this.scenes.get(state);
+
+        if (!immediate && this.isTransitioning) {
+            // Clean up any previously primed next scene before starting a new transition
+            if (this.nextScene && this.nextScene !== nextScene) {
+                this.nextScene.unmount();
+            }
+            this.nextScene = null;
+            this.isTransitioning = false;
+            this.transitionProgress = 0;
+        }
 
         if (immediate) {
             if (this.currentScene) this.currentScene.unmount();

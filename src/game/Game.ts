@@ -131,6 +131,7 @@ export class Game {
   wasAimModeBeforeSpace: boolean = true;
   powerDragStartY: number = 0;
   spaceKeyHeld: boolean = false;
+  hasStartedRack: boolean = false;
   microAimDialValue: number = 0;
   isDraggingMicroDial: boolean = false;
 
@@ -974,6 +975,7 @@ export class Game {
     this.wasAimModeBeforeSpace = true;
     this.powerDragStartY = 0;
     this.spaceKeyHeld = false;
+    this.hasStartedRack = false;
 
     // Reset prediction cache
     this.cachedPrediction = null;
@@ -1087,6 +1089,7 @@ export class Game {
       }
     }
 
+    this.hasStartedRack = true;
     // Clear cached prediction and aim angle smoothing state
     this.cachedPrediction = null;
     this.cachedDirection = null;
@@ -2440,4 +2443,3 @@ export class Game {
   }
 }
 // React to AI difficulty changes from settings panel
-

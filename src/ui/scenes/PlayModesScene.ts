@@ -8,6 +8,7 @@ import {
     UIColors,
     Rect
 } from '../components/UIComponents';
+import { GameMode } from '../../game/Game';
 
 interface PlayModeButton {
     id: string;
@@ -117,13 +118,13 @@ export class PlayModesScene implements UIScene {
 
         switch (id) {
             case 'practice':
-                game.mode = 0; // PRACTICE
+                game.mode = GameMode.PRACTICE;
                 break;
             case '8ball':
-                game.mode = 1; // EIGHT_BALL
+                game.mode = GameMode.EIGHT_BALL;
                 break;
             case 'time-attack':
-                game.mode = 2; // TIME_ATTACK
+                game.mode = GameMode.TIME_ATTACK;
                 break;
         }
         game.restart();
