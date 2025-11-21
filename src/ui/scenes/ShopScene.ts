@@ -1,8 +1,11 @@
 import { UIScene } from '../SceneController';
 import { uiStateMachine, UIState } from '../UIStateMachine';
-import { drawPanel, drawGlossyButton, drawCurrencyPill, Rect, UIColors } from '../components/UIComponents';
+import { drawPanel, drawGlossyButton, Rect, UIColors } from '../components/UIComponents';
+import { ColorTokens } from '../theme/ColorTokens';
+import { NavigationBar } from '../components/NavigationBar';
 import { SettingsManager } from '../SettingsManager';
 import { notificationService } from '../NotificationService';
+import { drawSceneBackground } from '../components/SceneBackground';
 
 type ShopButton = {
     id: 'back' | 'equip';
@@ -39,9 +42,18 @@ export class ShopScene implements UIScene {
     private cardRects: Rect[] = [];
     private settingsManager = new SettingsManager();
     private equippedCueId: string = CUES[0].id;
+    private navigationBar: NavigationBar;
 
     constructor() {
         this.syncEquippedCue();
+        this.navigationBar = new NavigationBar({
+            title: 'SHOP',
+            showBack: true,
+            backState: UIState.LOBBY,
+            showProfile: true,
+            showCurrencies: true,
+            showSettings: true
+        });
     }
 
     mount(): void {
@@ -66,20 +78,20 @@ export class ShopScene implements UIScene {
         if (!this.canvas) return;
         const width = this.canvas.width;
         const height = this.canvas.height;
+
+        // Setup navigation bar
+        this.navigationBar.setupLayout(width);
+        const navHeight = this.navigationBar.getHeight();
+
         const horizontalPadding = Math.max(40, width * 0.05);
         const footerHeight = 160;
 
+        // Remove back button since navigation bar handles it
         this.buttons = [
-            {
-                id: 'back',
-                label: '← BACK',
-                color: UIColors.danger,
-                rect: { x: 20, y: 20, width: 100, height: 40 }
-            },
             {
                 id: 'equip',
                 label: 'Equip Selected',
-                color: '#4CAF50',
+                color: ColorTokens.action.success,
                 rect: {
                     x: width - horizontalPadding - 220,
                     y: height - footerHeight + 60,
@@ -94,7 +106,7 @@ export class ShopScene implements UIScene {
         const gap = 28;
         const columns = Math.max(1, Math.floor((width - horizontalPadding * 2) / (cardWidth + gap)));
         const startX = (width - Math.min(columns, CUES.length) * cardWidth - Math.max(0, Math.min(columns, CUES.length) - 1) * gap) / 2;
-        const startY = 180;
+        const startY = navHeight + 40; // Start below navigation bar with margin
 
         this.cardRects = CUES.map((_cue, index) => {
             const col = index % columns;
@@ -115,6 +127,14 @@ export class ShopScene implements UIScene {
         const scaleY = this.canvas.height / rect.height;
         const x = (e.clientX - rect.left) * scaleX;
         const y = (e.clientY - rect.top) * scaleY;
+
+        // Check navigation bar first
+        if (this.navigationBar.handleMouseMove(x, y)) {
+            this.hoveredButton = null;
+            this.hoveredCardIndex = -1;
+            this.canvas.style.cursor = this.navigationBar.getCursor();
+            return;
+        }
 
         this.hoveredButton = null;
         for (const button of this.buttons) {
@@ -138,7 +158,19 @@ export class ShopScene implements UIScene {
         this.canvas.style.cursor = isPointer ? 'pointer' : 'default';
     };
 
-    private onClick = () => {
+    private onClick = (e: MouseEvent) => {
+        if (!this.canvas) return;
+        const rect = this.canvas.getBoundingClientRect();
+        const scaleX = this.canvas.width / rect.width;
+        const scaleY = this.canvas.height / rect.height;
+        const x = (e.clientX - rect.left) * scaleX;
+        const y = (e.clientY - rect.top) * scaleY;
+
+        // Check navigation bar first
+        if (this.navigationBar.handleClick(x, y)) {
+            return;
+        }
+
         if (this.hoveredButton) {
             this.handleButtonClick(this.hoveredButton.id);
             return;
@@ -171,29 +203,13 @@ export class ShopScene implements UIScene {
         const width = ctx.canvas.width;
         const height = ctx.canvas.height;
         this.renderBackground(ctx, width, height);
-        this.renderHeader(ctx, width);
         this.renderCards(ctx);
         this.renderFooter(ctx);
+        this.navigationBar.render(ctx, width);
     }
 
     private renderBackground(ctx: CanvasRenderingContext2D, width: number, height: number) {
-        const gradient = ctx.createLinearGradient(0, 0, width, height);
-        gradient.addColorStop(0, '#020710');
-        gradient.addColorStop(0.5, '#071a36');
-        gradient.addColorStop(1, '#09030f');
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, width, height);
-
-        ctx.save();
-        ctx.globalAlpha = 0.15;
-        const gridSize = 60;
-        for (let y = 0; y < height; y += gridSize) {
-            for (let x = 0; x < width; x += gridSize) {
-                ctx.strokeStyle = 'rgba(255,255,255,0.04)';
-                ctx.strokeRect(x, y, gridSize, gridSize);
-            }
-        }
-        ctx.restore();
+        drawSceneBackground(ctx, width, height, 'blue');
     }
 
     private renderHeader(ctx: CanvasRenderingContext2D, width: number) {
@@ -202,14 +218,14 @@ export class ShopScene implements UIScene {
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
         ctx.font = '600 46px "Orbitron", Arial, sans-serif';
-        ctx.fillStyle = '#FFFFFF';
-        ctx.shadowColor = 'rgba(0,0,0,0.6)';
+        ctx.fillStyle = ColorTokens.text.primary;
+        ctx.shadowColor = 'rgba(0,0,0,0.6)'; // Text shadow
         ctx.shadowBlur = 12;
         ctx.fillText(title.toUpperCase(), 60, 40);
 
         ctx.font = '14px "Nunito", Arial, sans-serif';
         ctx.shadowBlur = 0;
-        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        ctx.fillStyle = 'rgba(255,255,255,0.6)'; // Subtitle text
         ctx.fillText('Rotate your arsenal and apply neon finishes instantly.', 62, 92);
         ctx.restore();
 
@@ -246,36 +262,36 @@ export class ShopScene implements UIScene {
             ctx.restore();
         }
 
-        ctx.fillStyle = 'rgba(0,0,0,0.4)';
+        ctx.fillStyle = ColorTokens.background.overlay;
         ctx.fillRect(rect.x + 20, rect.y + 20, rect.width - 40, 110);
-        ctx.fillStyle = cue.stickColor;
+        ctx.fillStyle = cue.stickColor; // Cue-specific color
         ctx.fillRect(rect.x + 30, rect.y + 70, rect.width - 60, 10);
-        ctx.fillStyle = cue.tipColor;
+        ctx.fillStyle = cue.tipColor; // Cue-specific color
         ctx.fillRect(rect.x + 30, rect.y + 68, 8, 14);
 
         ctx.textAlign = 'left';
-        ctx.fillStyle = '#FFFFFF';
+        ctx.fillStyle = ColorTokens.text.primary;
         ctx.font = '700 20px "Montserrat", Arial';
         ctx.fillText(cue.name, rect.x + 24, rect.y + 160);
 
         ctx.font = '12px "Nunito", Arial';
-        ctx.fillStyle = 'rgba(255,255,255,0.65)';
+        ctx.fillStyle = 'rgba(255,255,255,0.65)'; // Muted description text
         ctx.fillText(cue.desc, rect.x + 24, rect.y + 185, rect.width - 48);
 
         ctx.font = '11px "Montserrat", Arial';
-        ctx.fillStyle = '#000';
+        ctx.fillStyle = ColorTokens.text.dark;
         const rarityWidth = ctx.measureText(cue.rarity).width + 26;
         ctx.fillStyle = this.getRarityColor(cue.rarity);
         ctx.fillRect(rect.x + 24, rect.y + 132, rarityWidth, 22);
-        ctx.fillStyle = '#000';
+        ctx.fillStyle = ColorTokens.text.dark;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(cue.rarity, rect.x + 24 + rarityWidth / 2, rect.y + 143);
 
         if (cue.id === this.equippedCueId) {
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; // Dark overlay for equipped badge
             ctx.fillRect(rect.x, rect.y + rect.height - 36, rect.width, 36);
-            ctx.fillStyle = '#4CAF50';
+            ctx.fillStyle = ColorTokens.action.success;
             ctx.font = '600 14px "Montserrat", Arial';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
@@ -302,15 +318,15 @@ export class ShopScene implements UIScene {
     private getRarityColor(rarity: CueCard['rarity']) {
         switch (rarity) {
             case 'COMMON':
-                return '#9E9E9E';
+                return ColorTokens.ui.gray;
             case 'RARE':
-                return '#00B4FF';
+                return ColorTokens.ui.teal;
             case 'EPIC':
-                return '#A335EE';
+                return ColorTokens.ui.purple;
             case 'LEGENDARY':
-                return '#FFD700';
+                return ColorTokens.brand.primary;
             default:
-                return '#FFFFFF';
+                return ColorTokens.text.primary;
         }
     }
 

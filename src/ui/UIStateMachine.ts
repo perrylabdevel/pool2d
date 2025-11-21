@@ -4,6 +4,7 @@ export enum UIState {
     SHOP = 'SHOP',
     PROFILE = 'PROFILE',
     CONFIRM = 'CONFIRM',
+    SETTINGS = 'SETTINGS',
     IN_GAME = 'IN_GAME',
     IN_GAME_MENU = 'IN_GAME_MENU'
 }

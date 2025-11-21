@@ -1,0 +1,81 @@
+import { ColorTokens } from '../theme/ColorTokens';
+
+export type BackgroundTheme = 'blue' | 'red' | 'yellow' | 'purple' | 'green';
+
+export function drawSceneBackground(
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    theme: BackgroundTheme = 'blue'
+) {
+    // Define gradient colors based on theme
+    let gradientStart: string;
+    let gradientMid: string;
+    let gradientEnd: string;
+
+    switch (theme) {
+        case 'blue':
+            gradientStart = '#020710'; // Very dark blue
+            gradientMid = '#071a36'; // Mid blue
+            gradientEnd = '#09030f'; // Dark purple
+            break;
+        case 'red':
+            gradientStart = '#0f0202'; // Very dark red
+            gradientMid = '#2a0a0a'; // Mid red
+            gradientEnd = '#1a0505'; // Dark red-purple
+            break;
+        case 'yellow':
+            gradientStart = '#0f0a02'; // Very dark gold
+            gradientMid = '#2a1f0a'; // Mid gold
+            gradientEnd = '#1a1005'; // Dark brown-gold
+            break;
+        case 'purple':
+            gradientStart = '#0a0215'; // Very dark purple
+            gradientMid = '#1a0a36'; // Mid purple
+            gradientEnd = '#0f030a'; // Dark purple
+            break;
+        case 'green':
+            gradientStart = '#021007'; // Very dark green
+            gradientMid = '#0a2a1a'; // Mid green
+            gradientEnd = '#050f0a'; // Dark teal-green
+            break;
+    }
+
+    // Gradient background
+    const gradient = ctx.createLinearGradient(0, 0, width, height);
+    gradient.addColorStop(0, gradientStart);
+    gradient.addColorStop(0.5, gradientMid);
+    gradient.addColorStop(1, gradientEnd);
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, width, height);
+
+    // Subtle grid overlay
+    ctx.save();
+    ctx.globalAlpha = 0.15;
+    const gridSize = 60;
+    for (let y = 0; y < height; y += gridSize) {
+        for (let x = 0; x < width; x += gridSize) {
+            ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x, y, gridSize, gridSize);
+        }
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+
+    // Optional: Add subtle radial glow in center
+    ctx.save();
+    const centerGradient = ctx.createRadialGradient(
+        width / 2,
+        height / 2,
+        0,
+        width / 2,
+        height / 2,
+        Math.max(width, height) / 2
+    );
+    centerGradient.addColorStop(0, 'rgba(255, 255, 255, 0.02)');
+    centerGradient.addColorStop(1, 'rgba(0, 0, 0, 0.1)');
+    ctx.fillStyle = centerGradient;
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
+}

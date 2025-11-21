@@ -1,3 +1,4 @@
+import { ColorTokens, UIColors as LegacyUIColors } from '../theme/ColorTokens';
 
 export interface Rect {
     x: number;
@@ -6,17 +7,11 @@ export interface Rect {
     height: number;
 }
 
-export const UIColors = {
-    primary: '#FFD700', // Gold
-    primaryDark: '#B8860B',
-    secondary: '#4CAF50', // Green
-    accent: '#2196F3', // Blue
-    danger: '#F44336', // Red
-    text: '#FFFFFF',
-    textDark: '#000000',
-    panelBg: 'rgba(13, 20, 36, 0.85)',
-    panelBorder: 'rgba(255, 255, 255, 0.15)',
-};
+/**
+ * @deprecated Use ColorTokens from '@/ui/theme/ColorTokens' instead
+ * This is kept for backward compatibility during migration
+ */
+export const UIColors = LegacyUIColors;
 
 export function drawRoundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
     if (w < 2 * r) r = w / 2;
@@ -48,7 +43,7 @@ export function drawGlossyButton(
 
     // Shadow
     drawRoundedRect(ctx, x, y + 4, width, height, r);
-    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.fillStyle = ColorTokens.effects.shadowButton;
     ctx.fill();
 
     // Main Body
@@ -69,23 +64,23 @@ export function drawGlossyButton(
     ctx.save();
     ctx.clip();
     const glossGrad = ctx.createLinearGradient(x, y, x, y + height / 2);
-    glossGrad.addColorStop(0, 'rgba(255,255,255,0.4)');
-    glossGrad.addColorStop(1, 'rgba(255,255,255,0.05)');
+    glossGrad.addColorStop(0, ColorTokens.effects.gloss.start);
+    glossGrad.addColorStop(1, ColorTokens.effects.gloss.end);
     ctx.fillStyle = glossGrad;
     ctx.fillRect(x, y, width, height / 2);
     ctx.restore();
 
     // Border
-    ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+    ctx.strokeStyle = ColorTokens.border.dark;
     ctx.lineWidth = 1;
     ctx.stroke();
 
     // Text
-    ctx.fillStyle = '#FFFFFF';
+    ctx.fillStyle = ColorTokens.text.primary;
     ctx.font = 'bold 16px Arial';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    ctx.shadowColor = ColorTokens.effects.shadow;
     ctx.shadowBlur = 2;
     ctx.shadowOffsetY = 1;
     ctx.fillText(text, x + width / 2, y + height / 2);
@@ -122,21 +117,21 @@ export function drawCurrencyPill(
 
     // Background
     drawRoundedRect(ctx, x, y, width, height, r);
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillStyle = ColorTokens.background.overlayDark;
     ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+    ctx.strokeStyle = ColorTokens.border.default;
     ctx.lineWidth = 1;
     ctx.stroke();
 
     // Icon placeholder
-    const iconColor = type === 'coins' ? '#FFD700' : '#4CAF50';
+    const iconColor = type === 'coins' ? ColorTokens.currency.coins : ColorTokens.currency.cash;
     ctx.beginPath();
     ctx.arc(x + 14, y + height / 2, 10, 0, Math.PI * 2);
     ctx.fillStyle = iconColor;
     ctx.fill();
 
     // Text
-    ctx.fillStyle = '#FFFFFF';
+    ctx.fillStyle = ColorTokens.text.primary;
     ctx.font = 'bold 14px Arial';
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
@@ -147,9 +142,9 @@ export function drawCurrencyPill(
     const plusR = 12;
     ctx.beginPath();
     ctx.arc(plusX + plusR, y + height / 2, plusR, 0, Math.PI * 2);
-    ctx.fillStyle = '#4CAF50';
+    ctx.fillStyle = ColorTokens.action.success;
     ctx.fill();
-    ctx.fillStyle = '#FFF';
+    ctx.fillStyle = ColorTokens.text.primary;
     ctx.font = 'bold 16px Arial';
     ctx.textAlign = 'center';
     ctx.fillText('+', plusX + plusR, y + height / 2 + 1);

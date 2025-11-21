@@ -7,6 +7,7 @@ import { ShopScene } from './scenes/ShopScene';
 import { ProfileScene } from './scenes/ProfileScene';
 import { ConfirmScene } from './scenes/ConfirmScene';
 import { InGameMenuScene } from './scenes/InGameMenuScene';
+import { SettingsScene } from './scenes/SettingsScene';
 import { uiSoundService } from './UISoundService';
 
 export interface UIScene {
@@ -44,7 +45,7 @@ export class SceneController {
         this.setupResizeListener();
         this.bindStateChanges();
 
-        // Register Scenes
+        // Register Scenes (SettingsScene will be registered later via initializeSettingsScene)
         this.registerScene(UIState.LOBBY, new LobbyScene());
         this.registerScene(UIState.PLAY_MODES, new PlayModesScene());
         this.registerScene(UIState.SHOP, new ShopScene());
@@ -58,6 +59,10 @@ export class SceneController {
 
         // Initial State
         this.switchScene(uiStateMachine.state, true);
+    }
+
+    public initializeSettingsScene(settingsManager: any) {
+        this.registerScene(UIState.SETTINGS, new SettingsScene(settingsManager));
     }
 
     public registerScene(state: UIState, scene: UIScene) {
@@ -142,7 +147,12 @@ export class SceneController {
             this.canvas.style.height = `${height}px`;
         };
         window.addEventListener('resize', resize);
+
+        // Initial sizing - wait for layout to settle
         resize();
+        requestAnimationFrame(() => {
+            resize();
+        });
     }
 
     private lastTime = 0;

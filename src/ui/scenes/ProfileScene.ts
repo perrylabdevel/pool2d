@@ -1,10 +1,13 @@
 import { UIScene } from '../SceneController';
 import { uiStateMachine, UIState } from '../UIStateMachine';
 import { drawPanel, drawGlossyButton, Rect, UIColors } from '../components/UIComponents';
+import { ColorTokens } from '../theme/ColorTokens';
 import { SettingsManager, type GameStats } from '../SettingsManager';
+import { NavigationBar } from '../components/NavigationBar';
+import { drawSceneBackground } from '../components/SceneBackground';
 
 type ProfileButton = {
-    id: 'back' | 'customize';
+    id: 'customize';
     label: string;
     color: string;
     rect: Rect;
@@ -22,6 +25,18 @@ export class ProfileScene implements UIScene {
     private buttons: ProfileButton[] = [];
     private hoveredButton: ProfileButton | null = null;
     private settingsManager = new SettingsManager();
+    private navigationBar: NavigationBar;
+
+    constructor() {
+        this.navigationBar = new NavigationBar({
+            title: 'PROFILE',
+            showBack: true,
+            backState: UIState.LOBBY,
+            showProfile: false, // Don't show profile button on profile page
+            showCurrencies: true,
+            showSettings: true
+        });
+    }
 
     mount(): void {
         this.canvas = document.getElementById('ui-stage') as HTMLCanvasElement;
@@ -46,13 +61,10 @@ export class ProfileScene implements UIScene {
         const height = this.canvas.height;
         const padding = Math.max(48, width * 0.04);
 
+        // Setup navigation bar
+        this.navigationBar.setupLayout(width);
+
         this.buttons = [
-            {
-                id: 'back',
-                label: '← BACK',
-                color: UIColors.danger,
-                rect: { x: 20, y: 20, width: 100, height: 40 }
-            },
             {
                 id: 'customize',
                 label: 'Customize Avatar',
@@ -70,6 +82,13 @@ export class ProfileScene implements UIScene {
         const x = (e.clientX - rect.left) * scaleX;
         const y = (e.clientY - rect.top) * scaleY;
 
+        // Check navigation bar first
+        if (this.navigationBar.handleMouseMove(x, y)) {
+            this.hoveredButton = null;
+            this.canvas.style.cursor = this.navigationBar.getCursor();
+            return;
+        }
+
         this.hoveredButton = null;
         for (const button of this.buttons) {
             const { x: bx, y: by, width, height } = button.rect;
@@ -81,12 +100,20 @@ export class ProfileScene implements UIScene {
         this.canvas.style.cursor = this.hoveredButton ? 'pointer' : 'default';
     };
 
-    private onClick = () => {
-        if (!this.hoveredButton) return;
-        if (this.hoveredButton.id === 'back') {
-            uiStateMachine.transitionTo(UIState.LOBBY);
+    private onClick = (e: MouseEvent) => {
+        if (!this.canvas) return;
+        const rect = this.canvas.getBoundingClientRect();
+        const scaleX = this.canvas.width / rect.width;
+        const scaleY = this.canvas.height / rect.height;
+        const x = (e.clientX - rect.left) * scaleX;
+        const y = (e.clientY - rect.top) * scaleY;
+
+        // Check navigation bar first
+        if (this.navigationBar.handleClick(x, y)) {
             return;
         }
+
+        if (!this.hoveredButton) return;
         if (this.hoveredButton.id === 'customize') {
             console.log('[ProfileScene] Customize avatar placeholder');
         }
@@ -99,36 +126,22 @@ export class ProfileScene implements UIScene {
         const height = ctx.canvas.height;
         this.renderBackground(ctx, width, height);
         const stats = this.settingsManager.getGameStats();
-        this.renderHero(ctx, width, stats);
-        this.renderStats(ctx, width, stats);
-        this.renderAchievements(ctx, width, height, stats);
+        const navHeight = this.navigationBar.getHeight();
+        this.renderHero(ctx, width, navHeight, stats);
+        this.renderStats(ctx, width, navHeight, stats);
+        this.renderAchievements(ctx, width, height, navHeight, stats);
         this.renderButtons(ctx);
+        this.navigationBar.render(ctx, width);
     }
 
     private renderBackground(ctx: CanvasRenderingContext2D, width: number, height: number) {
-        const gradient = ctx.createLinearGradient(0, 0, width, height);
-        gradient.addColorStop(0, '#05060d');
-        gradient.addColorStop(1, '#121c38');
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, width, height);
-
-        ctx.save();
-        ctx.globalAlpha = 0.15;
-        ctx.fillStyle = 'rgba(255,255,255,0.05)';
-        const step = 80;
-        for (let i = 0; i < width; i += step) {
-            ctx.fillRect(i, 0, 1, height);
-        }
-        for (let j = 0; j < height; j += step) {
-            ctx.fillRect(0, j, width, 1);
-        }
-        ctx.restore();
+        drawSceneBackground(ctx, width, height, 'green');
     }
 
-    private renderHero(ctx: CanvasRenderingContext2D, width: number, stats: GameStats) {
+    private renderHero(ctx: CanvasRenderingContext2D, width: number, navHeight: number, stats: GameStats) {
         const panelRect: Rect = {
             x: width * 0.08,
-            y: 40,
+            y: navHeight + 20,
             width: width * 0.84,
             height: 200
         };
@@ -137,8 +150,8 @@ export class ProfileScene implements UIScene {
 
         ctx.save();
         const gradient = ctx.createLinearGradient(panelRect.x, panelRect.y, panelRect.x + panelRect.width, panelRect.y + panelRect.height);
-        gradient.addColorStop(0, 'rgba(0, 173, 255, 0.35)');
-        gradient.addColorStop(1, 'rgba(90, 0, 150, 0.2)');
+        gradient.addColorStop(0, 'rgba(0, 173, 255, 0.35)'); // Cyan overlay
+        gradient.addColorStop(1, 'rgba(90, 0, 150, 0.2)'); // Purple overlay
         ctx.fillStyle = gradient;
         ctx.fillRect(panelRect.x, panelRect.y, panelRect.width, panelRect.height);
         ctx.restore();
@@ -150,29 +163,29 @@ export class ProfileScene implements UIScene {
         ctx.beginPath();
         ctx.arc(avatarX, avatarY, 60, 0, Math.PI * 2);
         const avatarGrad = ctx.createLinearGradient(avatarX - 40, avatarY - 60, avatarX + 40, avatarY + 60);
-        avatarGrad.addColorStop(0, '#1e2b47');
-        avatarGrad.addColorStop(1, '#04060f');
+        avatarGrad.addColorStop(0, '#1e2b47'); // Navy
+        avatarGrad.addColorStop(1, '#04060f'); // Very dark
         ctx.fillStyle = avatarGrad;
         ctx.fill();
         ctx.lineWidth = 3;
-        ctx.strokeStyle = '#00D4FF';
+        ctx.strokeStyle = ColorTokens.ui.teal;
         ctx.stroke();
         ctx.font = '700 32px "Montserrat", Arial';
-        ctx.fillStyle = '#FFFFFF';
+        ctx.fillStyle = ColorTokens.text.primary;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('BR', avatarX, avatarY);
         ctx.restore();
 
         ctx.save();
-        ctx.fillStyle = '#FFFFFF';
+        ctx.fillStyle = ColorTokens.text.primary;
         ctx.font = '600 40px "Orbitron", Arial';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
         ctx.fillText('Brian Rivera', panelRect.x + 220, panelRect.y + 40);
 
         ctx.font = '16px "Nunito", Arial';
-        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.fillStyle = 'rgba(255,255,255,0.7)'; // Subtitle text
         ctx.fillText(
             `${stats.gamesPlayed} games • ${stats.winStreak} streak • ${stats.ballsPotted} pots`,
             panelRect.x + 220,
@@ -180,15 +193,15 @@ export class ProfileScene implements UIScene {
         );
 
         ctx.font = '14px "Nunito", Arial';
-        ctx.fillStyle = 'rgba(255,255,255,0.55)';
+        ctx.fillStyle = 'rgba(255,255,255,0.55)'; // Muted text
         ctx.fillText(`Overall rank: ${this.deriveRank(stats)}`, panelRect.x + 220, panelRect.y + 120);
         ctx.restore();
     }
 
-    private renderStats(ctx: CanvasRenderingContext2D, width: number, stats: GameStats) {
+    private renderStats(ctx: CanvasRenderingContext2D, width: number, navHeight: number, stats: GameStats) {
         const panelRect: Rect = {
             x: width * 0.08,
-            y: 270,
+            y: navHeight + 250,
             width: width * 0.84,
             height: 150
         };
@@ -214,11 +227,12 @@ export class ProfileScene implements UIScene {
         });
     }
 
-    private renderAchievements(ctx: CanvasRenderingContext2D, width: number, height: number, stats: GameStats) {
-        const panelHeight = height - 470;
+    private renderAchievements(ctx: CanvasRenderingContext2D, width: number, height: number, navHeight: number, stats: GameStats) {
+        const contentY = navHeight + 420;
+        const panelHeight = height - contentY - 30;
         const panelRect: Rect = {
             x: width * 0.08,
-            y: 440,
+            y: contentY,
             width: width * 0.84,
             height: Math.max(220, panelHeight)
         };
@@ -262,17 +276,17 @@ export class ProfileScene implements UIScene {
             {
                 label: 'Win Rate',
                 value: this.formatWinRate(stats),
-                accent: '#4CAF50'
+                accent: ColorTokens.action.success
             },
             {
                 label: 'Current Streak',
                 value: `${stats.winStreak} wins`,
-                accent: '#2196F3'
+                accent: ColorTokens.action.info
             },
             {
                 label: 'Balls Potted',
                 value: stats.ballsPotted.toString(),
-                accent: '#FF5722'
+                accent: ColorTokens.action.danger
             }
         ];
     }

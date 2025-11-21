@@ -312,6 +312,15 @@ export class Game {
 
     // Handle A key to toggle aim/power mode
     window.addEventListener('keydown', (e) => {
+      // ESC key - show in-game menu (only when UI is not already blocking)
+      if (e.key === 'Escape') {
+        // Only show menu if we're currently in-game (not in lobby/other UI)
+        if (uiStateMachine.state === UIState.IN_GAME) {
+          uiStateMachine.transitionTo(UIState.IN_GAME_MENU);
+        }
+        return;
+      }
+
       if (isUIBlockingGameplay()) return;
       if (e.key === 'Shift') {
         this.input.setFineAimActive(true);

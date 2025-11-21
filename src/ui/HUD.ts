@@ -6,6 +6,7 @@ import { UIPanel } from './panels/UIPanel';
 import { GameSettingsPanel } from './GameSettingsPanel';
 import { notificationService } from './NotificationService';
 import { uiStateMachine, UIState } from './UIStateMachine';
+import { sceneController } from './SceneController';
 
 export class HUD {
   fpsElement: HTMLElement | null;
@@ -31,6 +32,10 @@ export class HUD {
     this.statsElement = document.getElementById('stats');
 
     this.settingsManager = new SettingsManager();
+
+    // Initialize SettingsScene with the settingsManager
+    sceneController.initializeSettingsScene(this.settingsManager);
+
     this.gameSettingsPanel = new GameSettingsPanel(this.settingsManager, {
       onStatsVisibilityChange: (visible) => {
         this.showStats = visible;

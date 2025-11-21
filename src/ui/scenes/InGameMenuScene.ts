@@ -1,61 +1,113 @@
 
 import { UIScene } from '../SceneController';
 import { uiStateMachine, UIState } from '../UIStateMachine';
+import { ColorTokens, SemanticColors } from '../theme/ColorTokens';
+import { drawGlossyButton, drawRoundedRect, Rect } from '../components/UIComponents';
+
+interface MenuButton {
+    id: 'resume' | 'settings' | 'quit';
+    text: string;
+    icon: string;
+    color: string;
+    rect: Rect;
+}
 
 export class InGameMenuScene implements UIScene {
-    private buttons: any[] = [];
-    private hoveredButton: any = null;
+    private canvas: HTMLCanvasElement | null = null;
+    private buttons: MenuButton[] = [];
+    private hoveredButton: MenuButton | null = null;
+    private keyHandler: ((e: KeyboardEvent) => void) | null = null;
 
-    constructor() {
-        this.setupButtons();
-    }
+    private setupButtons(width: number, height: number) {
+        const buttonWidth = 280;
+        const buttonHeight = 70;
+        const gap = 20;
+        const startX = (width - buttonWidth) / 2;
+        const centerY = height / 2;
+        const startY = centerY - (buttonHeight * 1.5 + gap);
 
-    private setupButtons() {
         this.buttons = [
-            { id: 'resume', text: 'RESUME', x: 0, y: -50, width: 200, height: 50, color: '#4CAF50' },
-            { id: 'settings', text: 'SETTINGS', x: 0, y: 20, width: 200, height: 50, color: '#2196F3' },
-            { id: 'quit', text: 'QUIT TO MENU', x: 0, y: 90, width: 200, height: 50, color: '#F44336' }
+            {
+                id: 'resume',
+                text: 'Resume Game',
+                icon: '▶',
+                color: ColorTokens.action.success,
+                rect: { x: startX, y: startY, width: buttonWidth, height: buttonHeight }
+            },
+            {
+                id: 'settings',
+                text: 'Settings',
+                icon: '⚙',
+                color: ColorTokens.action.info,
+                rect: { x: startX, y: startY + buttonHeight + gap, width: buttonWidth, height: buttonHeight }
+            },
+            {
+                id: 'quit',
+                text: 'Quit to Menu',
+                icon: '⏻',
+                color: ColorTokens.action.danger,
+                rect: { x: startX, y: startY + (buttonHeight + gap) * 2, width: buttonWidth, height: buttonHeight }
+            }
         ];
     }
 
     mount(): void {
-        console.log('InGameMenuScene mounted');
-        const canvas = document.getElementById('ui-stage') as HTMLCanvasElement;
-        canvas.addEventListener('mousemove', this.onMouseMove);
-        canvas.addEventListener('click', this.onClick);
+        this.canvas = document.getElementById('ui-stage') as HTMLCanvasElement;
+        if (!this.canvas) return;
+
+        this.setupButtons(this.canvas.width, this.canvas.height);
+        this.canvas.addEventListener('mousemove', this.onMouseMove);
+        this.canvas.addEventListener('click', this.onClick);
+        window.addEventListener('resize', this.onResize);
+
+        // ESC key to resume game
+        this.keyHandler = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                this.handleButtonClick('resume');
+            }
+        };
+        window.addEventListener('keydown', this.keyHandler);
 
         // Pause game logic if not already paused
         window.dispatchEvent(new CustomEvent('game:pause'));
     }
 
     unmount(): void {
-        console.log('InGameMenuScene unmounted');
-        const canvas = document.getElementById('ui-stage') as HTMLCanvasElement;
-        canvas.removeEventListener('mousemove', this.onMouseMove);
-        canvas.removeEventListener('click', this.onClick);
+        if (!this.canvas) return;
+        this.canvas.removeEventListener('mousemove', this.onMouseMove);
+        this.canvas.removeEventListener('click', this.onClick);
+        window.removeEventListener('resize', this.onResize);
+
+        if (this.keyHandler) {
+            window.removeEventListener('keydown', this.keyHandler);
+            this.keyHandler = null;
+        }
+
+        this.canvas.style.cursor = 'default';
+        this.canvas = null;
     }
 
+    private onResize = () => {
+        if (!this.canvas) return;
+        this.setupButtons(this.canvas.width, this.canvas.height);
+    };
+
     private onMouseMove = (e: MouseEvent) => {
-        const canvas = document.getElementById('ui-stage') as HTMLCanvasElement;
-        const rect = canvas.getBoundingClientRect();
+        if (!this.canvas) return;
+        const rect = this.canvas.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
 
-        const cx = canvas.width / 2;
-        const cy = canvas.height / 2;
-
         this.hoveredButton = null;
         for (const btn of this.buttons) {
-            const bx = cx + btn.x - btn.width / 2;
-            const by = cy + btn.y - btn.height / 2;
-
-            if (x >= bx && x <= bx + btn.width && y >= by && y <= by + btn.height) {
+            const { x: bx, y: by, width, height } = btn.rect;
+            if (x >= bx && x <= bx + width && y >= by && y <= by + height) {
                 this.hoveredButton = btn;
-                canvas.style.cursor = 'pointer';
+                this.canvas.style.cursor = 'pointer';
                 return;
             }
         }
-        canvas.style.cursor = 'default';
+        this.canvas.style.cursor = 'default';
     }
 
     private onClick = (_e: MouseEvent) => {
@@ -71,15 +123,9 @@ export class InGameMenuScene implements UIScene {
                 uiStateMachine.transitionTo(UIState.IN_GAME);
                 break;
             case 'settings':
-                const game = (window as any).poolGame;
-                if (game && game.hud) {
-                    console.log('Open Settings requested');
-                    // Trigger settings panel via event or direct access if possible
-                    // For now, we just log as the settings panel is DOM based and might need a separate trigger
-                    // or we can try to find the settings button and click it programmatically
-                    const settingsBtn = document.getElementById('settings-btn');
-                    if (settingsBtn) settingsBtn.click();
-                }
+                // Store return state so SettingsScene knows where to go back
+                (window as any).__settingsReturnState = UIState.IN_GAME_MENU;
+                uiStateMachine.transitionTo(UIState.SETTINGS);
                 break;
             case 'quit':
                 window.dispatchEvent(new CustomEvent('game:resume')); // Resume to clean up state
@@ -94,93 +140,51 @@ export class InGameMenuScene implements UIScene {
     render(ctx: CanvasRenderingContext2D): void {
         const width = ctx.canvas.width;
         const height = ctx.canvas.height;
-        const cx = width / 2;
-        const cy = height / 2;
 
-        // Background - deep navy gradient similar to lobby
-        const bgGradient = ctx.createLinearGradient(0, 0, 0, height);
-        bgGradient.addColorStop(0, '#000B1A');
-        bgGradient.addColorStop(0.5, '#050B18');
-        bgGradient.addColorStop(1, '#02040A');
-        ctx.fillStyle = bgGradient;
+        this.renderBackground(ctx, width, height);
+        this.renderTitle(ctx, width, height);
+        this.renderButtons(ctx);
+        this.renderHint(ctx, width, height);
+    }
+
+    private renderBackground(ctx: CanvasRenderingContext2D, width: number, height: number) {
+        // Same gradient as LobbyScene
+        const gradient = ctx.createLinearGradient(0, 0, 0, height);
+        gradient.addColorStop(0, SemanticColors.gradient.start);
+        gradient.addColorStop(1, SemanticColors.gradient.end);
+        ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, width, height);
 
-        // Title
+        // Semi-transparent overlay to dim game view
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.fillRect(0, 0, width, height);
+    }
+
+    private renderTitle(ctx: CanvasRenderingContext2D, width: number, height: number) {
         ctx.save();
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = 'bold 48px Arial';
+        ctx.fillStyle = ColorTokens.text.primary;
+        ctx.font = 'bold 56px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.shadowColor = 'rgba(0, 180, 255, 0.7)';
-        ctx.shadowBlur = 16;
-        ctx.fillText('PAUSED', cx, cy - 170);
-        ctx.shadowBlur = 0;
+        ctx.shadowColor = ColorTokens.effects.shadow;
+        ctx.shadowBlur = 8;
+        ctx.fillText('GAME PAUSED', width / 2, height / 2 - 180);
         ctx.restore();
+    }
 
-        // Central card panel
-        const panelWidth = 420;
-        const panelHeight = 260;
-        const panelX = cx - panelWidth / 2;
-        const panelY = cy - panelHeight / 2 - 10;
-        const panelRadius = 16;
-
-        const cardGradient = ctx.createLinearGradient(0, panelY, 0, panelY + panelHeight);
-        cardGradient.addColorStop(0, 'rgba(255,255,255,0.06)');
-        cardGradient.addColorStop(1, 'rgba(13,20,36,0.75)');
-
-        const drawRoundedRect = (x: number, y: number, w: number, h: number, r: number) => {
-            ctx.beginPath();
-            ctx.moveTo(x + r, y);
-            ctx.lineTo(x + w - r, y);
-            ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-            ctx.lineTo(x + w, y + h - r);
-            ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-            ctx.lineTo(x + r, y + h);
-            ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-            ctx.lineTo(x, y + r);
-            ctx.quadraticCurveTo(x, y, x + r, y);
-            ctx.closePath();
-        };
-
-        ctx.save();
-        drawRoundedRect(panelX, panelY, panelWidth, panelHeight, panelRadius);
-        ctx.fillStyle = cardGradient;
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(255,255,255,0.25)';
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-        ctx.restore();
-
-        // Buttons
+    private renderButtons(ctx: CanvasRenderingContext2D) {
         for (const btn of this.buttons) {
-            const bx = cx + btn.x - btn.width / 2;
-            const by = cy + btn.y - btn.height / 2;
-
-            ctx.save();
-            const btnRadius = 10;
-            drawRoundedRect(bx, by, btn.width, btn.height, btnRadius);
-
-            const baseGradient = ctx.createLinearGradient(bx, by, bx, by + btn.height);
-            if (btn === this.hoveredButton) {
-                baseGradient.addColorStop(0, 'rgba(255,255,255,0.25)');
-                baseGradient.addColorStop(1, 'rgba(255,255,255,0.10)');
-            } else {
-                baseGradient.addColorStop(0, 'rgba(255,255,255,0.18)');
-                baseGradient.addColorStop(1, 'rgba(255,255,255,0.06)');
-            }
-            ctx.fillStyle = baseGradient;
-            ctx.fill();
-
-            ctx.strokeStyle = btn.color;
-            ctx.lineWidth = btn === this.hoveredButton ? 2.5 : 2;
-            ctx.stroke();
-
-            ctx.fillStyle = '#000000';
-            ctx.font = 'bold 18px Arial';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(btn.text, cx + btn.x, cy + btn.y);
-            ctx.restore();
+            const isHovered = btn === this.hoveredButton;
+            drawGlossyButton(ctx, btn.rect, btn.text, btn.color, isHovered);
         }
+    }
+
+    private renderHint(ctx: CanvasRenderingContext2D, width: number, height: number) {
+        ctx.save();
+        ctx.fillStyle = ColorTokens.text.secondary;
+        ctx.font = '14px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('Press ESC to resume', width / 2, height / 2 + 180);
+        ctx.restore();
     }
 }

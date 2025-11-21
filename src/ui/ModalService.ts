@@ -25,7 +25,7 @@ export class ModalService {
     this.overlay.style.width = '100vw';
     this.overlay.style.height = '100vh';
     this.overlay.style.zIndex = '2000';
-    this.overlay.style.display = 'flex';
+    this.overlay.style.display = 'none'; // Start hidden, will be set to 'flex' when shown
     this.overlay.style.alignItems = 'center';
     this.overlay.style.justifyContent = 'center';
     this.overlay.style.opacity = '0';
@@ -141,6 +141,7 @@ export class ModalService {
 
     // Show overlay
     this.overlay.classList.remove('hidden');
+    this.overlay.style.display = 'flex';
     // Trigger reflow
     this.overlay.offsetHeight;
     this.overlay.style.opacity = '1';
@@ -173,6 +174,7 @@ export class ModalService {
       if (this.currentModal === modal) {
           this.currentModal = null;
           this.overlay.classList.add('hidden');
+          this.overlay.style.display = 'none';
           uiSoundService.play('modal-close');
           if (this.onCloseCallback) {
               this.onCloseCallback();

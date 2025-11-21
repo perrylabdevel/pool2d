@@ -8,7 +8,10 @@ import {
     UIColors,
     Rect
 } from '../components/UIComponents';
+import { ColorTokens } from '../theme/ColorTokens';
 import { GameMode } from '../../game/Game';
+import { NavigationBar } from '../components/NavigationBar';
+import { drawSceneBackground } from '../components/SceneBackground';
 
 interface PlayModeButton {
     id: string;
@@ -23,9 +26,17 @@ export class PlayModesScene implements UIScene {
     private buttons: PlayModeButton[] = [];
     private hoveredButton: PlayModeButton | null = null;
     private keyHandler: ((e: KeyboardEvent) => void) | null = null;
+    private navigationBar: NavigationBar;
 
     constructor() {
-        // Buttons setup in resize
+        this.navigationBar = new NavigationBar({
+            title: 'GAME MODES',
+            showBack: true,
+            backState: UIState.LOBBY,
+            showProfile: true,
+            showCurrencies: true,
+            showSettings: true
+        });
     }
 
     mount(): void {
@@ -66,28 +77,24 @@ export class PlayModesScene implements UIScene {
     private setupLayout(width: number, height: number) {
         this.buttons = [];
 
-        // Back Button (Top Left)
-        this.buttons.push({
-            id: 'back',
-            text: '← BACK',
-            rect: { x: 20, y: 20, width: 100, height: 40 },
-            color: UIColors.danger,
-            action: () => uiStateMachine.transitionTo(UIState.LOBBY)
-        });
+        // Setup navigation bar
+        this.navigationBar.setupLayout(width);
+        const navHeight = this.navigationBar.getHeight();
 
         // Cards Layout
         const cardWidth = 220;
         const cardHeight = 300;
         const gap = 30;
         const modes = [
-            { id: 'practice', title: 'PRACTICE', desc: 'Sharpen your skills', color: '#4CAF50', icon: '🎯' },
-            { id: '8ball', title: '8 BALL', desc: 'Classic Rules', color: '#2196F3', icon: '🎱' },
-            { id: 'time-attack', title: 'TIME ATTACK', desc: 'Race against time', color: '#FF9800', icon: '⏱️' },
+            { id: 'practice', title: 'PRACTICE', desc: 'Sharpen your skills', color: ColorTokens.action.success, icon: '🎯' },
+            { id: '8ball', title: '8 BALL', desc: 'Classic Rules', color: ColorTokens.action.info, icon: '🎱' },
+            { id: 'time-attack', title: 'TIME ATTACK', desc: 'Race against time', color: ColorTokens.action.warning, icon: '⏱️' },
         ];
 
         const totalWidth = modes.length * cardWidth + (modes.length - 1) * gap;
         let startX = (width - totalWidth) / 2;
-        const startY = (height - cardHeight) / 2;
+        const availableHeight = height - navHeight - 40; // 40px for spacing
+        const startY = navHeight + (availableHeight - cardHeight) / 2 + 20;
 
         modes.forEach((mode, index) => {
             const x = startX + index * (cardWidth + gap);
@@ -137,6 +144,13 @@ export class PlayModesScene implements UIScene {
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
 
+        // Check navigation bar first
+        if (this.navigationBar.handleMouseMove(x, y)) {
+            this.hoveredButton = null;
+            canvas.style.cursor = this.navigationBar.getCursor();
+            return;
+        }
+
         this.hoveredButton = null;
         for (const btn of this.buttons) {
             if (x >= btn.rect.x && x <= btn.rect.x + btn.rect.width &&
@@ -150,6 +164,16 @@ export class PlayModesScene implements UIScene {
     }
 
     private onClick = (e: MouseEvent) => {
+        const canvas = document.getElementById('ui-stage') as HTMLCanvasElement;
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        // Check navigation bar first
+        if (this.navigationBar.handleClick(x, y)) {
+            return;
+        }
+
         if (this.hoveredButton) {
             this.hoveredButton.action();
         }
@@ -163,17 +187,9 @@ export class PlayModesScene implements UIScene {
         const height = ctx.canvas.height;
 
         // Background
-        const bgGradient = ctx.createLinearGradient(0, 0, 0, height);
-        bgGradient.addColorStop(0, '#1a2b4a');
-        bgGradient.addColorStop(1, '#000000');
-        ctx.fillStyle = bgGradient;
-        ctx.fillRect(0, 0, width, height);
+        drawSceneBackground(ctx, width, height, 'purple');
 
-        // Title
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = 'bold 32px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('SELECT GAME MODE', width / 2, 80);
+        const navHeight = this.navigationBar.getHeight();
 
         // Render Cards (Static for now, matching buttons layout)
         const cardWidth = 220;
@@ -187,7 +203,8 @@ export class PlayModesScene implements UIScene {
 
         const totalWidth = modes.length * cardWidth + (modes.length - 1) * gap;
         let startX = (width - totalWidth) / 2;
-        const startY = (height - cardHeight) / 2;
+        const availableHeight = height - navHeight - 40; // 40px for spacing
+        const startY = navHeight + (availableHeight - cardHeight) / 2 + 20;
 
         modes.forEach((mode, index) => {
             const x = startX + index * (cardWidth + gap);
@@ -202,12 +219,12 @@ export class PlayModesScene implements UIScene {
             ctx.fillText(mode.icon, x + cardWidth / 2, startY + 60);
 
             // Title
-            ctx.fillStyle = '#FFF';
+            ctx.fillStyle = ColorTokens.text.primary;
             ctx.font = 'bold 20px Arial';
             ctx.fillText(mode.title, x + cardWidth / 2, startY + 120);
 
             // Desc
-            ctx.fillStyle = '#AAA';
+            ctx.fillStyle = ColorTokens.text.secondary;
             ctx.font = '14px Arial';
             ctx.fillText(mode.desc, x + cardWidth / 2, startY + 150);
 
@@ -215,16 +232,19 @@ export class PlayModesScene implements UIScene {
             if (mode.price !== 'Free') {
                 drawCurrencyPill(ctx, x + cardWidth / 2 - 50, startY + 180, parseInt(mode.price), 'coins');
             } else {
-                ctx.fillStyle = '#4CAF50';
+                ctx.fillStyle = ColorTokens.action.success;
                 ctx.font = 'bold 16px Arial';
                 ctx.fillText('FREE', x + cardWidth / 2, startY + 190);
             }
         });
 
-        // Render Buttons (Back button and Play buttons)
+        // Render Buttons (Play buttons only, back button handled by nav bar)
         for (const btn of this.buttons) {
             const isHovered = btn === this.hoveredButton;
             drawGlossyButton(ctx, btn.rect, btn.text, btn.color, isHovered);
         }
+
+        // Render navigation bar on top
+        this.navigationBar.render(ctx, width);
     }
 }

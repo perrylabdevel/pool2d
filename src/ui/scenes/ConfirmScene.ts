@@ -1,6 +1,7 @@
 import { UIScene } from '../SceneController';
 import { uiStateMachine, UIState } from '../UIStateMachine';
 import { drawGlossyButton, drawPanel, Rect, UIColors } from '../components/UIComponents';
+import { ColorTokens, SemanticColors } from '../theme/ColorTokens';
 
 type ConfirmButton = {
     id: 'confirm' | 'cancel';
@@ -110,13 +111,13 @@ export class ConfirmScene implements UIScene {
     private renderBackground(ctx: CanvasRenderingContext2D, width: number, height: number) {
         // Same background gradient as LobbyScene
         const gradient = ctx.createLinearGradient(0, 0, 0, height);
-        gradient.addColorStop(0, '#0D1424');
-        gradient.addColorStop(1, '#000B1A');
+        gradient.addColorStop(0, SemanticColors.gradient.start);
+        gradient.addColorStop(1, SemanticColors.gradient.end);
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, width, height);
 
         // Dim overlay
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        ctx.fillStyle = ColorTokens.effects.shadow;
         ctx.fillRect(0, 0, width, height);
     }
 
@@ -132,14 +133,14 @@ export class ConfirmScene implements UIScene {
         drawPanel(ctx, { x: panelX, y: panelY, width: panelWidth, height: panelHeight });
 
         // Title
-        ctx.fillStyle = '#FFF';
+        ctx.fillStyle = ColorTokens.text.primary;
         ctx.font = 'bold 24px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(this.title, width / 2, panelY + 50);
 
         // Message
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'; // Slightly transparent white for subtitle
         ctx.font = '16px Arial';
         ctx.fillText(this.message, width / 2, panelY + 85);
 
