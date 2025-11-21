@@ -7,7 +7,7 @@ import { NavigationBar } from '../components/NavigationBar';
 import { drawSceneBackground } from '../components/SceneBackground';
 
 type ProfileButton = {
-    id: 'customize';
+    id: 'customize' | 'reset';
     label: string;
     color: string;
     rect: Rect;
@@ -70,6 +70,12 @@ export class ProfileScene implements UIScene {
                 label: 'Customize Avatar',
                 color: UIColors.secondary,
                 rect: { x: width - padding - 240, y: height - 126, width: 240, height: 56 }
+            },
+            {
+                id: 'reset',
+                label: 'Reset Stats',
+                color: ColorTokens.action.danger,
+                rect: { x: width - padding - 500, y: height - 126, width: 240, height: 56 }
             }
         ];
     };
@@ -116,10 +122,25 @@ export class ProfileScene implements UIScene {
         if (!this.hoveredButton) return;
         if (this.hoveredButton.id === 'customize') {
             console.log('[ProfileScene] Customize avatar placeholder');
+        } else if (this.hoveredButton.id === 'reset') {
+            // Dynamic import to avoid circular dependency if possible, or just rely on global/module
+            // We need ModalService. Since it's a singleton, we can import it.
+            import('../ModalService').then(({ modalService }) => {
+                modalService.confirm({
+                    title: 'RESET STATS',
+                    message: 'Are you sure you want to reset all your game statistics? This cannot be undone.',
+                    confirmText: 'YES, RESET',
+                    onConfirm: () => {
+                        this.settingsManager.resetGameStats();
+                        // Force re-render or update stats
+                        // The render loop pulls from settingsManager every frame, so it should update automatically
+                    }
+                });
+            });
         }
     };
 
-    update(_dt: number): void {}
+    update(_dt: number): void { }
 
     render(ctx: CanvasRenderingContext2D): void {
         const width = ctx.canvas.width;

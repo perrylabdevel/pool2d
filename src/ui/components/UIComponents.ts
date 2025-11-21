@@ -37,52 +37,92 @@ export function drawGlossyButton(
     isHovered: boolean = false
 ) {
     const { x, y, width, height } = rect;
-    const r = 8;
+    const r = 8; // Slightly tighter radius for game feel
 
     ctx.save();
 
-    // Shadow
-    drawRoundedRect(ctx, x, y + 4, width, height, r);
-    ctx.fillStyle = ColorTokens.effects.shadowButton;
+    // 1. Heavy Drop Shadow (External)
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetY = 6;
+    ctx.fillStyle = 'rgba(0,0,0,0)';
+    drawRoundedRect(ctx, x, y, width, height, r);
     ctx.fill();
 
-    // Main Body
+    // Reset shadow
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
+
+    // 2. Metallic Rim (Thick Border)
+    const rimWidth = 3;
+    const rimGrad = ctx.createLinearGradient(x, y, x, y + height);
+    rimGrad.addColorStop(0, '#ffffff');
+    rimGrad.addColorStop(0.5, '#888888');
+    rimGrad.addColorStop(1, '#444444');
+
+    ctx.fillStyle = rimGrad;
     drawRoundedRect(ctx, x, y, width, height, r);
+    ctx.fill();
+
+    // 3. Main Body (Gem/Glass Effect)
+    // Shrink rect for body to sit inside rim
+    const bx = x + rimWidth;
+    const by = y + rimWidth;
+    const bw = width - (rimWidth * 2);
+    const bh = height - (rimWidth * 2);
+    const br = r - 2;
 
     const base = normalizeColor(color);
-    const topColor = adjustColor(base, isHovered ? 40 : 0);
-    const bottomColor = adjustColor(base, isHovered ? 0 : -40);
+    // Much stronger contrast for gem look
+    const topColor = adjustColor(base, isHovered ? 80 : 40);
+    const bottomColor = adjustColor(base, isHovered ? -20 : -60);
 
-    // Gradient
-    const grad = ctx.createLinearGradient(x, y, x, y + height);
-    grad.addColorStop(0, topColor);
-    grad.addColorStop(1, bottomColor);
-    ctx.fillStyle = grad;
+    const bodyGrad = ctx.createLinearGradient(bx, by, bx, by + bh);
+    bodyGrad.addColorStop(0, topColor);
+    bodyGrad.addColorStop(0.5, base);
+    bodyGrad.addColorStop(1, bottomColor);
+
+    ctx.fillStyle = bodyGrad;
+    drawRoundedRect(ctx, bx, by, bw, bh, br);
     ctx.fill();
 
-    // Gloss highlight (top half)
+    // 4. Inner Glow / Edge Highlight (Inside the rim)
     ctx.save();
-    ctx.clip();
-    const glossGrad = ctx.createLinearGradient(x, y, x, y + height / 2);
-    glossGrad.addColorStop(0, ColorTokens.effects.gloss.start);
-    glossGrad.addColorStop(1, ColorTokens.effects.gloss.end);
-    ctx.fillStyle = glossGrad;
-    ctx.fillRect(x, y, width, height / 2);
-    ctx.restore();
+    ctx.clip(); // Clip to body
 
-    // Border
-    ctx.strokeStyle = ColorTokens.border.dark;
-    ctx.lineWidth = 1;
+    // Top inner highlight (sharp)
+    const innerHighlight = ctx.createLinearGradient(bx, by, bx, by + bh);
+    innerHighlight.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
+    innerHighlight.addColorStop(0.1, 'rgba(255, 255, 255, 0.1)');
+    innerHighlight.addColorStop(1, 'rgba(0, 0, 0, 0.4)');
+
+    ctx.strokeStyle = innerHighlight;
+    ctx.lineWidth = 2;
+    drawRoundedRect(ctx, bx + 1, by + 1, bw - 2, bh - 2, br);
     ctx.stroke();
 
-    // Text
+    // Gloss Shine (Top Half - Sharp)
+    const glossGrad = ctx.createLinearGradient(bx, by, bx, by + bh / 2);
+    glossGrad.addColorStop(0, 'rgba(255, 255, 255, 0.5)');
+    glossGrad.addColorStop(1, 'rgba(255, 255, 255, 0.05)');
+    ctx.fillStyle = glossGrad;
+    ctx.fillRect(bx, by, bw, bh / 2);
+
+    ctx.restore();
+
+    // 5. Text with Strong Outline
     ctx.fillStyle = ColorTokens.text.primary;
     ctx.font = 'bold 16px Arial';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.shadowColor = ColorTokens.effects.shadow;
-    ctx.shadowBlur = 2;
-    ctx.shadowOffsetY = 1;
+
+    // Text Stroke (Outline)
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+    ctx.strokeText(text, x + width / 2, y + height / 2);
+
+    // Text Fill
     ctx.fillText(text, x + width / 2, y + height / 2);
 
     ctx.restore();

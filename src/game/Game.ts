@@ -19,6 +19,7 @@ import { GeometryPanel } from '../ui/GeometryPanel';
 import { ModernGeometryPanel } from '../ui/ModernGeometryPanel';
 import { RenderLayerPanel } from '../ui/RenderLayerPanel';
 import { AudioPanel } from '../ui/AudioPanel';
+import { HelpPanel } from '../ui/HelpPanel';
 import { scenarioManager } from '../debug/ScenarioManager';
 import { Player, PlayerType, BallGroup } from './Player';
 import { GameStateMachine, GameState } from './GameStateMachine';
@@ -79,6 +80,7 @@ export class Game {
   modernGeometryPanel: ModernGeometryPanel;
   renderLayersPanel: RenderLayerPanel;
   audioPanel: AudioPanel;
+  helpPanel: HelpPanel;
   rules: EightBallRules;
   predictor: Predictor;
   audio: AudioManager;
@@ -158,6 +160,7 @@ export class Game {
     this.modernGeometryPanel = new ModernGeometryPanel(this.hud.settingsManager, () => this.restart());
     this.renderLayersPanel = new RenderLayerPanel(this.hud.settingsManager, this.renderer);
     this.audioPanel = new AudioPanel(this.hud.settingsManager);
+    this.helpPanel = new HelpPanel();
     this.rules = new EightBallRules(RULES_PRESETS[this.currentRuleset]);
     this.predictor = new Predictor();
     this.playbackController = new PlaybackController(this.world);
@@ -325,13 +328,7 @@ export class Game {
       if (e.key === 'Shift') {
         this.input.setFineAimActive(true);
       }
-      // Help Modal Shortcut
-      if (e.key === 'h' || e.key === 'H' || e.key === '?') {
-        // We can access HomeHub via import if we export it, or just use the one attached to window if any
-        // Or better, import the instance
-        const hub = (window as any).homeHub || require('../ui/HomeHub').homeHub;
-        if (hub) hub.openHelp();
-      }
+
 
       if (e.key === 'a' || e.key === 'A') {
         if (this.isPlayerInputBlocked()) return;
@@ -477,25 +474,22 @@ export class Game {
       }
       if (e.key === 's' || e.key === 'S') {
         if (e.shiftKey) {
-          // Shift+S: Open Settings Modal
-          const hub = (window as any).homeHub;
-          if (hub) hub.openSettings();
+          // Shift+S: Open Settings Scene
+          uiStateMachine.transitionTo(UIState.SETTINGS);
           return;
         }
         // Regular S: Toggle Physics Settings Panel (existing behavior)
       }
 
       if ((e.key === 'p' || e.key === 'P') && e.shiftKey) {
-        // Shift+P: Open Profile Modal
-        const hub = (window as any).homeHub;
-        if (hub) hub.openProfile();
+        // Shift+P: Open Profile Scene
+        uiStateMachine.transitionTo(UIState.PROFILE);
         return;
       }
 
       if ((e.key === 'c' || e.key === 'C') && e.shiftKey) {
         // Shift+C: Open Shop (Cues)
-        const hub = (window as any).homeHub;
-        if (hub) hub.openShop();
+        uiStateMachine.transitionTo(UIState.SHOP);
         return;
       }
 
@@ -693,6 +687,10 @@ export class Game {
     });
     this.hud.registerPanel('audio-panel', this.audioPanel.getController(), {
       hotkeys: ['u'],
+      persistState: true,
+    });
+    this.hud.registerPanel('help-panel', this.helpPanel.getController(), {
+      hotkeys: ['h', '?'],
       persistState: true,
     });
     this.hud.panelManager.restoreLastPanel();
