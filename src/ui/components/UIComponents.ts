@@ -54,15 +54,14 @@ export function drawGlossyButton(
     // Main Body
     drawRoundedRect(ctx, x, y, width, height, r);
 
+    const base = normalizeColor(color);
+    const topColor = adjustColor(base, isHovered ? 40 : 0);
+    const bottomColor = adjustColor(base, isHovered ? 0 : -40);
+
     // Gradient
     const grad = ctx.createLinearGradient(x, y, x, y + height);
-    if (isHovered) {
-        grad.addColorStop(0, adjustColor(color, 40));
-        grad.addColorStop(1, color);
-    } else {
-        grad.addColorStop(0, color);
-        grad.addColorStop(1, adjustColor(color, -40));
-    }
+    grad.addColorStop(0, topColor);
+    grad.addColorStop(1, bottomColor);
     ctx.fillStyle = grad;
     ctx.fill();
 
@@ -158,7 +157,22 @@ export function drawCurrencyPill(
     ctx.restore();
 }
 
-// Simple color adjuster
+function normalizeColor(color: string) {
+    const ctx = document.createElement('canvas').getContext('2d');
+    if (!ctx) return '#ffffff';
+    ctx.fillStyle = color;
+    return ctx.fillStyle;
+}
+
+// Simple color adjuster using parsed RGB components
 function adjustColor(color: string, amount: number) {
-    return '#' + color.replace(/^#/, '').replace(/../g, color => ('0' + Math.min(255, Math.max(0, parseInt(color, 16) + amount)).toString(16)).substr(-2));
+    const normalized = normalizeColor(color);
+    const match = normalized.match(/^#?([0-9a-f]{6})$/i);
+    if (!match) return normalized;
+    const num = parseInt(match[1], 16);
+    const r = Math.min(255, Math.max(0, ((num >> 16) & 0xff) + amount));
+    const g = Math.min(255, Math.max(0, ((num >> 8) & 0xff) + amount));
+    const b = Math.min(255, Math.max(0, (num & 0xff) + amount));
+    const toHex = (v: number) => v.toString(16).padStart(2, '0');
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 }

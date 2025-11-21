@@ -11,8 +11,7 @@ export class HomeHub {
     private helpModal: HelpModal | null = null;
 
     constructor() {
-        // Auto-show on instantiation (app start)
-        this.init();
+        // Legacy modal hub remains available, but scenes now own the default navigation.
     }
 
     init(onClose?: () => void) {

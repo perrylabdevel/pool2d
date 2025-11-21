@@ -1728,6 +1728,11 @@ export class Game {
 
     this.renderer.render(this.world, alpha);
 
+    // Only draw UI overlays (cue, power bar, dial) when in actual gameplay, not in lobby/menu scenes
+    if (uiStateMachine.state !== UIState.IN_GAME) {
+      return;
+    }
+
     // Draw cue line and power bar if can shoot (hide during ball-in-hand drag only)
     if (this.mode !== GameMode.PLAYBACK && this.canShoot && this.cueBall && !this.cueBall.pocketed && !this.isDraggingBall) {
       // Calculate aim sensitivity based on distance to nearest object ball

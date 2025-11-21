@@ -149,8 +149,11 @@ body {
 }
 
 #hud {
-  position: relative;
-  z-index: 10;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
   pointer-events: none;
 }
 
@@ -165,7 +168,7 @@ body {
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(10px);
-  pointer-events: auto;
+  pointer-events: none;
   width: 100%;
 }
 
@@ -311,6 +314,8 @@ body {
   justify-content: center;
   cursor: pointer;
   transition: all 0.2s ease;
+  position: relative;
+  z-index: 2;
 }
 
 #hud-menu-btn:hover {
@@ -544,6 +549,12 @@ button:active {
   flex: 1;
   min-width: 0;
   min-height: 0;
+  position: relative;
+  background: radial-gradient(circle at center, var(--color-menu-bg) 0%, var(--color-deep-navy) 100%);
+}
+
+#workspace-main.workspace-hud-offset {
+  padding-top: 120px;
 }
 
 #canvas-stage {
@@ -553,7 +564,10 @@ button:active {
   align-items: center;
   min-height: 0;
   padding: 0 24px 24px;
-  background: radial-gradient(circle at center, var(--color-menu-bg) 0%, var(--color-deep-navy) 100%);
+  background: transparent;
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
 }
 
 #canvas-container {
@@ -835,7 +849,13 @@ button:active {
 
 #ui-stage {
   position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
   pointer-events: auto;
+  z-index: 15;
+  /* Full-screen UI scenes (lobby, shop, profile) - sits between gameplay and HUD */
 }
 
 #debug-canvas {
@@ -1208,4 +1228,8 @@ button:active {
   color: rgba(255, 255, 255, 0.8);
   text-transform: uppercase;
   letter-spacing: 0.5px;
+}
+.hud-header .hud-player,
+#hud-menu-btn {
+  pointer-events: auto;
 }

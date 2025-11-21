@@ -1,22 +1,30 @@
 
-import { UIScene } from '../SceneController';
+import { UIScene, sceneController, TransitionType } from '../SceneController';
 import { uiStateMachine, UIState } from '../UIStateMachine';
+import {
+    drawGlossyButton,
+    drawPanel,
+    drawCurrencyPill,
+    UIColors,
+    Rect
+} from '../components/UIComponents';
+
+interface PlayModeButton {
+    id: string;
+    text: string;
+    rect: Rect;
+    color: string;
+    action: () => void;
+    icon?: string;
+}
 
 export class PlayModesScene implements UIScene {
-    private buttons: any[] = [];
-    private hoveredButton: any = null;
+    private buttons: PlayModeButton[] = [];
+    private hoveredButton: PlayModeButton | null = null;
+    private keyHandler: ((e: KeyboardEvent) => void) | null = null;
 
     constructor() {
-        this.setupButtons();
-    }
-
-    private setupButtons() {
-        this.buttons = [
-            { id: 'practice', text: 'PRACTICE', x: -150, y: 0, width: 140, height: 100, color: '#FFD700' },
-            { id: '8ball', text: '8 BALL', x: 0, y: 0, width: 140, height: 100, color: '#2196F3' },
-            { id: 'time-attack', text: 'TIME ATTACK', x: 150, y: 0, width: 140, height: 100, color: '#4CAF50' },
-            { id: 'back', text: 'BACK', x: 0, y: 150, width: 120, height: 40, color: '#9E9E9E' }
-        ];
+        // Buttons setup in resize
     }
 
     mount(): void {
@@ -24,6 +32,16 @@ export class PlayModesScene implements UIScene {
         const canvas = document.getElementById('ui-stage') as HTMLCanvasElement;
         canvas.addEventListener('mousemove', this.onMouseMove);
         canvas.addEventListener('click', this.onClick);
+        window.addEventListener('resize', this.onResize);
+
+        this.keyHandler = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                uiStateMachine.transitionTo(UIState.LOBBY);
+            }
+        };
+        window.addEventListener('keydown', this.keyHandler);
+
+        this.setupLayout(canvas.width, canvas.height);
     }
 
     unmount(): void {
@@ -31,6 +49,85 @@ export class PlayModesScene implements UIScene {
         const canvas = document.getElementById('ui-stage') as HTMLCanvasElement;
         canvas.removeEventListener('mousemove', this.onMouseMove);
         canvas.removeEventListener('click', this.onClick);
+        window.removeEventListener('resize', this.onResize);
+
+        if (this.keyHandler) {
+            window.removeEventListener('keydown', this.keyHandler);
+            this.keyHandler = null;
+        }
+    }
+
+    private onResize = () => {
+        const canvas = document.getElementById('ui-stage') as HTMLCanvasElement;
+        this.setupLayout(canvas.width, canvas.height);
+    }
+
+    private setupLayout(width: number, height: number) {
+        this.buttons = [];
+
+        // Back Button (Top Left)
+        this.buttons.push({
+            id: 'back',
+            text: '← BACK',
+            rect: { x: 20, y: 20, width: 100, height: 40 },
+            color: UIColors.danger,
+            action: () => uiStateMachine.transitionTo(UIState.LOBBY)
+        });
+
+        // Cards Layout
+        const cardWidth = 220;
+        const cardHeight = 300;
+        const gap = 30;
+        const modes = [
+            { id: 'practice', title: 'PRACTICE', desc: 'Sharpen your skills', color: '#4CAF50', icon: '🎯' },
+            { id: '8ball', title: '8 BALL', desc: 'Classic Rules', color: '#2196F3', icon: '🎱' },
+            { id: 'time-attack', title: 'TIME ATTACK', desc: 'Race against time', color: '#FF9800', icon: '⏱️' },
+        ];
+
+        const totalWidth = modes.length * cardWidth + (modes.length - 1) * gap;
+        let startX = (width - totalWidth) / 2;
+        const startY = (height - cardHeight) / 2;
+
+        modes.forEach((mode, index) => {
+            const x = startX + index * (cardWidth + gap);
+
+            // We will render the card background manually in render(), 
+            // but we need a button for the "PLAY" action inside the card.
+
+            // Card "Play" Button
+            this.buttons.push({
+                id: mode.id,
+                text: 'PLAY',
+                rect: {
+                    x: x + 20,
+                    y: startY + cardHeight - 70,
+                    width: cardWidth - 40,
+                    height: 50
+                },
+                color: mode.color,
+                action: () => this.handleModeSelect(mode.id),
+                icon: mode.icon // Pass icon to button if we want, or just use it for card header
+            });
+        });
+    }
+
+    private handleModeSelect(id: string) {
+        const game = (window as any).poolGame;
+        if (!game) return;
+
+        switch (id) {
+            case 'practice':
+                game.mode = 0; // PRACTICE
+                break;
+            case '8ball':
+                game.mode = 1; // EIGHT_BALL
+                break;
+            case 'time-attack':
+                game.mode = 2; // TIME_ATTACK
+                break;
+        }
+        game.restart();
+        uiStateMachine.transitionTo(UIState.IN_GAME);
     }
 
     private onMouseMove = (e: MouseEvent) => {
@@ -39,15 +136,10 @@ export class PlayModesScene implements UIScene {
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
 
-        const cx = canvas.width / 2;
-        const cy = canvas.height / 2;
-
         this.hoveredButton = null;
         for (const btn of this.buttons) {
-            const bx = cx + btn.x - btn.width / 2;
-            const by = cy + btn.y - btn.height / 2;
-
-            if (x >= bx && x <= bx + btn.width && y >= by && y <= by + btn.height) {
+            if (x >= btn.rect.x && x <= btn.rect.x + btn.rect.width &&
+                y >= btn.rect.y && y <= btn.rect.y + btn.rect.height) {
                 this.hoveredButton = btn;
                 canvas.style.cursor = 'pointer';
                 return;
@@ -58,38 +150,7 @@ export class PlayModesScene implements UIScene {
 
     private onClick = (e: MouseEvent) => {
         if (this.hoveredButton) {
-            this.handleButtonClick(this.hoveredButton.id);
-        }
-    }
-
-    private handleButtonClick(id: string) {
-        const game = (window as any).poolGame;
-
-        switch (id) {
-            case 'back':
-                uiStateMachine.transitionTo(UIState.LOBBY);
-                break;
-            case 'practice':
-                if (game) {
-                    game.mode = 0; // PRACTICE
-                    game.restart();
-                }
-                uiStateMachine.transitionTo(UIState.IN_GAME);
-                break;
-            case '8ball':
-                if (game) {
-                    game.mode = 1; // EIGHT_BALL
-                    game.restart();
-                }
-                uiStateMachine.transitionTo(UIState.IN_GAME);
-                break;
-            case 'time-attack':
-                if (game) {
-                    game.mode = 2; // TIME_ATTACK
-                    game.restart();
-                }
-                uiStateMachine.transitionTo(UIState.IN_GAME);
-                break;
+            this.hoveredButton.action();
         }
     }
 
@@ -99,35 +160,70 @@ export class PlayModesScene implements UIScene {
     render(ctx: CanvasRenderingContext2D): void {
         const width = ctx.canvas.width;
         const height = ctx.canvas.height;
-        const cx = width / 2;
-        const cy = height / 2;
 
         // Background
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+        const bgGradient = ctx.createLinearGradient(0, 0, 0, height);
+        bgGradient.addColorStop(0, '#1a2b4a');
+        bgGradient.addColorStop(1, '#000000');
+        ctx.fillStyle = bgGradient;
         ctx.fillRect(0, 0, width, height);
 
         // Title
         ctx.fillStyle = '#FFFFFF';
-        ctx.font = 'bold 36px Arial';
+        ctx.font = 'bold 32px Arial';
         ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('SELECT MODE', cx, cy - 150);
+        ctx.fillText('SELECT GAME MODE', width / 2, 80);
 
-        // Buttons
+        // Render Cards (Static for now, matching buttons layout)
+        const cardWidth = 220;
+        const cardHeight = 300;
+        const gap = 30;
+        const modes = [
+            { title: 'PRACTICE', desc: 'Sharpen your skills', icon: '🎯', price: 'Free' },
+            { title: '8 BALL', desc: 'Classic Rules', icon: '🎱', price: '100' },
+            { title: 'TIME ATTACK', desc: 'Race against time', icon: '⏱️', price: 'Free' },
+        ];
+
+        const totalWidth = modes.length * cardWidth + (modes.length - 1) * gap;
+        let startX = (width - totalWidth) / 2;
+        const startY = (height - cardHeight) / 2;
+
+        modes.forEach((mode, index) => {
+            const x = startX + index * (cardWidth + gap);
+
+            // Card Background
+            drawPanel(ctx, { x, y: startY, width: cardWidth, height: cardHeight });
+
+            // Header Icon
+            ctx.font = '48px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(mode.icon, x + cardWidth / 2, startY + 60);
+
+            // Title
+            ctx.fillStyle = '#FFF';
+            ctx.font = 'bold 20px Arial';
+            ctx.fillText(mode.title, x + cardWidth / 2, startY + 120);
+
+            // Desc
+            ctx.fillStyle = '#AAA';
+            ctx.font = '14px Arial';
+            ctx.fillText(mode.desc, x + cardWidth / 2, startY + 150);
+
+            // Price
+            if (mode.price !== 'Free') {
+                drawCurrencyPill(ctx, x + cardWidth / 2 - 50, startY + 180, parseInt(mode.price), 'coins');
+            } else {
+                ctx.fillStyle = '#4CAF50';
+                ctx.font = 'bold 16px Arial';
+                ctx.fillText('FREE', x + cardWidth / 2, startY + 190);
+            }
+        });
+
+        // Render Buttons (Back button and Play buttons)
         for (const btn of this.buttons) {
-            const bx = cx + btn.x - btn.width / 2;
-            const by = cy + btn.y - btn.height / 2;
-
-            ctx.fillStyle = btn === this.hoveredButton ? '#FFFFFF' : btn.color;
-            ctx.fillRect(bx, by, btn.width, btn.height);
-
-            ctx.strokeStyle = '#000000';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(bx, by, btn.width, btn.height);
-
-            ctx.fillStyle = btn === this.hoveredButton ? btn.color : '#000000';
-            ctx.font = 'bold 16px Arial';
-            ctx.fillText(btn.text, cx + btn.x, cy + btn.y);
+            const isHovered = btn === this.hoveredButton;
+            drawGlossyButton(ctx, btn.rect, btn.text, btn.color, isHovered);
         }
     }
 }

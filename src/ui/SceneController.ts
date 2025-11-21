@@ -1,10 +1,11 @@
 
-import { uiStateMachine, UIState } from './UIStateMachine';
+import { uiStateMachine, UIState, TransitionType } from './UIStateMachine';
 import { uiRoot } from './UIRoot';
 import { LobbyScene } from './scenes/LobbyScene';
 import { PlayModesScene } from './scenes/PlayModesScene';
 import { ShopScene } from './scenes/ShopScene';
 import { ProfileScene } from './scenes/ProfileScene';
+import { ConfirmScene } from './scenes/ConfirmScene';
 import { InGameMenuScene } from './scenes/InGameMenuScene';
 import { uiSoundService } from './UISoundService';
 
@@ -15,12 +16,8 @@ export interface UIScene {
     render(ctx: CanvasRenderingContext2D): void;
 }
 
-enum TransitionType {
-    NONE,
-    CROSS_FADE,
-    SLIDE_LEFT,
-    SLIDE_RIGHT
-}
+// Re-export TransitionType for backward compatibility
+export { TransitionType };
 
 export class SceneController {
     private currentScene: UIScene | null = null;
@@ -52,6 +49,7 @@ export class SceneController {
         this.registerScene(UIState.PLAY_MODES, new PlayModesScene());
         this.registerScene(UIState.SHOP, new ShopScene());
         this.registerScene(UIState.PROFILE, new ProfileScene());
+        this.registerScene(UIState.CONFIRM, new ConfirmScene());
         this.registerScene(UIState.IN_GAME_MENU, new InGameMenuScene());
 
         // Start the render loop
@@ -66,13 +64,19 @@ export class SceneController {
         this.scenes.set(state, scene);
     }
 
+    public getScene(state: UIState): UIScene | undefined {
+        return this.scenes.get(state);
+    }
+
     private bindStateChanges() {
-        uiStateMachine.onStateChange((newState, _prevState) => {
-            this.switchScene(newState);
+        uiStateMachine.onStateChange((newState, _prevState, transition) => {
+            // Show CONFIRM scene immediately without transition
+            const immediate = newState === UIState.CONFIRM || _prevState === UIState.CONFIRM;
+            this.switchScene(newState, immediate, transition);
         });
     }
 
-    private switchScene(state: UIState, immediate = false) {
+    public switchScene(state: UIState, immediate = false, transition: TransitionType = TransitionType.CROSS_FADE) {
         const nextScene = this.scenes.get(state);
 
         if (immediate) {
@@ -96,6 +100,7 @@ export class SceneController {
             this.nextScene.mount();
             this.isTransitioning = true;
             this.transitionProgress = 0;
+            this.transitionType = transition; // Use the requested transition
             this.canvas.style.display = 'block';
             this.canvas.style.pointerEvents = 'auto';
 
@@ -113,8 +118,14 @@ export class SceneController {
 
     private setupResizeListener() {
         const resize = () => {
-            this.canvas.width = window.innerWidth;
-            this.canvas.height = window.innerHeight;
+            const parent = this.canvas.parentElement as HTMLElement | null;
+            const rect = parent?.getBoundingClientRect();
+            const width = Math.max(1, rect?.width ?? window.innerWidth);
+            const height = Math.max(1, rect?.height ?? window.innerHeight);
+            this.canvas.width = width;
+            this.canvas.height = height;
+            this.canvas.style.width = `${width}px`;
+            this.canvas.style.height = `${height}px`;
         };
         window.addEventListener('resize', resize);
         resize();
@@ -188,6 +199,23 @@ export class SceneController {
             if (this.nextScene) {
                 ctx.save();
                 ctx.translate(width - offset, 0);
+                this.nextScene.render(ctx);
+                ctx.restore();
+            }
+        } else if (this.transitionType === TransitionType.SLIDE_RIGHT) {
+            // Slide current out to right, next in from left
+            const offset = width * alpha;
+
+            if (this.currentScene) {
+                ctx.save();
+                ctx.translate(offset, 0);
+                this.currentScene.render(ctx);
+                ctx.restore();
+            }
+
+            if (this.nextScene) {
+                ctx.save();
+                ctx.translate(-(width - offset), 0);
                 this.nextScene.render(ctx);
                 ctx.restore();
             }

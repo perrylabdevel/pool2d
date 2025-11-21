@@ -35,14 +35,13 @@ This document explains how the visual display is composed, scaled, and kept alig
 
 Key config:
 - `CONFIG.CANVAS_SCALE_MULTIPLIER` — user “Table Scale” (visual size).
-- `CONFIG.CUE_LENGTH_IN` — visual cue length in world inches.
-- `CONFIG.CUE_VISUAL_PADDING_IN` — extra space around table for cue visibility.
-- `CONFIG.MIN_WORLD_PADDING_IN` — lower bound for world padding.
+- `CONFIG.CUE_VISUAL_PADDING_IN` — desired safety margin around the rails.
+- `CONFIG.MIN_WORLD_PADDING_IN` — lower bound for padding when cue padding is small (legacy styles).
 
-Framing & scale:
+Framing & scale (mirrors `Renderer3D.resize()`):
 1. Compute world padding (in inches), independent of current scale:
-   - `padWorldIn = max(MIN_WORLD_PADDING_IN, CUE_LENGTH_IN + baseBallRadius + 5 + CUE_VISUAL_PADDING_IN)`
-   - Uses the base/unscaled ball radius so ball visual scale changes do not reframe the camera.
+   - `padWorldIn = max(MIN_WORLD_PADDING_IN ?? 6, CUE_VISUAL_PADDING_IN ?? 20)`
+   - Padding intentionally ignores cue length now; the cue is allowed to leave frame slightly, which removed the high variance sizing we previously had.
 2. Compute base scale to fit table + padding into available pixels:
    - `scaleX = availableWidth / (TABLE_WIDTH + 2*padWorldIn)`
    - `scaleY = availableHeight / (TABLE_HEIGHT + 2*padWorldIn)`
@@ -56,7 +55,8 @@ Framing & scale:
 
 Implications:
 - “Table Scale” changes visual size only (no physics changes).
-- Ball visual scale does not affect framing; it only rescales meshes and physics ball radius (and triggers a controlled restart).
+- If you need more breathing room increase `CUE_VISUAL_PADDING_IN`; the cue length does not influence framing anymore.
+- Ball visual scale does not affect framing; it only rescales meshes and physics ball radius (and still triggers a controlled restart).
 
 ## Table Scale vs Ball Scale
 

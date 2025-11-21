@@ -39,14 +39,14 @@
 
 ### Phase 2 - Scene Ports (In Progress)
 1. **Lobby Scene** (implemented) - Canvas-based hero + cards on `#ui-stage`, with `BACK TO TABLE` and `Esc` returning to `IN_GAME`.
-2. **Play Modes Scene** (prototype) - Mode cards and transitions to `IN_GAME` after configuring the `Game` mode.
-3. **Shop Scene** - Cue carousel with rarity badges and equip CTA, rendered on `#ui-stage` and calling into `homeHub`/`Game` as needed.
-4. **Profile & Settings Scenes** - Port existing modal content to `#ui-stage` without touching `#ui-canvas`.
+2. **Play Modes Scene** (prototype) - Slides in from Lobby and feeds back into `IN_GAME` but still uses placeholder art and options.
+3. **Shop Scene** (placeholder) - Currently a temporary slate with a Back button. Needs cue carousel, rarity badges, and equip CTA backed by `SettingsManager`.
+4. **Profile Scene** (placeholder) - Same story as Shop; still needs the ported modal layout, player stats, and CTA chips.
+5. **Settings Scene** - Not started. Will replace the existing modal stack once Profile/Shop prove out the canvas UI tree.
 
-### Phase 3 - Transitions & Effects
-- Add cross-fade / slide animations between scenes.
-- Hook UISoundService events for scene enter/exit.
-- Integrate background particles/shimmers for lobby hero.
+### Phase 3 - Transitions & Effects (Partially implemented)
+- **Done**: SceneController supports cross-fade, slide-left, and slide-right transitions plus UISoundService hooks.
+- **Pending**: Fancy motion (particles, dynamic hero layers) and contextual transition selection per scene.
 
 ### Phase 4 - Pause & HUD Integration
 - Replace pause modal with `IN_GAME_MENU` scene (full-screen overlay on `#ui-stage`).
@@ -58,9 +58,9 @@
 - Optimize canvas rendering (batched draws, offscreen buffers) and add responsive layouts for tablet/mobile widths.
 
 ## Next Steps
-1. Prototype additional scenes on `#ui-stage` (e.g., expanded Play Modes, Shop, Profile) and keep them fully independent of `#ui-canvas`.
-2. Define data contracts for scenes (Play Modes, Shop inventory, Profile stats) and how they call into `Game` and `homeHub`.
-3. Plan asset pipeline (textures, fonts) for canvas drawing.
+1. Replace the placeholder Shop/Profile canvases with real layouts that match the neon/metallic design tokens (carousel, focus management, etc.).
+2. Define data contracts for scenes (Play Modes configs, Shop inventory, Profile stats) and how they call into `Game`, `SettingsManager`, and the existing modal APIs.
+3. Plan asset pipeline (textures, fonts) for canvas drawing so scenes no longer depend on bare Arial fills.
 4. When extending the scene system, confirm:
    - `UIState` transitions are correct.
    - Input is gated by `UIState === IN_GAME` for gameplay behaviors.
