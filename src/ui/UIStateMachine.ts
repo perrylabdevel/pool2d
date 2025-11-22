@@ -2,6 +2,7 @@ export enum UIState {
     LOBBY = 'LOBBY',
     PLAY_MODES = 'PLAY_MODES',
     SHOP = 'SHOP',
+    EVENTS = 'EVENTS',
     PROFILE = 'PROFILE',
     CONFIRM = 'CONFIRM',
     SETTINGS = 'SETTINGS',
@@ -58,7 +59,7 @@ export class UIStateMachine {
         }
 
         // Navigation hierarchy for slides
-        const hierarchy = [UIState.LOBBY, UIState.PLAY_MODES, UIState.SHOP, UIState.PROFILE];
+        const hierarchy = [UIState.LOBBY, UIState.PLAY_MODES, UIState.SHOP, UIState.EVENTS, UIState.PROFILE];
         const fromIndex = hierarchy.indexOf(from);
         const toIndex = hierarchy.indexOf(to);
 

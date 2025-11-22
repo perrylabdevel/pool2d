@@ -1,4 +1,5 @@
 import { ColorTokens, UIColors as LegacyUIColors } from '../theme/ColorTokens';
+import { LayoutConstants } from '../theme/LayoutConstants';
 
 export interface Rect {
     x: number;
@@ -37,7 +38,7 @@ export function drawGlossyButton(
     isHovered: boolean = false
 ) {
     const { x, y, width, height } = rect;
-    const r = 8; // Slightly tighter radius for game feel
+    const r = LayoutConstants.Radii.Medium; // Slightly tighter radius for game feel
 
     ctx.save();
 
@@ -113,7 +114,7 @@ export function drawGlossyButton(
 
     // 5. Text with Strong Outline
     ctx.fillStyle = ColorTokens.text.primary;
-    ctx.font = 'bold 16px Arial';
+    ctx.font = `bold ${LayoutConstants.Fonts.Size.Medium}px ${LayoutConstants.Fonts.Family.Default}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
@@ -130,7 +131,7 @@ export function drawGlossyButton(
 
 export function drawPanel(ctx: CanvasRenderingContext2D, rect: Rect) {
     const { x, y, width, height } = rect;
-    const r = 12;
+    const r = LayoutConstants.Radii.Large;
 
     ctx.save();
     drawRoundedRect(ctx, x, y, width, height, r);
@@ -172,7 +173,7 @@ export function drawCurrencyPill(
 
     // Text
     ctx.fillStyle = ColorTokens.text.primary;
-    ctx.font = 'bold 14px Arial';
+    ctx.font = `bold ${LayoutConstants.Fonts.Size.Small}px ${LayoutConstants.Fonts.Family.Default}`;
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
     ctx.fillText(amount.toLocaleString(), x + width - 10, y + height / 2 + 1);
@@ -185,7 +186,7 @@ export function drawCurrencyPill(
     ctx.fillStyle = ColorTokens.action.success;
     ctx.fill();
     ctx.fillStyle = ColorTokens.text.primary;
-    ctx.font = 'bold 16px Arial';
+    ctx.font = `bold ${LayoutConstants.Fonts.Size.Medium}px ${LayoutConstants.Fonts.Family.Default}`;
     ctx.textAlign = 'center';
     ctx.fillText('+', plusX + plusR, y + height / 2 + 1);
 

@@ -6,7 +6,6 @@ import {
 } from '../components/UIComponents';
 import { ColorTokens, SemanticColors } from '../theme/ColorTokens';
 import { NavigationBar } from '../components/NavigationBar';
-import { SettingsManager } from '../SettingsManager';
 import { Game, GameMode } from '../../game/Game';
 import { GameState } from '../../game/GameStateMachine';
 import { ConfirmScene } from './ConfirmScene';
@@ -29,7 +28,6 @@ export class LobbyScene implements UIScene {
     private canvas: HTMLCanvasElement | null = null;
     private buttons: LobbyButton[] = [];
     private hoveredButton: LobbyButton | null = null;
-    private settingsManager = new SettingsManager();
     private keyHandler: ((e: KeyboardEvent) => void) | null = null;
     private cameFromGame: boolean = false;
     private navigationBar: NavigationBar;
@@ -50,7 +48,7 @@ export class LobbyScene implements UIScene {
         practice: new URL('../../assets/img/lobby-cards/practice.png', import.meta.url).href,
         arcade: new URL('../../assets/img/lobby-cards/arcade.png', import.meta.url).href,
         shop: new URL('../../assets/img/lobby-cards/shop.png', import.meta.url).href,
-        profile: new URL('../../assets/img/lobby-cards/profile.png', import.meta.url).href,
+        events: new URL('../../assets/img/lobby-cards/events.png', import.meta.url).href,
         mini: new URL('../../assets/img/lobby-cards/mini-games.png', import.meta.url).href
     };
 
@@ -129,8 +127,6 @@ export class LobbyScene implements UIScene {
         const col1X = col0X + landscapeWidth + gap;
         const col2X = col1X + landscapeWidth + gap;
 
-        const baseCardHeight = 160;
-
         // Define cards with grid positions (Miniclip style - different sizes)
         const cards = [
             // Row 1: Large featured "Play" card (2x2) + Practice (1x1)
@@ -161,8 +157,8 @@ export class LobbyScene implements UIScene {
                 action: () => uiStateMachine.transitionTo(UIState.SHOP)
             },
             {
-                id: 'profile', text: 'Profile', subtitle: 'Your Stats', icon: '👤', col: 1, row: 2, cols: 1, rows: 1, color: SemanticColors.lobby.cardProfile,
-                action: () => uiStateMachine.transitionTo(UIState.PROFILE)
+                id: 'events', text: 'Events', subtitle: 'Win Big!', icon: '🏆', col: 1, row: 2, cols: 1, rows: 1, color: SemanticColors.lobby.cardEvents,
+                action: () => uiStateMachine.transitionTo(UIState.EVENTS)
             },
             {
                 id: 'mini', text: 'Mini Games', subtitle: 'Coming Soon', icon: '🎮', col: 2, row: 2, cols: 1, rows: 1, color: SemanticColors.lobby.cardMiniGames,

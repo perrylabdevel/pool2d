@@ -2,6 +2,7 @@ import { UIScene } from '../SceneController';
 import { uiStateMachine, UIState } from '../UIStateMachine';
 import { drawPanel, drawGlossyButton, Rect, UIColors } from '../components/UIComponents';
 import { ColorTokens } from '../theme/ColorTokens';
+import { LayoutConstants } from '../theme/LayoutConstants';
 import { SettingsManager, type GameStats } from '../SettingsManager';
 import { NavigationBar } from '../components/NavigationBar';
 import { drawSceneBackground } from '../components/SceneBackground';
@@ -26,6 +27,11 @@ export class ProfileScene implements UIScene {
     private hoveredButton: ProfileButton | null = null;
     private settingsManager = new SettingsManager();
     private navigationBar: NavigationBar;
+    private layout: {
+        heroRect: Rect;
+        statsRect: Rect;
+        achievementsRect: Rect;
+    } | null = null;
 
     constructor() {
         this.navigationBar = new NavigationBar({
@@ -59,23 +65,61 @@ export class ProfileScene implements UIScene {
         if (!this.canvas) return;
         const width = this.canvas.width;
         const height = this.canvas.height;
-        const padding = Math.max(48, width * 0.04);
+        const gap = LayoutConstants.Spacing.GapMedium;
+        const paddingX = width * LayoutConstants.Spacing.PaddingScreen;
+        const contentWidth = width - paddingX * 2;
+        const navHeight = this.navigationBar.getHeight();
+        const heroHeight = 200;
+        const statsHeight = 150;
+
+        const heroRect: Rect = {
+            x: paddingX,
+            y: navHeight + gap,
+            width: contentWidth,
+            height: heroHeight
+        };
+
+        const statsRect: Rect = {
+            x: paddingX,
+            y: heroRect.y + heroRect.height + gap,
+            width: contentWidth,
+            height: statsHeight
+        };
+
+        const achievementsRect: Rect = {
+            x: paddingX,
+            y: statsRect.y + statsRect.height + gap,
+            width: contentWidth,
+            height: Math.max(220, height - (statsRect.y + statsRect.height) - gap * 2)
+        };
+
+        this.layout = {
+            heroRect,
+            statsRect,
+            achievementsRect
+        };
 
         // Setup navigation bar
         this.navigationBar.setupLayout(width);
 
+        const btnGap = 12;
+        const buttonWidth = LayoutConstants.Dimensions.ButtonWidthMedium;
+        const buttonHeight = LayoutConstants.Dimensions.ButtonHeight;
+        const buttonY = heroRect.y + heroRect.height - buttonHeight - 16;
+        const buttonPaddingRight = 16;
+        const buttonRight = heroRect.x + heroRect.width - buttonPaddingRight;
         this.buttons = [
             {
                 id: 'customize',
                 label: 'Customize Avatar',
                 color: UIColors.secondary,
-                rect: { x: width - padding - 240, y: height - 126, width: 240, height: 56 }
+                rect: { x: buttonRight - buttonWidth, y: buttonY, width: buttonWidth, height: buttonHeight }
             },
             {
                 id: 'reset',
                 label: 'Reset Stats',
                 color: ColorTokens.action.danger,
-                rect: { x: width - padding - 500, y: height - 126, width: 240, height: 56 }
+                rect: { x: buttonRight - buttonWidth * 2 - btnGap, y: buttonY, width: buttonWidth, height: buttonHeight }
             }
         ];
     };
@@ -160,7 +204,7 @@ export class ProfileScene implements UIScene {
     }
 
     private renderHero(ctx: CanvasRenderingContext2D, width: number, navHeight: number, stats: GameStats) {
-        const panelRect: Rect = {
+        const panelRect = this.layout?.heroRect ?? {
             x: width * 0.08,
             y: navHeight + 20,
             width: width * 0.84,
@@ -169,58 +213,51 @@ export class ProfileScene implements UIScene {
 
         drawPanel(ctx, panelRect);
 
+        // Avatar block (square to match other panels)
+        const avatarSize = LayoutConstants.Dimensions.AvatarSize;
+        const avatarRect: Rect = {
+            x: panelRect.x + 30,
+            y: panelRect.y + (panelRect.height - avatarSize) / 2,
+            width: avatarSize,
+            height: avatarSize
+        };
         ctx.save();
-        const gradient = ctx.createLinearGradient(panelRect.x, panelRect.y, panelRect.x + panelRect.width, panelRect.y + panelRect.height);
-        gradient.addColorStop(0, 'rgba(0, 173, 255, 0.35)'); // Cyan overlay
-        gradient.addColorStop(1, 'rgba(90, 0, 150, 0.2)'); // Purple overlay
-        ctx.fillStyle = gradient;
-        ctx.fillRect(panelRect.x, panelRect.y, panelRect.width, panelRect.height);
-        ctx.restore();
-
-        // Avatar circle
-        const avatarX = panelRect.x + 120;
-        const avatarY = panelRect.y + panelRect.height / 2;
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(avatarX, avatarY, 60, 0, Math.PI * 2);
-        const avatarGrad = ctx.createLinearGradient(avatarX - 40, avatarY - 60, avatarX + 40, avatarY + 60);
-        avatarGrad.addColorStop(0, '#1e2b47'); // Navy
-        avatarGrad.addColorStop(1, '#04060f'); // Very dark
-        ctx.fillStyle = avatarGrad;
-        ctx.fill();
-        ctx.lineWidth = 3;
-        ctx.strokeStyle = ColorTokens.ui.teal;
-        ctx.stroke();
-        ctx.font = '700 32px "Montserrat", Arial';
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+        ctx.shadowBlur = 8;
+        drawPanel(ctx, avatarRect);
+        ctx.strokeStyle = ColorTokens.action.info;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(avatarRect.x + 4, avatarRect.y + 4, avatarRect.width - 8, avatarRect.height - 8);
+        ctx.font = `700 ${LayoutConstants.Fonts.Size.XXLarge}px ${LayoutConstants.Fonts.Family.Heading}`;
         ctx.fillStyle = ColorTokens.text.primary;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('BR', avatarX, avatarY);
+        ctx.fillText('BR', avatarRect.x + avatarRect.width / 2, avatarRect.y + avatarRect.height / 2);
         ctx.restore();
 
         ctx.save();
         ctx.fillStyle = ColorTokens.text.primary;
-        ctx.font = '600 40px "Orbitron", Arial';
+        ctx.font = `600 ${LayoutConstants.Fonts.Size.Hero}px ${LayoutConstants.Fonts.Family.Display}`;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
-        ctx.fillText('Brian Rivera', panelRect.x + 220, panelRect.y + 40);
+        ctx.fillText('Brian Rivera', avatarRect.x + avatarRect.width + 24, panelRect.y + 32);
 
-        ctx.font = '16px "Nunito", Arial';
+        ctx.font = `${LayoutConstants.Fonts.Size.Medium}px ${LayoutConstants.Fonts.Family.Body}`;
         ctx.fillStyle = 'rgba(255,255,255,0.7)'; // Subtitle text
         ctx.fillText(
             `${stats.gamesPlayed} games • ${stats.winStreak} streak • ${stats.ballsPotted} pots`,
-            panelRect.x + 220,
-            panelRect.y + 90
+            avatarRect.x + avatarRect.width + 24,
+            panelRect.y + 80
         );
 
-        ctx.font = '14px "Nunito", Arial';
+        ctx.font = `${LayoutConstants.Fonts.Size.Small}px ${LayoutConstants.Fonts.Family.Body}`;
         ctx.fillStyle = 'rgba(255,255,255,0.55)'; // Muted text
-        ctx.fillText(`Overall rank: ${this.deriveRank(stats)}`, panelRect.x + 220, panelRect.y + 120);
+        ctx.fillText(`Overall rank: ${this.deriveRank(stats)}`, avatarRect.x + avatarRect.width + 24, panelRect.y + 108);
         ctx.restore();
     }
 
     private renderStats(ctx: CanvasRenderingContext2D, width: number, navHeight: number, stats: GameStats) {
-        const panelRect: Rect = {
+        const panelRect = this.layout?.statsRect ?? {
             x: width * 0.08,
             y: navHeight + 250,
             width: width * 0.84,
@@ -239,40 +276,38 @@ export class ProfileScene implements UIScene {
             ctx.fillStyle = card.accent;
             ctx.fillRect(x, y, 4, 90);
             ctx.fillStyle = 'rgba(255,255,255,0.65)';
-            ctx.font = '12px "Nunito", Arial';
+            ctx.font = `12px ${LayoutConstants.Fonts.Family.Body}`;
             ctx.fillText(card.label.toUpperCase(), x + 16, y + 20);
             ctx.fillStyle = '#FFFFFF';
-            ctx.font = '600 26px "Montserrat", Arial';
+            ctx.font = `600 26px ${LayoutConstants.Fonts.Family.Heading}`;
             ctx.fillText(card.value, x + 16, y + 60);
             ctx.restore();
         });
     }
 
     private renderAchievements(ctx: CanvasRenderingContext2D, width: number, height: number, navHeight: number, stats: GameStats) {
-        const contentY = navHeight + 420;
-        const panelHeight = height - contentY - 30;
-        const panelRect: Rect = {
+        const panelRect = this.layout?.achievementsRect ?? {
             x: width * 0.08,
-            y: contentY,
+            y: navHeight + 420,
             width: width * 0.84,
-            height: Math.max(220, panelHeight)
+            height: Math.max(220, height - (navHeight + 420) - 30)
         };
         drawPanel(ctx, panelRect);
 
         ctx.save();
         ctx.fillStyle = '#FFFFFF';
-        ctx.font = '600 20px "Montserrat", Arial';
+        ctx.font = `600 20px ${LayoutConstants.Fonts.Family.Heading}`;
         ctx.fillText('Recent Achievements', panelRect.x + 30, panelRect.y + 40);
 
         const achievements = this.getAchievementProgress(stats);
         achievements.forEach((achievement, index) => {
             const rowY = panelRect.y + 80 + index * 70;
             ctx.fillStyle = '#FFFFFF';
-            ctx.font = '15px "Nunito", Arial';
+            ctx.font = `15px ${LayoutConstants.Fonts.Family.Body}`;
             ctx.fillText(achievement.title, panelRect.x + 30, rowY);
 
             ctx.fillStyle = 'rgba(255,255,255,0.65)';
-            ctx.font = '13px "Nunito", Arial';
+            ctx.font = `13px ${LayoutConstants.Fonts.Family.Body}`;
             ctx.fillText(`${achievement.desc} (${achievement.current}/${achievement.target})`, panelRect.x + 30, rowY + 22);
 
             const barX = panelRect.x + panelRect.width - 220;

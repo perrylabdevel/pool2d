@@ -92,7 +92,7 @@ export const SemanticColors = {
     cardPractice: ColorTokens.action.success,
     cardArcade: ColorTokens.action.info,
     cardShop: ColorTokens.ui.purple,
-    cardProfile: ColorTokens.action.warning,
+    cardEvents: ColorTokens.action.danger,
     cardMiniGames: ColorTokens.ui.gray,
   },
 
