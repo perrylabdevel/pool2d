@@ -565,8 +565,8 @@ export class SettingsManager {
       grooveColor: '#000000',
       rimColor: '#ffffff',
       pocketBottomColor: '#000000',
-      pocketGradientCenterColor: '#050505',
-      pocketGradientEdgeColor: '#5a5a5a',
+      pocketGradientCenterColor: '#000000',
+      pocketGradientEdgeColor: '#141414',
       pocketWallColor: '#0a0a0a',
       pocketGradientStrength: 1.0,
     };

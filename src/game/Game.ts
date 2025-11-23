@@ -697,140 +697,142 @@ export class Game {
   }
 
   initializeGame() {
-    this.world.balls = [];
+    try {
+      this.world.balls = [];
 
-    // Create cue ball with randomized initial rotation
-    this.cueBall = new Ball(
-      0,
-      CUE_BALL_POSITION.x,
-      CUE_BALL_POSITION.y,
-      CONFIG.BALL_RADIUS,
-      CONFIG.BALL_MASS
-    );
-    // Randomize initial rotation angle for visual variety
-    this.cueBall.angle = Math.random() * Math.PI * 2;
-    randomizeBallOrientation(this.cueBall);
-    this.world.addBall(this.cueBall);
+      // Create cue ball with randomized initial rotation
+      this.cueBall = new Ball(
+        0,
+        CUE_BALL_POSITION.x,
+        CUE_BALL_POSITION.y,
+        CONFIG.BALL_RADIUS,
+        CONFIG.BALL_MASS
+      );
+      // Randomize initial rotation angle for visual variety
+      this.cueBall.angle = Math.random() * Math.PI * 2;
+      randomizeBallOrientation(this.cueBall);
+      this.world.addBall(this.cueBall);
 
-    const currentRadius = CONFIG.BALL_RADIUS;
-    const radiusSafe = Math.max(currentRadius, 1e-6);
-    const diameter = radiusSafe * 2;
-    const rowSpacingX =
-      diameter *
-      Math.cos(Math.PI / 6); // Maintain equilateral triangle spacing regardless of base radius rounding
-    const apexX = RACK_POSITIONS[0]?.x ?? 0;
-    const apexY = RACK_POSITIONS[0]?.y ?? 0;
+      const currentRadius = CONFIG.BALL_RADIUS;
+      const radiusSafe = Math.max(currentRadius, 1e-6);
+      const diameter = radiusSafe * 2;
+      const rowSpacingX =
+        diameter *
+        Math.sin(Math.PI / 3) *
+        1.02; // Slightly looser rack
 
-    // Create racked balls with randomized initial rotations
-    const rowStarts = [0, 1, 3, 6, 10];
-    rowStarts.forEach((startIndex, row) => {
-      const endIndex = rowStarts[row + 1] ?? RACK_POSITIONS.length;
-      const rowBalls = RACK_POSITIONS.slice(startIndex, endIndex);
-      const rowX = apexX + rowSpacingX * row;
-      rowBalls.forEach((pos, index) => {
-        const ordinal = (rowBalls.length - 1) / 2 - index;
-        const rowCenterOffset = ordinal * diameter;
-        const scaledY = apexY + rowCenterOffset;
-        const ball = new Ball(pos.id, rowX, scaledY, currentRadius, CONFIG.BALL_MASS);
-        // Randomize initial rotation angle for visual variety
-        ball.angle = Math.random() * Math.PI * 2;
-        randomizeBallOrientation(ball);
-        this.world.addBall(ball);
+      // Build rack of 15 balls
+      const rackX = RACK_POSITIONS[0].x;
+      const apexY = RACK_POSITIONS[0].y;
+
+      // 5 rows: 1, 2, 3, 4, 5 balls
+      const rows = [
+        [{ id: 1 }], // Row 1 (Apex)
+        [{ id: 9 }, { id: 2 }], // Row 2
+        [{ id: 3 }, { id: 8 }, { id: 10 }], // Row 3 (8-ball in center)
+        [{ id: 11 }, { id: 4 }, { id: 12 }, { id: 5 }], // Row 4
+        [{ id: 6 }, { id: 13 }, { id: 7 }, { id: 14 }, { id: 15 }], // Row 5
+      ];
+
+      rows.forEach((rowBalls, rowIndex) => {
+        const rowX = rackX + rowIndex * rowSpacingX;
+        rowBalls.forEach((pos, index) => {
+          const ordinal = (rowBalls.length - 1) / 2 - index;
+          const rowCenterOffset = ordinal * diameter;
+          const scaledY = apexY + rowCenterOffset;
+          const ball = new Ball(pos.id, rowX, scaledY, currentRadius, CONFIG.BALL_MASS);
+          // Randomize initial rotation angle for visual variety
+          ball.angle = Math.random() * Math.PI * 2;
+          randomizeBallOrientation(ball);
+          this.world.addBall(ball);
+        });
       });
-    });
 
-    // Initialize 3D scene
-    this.renderer.initializeTable();
-    this.renderer.initializeRails(this.world.rails);
-    const geometry = getTableGeometry();
-    this.renderer.initializePockets(geometry.pockets);
+      // Initialize 3D scene
+      this.renderer.initializeTable();
+      this.renderer.initializeRails(this.world.rails);
+      const geometry = getTableGeometry();
+      this.renderer.initializePockets(geometry.pockets);
 
-    // Connect debug overlay to renderer for coordinate projection
-    this.debug.setRenderer(this.renderer);
+      // Connect debug overlay to renderer for coordinate projection
+      this.debug.setRenderer(this.renderer);
 
-    // Initialize HUD player balls at game start
-    this.updateHUDPlayerBalls();
+      // Initialize HUD player balls at game start
+      this.updateHUDPlayerBalls();
 
-    // Generate ball icon thumbnails for HUD and update once ready
-    if ((this.renderer as any).generateBallIcons) {
-      const tryGenerate = () => {
-        const iconSizePx = this.getHudChipIconSizePx();
-        (this.renderer as any).generateBallIcons(iconSizePx).then((map: Map<number, string>) => {
-          (window as any).__BALL_ICONS__ = map;
-          this.updateHUDPlayerBalls();
-        }).catch(() => {/* ignore icon errors */ });
-      };
-
-      // Defer until ball models/textures are loaded to ensure real textures are used
-      const waitForTextures = () => {
-        if ((this.renderer as any).ballModelsLoaded) {
-          tryGenerate();
-          return true;
-        }
-        return false;
-      };
-
-      if (!waitForTextures()) {
-        let attempts = 0;
-        const poll = () => {
-          if (waitForTextures() || attempts++ > 50) {
-            clearInterval((this as any)._chipPollTimer);
-          }
+      // Generate ball icon thumbnails for HUD and update once ready
+      if ((this.renderer as any).generateBallIcons) {
+        const tryGenerate = () => {
+          const iconSizePx = this.getHudChipIconSizePx();
+          (this.renderer as any).generateBallIcons(iconSizePx).then((map: Map<number, string>) => {
+            (window as any).__BALL_ICONS__ = map;
+            this.updateHUDPlayerBalls();
+          }).catch(() => {/* ignore icon errors */ });
         };
-        (this as any)._chipPollTimer = setInterval(poll, 120);
+
+        // Defer until ball models/textures are loaded to ensure real textures are used
+        const waitForTextures = () => {
+          if ((this.renderer as any).ballModelsLoaded) {
+            tryGenerate();
+            return true;
+          }
+          return false;
+        };
+
+        if (!waitForTextures()) {
+          let attempts = 0;
+          const poll = () => {
+            if (waitForTextures() || attempts++ > 50) {
+              clearInterval((this as any)._chipPollTimer);
+            }
+          };
+          (this as any)._chipPollTimer = setInterval(poll, 120);
+        }
       }
+
+      this.resize();
+      this.rules.startGame();
+
+      // Start recording automatically for playback features
+      physicsRecorder.start();
+
+      this.currentCalledPocketId = null;
+      this.rules.setCalledPocket(null);
+
+      // Set mode display with ruleset if in 8-Ball mode
+      if (this.mode === GameMode.PRACTICE) {
+        this.hud.setMode('Practice Mode');
+        this.hud.hideTurnIndicator();
+        this.hud.setTurn(1, false);
+        this.hud.setPlayer2Visible(false);
+      } else if (this.mode === GameMode.PLAYBACK) {
+        // Playback mode initialization handled by startPlayback
+        // We just need to ensure we don't overwrite it
+        return;
+      } else if (this.mode === GameMode.TIME_ATTACK) {
+        this.initializeTimeAttack();
+        this.hud.setPlayer2Visible(false); // Hide Player 2 in arcade modes
+      } else if (this.mode === GameMode.PERFECT_GAME) {
+        this.initializePerfectGame();
+        this.hud.setPlayer2Visible(false); // Hide Player 2 in arcade modes
+      } else if (this.mode === GameMode.SPEED_POOL) {
+        this.initializeSpeedPool();
+        this.hud.setPlayer2Visible(false); // Hide Player 2 in arcade modes
+      } else if (this.mode === GameMode.EIGHT_BALL) {
+        this.hud.setMode('8-Ball Pool');
+        // Show Player 2 and turn indicator for 8-Ball mode
+        this.hud.setPlayer2Visible(true);
+        this.initializePlayers();
+      }
+
+      this.lastBallScale = CONFIG.BALL_SCALE ?? 1;
+
+    } catch (error) {
+      console.error('Failed to initialize game:', error);
+    } finally {
+      // Hide loading screen once initialization is complete (or failed)
+      this.renderer.hideLoadingScreen();
     }
-
-    this.resize();
-    this.rules.startGame();
-
-    // Start recording automatically for playback features
-    physicsRecorder.start();
-
-    this.currentCalledPocketId = null;
-    this.rules.setCalledPocket(null);
-
-    // Set mode display with ruleset if in 8-Ball mode
-    if (this.mode === GameMode.PRACTICE) {
-      this.hud.setMode('Practice Mode');
-    } else if (this.mode === GameMode.PLAYBACK) {
-      // Playback mode initialization handled by startPlayback
-      // We just need to ensure we don't overwrite it
-      return;
-    } else {
-      const rulesetName = getRulesDescription(this.rules.config);
-      this.hud.setMode(`8-Ball (${rulesetName})`);
-    }
-
-    // Reset mode-specific components
-    this.players = [];
-    this.currentPlayerIndex = 0;
-    this.stateMachine = null;
-    this.ai = null;
-    this.arcadeMode = null;
-
-    // Initialize mode-specific gameplay
-    if (this.mode === GameMode.EIGHT_BALL) {
-      this.initializePlayers();
-      this.hud.setPlayer2Visible(true); // Show Player 2 in 8-ball mode
-    } else if (this.mode === GameMode.TIME_ATTACK) {
-      this.initializeTimeAttack();
-      this.hud.setPlayer2Visible(false); // Hide Player 2 in arcade modes
-    } else if (this.mode === GameMode.PERFECT_GAME) {
-      this.initializePerfectGame();
-      this.hud.setPlayer2Visible(false); // Hide Player 2 in arcade modes
-    } else if (this.mode === GameMode.SPEED_POOL) {
-      this.initializeSpeedPool();
-      this.hud.setPlayer2Visible(false); // Hide Player 2 in arcade modes
-    } else {
-      // Hide turn indicator in practice mode
-      this.hud.hideTurnIndicator();
-      // Set player 1 as active in practice mode
-      this.hud.setTurn(1, false);
-      this.hud.setPlayer2Visible(false); // Hide Player 2 in practice mode
-    }
-
-    this.lastBallScale = CONFIG.BALL_SCALE ?? 1;
   }
 
   initializePlayers() {
@@ -1387,6 +1389,9 @@ export class Game {
     if (intensity > 0.05) {
       this.audio.playPocketDrop(intensity);
     }
+
+    // Update HUD to show pocketed balls in ball chips
+    this.updateHUDPlayerBalls();
   }
 
   private playBallCollisionAudio(ballA: Ball, ballB: Ball) {
@@ -1480,6 +1485,8 @@ export class Game {
         if (!this.aiSelectedShot) {
           // No valid shot found - should play safety or pass
           console.warn('[AI] Could not find a valid shot, switching turn');
+          // Sync rules engine before switching game state
+          this.rules.switchPlayer();
           this.switchToPlayer((this.currentPlayerIndex + 1) % this.players.length);
           return;
         }
@@ -1823,7 +1830,7 @@ export class Game {
         degrees: this.getMicroAimOffsetDegrees(),
         isActive: this.isDraggingMicroDial,
       };
-      this.renderer.drawCueAndPowerBar(this.cueBall, angle, this.currentPower, this.aimAssist, true, this.isAimMode, prediction, microDialState);
+      this.renderer.drawCueAndPowerBar(this.cueBall, angle, this.currentPower, this.aimAssist, true, this.isAimMode, prediction, microDialState, alpha);
     }
 
     // Highlight pockets when waiting for pocket call

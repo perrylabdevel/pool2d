@@ -101,7 +101,7 @@ export const CONFIG = {
   TABLE_COLOR: '#0a5f0a',
   FRAME_COLOR: '#3d2413',
   RAIL_COLOR: '#2d1810',
-  RAIL_FILL_COLOR: '#000000', // Fill color for area between corner pockets
+  RAIL_FILL_COLOR: '#db2c2cff', // Fill color for area between corner pockets
   POCKET_COLOR: '#000000',
   CUE_BALL_COLOR: '#ffffff',
   // Cue ball measles: default to standard "Pro Cup" 6-dot pattern
