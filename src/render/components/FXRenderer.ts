@@ -118,20 +118,27 @@ export class FXRenderer {
         ctx.arc(endScreen.x, endScreen.y, pocketOpeningRadius, 0, Math.PI * 2);
         ctx.clip();
 
-        const colors = this.getBallColor(event.ballId);
-        const gradient = ctx.createRadialGradient(x - radius * 0.3, y - radius * 0.3, radius * 0.15, x, y, radius);
-        gradient.addColorStop(0, colors.light);
-        gradient.addColorStop(1, colors.dark);
-
-        ctx.fillStyle = gradient;
-        ctx.beginPath();
-        ctx.arc(x, y, radius, 0, Math.PI * 2);
-        ctx.fill();
-
         const iconImage = this.getPocketIconImage(event.icon);
-        if (iconImage) {
-            const size = radius * 2;
-            ctx.drawImage(iconImage, x - radius, y - radius, size, size);
+        
+        if (!iconImage) {
+            const colors = this.getBallColor(event.ballId);
+            const gradient = ctx.createRadialGradient(x - radius * 0.3, y - radius * 0.3, radius * 0.15, x, y, radius);
+            gradient.addColorStop(0, colors.light);
+            gradient.addColorStop(1, colors.dark);
+
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(x, y, radius, 0, Math.PI * 2);
+            ctx.fill();
+        } else {
+            // Calculate scale factor to match 3D ball size
+            // Based on BallRenderer camera: FOV 45, Dist 3.5 * R
+            // Visible height = 2 * 3.5 * R * tan(22.5) = 2.9 * R
+            // Ball diameter = 2 * R
+            // Scale = 2.9 / 2 = 1.45
+            const iconScale = 1.45;
+            const size = radius * 2 * iconScale;
+            ctx.drawImage(iconImage, x - size / 2, y - size / 2, size, size);
         }
 
         ctx.lineWidth = 1.2;
