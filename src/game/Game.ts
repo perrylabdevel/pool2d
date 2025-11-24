@@ -1101,6 +1101,13 @@ export class Game {
     }
 
     this.hasStartedRack = true;
+
+    // Ensure audio is fully unlocked and ready on first shot
+    // This primes the audio pipeline to prevent silent first collision
+    this.audio.ensureUnlocked().catch(() => {
+      // Silently ignore - audio will work on next attempt
+    });
+
     // Clear cached prediction and aim angle smoothing state
     this.cachedPrediction = null;
     this.cachedDirection = null;

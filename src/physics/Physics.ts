@@ -4,7 +4,7 @@
 import { Ball, Rail, Pocket } from './Shapes';
 import { CONFIG } from '../config';
 import { getTableGeometry } from '../geometry/Geometry';
-import { detectBallBall, detectBallRail, resolveBallBall, resolveBallRail, Contact, resetCollisionTracking, setSuppressWarnings } from './Collision';
+import { detectBallBall, detectBallRail, resolveBallBall, resolveBallRail, Contact, resetCollisionTracking, setSuppressWarnings, shouldNotifyRailCollision, shouldNotifyBallCollision } from './Collision';
 import { physicsRecorder } from '../debug/PhysicsRecorder';
 
 const ROTATION_EPSILON = 1e-7;
@@ -220,13 +220,14 @@ export class PhysicsWorld {
         contacts.forEach((contact) => {
           if (contact.ballB) {
             resolveBallBall(contact);
-            // Notify collision callback on any substep
-            if (this.onBallCollision) {
+            // Only notify about new ball collisions (once per ball pair per timestep)
+            if (this.onBallCollision && shouldNotifyBallCollision(contact.ballA, contact.ballB)) {
               this.onBallCollision(contact.ballA, contact.ballB);
             }
           } else if (contact.rail) {
             resolveBallRail(contact);
-            if (this.onRailCollision) {
+            // Only notify about new rail collisions (once per ball-rail pair per timestep)
+            if (this.onRailCollision && shouldNotifyRailCollision(contact.ballA, contact.rail)) {
               this.onRailCollision(contact.ballA, contact.rail);
             }
           }

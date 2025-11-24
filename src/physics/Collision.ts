@@ -18,6 +18,10 @@ export interface Contact {
 const resolvedPairsThisStep = new Set<string>();
 const resolvedRailContactsThisStep = new Set<string>();
 
+// Track which collisions have been notified (for audio callbacks) this timestep
+const notifiedRailCollisionsThisStep = new Set<string>();
+const notifiedBallCollisionsThisStep = new Set<string>();
+
 // Suppress collision warnings during prediction simulations
 let suppressCollisionWarnings = false;
 
@@ -55,9 +59,37 @@ export function consumeCollisionSnapshot(): CollisionSnapshot | null {
 export function resetCollisionTracking() {
   resolvedPairsThisStep.clear();
   resolvedRailContactsThisStep.clear();
+  notifiedRailCollisionsThisStep.clear();
+  notifiedBallCollisionsThisStep.clear();
   if (collisionCaptureEnabled) {
     collisionSnapshots = [];
   }
+}
+
+/**
+ * Check if we should notify about a rail collision (for audio callback)
+ * Returns true only for the FIRST notification per ball-rail pair per timestep
+ */
+export function shouldNotifyRailCollision(ball: Ball, rail: Rail): boolean {
+  const pairId = getBallRailPairId(ball, rail);
+  if (notifiedRailCollisionsThisStep.has(pairId)) {
+    return false;
+  }
+  notifiedRailCollisionsThisStep.add(pairId);
+  return true;
+}
+
+/**
+ * Check if we should notify about a ball-ball collision (for audio callback)
+ * Returns true only for the FIRST notification per ball pair per timestep
+ */
+export function shouldNotifyBallCollision(ballA: Ball, ballB: Ball): boolean {
+  const pairId = getCollisionPairId(ballA, ballB);
+  if (notifiedBallCollisionsThisStep.has(pairId)) {
+    return false;
+  }
+  notifiedBallCollisionsThisStep.add(pairId);
+  return true;
 }
 
 export function setSuppressWarnings(suppress: boolean) {
@@ -334,7 +366,7 @@ export function resolveBallRail(contact: Contact) {
   
   // Velocity reflection
   const vn = ballA.vx * nx + ballA.vy * ny;
-  
+
   // Already separating?
   if (vn > 0) return;
   

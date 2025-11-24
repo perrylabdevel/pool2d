@@ -383,8 +383,29 @@ export class AudioManager {
     const volume = this.getEventVolume(sampleSet.volumeKey);
     if (volume <= 0) return;
 
-    // Prevent sound spam - throttle rapid repeated sounds
+    // Ensure audio context is unlocked and ready
     const ctx = this.audioContext;
+
+    // If context is suspended, try to resume it synchronously if possible
+    // Note: resume() returns a promise, but we can't await here
+    // The sound will play once context transitions to 'running'
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {
+        // Ignore resume errors
+      });
+      // If still suspended after resume attempt, skip this sound
+      // It will work on the next attempt once context is running
+      if (ctx.state === 'suspended') {
+        return;
+      }
+    }
+
+    // Check if samples are loaded
+    if (!this.isLoaded) {
+      return;
+    }
+
+    // Prevent sound spam - throttle rapid repeated sounds
     const now = ctx.currentTime;
     const lastTime = this.lastPlayTime[sampleSetKey] || 0;
 
@@ -455,8 +476,8 @@ export class AudioManager {
     const destination = this.filterNode ?? this.masterGain ?? ctx.destination;
     gainNode.connect(destination);
 
-    // Play sound
-    source.start(now);
+    // Play sound immediately (don't use cached 'now' time as it may be stale)
+    source.start();
 
     // Track active source
     this.activeSources.push(source);
