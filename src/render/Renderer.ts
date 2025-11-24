@@ -280,8 +280,10 @@ export class Renderer extends BaseRenderer {
     const { x, y } = pocket.center;
 
     // Map shelf depth to a 0..1 visual factor so deeper pockets look darker
+    // The slider goes 0-3, we normalize to 0-1 range for visual effects
+    // Using the full slider range: 0 = shallow (0%), 3 = deep (100%)
     const shelf = pocket.shelfDepth ?? CONFIG.POCKET_SHELF_DEPTH_IN ?? 0.5;
-    const depthFactor = Math.max(0, Math.min(1, shelf / 2.0));
+    const depthFactor = Math.max(0, Math.min(1, shelf / 3.0));
 
     this.ctx.save();
     this.ctx.translate(x, y);

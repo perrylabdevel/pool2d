@@ -489,6 +489,7 @@ export class TableRenderer {
             const wallTaperRadius = visualRadius * 0.75;
             const shelfDepthIn = pocket.shelfDepth ?? CONFIG.POCKET_SHELF_DEPTH_IN;
             const shelfDepth = Math.max(0.1, shelfDepthIn) * 1.5;
+            // Normalize shelf depth for groove geometry (preserve original behavior with /2.0)
             const depthFactor = Math.max(0, Math.min(1, (shelfDepthIn ?? 0.5) / 2.0));
             const angleRad = THREE.MathUtils.degToRad(pocket.cutAngleDeg ?? 0);
 
@@ -518,8 +519,12 @@ export class TableRenderer {
             this.scene.add(pocketMesh);
             this.pocketMeshes.push(pocketMesh);
 
+            // Calculate groove inner radius first (needed for both gradient and bottom sizing)
+            const grooveInner = visualRadius * (this.grooveInnerBase + this.grooveInnerDepthScale * depthFactor);
+
+            // Bottom fill should only cover the center (inside the groove)
             const circleShape = new THREE.Shape();
-            const radius = visualRadius * 0.98;
+            const radius = grooveInner * 0.98; // Slightly smaller than groove inner
             circleShape.absarc(0, 0, radius, 0, Math.PI * 2, false);
             const bottomGeometry = new THREE.ShapeGeometry(circleShape);
 
@@ -538,18 +543,33 @@ export class TableRenderer {
             this.scene.add(bottomMesh);
             this.pocketBottomMeshes.push(bottomMesh);
 
-            const gradientShape = new THREE.Shape();
-            gradientShape.absarc(0, 0, visualRadius, 0, Math.PI * 2, false);
-            const gradientGeometry = new THREE.ShapeGeometry(gradientShape);
+            // Create gradient as a ring that stops at the groove inner radius
+            // This makes the center (inside groove) show the bottom fill color for depth
+            const gradientInnerRadius = Math.max(0.01, grooveInner * 0.99); // Just inside groove
+
+            const gradientGeometry = new THREE.RingGeometry(
+                gradientInnerRadius,
+                visualRadius,
+                64,
+                1,
+                thetaStart,
+                thetaLength
+            );
 
             const uvAttribute = gradientGeometry.attributes.uv;
             const posAttribute = gradientGeometry.attributes.position;
             for (let i = 0; i < uvAttribute.count; i++) {
                 const x = posAttribute.getX(i);
                 const y = posAttribute.getY(i);
+                // Map UV from inner radius to outer radius of the ring
+                const distFromCenter = Math.sqrt(x * x + y * y);
+                const normalizedDist = (distFromCenter - gradientInnerRadius) / (visualRadius - gradientInnerRadius);
                 const u = (x / visualRadius + 1) * 0.5;
                 const v = (y / visualRadius + 1) * 0.5;
-                uvAttribute.setXY(i, u, v);
+                // Remap so gradient goes from inner edge (0) to outer edge (1)
+                const remappedU = 0.5 + (u - 0.5) * (1 - normalizedDist);
+                const remappedV = 0.5 + (v - 0.5) * (1 - normalizedDist);
+                uvAttribute.setXY(i, remappedU, remappedV);
             }
             uvAttribute.needsUpdate = true;
 
@@ -596,7 +616,7 @@ export class TableRenderer {
             this.scene.add(shadowMesh);
             this.pocketShadowMeshes.push(shadowMesh);
 
-            const grooveInner = visualRadius * (this.grooveInnerBase + this.grooveInnerDepthScale * depthFactor);
+            // Reuse grooveInner from gradient calculation above
             const grooveOuter = grooveInner + visualRadius * this.grooveThicknessFactor;
             const grooveGeometry = new THREE.RingGeometry(grooveInner, grooveOuter, 64, 1, thetaStart, thetaLength);
             const grooveMaterial = new THREE.MeshBasicMaterial({
@@ -1054,6 +1074,8 @@ export class TableRenderer {
         if (!this.pocketSideMaterial) {
             this.pocketSideMaterial = new THREE.MeshBasicMaterial({
                 color: this.pocketWallColor.clone(),
+                transparent: false,
+                opacity: 1.0,
                 depthTest: true,
                 depthWrite: false,
                 side: THREE.DoubleSide,
@@ -1088,10 +1110,12 @@ export class TableRenderer {
 
         const s = Math.max(0, Math.min(1, this.pocketGradientStrength));
         const gradient = ctx.createRadialGradient(center, center, 0, center, center, radius);
-        gradient.addColorStop(0.0, toRgbaStr(centerCol, 0.7 * s));
-        gradient.addColorStop(0.25, toRgbaStr(midCol, 0.65 * s));
-        gradient.addColorStop(0.6, toRgbaStr(nearCol, 0.5 * s));
-        gradient.addColorStop(1.0, toRgbaStr(edgeCol, 0.2 * s));
+        // Use more uniform alpha distribution for better depth perception from overhead
+        // Higher alpha at all stops so the gradient colors show through consistently
+        gradient.addColorStop(0.0, toRgbaStr(centerCol, 0.85 * s));
+        gradient.addColorStop(0.25, toRgbaStr(midCol, 0.85 * s));
+        gradient.addColorStop(0.6, toRgbaStr(nearCol, 0.85 * s));
+        gradient.addColorStop(1.0, toRgbaStr(edgeCol, 0.85 * s));
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, size, size);
 
@@ -1955,6 +1979,7 @@ export class TableRenderer {
         this.lastPocketDefs.forEach((p) => {
             const visualRadius = p.visualRadius ?? (p as any).radius ?? 2.5;
             const shelfDepthIn = p.shelfDepth ?? CONFIG.POCKET_SHELF_DEPTH_IN;
+            // Normalize shelf depth for groove geometry (preserve original behavior with /2.0)
             const depthFactor = Math.max(0, Math.min(1, (shelfDepthIn ?? 0.5) / 2.0));
 
             const grooveInner = visualRadius * (this.grooveInnerBase + this.grooveInnerDepthScale * depthFactor);
