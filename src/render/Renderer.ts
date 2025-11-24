@@ -612,10 +612,16 @@ export class Renderer extends BaseRenderer {
     const y = ball.y;
     const dx = Math.cos(angle);
     const dy = Math.sin(angle);
-    // Ghost ball center is the contact point for ball collisions
+    // Ghost ball center calculation:
+    // contactPoint is on the cue ball surface
+    // objectBallCenter = contactPoint + normal * objectBallRadius
     let ghostCenter: Vec2 | null = null;
-    if (prediction && prediction.type === 'ball') {
-      ghostCenter = { x: prediction.contactPoint.x, y: prediction.contactPoint.y };
+    if (prediction && prediction.type === 'ball' && prediction.hitBall) {
+      const objectBallRadius = prediction.hitBall.radius;
+      ghostCenter = {
+        x: prediction.contactPoint.x + prediction.contactNormal.x * objectBallRadius,
+        y: prediction.contactPoint.y + prediction.contactNormal.y * objectBallRadius
+      };
     }
     
     // Cue stick (behind the ball, opposite to shot direction)
@@ -637,15 +643,12 @@ export class Renderer extends BaseRenderer {
     this.ctx.lineTo(clampedFar.x, clampedFar.y);
     this.ctx.stroke();
     
-    // Aim line - always stop at contact point (ball or rail) if prediction exists
+    // Aim line - always stop at contact point (where cue ball surface touches)
     const aimStart = { x, y };
     let aimRawEnd = { x: x + dx * CONFIG.AIM_LINE_LENGTH, y: y + dy * CONFIG.AIM_LINE_LENGTH };
     if (prediction) {
-      if (prediction.type === 'ball' && ghostCenter) {
-        aimRawEnd = ghostCenter;
-      } else if (prediction.type === 'rail') {
-        aimRawEnd = { x: prediction.contactPoint.x, y: prediction.contactPoint.y };
-      }
+      // Always use contactPoint (not ghostCenter) - this is where the cue ball surface touches
+      aimRawEnd = { x: prediction.contactPoint.x, y: prediction.contactPoint.y };
     }
     const aimEnd = this.clampSegmentToPlayArea(aimStart, aimRawEnd);
     const aimStrokeWidth = 1 / this.scale;
@@ -712,10 +715,17 @@ export class Renderer extends BaseRenderer {
     const strokeWidth = 1 / this.scale;
     const dashLength = 6 / this.scale;
     const arrowLength = 8 / this.scale;
-    
-    // Ghost center is where the cue ball contacts the object ball
-    // For ball collisions, this is the contact point (between the two ball surfaces)
-    const ghostCenter = { x: prediction.contactPoint.x, y: prediction.contactPoint.y };
+
+    // Calculate object ball center from contact point
+    // contactPoint is on the cue ball surface, object ball center is offset by object ball radius
+    let ghostCenter = { x: prediction.contactPoint.x, y: prediction.contactPoint.y };
+    if (prediction.type === 'ball' && prediction.hitBall) {
+      const objectBallRadius = prediction.hitBall.radius;
+      ghostCenter = {
+        x: prediction.contactPoint.x + prediction.contactNormal.x * objectBallRadius,
+        y: prediction.contactPoint.y + prediction.contactNormal.y * objectBallRadius
+      };
+    }
 
     const drawClampedLine = (start: Vec2, end: Vec2, color: string) => {
       const clampedEnd = this.clampSegmentToPlayArea(start, end);
@@ -833,8 +843,17 @@ export class Renderer extends BaseRenderer {
     const strokeWidth = 3 / this.scale;
     const glowWidth = 7 / this.scale;
     const arrowLength = 12 / this.scale;
-    
-    const ghostCenter = { x: prediction.contactPoint.x, y: prediction.contactPoint.y };
+
+    // Calculate object ball center from contact point
+    // contactPoint is on the cue ball surface, object ball center is offset by object ball radius
+    let ghostCenter = { x: prediction.contactPoint.x, y: prediction.contactPoint.y };
+    if (prediction.type === 'ball' && prediction.hitBall) {
+      const objectBallRadius = prediction.hitBall.radius;
+      ghostCenter = {
+        x: prediction.contactPoint.x + prediction.contactNormal.x * objectBallRadius,
+        y: prediction.contactPoint.y + prediction.contactNormal.y * objectBallRadius
+      };
+    }
     
     const drawSolidLineWithGlow = (start: Vec2, end: Vec2, glowColor: string, lineColor: string) => {
       const clampedEnd = this.clampSegmentToPlayArea(start, end);

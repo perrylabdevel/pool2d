@@ -379,12 +379,39 @@ export function resolveBallRail(contact: Contact) {
 
   ballA.vx += jtClamped * tx * ballA.invMass;
   ballA.vy += jtClamped * ty * ballA.invMass;
-  
-  // Clamp tiny separating normal velocity when still against rail to extend brief glide realistically
+
+  // Enhanced rail riding: clamp separating velocity to allow balls to ride along rails
   const vnAfter = ballA.vx * nx + ballA.vy * ny;
-  if (vnAfter > 0 && vnAfter < 0.5) {
+  const speedAfter = Math.hypot(ballA.vx, ballA.vy);
+  const approachRatioAfter = speedAfter > 1e-6 ? Math.abs(vnAfter) / speedAfter : 0;
+
+  // For very shallow angles, aggressively clamp normal velocity to enable rail riding
+  // Gradually reduce clamping threshold as angle gets steeper
+  const shallowAngle = 0.08;  // ~4.6° - full rail riding
+  const steepAngle = 0.25;     // ~14.5° - no rail riding
+
+  let clampThreshold = 0;
+  if (approachRatioAfter <= shallowAngle) {
+    // Very shallow - clamp up to 5 in/s to enable strong rail riding
+    clampThreshold = 5.0;
+  } else if (approachRatioAfter < steepAngle) {
+    // Gradually reduce clamping as angle increases
+    const t = (approachRatioAfter - shallowAngle) / (steepAngle - shallowAngle);
+    clampThreshold = 5.0 * (1 - t * t); // Quadratic falloff
+  }
+
+  if (vnAfter > 0 && vnAfter < clampThreshold) {
     ballA.vx -= vnAfter * nx;
     ballA.vy -= vnAfter * ny;
+
+    // Apply additional tangential friction when riding the rail
+    // This creates more realistic rail contact behavior
+    const railRidingFriction = 0.02; // Small friction coefficient for rail riding
+    const tangentialSpeed = Math.abs(ballA.vx * tx + ballA.vy * ty);
+    const frictionScale = Math.min(1.0, tangentialSpeed * 0.1); // Scale with speed
+
+    ballA.vx *= (1.0 - railRidingFriction * frictionScale);
+    ballA.vy *= (1.0 - railRidingFriction * frictionScale);
   }
   
   // Record rail collision for shot capture (only for cue ball)

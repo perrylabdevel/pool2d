@@ -55,10 +55,10 @@ export const AssetRegistry = {
    */
   eventCards: {
     // Using lobby images as placeholders - replace with specific event card images as you create them
-    goldenSpin: () => new URL('./img/lobby-cards/events.png', import.meta.url).href,
+    goldenSpin: () => new URL('./img/event-cards/spin.jpg', import.meta.url).href,
     // Add these when you create specific event card images:
-    // bullseye: () => new URL('./img/event-cards/bullseye.png', import.meta.url).href,
-    // winStreak: () => new URL('./img/event-cards/win-streak.png', import.meta.url).href,
+    bullseye: () => new URL('./img/event-cards/bulls-eye.jpg', import.meta.url).href,
+    winStreak: () => new URL('./img/event-cards/win-streak.jpg', import.meta.url).href,
   },
 
   // Add more asset categories as your project grows:

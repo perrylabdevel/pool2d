@@ -185,17 +185,17 @@ export class NavigationBar {
             ctx.save();
 
             // Logo dimensions - scaled to fit nicely in the nav bar
-            const logoMaxHeight = height * 0.65; // 65% of nav bar height
+            const logoMaxHeight = height * 0.75; // Increased to 75% for better visibility
             const logoAspect = this.logoImage.naturalWidth / this.logoImage.naturalHeight;
             const logoHeight = logoMaxHeight;
             const logoWidth = logoHeight * logoAspect;
             const logoX = (width / 2) - (logoWidth / 2);
             const logoY = (height / 2) - (logoHeight / 2);
 
-            // Subtle shadow for logo
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-            ctx.shadowBlur = 12;
-            ctx.shadowOffsetY = 4;
+            // Light glow to lift logo off dark background
+            ctx.shadowColor = 'rgba(255, 255, 255, 0.15)';
+            ctx.shadowBlur = 15;
+            ctx.shadowOffsetY = 0;
 
             ctx.drawImage(this.logoImage, logoX, logoY, logoWidth, logoHeight);
             ctx.restore();
@@ -296,7 +296,7 @@ export class NavigationBar {
         const metrics = this.getCurrencyPillMetrics(this.height);
         const currencyY = (this.height - metrics.height) / 2;
         const gap = 24;
-        
+
         // Calculate starting position from right, matching setupLayout logic
         let rightX = width; // - horizontalPadding (0)
         const buttonHeight = this.height;
@@ -310,7 +310,7 @@ export class NavigationBar {
             const settingsWidth = Math.max(96, buttonHeight * 0.6);
             rightX -= settingsWidth;
         }
-        
+
         // Apply some padding from the buttons
         rightX -= 24;
 

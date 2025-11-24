@@ -70,8 +70,8 @@ export class EventsScene implements UIScene {
         // Load event card images using AssetLoader
         this.cardImages['golden-spin'] = AssetLoader.loadImageSync(AssetRegistry.eventCards.goldenSpin());
         // Load additional event card images as they're added to the registry:
-        // this.cardImages['bullseye'] = AssetLoader.loadImageSync(AssetRegistry.eventCards.bullseye());
-        // this.cardImages['win-streak'] = AssetLoader.loadImageSync(AssetRegistry.eventCards.winStreak());
+        this.cardImages['bullseye'] = AssetLoader.loadImageSync(AssetRegistry.eventCards.bullseye());
+        this.cardImages['win-streak'] = AssetLoader.loadImageSync(AssetRegistry.eventCards.winStreak());
 
         this.setupLayout(this.canvas.width, this.canvas.height);
         this.canvas.addEventListener('mousemove', this.onMouseMove);
