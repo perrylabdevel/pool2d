@@ -48,7 +48,7 @@ export class TimeAttackMode extends GameModeBase {
     console.log('⏱️ Time Attack started!');
   }
 
-  onShotTaken(angle: number, power: number): void {
+  onShotTaken(_angle: number, _power: number): void {
     this.stats.shotsAttempted++;
   }
 
@@ -64,7 +64,7 @@ export class TimeAttackMode extends GameModeBase {
     }
   }
 
-  update(dt: number): void {
+  update(_dt: number): void {
     if (this.isPaused || this.isComplete) return;
 
     // Update elapsed time

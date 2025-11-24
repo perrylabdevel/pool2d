@@ -29,7 +29,7 @@ export class PerfectGameMode extends GameModeBase {
     console.log('🎯 Perfect Game started! Run the table without missing.');
   }
 
-  onShotTaken(angle: number, power: number): void {
+  onShotTaken(_angle: number, _power: number): void {
     this.stats.shotsAttempted++;
     this.lastShotPocketedBall = false;
   }

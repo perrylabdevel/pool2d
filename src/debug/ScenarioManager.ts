@@ -423,9 +423,9 @@ class ScenarioManager {
   private syncRenderer(world: PhysicsWorld) {
     if (!this.game) return;
     const renderer = this.game.renderer as Renderer3D;
-    if (!renderer || !renderer.ballMeshes) return;
+    if (!renderer || !renderer.ballRenderer || !renderer.ballRenderer.ballMeshes) return;
 
-    renderer.ballMeshes.forEach((mesh, id) => {
+    renderer.ballRenderer.ballMeshes.forEach((mesh, id) => {
       const retain = world.balls.some((ball) => ball.id === id);
       if (!retain) {
         if (mesh.parent) {
@@ -433,7 +433,7 @@ class ScenarioManager {
         } else {
           renderer.scene.remove(mesh);
         }
-        renderer.ballMeshes.delete(id);
+        renderer.ballRenderer.ballMeshes.delete(id);
       } else {
         mesh.visible = true;
       }

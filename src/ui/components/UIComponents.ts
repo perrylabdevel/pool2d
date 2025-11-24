@@ -143,52 +143,108 @@ export function drawPanel(ctx: CanvasRenderingContext2D, rect: Rect) {
     ctx.restore();
 }
 
+export interface CurrencyPillOptions {
+    width?: number;
+    height?: number;
+    plusButton?: boolean;
+    plusRadius?: number;
+    plusSpacing?: number;
+    theme?: 'default' | 'nav';
+    dividerLeft?: boolean;
+    dividerRight?: boolean;
+}
+
 export function drawCurrencyPill(
     ctx: CanvasRenderingContext2D,
     x: number,
     y: number,
     amount: number,
-    type: 'coins' | 'cash'
+    type: 'coins' | 'cash',
+    options: CurrencyPillOptions = {}
 ) {
-    const width = 100;
-    const height = 28;
+    const width = options.width ?? 100;
+    const height = options.height ?? 28;
     const r = height / 2;
+    const includePlus = options.plusButton ?? true;
+    const plusRadius = options.plusRadius ?? 12;
+    const plusSpacing = options.plusSpacing ?? 5;
+    const theme = options.theme ?? 'default';
+
+    const iconColor = type === 'coins' ? ColorTokens.currency.coins : ColorTokens.currency.cash;
 
     ctx.save();
 
-    // Background
-    drawRoundedRect(ctx, x, y, width, height, r);
-    ctx.fillStyle = ColorTokens.background.overlayDark;
-    ctx.fill();
-    ctx.strokeStyle = ColorTokens.border.default;
-    ctx.lineWidth = 1;
-    ctx.stroke();
+    if (theme === 'nav') {
+        // No background "bubble" for nav theme - transparent
+        // Just drawing icon and text
+    } else {
+        drawRoundedRect(ctx, x, y, width, height, r);
+        ctx.fillStyle = ColorTokens.background.overlayDark;
+        ctx.fill();
+        ctx.strokeStyle = ColorTokens.border.default;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+    }
 
-    // Icon placeholder
-    const iconColor = type === 'coins' ? ColorTokens.currency.coins : ColorTokens.currency.cash;
-    ctx.beginPath();
-    ctx.arc(x + 14, y + height / 2, 10, 0, Math.PI * 2);
-    ctx.fillStyle = iconColor;
-    ctx.fill();
+    if (theme === 'nav') {
+        // Icon
+        const iconRadius = height * 0.28;
+        const iconCenterX = x + iconRadius; // Align icon to left of area
+        const iconCenterY = y + height / 2;
+        
+        const iconGradient = ctx.createLinearGradient(iconCenterX - iconRadius, iconCenterY - iconRadius, iconCenterX + iconRadius, iconCenterY + iconRadius);
+        iconGradient.addColorStop(0, '#ffffff');
+        iconGradient.addColorStop(0.4, iconColor);
+        iconGradient.addColorStop(1, adjustColor(iconColor, -40));
+        
+        ctx.beginPath();
+        ctx.arc(iconCenterX, iconCenterY, iconRadius, 0, Math.PI * 2);
+        ctx.fillStyle = iconGradient;
+        ctx.fill();
 
-    // Text
-    ctx.fillStyle = ColorTokens.text.primary;
-    ctx.font = `bold ${LayoutConstants.Fonts.Size.Small}px ${LayoutConstants.Fonts.Family.Default}`;
-    ctx.textAlign = 'right';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(amount.toLocaleString(), x + width - 10, y + height / 2 + 1);
+        // Text
+        const textStart = iconCenterX + iconRadius + 12;
+        const valueFontSize = Math.max(22, height * 0.45); // Slightly larger since no label
 
-    // Plus button
-    const plusX = x + width + 5;
-    const plusR = 12;
-    ctx.beginPath();
-    ctx.arc(plusX + plusR, y + height / 2, plusR, 0, Math.PI * 2);
-    ctx.fillStyle = ColorTokens.action.success;
-    ctx.fill();
-    ctx.fillStyle = ColorTokens.text.primary;
-    ctx.font = `bold ${LayoutConstants.Fonts.Size.Medium}px ${LayoutConstants.Fonts.Family.Default}`;
-    ctx.textAlign = 'center';
-    ctx.fillText('+', plusX + plusR, y + height / 2 + 1);
+        ctx.fillStyle = ColorTokens.text.primary;
+        ctx.font = `${LayoutConstants.Fonts.Weight.Bold} ${valueFontSize}px ${LayoutConstants.Fonts.Family.Display}`;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        
+        // Draw value only (cleaner look without "COINS"/"CASH" label)
+        ctx.fillText(amount.toLocaleString(), textStart, y + height / 2 + 1);
+    } else {
+        // Default icon/text layout
+        ctx.beginPath();
+        ctx.arc(x + 14, y + height / 2, 10, 0, Math.PI * 2);
+        ctx.fillStyle = iconColor;
+        ctx.fill();
+
+        ctx.fillStyle = ColorTokens.text.primary;
+        ctx.font = `bold ${LayoutConstants.Fonts.Size.Small}px ${LayoutConstants.Fonts.Family.Default}`;
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(amount.toLocaleString(), x + width - 10, y + height / 2 + 1);
+    }
+
+    if (includePlus) {
+        const plusX = x + width + plusSpacing;
+        const plusCenterX = plusX + plusRadius;
+        const plusCenterY = y + height / 2;
+        ctx.beginPath();
+        // Always use circle for consistency in new design
+        ctx.arc(plusCenterX, plusCenterY, plusRadius, 0, Math.PI * 2);
+
+        ctx.fillStyle = theme === 'nav' ? ColorTokens.action.success : ColorTokens.action.success;
+        ctx.fill();
+
+        // Plus sign
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = `bold ${Math.max(14, plusRadius * 1.2)}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('+', plusCenterX, plusCenterY + 1);
+    }
 
     ctx.restore();
 }

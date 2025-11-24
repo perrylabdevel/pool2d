@@ -36,7 +36,7 @@ export class SpeedPoolMode extends GameModeBase {
     console.log('⚡ Speed Pool started! Keep the combo going!');
   }
 
-  onShotTaken(angle: number, power: number): void {
+  onShotTaken(_angle: number, _power: number): void {
     this.stats.shotsAttempted++;
     this.lastShotPocketedBall = false;
   }

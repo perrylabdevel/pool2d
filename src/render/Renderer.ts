@@ -931,28 +931,6 @@ export class Renderer extends BaseRenderer {
     this.ctx.restore();
   }
 
-    
-    // Draw cue ball trajectory (solid white with black glow)
-    if (trajectories.cueBallPath) {
-      const dirX = trajectories.cueBallPath.end.x - trajectories.cueBallPath.start.x;
-      const dirY = trajectories.cueBallPath.end.y - trajectories.cueBallPath.start.y;
-      const length = Math.sqrt(dirX * dirX + dirY * dirY);
-      if (length > 0.0001) {
-        const normX = dirX / length;
-        const normY = dirY / length;
-        const lineLength = 50;
-        const start = ghostCenter;
-        const end = { x: start.x + normX * lineLength, y: start.y + normY * lineLength };
-        const result = drawSolidLineWithGlow(start, end, 'rgba(0, 0, 0, 0.8)', 'rgba(255, 255, 255, 0.95)');
-        if (result.drew) {
-          drawArrowWithGlow(result.end, result.dirX, result.dirY, 'rgba(0, 0, 0, 0.8)', 'rgba(255, 255, 255, 0.95)');
-        }
-      }
-    }
-    
-    this.ctx.restore();
-  }
-  
   /**
    * Draw physics-based trajectory lines (for debug mode)
    * Placeholder for compatibility with 3D renderer

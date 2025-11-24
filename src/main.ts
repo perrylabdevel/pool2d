@@ -1,6 +1,7 @@
 // Main entry point
 
 import { Game } from './game/Game';
+import { notificationService } from './ui/NotificationService';
 import './ui/ModalService';
 import './ui/DockBridge';
 import './ui/UISoundService';
@@ -19,9 +20,12 @@ function main() {
 
   const game = new Game(gameCanvas, debugCanvas);
   (window as any).poolGame = game;
+
+  // Transition to lobby immediately so it's ready when loading completes
+  // The loading screen will remain visible until game assets finish loading
+  uiStateMachine.transitionTo(UIState.LOBBY);
+
   game.start();
-  // Drop into the lobby scene on boot so navigation is obvious.
-  requestAnimationFrame(() => uiStateMachine.transitionTo(UIState.LOBBY));
 
   console.log('Pool 2D initialized');
 }

@@ -707,6 +707,21 @@ export class SettingsManager {
       railHighlightSpread: 1.0,
       pocketShadowIntensity: CONFIG.POCKET_SHADOW_INTENSITY ?? 0.45,
       pocketHighlightIntensity: CONFIG.POCKET_HIGHLIGHT_INTENSITY ?? 0.55,
+      grooveInnerBase: 0.18,
+      grooveInnerDepthScale: 0.22,
+      grooveThicknessFactor: 0.08,
+      grooveOpacityBase: 0.18,
+      grooveOpacityDepthScale: 0.36,
+      grooveRimThicknessFactor: 0.02,
+      grooveRimOuterOpacity: 0.10,
+      grooveRimInnerOpacity: 0.08,
+      grooveColor: '#000000',
+      rimColor: '#ffffff',
+      pocketBottomColor: '#000000',
+      pocketGradientCenterColor: '#000000',
+      pocketGradientEdgeColor: '#141414',
+      pocketWallColor: '#0a0a0a',
+      pocketGradientStrength: 1.0,
     };
     try {
       localStorage.setItem(STORAGE_KEYS.RENDER_SETTINGS, JSON.stringify(this.renderSettings));
@@ -793,6 +808,21 @@ export class SettingsManager {
         railHighlightSpread: 1.0,
         pocketShadowIntensity: CONFIG.POCKET_SHADOW_INTENSITY ?? 0.45,
         pocketHighlightIntensity: CONFIG.POCKET_HIGHLIGHT_INTENSITY ?? 0.55,
+        grooveInnerBase: 0.18,
+        grooveInnerDepthScale: 0.22,
+        grooveThicknessFactor: 0.08,
+        grooveOpacityBase: 0.18,
+        grooveOpacityDepthScale: 0.36,
+        grooveRimThicknessFactor: 0.02,
+        grooveRimOuterOpacity: 0.10,
+        grooveRimInnerOpacity: 0.08,
+        grooveColor: '#000000',
+        rimColor: '#ffffff',
+        pocketBottomColor: '#000000',
+        pocketGradientCenterColor: '#000000',
+        pocketGradientEdgeColor: '#141414',
+        pocketWallColor: '#0a0a0a',
+        pocketGradientStrength: 1.0,
       };
       
       this.applyPhysicsSettings();

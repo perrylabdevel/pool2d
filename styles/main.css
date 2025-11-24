@@ -100,6 +100,13 @@ body {
   animation: pulse-glow 2s infinite;
 }
 
+.loading-logo {
+  max-width: 300px;
+  height: auto;
+  filter: drop-shadow(0 0 15px rgba(0, 180, 255, 0.5));
+  animation: pulse-glow 2s infinite;
+}
+
 @keyframes pulse-glow {
   0% {
     filter: drop-shadow(0 0 10px rgba(0, 180, 255, 0.4));
@@ -262,9 +269,16 @@ body {
   width: var(--ball-chip-size, 32px);
   height: var(--ball-chip-size, 32px);
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  background: #050505; /* Dark pocket hole */
+  /* Gradient border for subtle depth */
+  border: 2px solid transparent;
+  background-image: linear-gradient(#050505, #050505), linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.05) 50%, rgba(255, 255, 255, 0.3) 100%);
+  background-origin: border-box;
+  background-clip: content-box, border-box;
+  
+  box-shadow: 
+    inset 0 3px 8px rgba(0, 0, 0, 1), /* Inner depth */
+    0 2px 4px rgba(0, 0, 0, 0.5); /* Outer shadow */
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -272,26 +286,34 @@ body {
   overflow: hidden;
 }
 
+/* Inner shadow overlay to create depth/recessed look over the ball */
+.ball-chip::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+  z-index: 1;
+}
+
 .ball-chip.solids,
 .ball-chip.stripes {
-  /* Use neutral glass background; actual color comes from the image */
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02));
+  /* Inherit gradient border structure */
 }
 
 /* Fallback if no image (optional, or just keep dark) */
 .ball-chip:not(.has-image):not(.empty) {
-  background: radial-gradient(circle at 30% 30%, #444, #222);
+  background-color: #050505;
 }
 
 .ball-chip.has-image {
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  /* Maintain the gradient border logic */
 }
 
 .ball-chip.empty {
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px dashed rgba(255, 255, 255, 0.15);
-  box-shadow: none;
+  background-image: linear-gradient(radial-gradient(circle at 50% 50%, #111 0%, #000 100%), radial-gradient(circle at 50% 50%, #111 0%, #000 100%)), linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0.02) 50%, rgba(255, 255, 255, 0.15) 100%);
+  box-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.9);
 }
 
 .ball-chip img {
@@ -299,6 +321,8 @@ body {
   height: 100%;
   object-fit: cover;
   border-radius: 50%;
+  transform: scale(1.5);
+  z-index: 0;
 }
 
 /* Menu Button */
@@ -1229,6 +1253,7 @@ button:active {
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
+
 .hud-header .hud-player,
 #hud-menu-btn {
   pointer-events: auto;

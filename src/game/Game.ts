@@ -191,7 +191,7 @@ export class Game {
       if (!detail?.event) return;
       this.handleAudioPreview(detail.event);
     });
-    this.mode = GameMode.EIGHT_BALL;
+    this.mode = GameMode.PRACTICE;
     this.lastBallScale = CONFIG.BALL_SCALE ?? 1;
 
     // Initialize settings
@@ -265,7 +265,7 @@ export class Game {
 
   setupCallbacks() {
     // Handle clicks for pocket selection (only when waiting for pocket call)
-    this.input.onClick = (worldX, worldY, event) => {
+    this.input.onClick = (worldX, worldY, _event) => {
       // Only process clicks when we're actually waiting for a pocket call
       if (this.waitingForPocketCall) {
         return this.handleClick(worldX, worldY);
@@ -869,8 +869,10 @@ export class Game {
         console.log('[8-Ball] Player', playerId, 'assigned', setName);
 
         // Show notification to user
-        const playerName = playerId === 1 ? 'You have' : `Player ${playerId} has`;
-        this.hud.showFoul(`${playerName} ${setName}`);
+        const message = playerId === 1
+          ? `${setName.toUpperCase()} ARE YOURS!`
+          : `Player ${playerId} has ${setName}`;
+        this.hud.showFoul(message);
 
         // Update HUD ball chips to reflect assigned groups
         this.updateHUDPlayerBalls();
@@ -894,11 +896,11 @@ export class Game {
 
       let winnerMessage: string;
       if (winningPlayer && winningPlayer.isAI()) {
-        winnerMessage = 'AI wins!';
+        winnerMessage = 'Better luck next time!';
       } else if (winner === 1) {
-        winnerMessage = 'You win!';
+        winnerMessage = 'VICTORY! You cleared the table!';
       } else {
-        winnerMessage = `Player ${winner} wins!`;
+        winnerMessage = `Player ${winner} wins the match!`;
       }
 
       console.log('[8-Ball] Winner message:', winnerMessage);
@@ -1051,7 +1053,7 @@ export class Game {
     };
     // Track rail contact
     if (this.world) {
-      this.world.onRailCollision = (ball, rail) => {
+      this.world.onRailCollision = (ball, _rail) => {
         this.playRailCollisionAudio(ball);
         if (this.mode !== GameMode.EIGHT_BALL) return;
         this.rules.recordRailContact(ball?.id);
@@ -1450,8 +1452,9 @@ export class Game {
   private getHudChipIconSizePx(): number {
     const baseSizePx = this.getHudChipSizePx();
     // Multiply by device pixel ratio for retina displays to generate higher quality icons
-    const dpr = Math.min(window.devicePixelRatio || 1, 2); // Cap at 2x to avoid excessive memory
-    return Math.max(8, Math.min(128, Math.round(baseSizePx * dpr)));
+    // Also multiply by 1.5 to account for the CSS scale transform
+    const dpr = Math.min(window.devicePixelRatio || 1, 3);
+    return Math.max(8, Math.min(256, Math.round(baseSizePx * dpr * 1.5)));
   }
 
   /**
@@ -2220,7 +2223,7 @@ export class Game {
     // Enable pocket selection mode - pockets will be clickable (only if not already waiting)
     if (!this.waitingForPocketCall) {
       this.waitingForPocketCall = true;
-      this.hud.showFoul('Click a pocket to call your shot');
+      this.hud.showFoul('Call your pocket!');
     }
 
     // Return false to block the shot until a pocket is called

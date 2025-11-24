@@ -6,7 +6,10 @@ type UISoundEvent =
   | 'modal-open'
   | 'modal-close'
   | 'toast'
-  | 'preview';
+  | 'preview'
+  | 'spin-tick'
+  | 'spin-win'
+  | 'error';
 
 interface SoundProfile {
   attack?: number;
@@ -164,6 +167,12 @@ class UISoundService {
         return { startFreq: 780, endFreq: 600, duration: 0.16, type: 'square', volume: 0.5 };
       case 'preview':
         return { startFreq: 560, endFreq: 430, duration: 0.25, type: 'square', volume: 0.65 };
+      case 'spin-tick':
+        return { startFreq: 800, endFreq: 600, duration: 0.03, type: 'sawtooth', volume: 0.3 };
+      case 'spin-win':
+        return { startFreq: 440, endFreq: 880, duration: 0.6, type: 'sine', volume: 0.7 };
+      case 'error':
+        return { startFreq: 150, endFreq: 100, duration: 0.3, type: 'sawtooth', volume: 0.6 };
       default:
         return { startFreq: 480, endFreq: 480, duration: 0.12, type: 'sine', volume: 0.4 };
     }

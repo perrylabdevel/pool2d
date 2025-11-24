@@ -1,6 +1,10 @@
 import { ColorTokens } from '../theme/ColorTokens';
-import { drawRoundedRect, drawCurrencyPill, Rect } from './UIComponents';
+import { LayoutConstants } from '../theme/LayoutConstants';
+import { drawCurrencyPill, Rect } from './UIComponents';
 import { uiStateMachine, UIState } from '../UIStateMachine';
+import { currencyStore } from '../CurrencyStore';
+import { AssetRegistry } from '../../assets/AssetRegistry';
+import { AssetLoader } from '../../assets/AssetLoader';
 
 export interface NavigationBarConfig {
     title?: string;
@@ -12,12 +16,13 @@ export interface NavigationBarConfig {
     onBack?: () => void;
     onProfile?: () => void;
     onSettings?: () => void;
+    balancesProvider?: () => { coins: number; gold: number };
 }
 
 interface NavButton {
     id: 'back' | 'profile' | 'settings';
     rect: Rect;
-    icon: string;
+    icon?: string;
 }
 
 export class NavigationBar {
@@ -25,6 +30,7 @@ export class NavigationBar {
     private buttons: NavButton[] = [];
     private hoveredButton: NavButton | null = null;
     private height = 104; // Match HUD header: 12px header padding + (8px player padding + 64px avatar + 8px player padding) + 12px header padding
+    private logoImage: HTMLImageElement;
 
     constructor(config: NavigationBarConfig) {
         this.config = {
@@ -32,8 +38,12 @@ export class NavigationBar {
             showProfile: true,
             showCurrencies: true,
             showSettings: true,
+            balancesProvider: () => currencyStore.getBalances(),
             ...config
         };
+
+        // Load logo image
+        this.logoImage = AssetLoader.loadImageSync(AssetRegistry.branding.logo());
     }
 
     updateConfig(config: Partial<NavigationBarConfig>) {
@@ -46,57 +56,46 @@ export class NavigationBar {
 
     setupLayout(width: number) {
         this.buttons = [];
-        const padding = 20;
-        const buttonSize = 44;
-        const gap = 12;
-
-        let x = padding;
+        const horizontalPadding = 0;
+        const buttonHeight = this.height;
+        const backWidth = 132; // 25% smaller than original 176
+        const pillMetrics = this.getCurrencyPillMetrics(buttonHeight);
+        const settingsWidth = Math.max(96, buttonHeight * 0.6);
+        const profileSize = buttonHeight;
 
         // Back button (left)
         if (this.config.showBack) {
             this.buttons.push({
                 id: 'back',
-                rect: { x, y: (this.height - buttonSize) / 2, width: buttonSize, height: buttonSize },
-                icon: '←'
+                rect: { x: horizontalPadding, y: 0, width: backWidth, height: buttonHeight },
             });
-            x += buttonSize + gap;
         }
 
         // Calculate right side layout from right to left
-        let rightX = width - padding;
+        // Order: Profile -> Settings -> Currencies
+        let rightX = width - horizontalPadding;
 
-        // Currencies take up space on the right
-        if (this.config.showCurrencies) {
-            const pillWidth = 100;
-            const plusOffset = 5;
-            const plusRadius = 12;
-            const pillTotalWidth = pillWidth + plusOffset + plusRadius * 2; // 129px per pill
-            const pillGap = 16; // Gap between pills
-            const currenciesWidth = pillTotalWidth * 2 + pillGap; // 129 + 16 + 129 = 274px
-            rightX -= currenciesWidth;
-            rightX -= gap * 2; // Extra spacing before buttons
-        }
-
-        // Settings button
-        if (this.config.showSettings) {
-            rightX -= buttonSize;
-            this.buttons.push({
-                id: 'settings',
-                rect: { x: rightX, y: (this.height - buttonSize) / 2, width: buttonSize, height: buttonSize },
-                icon: '⚙'
-            });
-            rightX -= gap;
-        }
-
-        // Profile button
+        // 1. Profile (Far Right)
         if (this.config.showProfile) {
-            rightX -= buttonSize;
+            rightX -= profileSize;
             this.buttons.push({
                 id: 'profile',
-                rect: { x: rightX, y: (this.height - buttonSize) / 2, width: buttonSize, height: buttonSize },
-                icon: '👤'
+                rect: { x: rightX, y: 0, width: profileSize, height: profileSize },
             });
         }
+
+        // 2. Settings (Left of Profile)
+        if (this.config.showSettings) {
+            rightX -= settingsWidth;
+            this.buttons.push({
+                id: 'settings',
+                rect: { x: rightX, y: 0, width: settingsWidth, height: buttonHeight },
+            });
+        }
+
+        // 3. Currencies (Left of Settings)
+        // We don't add buttons for currencies here, but renderCurrencies will use the same logic
+        // to determine where to start drawing.
     }
 
     handleMouseMove(x: number, y: number): boolean {
@@ -115,7 +114,7 @@ export class NavigationBar {
         return false;
     }
 
-    handleClick(x: number, y: number): boolean {
+    handleClick(_x: number, y: number): boolean {
         if (!this.hoveredButton || y > this.height) return false;
 
         switch (this.hoveredButton.id) {
@@ -137,7 +136,7 @@ export class NavigationBar {
                 if (this.config.onSettings) {
                     this.config.onSettings();
                 } else {
-                    (window as any).__settingsReturnState = uiStateMachine.state;
+                    (window as Window & { __settingsReturnState?: UIState }).__settingsReturnState = uiStateMachine.state;
                     uiStateMachine.transitionTo(UIState.SETTINGS);
                 }
                 return true;
@@ -181,8 +180,27 @@ export class NavigationBar {
 
         ctx.restore();
 
-        // Title (centered)
-        if (this.config.title) {
+        // Logo (centered) - replaces title text
+        if (this.logoImage && this.logoImage.complete && this.logoImage.naturalWidth > 0) {
+            ctx.save();
+
+            // Logo dimensions - scaled to fit nicely in the nav bar
+            const logoMaxHeight = height * 0.65; // 65% of nav bar height
+            const logoAspect = this.logoImage.naturalWidth / this.logoImage.naturalHeight;
+            const logoHeight = logoMaxHeight;
+            const logoWidth = logoHeight * logoAspect;
+            const logoX = (width / 2) - (logoWidth / 2);
+            const logoY = (height / 2) - (logoHeight / 2);
+
+            // Subtle shadow for logo
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+            ctx.shadowBlur = 12;
+            ctx.shadowOffsetY = 4;
+
+            ctx.drawImage(this.logoImage, logoX, logoY, logoWidth, logoHeight);
+            ctx.restore();
+        } else if (this.config.title) {
+            // Fallback to text if logo hasn't loaded yet
             ctx.save();
             ctx.fillStyle = ColorTokens.text.primary;
             ctx.font = 'bold 28px Arial';
@@ -196,7 +214,16 @@ export class NavigationBar {
 
         // Buttons
         for (const btn of this.buttons) {
-            this.renderButton(ctx, btn, btn === this.hoveredButton);
+            const hovered = btn === this.hoveredButton;
+            if (btn.id === 'back') {
+                this.renderBackButton(ctx, btn, hovered);
+            } else if (btn.id === 'profile') {
+                this.renderProfileButton(ctx, btn, hovered);
+            } else if (btn.id === 'settings') {
+                this.renderSettingsButton(ctx, btn, hovered);
+            } else {
+                this.renderStandardButton(ctx, btn, hovered);
+            }
         }
 
         // Currencies (if enabled)
@@ -205,7 +232,7 @@ export class NavigationBar {
         }
     }
 
-    private renderButton(ctx: CanvasRenderingContext2D, btn: NavButton, isHovered: boolean) {
+    private renderStandardButton(ctx: CanvasRenderingContext2D, btn: NavButton, isHovered: boolean) {
         const rect = btn.rect;
 
         ctx.save();
@@ -240,26 +267,150 @@ export class NavigationBar {
         ctx.font = '20px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(btn.icon, rect.x + rect.width / 2, rect.y + rect.height / 2);
+        if (btn.icon) {
+            ctx.fillText(btn.icon, rect.x + rect.width / 2, rect.y + rect.height / 2);
+        }
 
         ctx.restore();
     }
 
+    private renderSettingsButton(ctx: CanvasRenderingContext2D, btn: NavButton, isHovered: boolean) {
+        const { x, y, width, height } = btn.rect;
+        ctx.save();
+        ctx.fillStyle = isHovered ? 'rgba(0, 0, 0, 0.45)' : 'rgba(0, 0, 0, 0.35)';
+        ctx.fillRect(x, y, width, height);
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.font = `${LayoutConstants.Fonts.Weight.Bold} ${Math.max(32, height * 0.5)}px ${LayoutConstants.Fonts.Family.Display}`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('⚙', x + width / 2, y + height / 2 + 2);
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+        ctx.fillRect(x, y + 6, 1, height - 12);
+        ctx.fillRect(x + width - 1, y + 6, 1, height - 12);
+        ctx.restore();
+    }
+
     private renderCurrencies(ctx: CanvasRenderingContext2D, width: number) {
-        const currencyY = (this.height - 28) / 2; // Center vertically, pill height is 28px
-        const pillWidth = 100; // Base pill width
-        const plusOffset = 5; // Gap between pill and plus button
-        const plusRadius = 12; // Plus button radius
-        const pillTotalWidth = pillWidth + plusOffset + plusRadius * 2; // 100 + 5 + 24 = 129px
-        const gap = 16; // Gap between the two pills
-        const padding = 20;
+        const metrics = this.getCurrencyPillMetrics(this.height);
+        const currencyY = (this.height - metrics.height) / 2;
+        const gap = 24;
+        
+        // Calculate starting position from right, matching setupLayout logic
+        let rightX = width; // - horizontalPadding (0)
+        const buttonHeight = this.height;
 
-        // Position from right, accounting for full pill + plus button width
-        const cashX = width - padding - pillTotalWidth;
-        const coinsX = cashX - gap - pillTotalWidth;
+        if (this.config.showProfile) {
+            const profileSize = buttonHeight;
+            rightX -= profileSize;
+        }
 
-        drawCurrencyPill(ctx, coinsX, currencyY, 2500, 'coins');
-        drawCurrencyPill(ctx, cashX, currencyY, 85, 'cash');
+        if (this.config.showSettings) {
+            const settingsWidth = Math.max(96, buttonHeight * 0.6);
+            rightX -= settingsWidth;
+        }
+        
+        // Apply some padding from the buttons
+        rightX -= 24;
+
+        // Position from right of the available space
+        // Order: [Coins] [Gap] [Cash] [rightX]
+        const cashX = rightX - metrics.totalWidth;
+        const coinsX = cashX - gap - metrics.totalWidth;
+
+        const balances = this.config.balancesProvider ? this.config.balancesProvider() : { coins: 0, gold: 0 };
+
+        const baseOptions = {
+            width: metrics.width,
+            height: metrics.height,
+            plusButton: false,
+            theme: 'nav' as const,
+        };
+
+        drawCurrencyPill(ctx, coinsX, currencyY, balances.coins, 'coins', {
+            ...baseOptions,
+            dividerLeft: false,
+            dividerRight: false,
+        });
+        drawCurrencyPill(ctx, cashX, currencyY, balances.gold, 'cash', {
+            ...baseOptions,
+            dividerLeft: false,
+            dividerRight: false,
+        });
+    }
+
+    private renderBackButton(ctx: CanvasRenderingContext2D, btn: NavButton, isHovered: boolean) {
+        const { x, y, width, height } = btn.rect;
+
+        ctx.save();
+
+        // Flat background - solid color, full height rectangle
+        ctx.fillStyle = isHovered ? '#d32f2f' : '#b71c1c';
+        ctx.fillRect(x, y, width, height);
+
+        // Subtle right border for definition
+        ctx.strokeStyle = isHovered ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)';
+        ctx.lineWidth = 1;
+        ctx.fillRect(x + width - 1, y, 1, height);
+
+        // Stylized arrow using a more interesting font
+        const iconSize = Math.max(36, height * 0.45);
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = `${iconSize}px "Georgia", serif`; // Serif font for more elegant arrow
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+        ctx.shadowBlur = 3;
+        ctx.fillText('←', x + width / 2, y + height / 2);
+
+        ctx.shadowBlur = 0;
+        ctx.shadowColor = 'transparent';
+
+        ctx.restore();
+    }
+
+    private renderProfileButton(ctx: CanvasRenderingContext2D, btn: NavButton, isHovered: boolean) {
+        const { x, y, width, height } = btn.rect;
+        ctx.save();
+        ctx.fillStyle = isHovered ? 'rgba(0, 0, 0, 0.45)' : 'rgba(0, 0, 0, 0.35)';
+        ctx.fillRect(x, y, width, height);
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+        ctx.fillRect(x, y + 6, 1, height - 12);
+        ctx.fillRect(x + width - 1, y + 6, 1, height - 12);
+
+        const overlay = ctx.createLinearGradient(x, y, x, y + height);
+        overlay.addColorStop(0, 'rgba(255, 255, 255, 0.12)');
+        overlay.addColorStop(0.3, 'rgba(255, 255, 255, 0.04)');
+        overlay.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        ctx.fillStyle = overlay;
+        ctx.fillRect(x, y, width, height / 2);
+
+        const centerX = x + width / 2;
+        const headRadius = height * 0.18;
+        const bodyRadius = height * 0.3;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+        ctx.beginPath();
+        ctx.arc(centerX, y + height * 0.38, headRadius, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.moveTo(centerX - bodyRadius, y + height * 0.7);
+        ctx.quadraticCurveTo(centerX, y + height * 0.5, centerX + bodyRadius, y + height * 0.7);
+        ctx.lineTo(centerX + bodyRadius, y + height * 0.95);
+        ctx.lineTo(centerX - bodyRadius, y + height * 0.95);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.restore();
+    }
+
+    private getCurrencyPillMetrics(buttonHeight: number) {
+        const height = 42;
+        const width = 150;
+        const plusButtonSpace = 0; // removed plus button
+        return { height, width, totalWidth: width + plusButtonSpace };
     }
 
     private isInside(x: number, y: number, rect: Rect): boolean {

@@ -8,6 +8,13 @@ export function drawSceneBackground(
     height: number,
     theme: BackgroundTheme = 'blue'
 ) {
+    // Save current transform and reset for background
+    // This ensures background slides with scene transitions
+    ctx.save();
+    const transform = ctx.getTransform();
+    const offsetX = transform.e; // horizontal translation
+    const offsetY = transform.f; // vertical translation
+
     // Define gradient colors based on theme
     let gradientStart: string;
     let gradientMid: string;
@@ -41,41 +48,39 @@ export function drawSceneBackground(
             break;
     }
 
-    // Gradient background
-    const gradient = ctx.createLinearGradient(0, 0, width, height);
+    // Gradient background (accounting for transform)
+    const gradient = ctx.createLinearGradient(offsetX, offsetY, offsetX + width, offsetY + height);
     gradient.addColorStop(0, gradientStart);
     gradient.addColorStop(0.5, gradientMid);
     gradient.addColorStop(1, gradientEnd);
     ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, width, height);
+    ctx.fillRect(offsetX, offsetY, width, height);
 
     // Subtle grid overlay
-    ctx.save();
     ctx.globalAlpha = 0.15;
     const gridSize = 60;
-    for (let y = 0; y < height; y += gridSize) {
-        for (let x = 0; x < width; x += gridSize) {
+    for (let y = offsetY; y < offsetY + height; y += gridSize) {
+        for (let x = offsetX; x < offsetX + width; x += gridSize) {
             ctx.strokeStyle = 'rgba(255,255,255,0.04)';
             ctx.lineWidth = 1;
             ctx.strokeRect(x, y, gridSize, gridSize);
         }
     }
     ctx.globalAlpha = 1;
-    ctx.restore();
 
     // Optional: Add subtle radial glow in center
-    ctx.save();
     const centerGradient = ctx.createRadialGradient(
-        width / 2,
-        height / 2,
+        offsetX + width / 2,
+        offsetY + height / 2,
         0,
-        width / 2,
-        height / 2,
+        offsetX + width / 2,
+        offsetY + height / 2,
         Math.max(width, height) / 2
     );
     centerGradient.addColorStop(0, 'rgba(255, 255, 255, 0.02)');
     centerGradient.addColorStop(1, 'rgba(0, 0, 0, 0.1)');
     ctx.fillStyle = centerGradient;
-    ctx.fillRect(0, 0, width, height);
+    ctx.fillRect(offsetX, offsetY, width, height);
+
     ctx.restore();
 }

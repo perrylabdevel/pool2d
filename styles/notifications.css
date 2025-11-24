@@ -1,0 +1,166 @@
+/* Notification System */
+#notification-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 0;
+    /* Don't block clicks when empty */
+    z-index: 9000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    pointer-events: none;
+}
+
+.notification-banner {
+    width: 100%;
+    padding: 16px 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform: translateY(-100%);
+    opacity: 0;
+    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease;
+    pointer-events: auto;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    position: relative;
+    overflow: hidden;
+}
+
+.notification-banner.visible {
+    transform: translateY(0);
+    opacity: 1;
+}
+
+.notification-content {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    z-index: 2;
+}
+
+.notification-text {
+    font-family: var(--font-heading);
+    font-size: 24px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #fff;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+    margin: 0;
+}
+
+.notification-icon {
+    font-size: 28px;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+}
+
+/* Background Effects */
+.notification-banner::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-size: 200% 200%;
+    animation: banner-gradient 3s ease infinite;
+    z-index: 1;
+}
+
+.notification-banner::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.2) 0%, transparent 50%, rgba(0, 0, 0, 0.2) 100%);
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* Types */
+
+/* Success / Winner (Gold) */
+.notification-banner.type-success {
+    border-bottom: 2px solid #FFD700;
+}
+
+.notification-banner.type-success::before {
+    background-image: linear-gradient(45deg, #B8860B, #FFD700, #DAA520, #B8860B);
+}
+
+.notification-banner.type-success .notification-text {
+    color: #fff;
+    text-shadow: 0 2px 0 #8B6508, 0 4px 8px rgba(0, 0, 0, 0.5);
+}
+
+/* Error / Foul (Red) */
+.notification-banner.type-error {
+    border-bottom: 2px solid #FF3333;
+}
+
+.notification-banner.type-error::before {
+    background-image: linear-gradient(45deg, #8B0000, #FF3333, #DC143C, #8B0000);
+}
+
+/* Info (Blue) */
+.notification-banner.type-info {
+    border-bottom: 2px solid #00B4FF;
+}
+
+.notification-banner.type-info::before {
+    background-image: linear-gradient(45deg, #005A80, #00B4FF, #1E90FF, #005A80);
+}
+
+/* Warning (Orange) */
+.notification-banner.type-warning {
+    border-bottom: 2px solid #FF8C00;
+}
+
+.notification-banner.type-warning::before {
+    background-image: linear-gradient(45deg, #8B4500, #FF8C00, #FFA500, #8B4500);
+}
+
+@keyframes banner-gradient {
+    0% {
+        background-position: 0% 50%;
+    }
+
+    50% {
+        background-position: 100% 50%;
+    }
+
+    100% {
+        background-position: 0% 50%;
+    }
+}
+
+/* Shine Effect */
+.notification-shine {
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 50%;
+    height: 100%;
+    background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.4), transparent);
+    transform: skewX(-25deg);
+    animation: banner-shine 2s infinite;
+    z-index: 2;
+    pointer-events: none;
+}
+
+@keyframes banner-shine {
+    0% {
+        left: -100%;
+    }
+
+    20% {
+        left: 200%;
+    }
+
+    100% {
+        left: 200%;
+    }
+}

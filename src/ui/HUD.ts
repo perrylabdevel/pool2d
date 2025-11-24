@@ -173,8 +173,21 @@ export class HUD {
     }
   }
 
-  showFoul(message: string) {
-    notificationService.show(message, 'error', 4000);
+  showFoul(message: string, type?: 'info' | 'success' | 'warning' | 'error' | 'epic') {
+    // Auto-detect message type based on content if not specified
+    if (!type) {
+      const msg = message.toLowerCase();
+      if (msg.includes('victory') || msg.includes('wins') || msg.includes('cleared') || msg.includes('are yours') || msg.includes('ready to dominate')) {
+        type = 'success';
+      } else if (msg.includes('foul') || msg.includes('scratch') || msg.includes('wrong') || msg.includes('better luck')) {
+        type = 'error';
+      } else if (msg.includes('call your pocket')) {
+        type = 'info';
+      } else {
+        type = 'info';
+      }
+    }
+    notificationService.show(message, type, 4000);
   }
 
   setPlayerName(player: number, name: string) {

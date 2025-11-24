@@ -3,7 +3,6 @@
 
 import { PhysicsWorld } from '../physics/Physics';
 import { CONFIG } from '../config';
-import type { Rail } from '../physics/Shapes';
 import { getTableGeometry } from '../geometry/Geometry';
 import type { Renderer3D } from '../render/Renderer3D';
 

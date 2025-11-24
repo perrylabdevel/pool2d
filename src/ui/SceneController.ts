@@ -5,6 +5,7 @@ import { LobbyScene } from './scenes/LobbyScene';
 import { PlayModesScene } from './scenes/PlayModesScene';
 import { ShopScene } from './scenes/ShopScene';
 import { EventsScene } from './scenes/EventsScene';
+import { GoldenSpinScene } from './scenes/GoldenSpinScene';
 import { ProfileScene } from './scenes/ProfileScene';
 import { ConfirmScene } from './scenes/ConfirmScene';
 import { InGameMenuScene } from './scenes/InGameMenuScene';
@@ -51,6 +52,7 @@ export class SceneController {
         this.registerScene(UIState.PLAY_MODES, new PlayModesScene());
         this.registerScene(UIState.SHOP, new ShopScene());
         this.registerScene(UIState.EVENTS, new EventsScene());
+        this.registerScene(UIState.EVENT_GOLDEN_SPIN, new GoldenSpinScene());
         this.registerScene(UIState.PROFILE, new ProfileScene());
         this.registerScene(UIState.CONFIRM, new ConfirmScene());
         this.registerScene(UIState.IN_GAME_MENU, new InGameMenuScene());

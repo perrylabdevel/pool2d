@@ -3,7 +3,7 @@
 import { Ball } from '../physics/Shapes';
 import { PhysicsWorld } from '../physics/Physics';
 import { Player, BallGroup } from '../game/Player';
-import { getTableGeometry, PocketDef, Vec2 } from '../geometry/Geometry';
+import { getTableGeometry, PocketDef } from '../geometry/Geometry';
 import { BALL_CUE, BALL_8, BALLS_SOLID, BALLS_STRIPE, CONFIG } from '../config';
 
 export enum AIDifficulty {
@@ -429,7 +429,7 @@ export class PoolAI {
   /**
    * Decide whether to play safe based on available shot quality
    */
-  private shouldPlaySafe(shotOptions: ShotOption[], player: Player): boolean {
+  private shouldPlaySafe(shotOptions: ShotOption[], _player: Player): boolean {
     // Never play safe on easy difficulty
     if (this.difficulty === AIDifficulty.EASY) return false;
 
@@ -537,27 +537,6 @@ export class PoolAI {
 
     // Return best shot (noise added by caller)
     return scoredShots[0].shot;
-  }
-
-  /**
-   * Add aim and power error based on difficulty level
-   */
-  private addHumanErrorLegacy(shot: ShotOption): ShotOption {
-    const errorRange = {
-      [AIDifficulty.EASY]: 15,    // ±15° aim error
-      [AIDifficulty.MEDIUM]: 8,   // ±8° aim error
-      [AIDifficulty.HARD]: 3,     // ±3° aim error
-      [AIDifficulty.EXPERT]: 1,   // ±1° aim error
-    }[this.difficulty];
-
-    const angleError = (Math.random() - 0.5) * 2 * errorRange * (Math.PI / 180);
-    const powerError = (Math.random() - 0.5) * 0.2; // ±10% power
-
-    return {
-      ...shot,
-      aimAngle: shot.aimAngle + angleError,
-      power: shot.power * (1 + powerError),
-    };
   }
 
   /**

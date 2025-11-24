@@ -653,9 +653,8 @@ export class BallRenderer {
             }
 
             mesh.position.set(0, 0, 0);
-            // Rotate to show number nicely
-            mesh.rotation.x = Math.PI / 4;
-            mesh.rotation.z = Math.PI / 4;
+            // Rotate based on test-chips.html findings (X=270deg, Y=90deg)
+            mesh.rotation.set(Math.PI * 1.5, Math.PI / 2, 0);
 
             scene.add(mesh);
 

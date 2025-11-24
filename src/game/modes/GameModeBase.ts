@@ -1,7 +1,6 @@
 // Base interface for game modes
 
 import { Ball } from '../../physics/Shapes';
-import { PhysicsWorld } from '../../physics/Physics';
 
 export interface GameModeConfig {
   name: string;
@@ -44,7 +43,7 @@ export abstract class GameModeBase {
   /**
    * Called when a shot is taken
    */
-  abstract onShotTaken(angle: number, power: number): void;
+  abstract onShotTaken(_angle: number, _power: number): void;
 
   /**
    * Called when all balls come to rest after a shot
@@ -54,7 +53,7 @@ export abstract class GameModeBase {
   /**
    * Called every frame to update mode-specific logic (timers, etc.)
    */
-  abstract update(dt: number): void;
+  abstract update(_dt: number): void;
 
   /**
    * Check if the mode has a win/lose condition met

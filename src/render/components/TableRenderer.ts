@@ -351,6 +351,16 @@ export class TableRenderer {
     initializeRails(rails: Rail[]) {
         this.debugRailSegments = [];
         this.railLines = [];
+        
+        // Clear existing per-rail highlight meshes
+        this.railHighlightMeshes.forEach(mesh => {
+            this.scene.remove(mesh);
+            mesh.geometry.dispose();
+            const mat = mesh.material as THREE.Material;
+            mat.dispose();
+        });
+        this.railHighlightMeshes = [];
+
         const railMaterial = new THREE.MeshStandardMaterial({
             color: new THREE.Color(CONFIG.RAIL_COLOR),
             roughness: 0.5,
@@ -447,34 +457,6 @@ export class TableRenderer {
 
             this.scene.add(railMesh);
             this.railMeshes.push(railMesh);
-            // Add simple additive highlight ribbon sitting on top of the cushion
-            const highlightWidth = totalWidth * Math.max(0.2, Math.min(1.6, this.railHighlightSpread));
-            const seamPad = Math.max(0.4, totalWidth * 0.35); // small overlap to hide seams at cushion joints
-            const highlightGeom = new THREE.BoxGeometry(renderLength + seamPad, highlightWidth, 0.15);
-            const highlightMat = new THREE.MeshBasicMaterial({
-                color: this.railHighlightColor.clone(),
-                transparent: true,
-                blending: THREE.AdditiveBlending,
-                depthTest: false,
-                depthWrite: false,
-                opacity: 0.3 * this.railHighlightIntensity,
-                side: THREE.DoubleSide,
-            });
-            (highlightMat as any).toneMapped = false;
-            (highlightMat as any).userData = (highlightMat as any).userData ?? {};
-            (highlightMat as any).userData.baseOpacity = (highlightMat as any).userData.baseOpacity ?? highlightMat.opacity;
-            const highlightMesh = new THREE.Mesh(highlightGeom, highlightMat);
-            highlightMesh.position.set(renderCenterX - nx * centerShift, renderCenterY - ny * centerShift, 0.08);
-            highlightMesh.rotation.z = angle;
-            highlightMesh.visible = this.layerVisibility.showRails;
-            highlightMesh.renderOrder = this.layerOrder.orderRails + 0.1;
-            highlightMesh.userData = highlightMesh.userData ?? {};
-            highlightMesh.userData.basePos = { x: highlightMesh.position.x, y: highlightMesh.position.y };
-            highlightMesh.userData.normal = { x: nx, y: ny };
-            highlightMesh.userData.baseWidth = highlightWidth;
-            this.enforceRenderOrderControl(highlightMesh, { disableDepth: false });
-            this.scene.add(highlightMesh);
-            this.railHighlightMeshes.push(highlightMesh);
 
             const debugStartOuter = {
                 x: innerPoint.x - nx * (centerShift + totalWidth / 2),
@@ -1306,11 +1288,11 @@ export class TableRenderer {
             const feltSideX = x + nx * width;
             const feltSideY = y + ny * width;
 
-            positions.push(railSideX, railSideY, 0.005, feltSideX, feltSideY, 0.005);
+            positions.push(railSideX, railSideY, 0.015, feltSideX, feltSideY, 0.015);
 
             const u = i / joins.length;
-            // V=0 at Rail (Dark), V=1 at Felt (Light)
-            uvs.push(u, 0, u, 1);
+            // V=1 at Rail (Dark), V=0 at Felt (Light)
+            uvs.push(u, 1, u, 0);
         }
         for (let i = 0; i < joins.length; i++) {
             const a = i * 2;
@@ -1404,7 +1386,6 @@ export class TableRenderer {
             positions.push(outerX, outerY, zHeight, innerX, innerY, zHeight);
 
             // UVs: 0 = outer (sharp), 1 = inner (fade)
-            const u = i / joins.length;
             uvs.push(0, 0, 1, 0); // We might want a gradient across the width, so use V for width
         }
 
@@ -1485,7 +1466,7 @@ export class TableRenderer {
     private updateRailHighlightRibbonMaterial() {
         const mat = this.railHighlightMaterial;
         if (!mat) return;
-        const t = Math.max(0, Math.min(1, this.railHighlightIntensity));
+        const t = Math.max(0, this.railHighlightIntensity);
         mat.opacity = (mat.userData?.baseOpacity ?? 1) * t;
         mat.color.copy(this.railHighlightColor);
         mat.needsUpdate = true;
@@ -1528,6 +1509,9 @@ export class TableRenderer {
             depthTest: true,
             depthWrite: false,
             side: THREE.DoubleSide,
+            polygonOffset: true,
+            polygonOffsetFactor: -2,
+            polygonOffsetUnits: -2,
         });
         material.userData = material.userData ?? {};
         material.userData.baseOpacity = material.userData.baseOpacity ?? material.opacity;
@@ -1556,7 +1540,7 @@ export class TableRenderer {
         }
     }
 
-    private createOrUpdateTableOverlays(width: number, height: number) {
+    private createOrUpdateTableOverlays(_width: number, _height: number) {
         // Placeholder for table overlays (felt texture, markings, etc.)
     }
 

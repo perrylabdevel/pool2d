@@ -1,7 +1,8 @@
 import { UIScene } from '../SceneController';
 import { uiStateMachine, UIState } from '../UIStateMachine';
-import { drawPanel, drawGlossyButton, Rect, UIColors } from '../components/UIComponents';
+import { drawPanel, drawGlossyButton, drawCurrencyPill, drawRoundedRect, Rect, UIColors } from '../components/UIComponents';
 import { ColorTokens } from '../theme/ColorTokens';
+import { LayoutConstants } from '../theme/LayoutConstants';
 import { NavigationBar } from '../components/NavigationBar';
 import { SettingsManager } from '../SettingsManager';
 import { notificationService } from '../NotificationService';
@@ -84,22 +85,9 @@ export class ShopScene implements UIScene {
         const navHeight = this.navigationBar.getHeight();
 
         const horizontalPadding = Math.max(40, width * 0.05);
-        const footerHeight = 160;
 
-        // Remove back button since navigation bar handles it
-        this.buttons = [
-            {
-                id: 'equip',
-                label: 'Equip Selected',
-                color: ColorTokens.action.success,
-                rect: {
-                    x: width - horizontalPadding - 220,
-                    y: height - footerHeight + 60,
-                    width: 220,
-                    height: 56
-                }
-            }
-        ];
+        // No footer buttons needed - cards are directly clickable
+        this.buttons = [];
 
         const cardWidth = 240;
         const cardHeight = 320;
@@ -139,8 +127,7 @@ export class ShopScene implements UIScene {
         this.hoveredButton = null;
         for (const button of this.buttons) {
             const { x: bx, y: by, width, height } = button.rect;
-            const isEquipDisabled = button.id === 'equip' && this.isSelectedCueEquipped();
-            if (!isEquipDisabled && x >= bx && x <= bx + width && y >= by && y <= by + height) {
+            if (x >= bx && x <= bx + width && y >= by && y <= by + height) {
                 this.hoveredButton = button;
                 break;
             }
@@ -177,6 +164,16 @@ export class ShopScene implements UIScene {
         }
         if (this.hoveredCardIndex !== -1) {
             this.selectedCardIndex = this.hoveredCardIndex;
+            // Equip the cue immediately when clicking on a card
+            const cue = CUES[this.selectedCardIndex];
+            if (cue && cue.id !== this.equippedCueId) {
+                this.settingsManager.saveUIColors({
+                    cueStickColor: cue.stickColor,
+                    cueTipColor: cue.tipColor
+                });
+                this.equippedCueId = cue.id;
+                notificationService.show(`${cue.name} ready to dominate!`, 'success', 2400);
+            }
         }
     };
 
@@ -193,7 +190,7 @@ export class ShopScene implements UIScene {
                 cueTipColor: cue.tipColor
             });
             this.equippedCueId = cue.id;
-            notificationService.show(`${cue.name} equipped`, 'success', 2400);
+            notificationService.show(`${cue.name} ready to dominate!`, 'success', 2400);
         }
     }
 
@@ -243,75 +240,372 @@ export class ShopScene implements UIScene {
     }
 
     private drawCueCard(ctx: CanvasRenderingContext2D, rect: Rect, cue: CueCard, isSelected: boolean, isHovered: boolean) {
-        const borderColor = isSelected ? cue.accent : 'rgba(255,255,255,0.12)';
+        const { x, y, width, height } = rect;
+        const radius = LayoutConstants.Radii.Large;
+        const frameWidth = 6; // Outer decorative frame
+        const bevelWidth = 3; // Middle bevel layer
+        const borderWidth = 2; // Inner border
+
         ctx.save();
 
-        drawPanel(ctx, rect);
-        ctx.strokeStyle = borderColor;
-        ctx.lineWidth = isSelected ? 3 : 1;
+        // Enhanced drop shadow
+        if (isHovered || isSelected) {
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+            ctx.shadowBlur = 28;
+            ctx.shadowOffsetY = 14;
+        } else {
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+            ctx.shadowBlur = 20;
+            ctx.shadowOffsetY = 10;
+        }
+
+        // Outer Frame - Metallic/Wood-grain effect
+        drawRoundedRect(ctx, x, y, width, height, radius);
+        const frameGradient = ctx.createLinearGradient(x, y, x, y + height);
+        frameGradient.addColorStop(0, '#8B7355'); // Lighter wood/bronze
+        frameGradient.addColorStop(0.5, '#6B5745'); // Mid wood/bronze
+        frameGradient.addColorStop(1, '#4B3725'); // Darker wood/bronze
+        ctx.fillStyle = frameGradient;
+        ctx.fill();
+
+        // Add metallic shine to frame
+        const shineGradient = ctx.createLinearGradient(x, y, x + width / 3, y);
+        shineGradient.addColorStop(0, 'rgba(255, 255, 255, 0.4)');
+        shineGradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.1)');
+        shineGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        ctx.fillStyle = shineGradient;
+        ctx.fill();
+
+        // Reset shadow for inner elements
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
+
+        // Middle Bevel Layer - Creates depth with inverted gradient
+        const bevelX = x + frameWidth;
+        const bevelY = y + frameWidth;
+        const bevelFullWidth = width - frameWidth * 2;
+        const bevelFullHeight = height - frameWidth * 2;
+        const bevelRadius = radius - frameWidth;
+
+        drawRoundedRect(ctx, bevelX, bevelY, bevelFullWidth, bevelFullHeight, bevelRadius);
+        const bevelGradient = ctx.createLinearGradient(bevelX, bevelY, bevelX, bevelY + bevelFullHeight);
+        bevelGradient.addColorStop(0, '#3a3a3a'); // Dark top for inset look
+        bevelGradient.addColorStop(0.5, '#2a2a2a'); // Mid
+        bevelGradient.addColorStop(1, '#4a4a4a'); // Lighter bottom
+        ctx.fillStyle = bevelGradient;
+        ctx.fill();
+
+        // Bevel highlight (top edge)
+        drawRoundedRect(ctx, bevelX, bevelY, bevelFullWidth, bevelFullHeight, bevelRadius);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.lineWidth = 1;
         ctx.stroke();
 
+        // Inner content area (inset from bevel)
+        const innerX = bevelX + bevelWidth;
+        const innerY = bevelY + bevelWidth;
+        const innerWidth = bevelFullWidth - bevelWidth * 2;
+        const innerHeight = bevelFullHeight - bevelWidth * 2;
+        const innerRadius = bevelRadius - bevelWidth;
+
+        // Background with radial gradient
+        drawRoundedRect(ctx, innerX, innerY, innerWidth, innerHeight, innerRadius);
+        const bgGradient = ctx.createRadialGradient(
+            innerX + innerWidth / 2,
+            innerY + innerHeight * 0.3,
+            0,
+            innerX + innerWidth / 2,
+            innerY + innerHeight * 0.3,
+            innerWidth * 0.8
+        );
+        bgGradient.addColorStop(0, 'rgba(40, 40, 50, 1)');
+        bgGradient.addColorStop(1, ColorTokens.background.panel);
+        ctx.fillStyle = bgGradient;
+        ctx.fill();
+
+        // Accent glow background effect
         if (isHovered || isSelected) {
             ctx.save();
-            ctx.globalAlpha = isSelected ? 0.18 : 0.1;
-            const hoverGrad = ctx.createLinearGradient(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height);
-            hoverGrad.addColorStop(0, cue.accent);
-            hoverGrad.addColorStop(1, 'transparent');
-            ctx.fillStyle = hoverGrad;
-            ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+            ctx.globalAlpha = isSelected ? 0.25 : 0.15;
+            const glowGrad = ctx.createRadialGradient(
+                innerX + innerWidth / 2,
+                innerY + innerHeight * 0.4,
+                0,
+                innerX + innerWidth / 2,
+                innerY + innerHeight * 0.4,
+                innerWidth
+            );
+            glowGrad.addColorStop(0, cue.accent);
+            glowGrad.addColorStop(0.6, 'transparent');
+            ctx.fillStyle = glowGrad;
+            ctx.fillRect(innerX, innerY, innerWidth, innerHeight);
             ctx.restore();
         }
 
-        ctx.fillStyle = ColorTokens.background.overlay;
-        ctx.fillRect(rect.x + 20, rect.y + 20, rect.width - 40, 110);
-        ctx.fillStyle = cue.stickColor; // Cue-specific color
-        ctx.fillRect(rect.x + 30, rect.y + 70, rect.width - 60, 10);
-        ctx.fillStyle = cue.tipColor; // Cue-specific color
-        ctx.fillRect(rect.x + 30, rect.y + 68, 8, 14);
+        // Diagonal accent stripe pattern
+        ctx.save();
+        drawRoundedRect(ctx, innerX, innerY, innerWidth, innerHeight, innerRadius);
+        ctx.clip();
 
-        ctx.textAlign = 'left';
-        ctx.fillStyle = ColorTokens.text.primary;
-        ctx.font = '700 20px "Montserrat", Arial';
-        ctx.fillText(cue.name, rect.x + 24, rect.y + 160);
+        ctx.globalAlpha = 0.08;
+        ctx.strokeStyle = cue.accent;
+        ctx.lineWidth = 2;
+        for (let i = -innerHeight; i < innerWidth + innerHeight; i += 20) {
+            ctx.beginPath();
+            ctx.moveTo(innerX + i, innerY);
+            ctx.lineTo(innerX + i + innerHeight, innerY + innerHeight);
+            ctx.stroke();
+        }
+        ctx.restore();
 
-        ctx.font = '12px "Nunito", Arial';
-        ctx.fillStyle = 'rgba(255,255,255,0.65)'; // Muted description text
-        ctx.fillText(cue.desc, rect.x + 24, rect.y + 185, rect.width - 48);
+        // DRAMATIC CUE VISUALIZATION - Large diagonal cue
+        const cueLength = innerWidth * 0.75;
+        const cueThickness = 12;
+        const cueStartX = innerX + innerWidth * 0.15;
+        const cueStartY = innerY + innerHeight * 0.35;
+        const cueEndX = cueStartX + cueLength;
+        const cueEndY = cueStartY - cueLength * 0.3;
 
-        ctx.font = '11px "Montserrat", Arial';
-        ctx.fillStyle = ColorTokens.text.dark;
-        const rarityWidth = ctx.measureText(cue.rarity).width + 26;
-        ctx.fillStyle = this.getRarityColor(cue.rarity);
-        ctx.fillRect(rect.x + 24, rect.y + 132, rarityWidth, 22);
-        ctx.fillStyle = ColorTokens.text.dark;
+        ctx.save();
+        // Cue shadow
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+        ctx.shadowBlur = 12;
+        ctx.shadowOffsetX = 4;
+        ctx.shadowOffsetY = 4;
+
+        // Cue stick with gradient
+        ctx.lineCap = 'round';
+        ctx.lineWidth = cueThickness;
+        const cueGradient = ctx.createLinearGradient(cueStartX, cueStartY, cueEndX, cueEndY);
+        cueGradient.addColorStop(0, adjustBrightness(cue.stickColor, -30));
+        cueGradient.addColorStop(0.5, cue.stickColor);
+        cueGradient.addColorStop(1, adjustBrightness(cue.stickColor, 20));
+        ctx.strokeStyle = cueGradient;
+        ctx.beginPath();
+        ctx.moveTo(cueStartX, cueStartY);
+        ctx.lineTo(cueEndX, cueEndY);
+        ctx.stroke();
+
+        // Cue tip with glow
+        ctx.shadowColor = cue.tipColor;
+        ctx.shadowBlur = 15;
+        ctx.fillStyle = cue.tipColor;
+        ctx.beginPath();
+        ctx.arc(cueStartX, cueStartY, cueThickness * 0.7, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Accent band on cue
+        const bandX = cueStartX + cueLength * 0.65;
+        const bandY = cueStartY - cueLength * 0.3 * 0.65;
+        ctx.shadowColor = cue.accent;
+        ctx.shadowBlur = 10;
+        ctx.strokeStyle = cue.accent;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(bandX, bandY, cueThickness * 0.75, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.restore();
+
+        // RARITY BADGE - Top right corner with glow
+        const rarityPadding = 16;
+        const rarityHeight = 28;
+        ctx.font = '700 11px "Rajdhani", "Montserrat", Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(cue.rarity, rect.x + 24 + rarityWidth / 2, rect.y + 143);
+        const rarityWidth = ctx.measureText(cue.rarity).width + 32;
+        const rarityX = innerX + innerWidth - rarityWidth - rarityPadding;
+        const rarityY = innerY + rarityPadding;
 
+        // Rarity badge background with gradient
+        drawRoundedRect(ctx, rarityX, rarityY, rarityWidth, rarityHeight, 6);
+        const rarityColor = this.getRarityColor(cue.rarity);
+        const rarityGradient = ctx.createLinearGradient(rarityX, rarityY, rarityX, rarityY + rarityHeight);
+        rarityGradient.addColorStop(0, rarityColor);
+        rarityGradient.addColorStop(1, adjustBrightness(rarityColor, -40));
+        ctx.fillStyle = rarityGradient;
+        ctx.fill();
+
+        // Rarity badge glow
+        ctx.shadowColor = rarityColor;
+        ctx.shadowBlur = 12;
+        ctx.strokeStyle = rarityColor;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.shadowColor = 'transparent';
+
+        // Rarity text
+        ctx.fillStyle = '#FFFFFF';
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+        ctx.shadowBlur = 4;
+        ctx.fillText(cue.rarity, rarityX + rarityWidth / 2, rarityY + rarityHeight / 2);
+        ctx.shadowBlur = 0;
+        ctx.shadowColor = 'transparent';
+
+        // TEXT CONTENT - Bottom section with dramatic styling
+        const textStartY = innerY + innerHeight - 90;
+
+        // Cue name - Large and bold with size adjustment if needed
+        ctx.save();
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+
+        // Dynamically adjust font size to fit
+        let nameFontSize = 22;
+        ctx.font = `900 ${nameFontSize}px "Rajdhani", "Montserrat", Arial`;
+        let nameText = cue.name.toUpperCase();
+        let nameWidth = ctx.measureText(nameText).width;
+        const maxNameWidth = innerWidth - 40;
+
+        // Reduce font size if text is too wide
+        while (nameWidth > maxNameWidth && nameFontSize > 16) {
+            nameFontSize -= 1;
+            ctx.font = `900 ${nameFontSize}px "Rajdhani", "Montserrat", Arial`;
+            nameWidth = ctx.measureText(nameText).width;
+        }
+
+        // Name with strong shadow
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+        ctx.shadowBlur = 8;
+        ctx.shadowOffsetX = 2;
+        ctx.shadowOffsetY = 2;
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillText(nameText, innerX + 20, textStartY);
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+
+        // Accent line under name
+        ctx.fillStyle = cue.accent;
+        ctx.fillRect(innerX + 20, textStartY + 4, Math.min(nameWidth, maxNameWidth), 3);
+        ctx.restore();
+
+        // Description text with accent color and word wrapping
+        ctx.font = '600 11px "Nunito", Arial';
+        ctx.fillStyle = cue.accent;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+        ctx.shadowBlur = 6;
+
+        // Word wrap the description
+        const maxDescWidth = innerWidth - 40;
+        const words = cue.desc.toUpperCase().split(' ');
+        let line = '';
+        let descY = textStartY + 16;
+        const lineHeight = 14;
+
+        for (let i = 0; i < words.length; i++) {
+            const testLine = line + words[i] + ' ';
+            const metrics = ctx.measureText(testLine);
+
+            if (metrics.width > maxDescWidth && i > 0) {
+                ctx.fillText(line, innerX + 20, descY);
+                line = words[i] + ' ';
+                descY += lineHeight;
+            } else {
+                line = testLine;
+            }
+        }
+        ctx.fillText(line, innerX + 20, descY);
+
+        ctx.shadowBlur = 0;
+        ctx.shadowColor = 'transparent';
+
+        // Equipped badge
         if (cue.id === this.equippedCueId) {
             ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; // Dark overlay for equipped badge
-            ctx.fillRect(rect.x, rect.y + rect.height - 36, rect.width, 36);
+            ctx.fillRect(innerX, innerY + innerHeight - 36, innerWidth, 36);
             ctx.fillStyle = ColorTokens.action.success;
             ctx.font = '600 14px "Montserrat", Arial';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText('EQUIPPED', rect.x + rect.width / 2, rect.y + rect.height - 18);
+            ctx.fillText('EQUIPPED', innerX + innerWidth / 2, innerY + innerHeight - 18);
+        }
+
+        // Inner border (decorative line inside the frame)
+        drawRoundedRect(ctx, innerX, innerY, innerWidth, innerHeight, innerRadius);
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+        ctx.lineWidth = borderWidth;
+        ctx.stroke();
+
+        // Inner highlight (creates depth)
+        const innerHighlightInset = borderWidth / 2;
+        drawRoundedRect(
+            ctx,
+            innerX + innerHighlightInset,
+            innerY + innerHighlightInset,
+            innerWidth - innerHighlightInset * 2,
+            innerHeight - innerHighlightInset * 2,
+            innerRadius - innerHighlightInset
+        );
+        const highlightGradient = ctx.createLinearGradient(
+            innerX,
+            innerY,
+            innerX,
+            innerY + innerHeight / 4
+        );
+        highlightGradient.addColorStop(0, 'rgba(255, 255, 255, 0.2)');
+        highlightGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        ctx.strokeStyle = highlightGradient;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Corner decorations (small accent lines at corners)
+        const cornerSize = Math.min(20, innerWidth * 0.05);
+        const cornerInset = frameWidth + bevelWidth + 2;
+        ctx.strokeStyle = 'rgba(255, 215, 0, 0.6)'; // Gold accents
+        ctx.lineWidth = 2;
+
+        // Top-left corner
+        ctx.beginPath();
+        ctx.moveTo(x + cornerInset + cornerSize, y + cornerInset);
+        ctx.lineTo(x + cornerInset, y + cornerInset);
+        ctx.lineTo(x + cornerInset, y + cornerInset + cornerSize);
+        ctx.stroke();
+
+        // Top-right corner
+        ctx.beginPath();
+        ctx.moveTo(x + width - cornerInset - cornerSize, y + cornerInset);
+        ctx.lineTo(x + width - cornerInset, y + cornerInset);
+        ctx.lineTo(x + width - cornerInset, y + cornerInset + cornerSize);
+        ctx.stroke();
+
+        // Bottom-left corner
+        ctx.beginPath();
+        ctx.moveTo(x + cornerInset, y + height - cornerInset - cornerSize);
+        ctx.lineTo(x + cornerInset, y + height - cornerInset);
+        ctx.lineTo(x + cornerInset + cornerSize, y + height - cornerInset);
+        ctx.stroke();
+
+        // Bottom-right corner
+        ctx.beginPath();
+        ctx.moveTo(x + width - cornerInset, y + height - cornerInset - cornerSize);
+        ctx.lineTo(x + width - cornerInset, y + height - cornerInset);
+        ctx.lineTo(x + width - cornerInset - cornerSize, y + height - cornerInset);
+        ctx.stroke();
+
+        // Hover/Selected glow effect (outer glow)
+        if (isHovered || isSelected) {
+            drawRoundedRect(ctx, x - 2, y - 2, width + 4, height + 4, radius + 2);
+            ctx.strokeStyle = isSelected ? cue.accent : '#00B4FF';
+            ctx.lineWidth = 4;
+            ctx.shadowColor = isSelected ? `${cue.accent}99` : 'rgba(0, 180, 255, 0.6)';
+            ctx.shadowBlur = 20;
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+            ctx.shadowColor = 'transparent';
         }
 
         ctx.restore();
     }
 
     private renderFooter(ctx: CanvasRenderingContext2D) {
+        // No footer buttons - cards are directly clickable
         this.buttons.forEach((button) => {
-            if (button.id === 'equip') {
-                const disabled = this.isSelectedCueEquipped();
-                const label = disabled ? 'Equipped' : button.label;
-                const color = disabled ? 'rgba(180,180,180,0.35)' : button.color;
-                const hovered = this.hoveredButton?.id === button.id && !disabled;
-                drawGlossyButton(ctx, button.rect, label, color, hovered);
-            } else {
-                drawGlossyButton(ctx, button.rect, button.label, button.color, this.hoveredButton?.id === button.id);
-            }
+            drawGlossyButton(ctx, button.rect, button.label, button.color, this.hoveredButton?.id === button.id);
         });
     }
 
@@ -350,4 +644,15 @@ export class ShopScene implements UIScene {
         const cue = CUES[this.selectedCardIndex];
         return cue ? cue.id === this.equippedCueId : false;
     }
+}
+
+// Helper function to adjust color brightness
+function adjustBrightness(color: string, amount: number): string {
+    // Convert hex to RGB
+    const hex = color.replace('#', '');
+    const r = Math.max(0, Math.min(255, parseInt(hex.substring(0, 2), 16) + amount));
+    const g = Math.max(0, Math.min(255, parseInt(hex.substring(2, 4), 16) + amount));
+    const b = Math.max(0, Math.min(255, parseInt(hex.substring(4, 6), 16) + amount));
+
+    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
 }
