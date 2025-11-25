@@ -61,11 +61,34 @@ export const AssetRegistry = {
     winStreak: () => new URL('./img/event-cards/win-streak.jpg', import.meta.url).href,
   },
 
-  // Add more asset categories as your project grows:
-  // shopItems: { ... },
-  // cues: { ... },
-  // backgrounds: { ... },
-  // icons: { ... },
+  /**
+   * Avatar images
+   */
+  avatars: {
+    default: () => new URL('./img/avatars/avatar_default.png', import.meta.url).href,
+    player: () => new URL('./img/avatars/avatar_player.png', import.meta.url).href,
+    sharkSally: () => new URL('./img/avatars/avatar_shark_sally.png', import.meta.url).href,
+    theMachine: () => new URL('./img/avatars/avatar_the_machine.png', import.meta.url).href,
+    rookieRick: () => new URL('./img/avatars/avatar_rookie_rick.png', import.meta.url).href,
+  },
+
+  /**
+   * League Frames
+   */
+  frames: {
+    bronze: () => new URL('./img/frames/frame_bronze.png', import.meta.url).href,
+    silver: () => new URL('./img/frames/frame_silver.png', import.meta.url).href,
+    gold: () => new URL('./img/frames/frame_gold.png', import.meta.url).href,
+  },
+
+  /**
+   * Economy assets (Chests, Coins, etc.)
+   */
+  economy: {
+    chestCommon: () => new URL('./img/economy/chest_common.png', import.meta.url).href,
+    chestRare: () => new URL('./img/economy/chest_rare.png', import.meta.url).href,
+    chestEpic: () => new URL('./img/economy/chest_epic.png', import.meta.url).href,
+  },
 } as const;
 
 /**

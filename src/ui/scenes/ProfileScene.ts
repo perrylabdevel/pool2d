@@ -1,11 +1,14 @@
 import { UIScene } from '../SceneController';
-import { uiStateMachine, UIState } from '../UIStateMachine';
+import { UIState } from '../UIStateMachine';
 import { drawPanel, drawGlossyButton, Rect, UIColors } from '../components/UIComponents';
 import { ColorTokens } from '../theme/ColorTokens';
 import { LayoutConstants } from '../theme/LayoutConstants';
-import { SettingsManager, type GameStats } from '../SettingsManager';
 import { NavigationBar } from '../components/NavigationBar';
 import { drawSceneBackground } from '../components/SceneBackground';
+import { db } from '../../data/db';
+import { UserProfile, UserStats } from '../../data/models';
+import { AssetRegistry } from '../../assets/AssetRegistry';
+import { AssetLoader } from '../../assets/AssetLoader';
 
 type ProfileButton = {
     id: 'customize' | 'reset';
@@ -17,7 +20,7 @@ type ProfileButton = {
 type AchievementDef = {
     title: string;
     desc: string;
-    key: keyof GameStats;
+    key: keyof UserStats;
     target: number;
 };
 
@@ -25,8 +28,8 @@ export class ProfileScene implements UIScene {
     private canvas: HTMLCanvasElement | null = null;
     private buttons: ProfileButton[] = [];
     private hoveredButton: ProfileButton | null = null;
-    private settingsManager = new SettingsManager();
     private navigationBar: NavigationBar;
+    private userProfile: UserProfile | null = null;
     private layout: {
         heroRect: Rect;
         statsRect: Rect;
@@ -47,7 +50,10 @@ export class ProfileScene implements UIScene {
     mount(): void {
         this.canvas = document.getElementById('ui-stage') as HTMLCanvasElement;
         if (!this.canvas) return;
+
+        this.loadData();
         this.updateLayout();
+
         this.canvas.addEventListener('mousemove', this.onMouseMove);
         this.canvas.addEventListener('click', this.onClick);
         window.addEventListener('resize', this.updateLayout);
@@ -59,6 +65,14 @@ export class ProfileScene implements UIScene {
         this.canvas.removeEventListener('click', this.onClick);
         window.removeEventListener('resize', this.updateLayout);
         this.canvas.style.cursor = 'default';
+    }
+
+    private async loadData() {
+        try {
+            this.userProfile = await db.user.get(1) || null;
+        } catch (e) {
+            console.error('Failed to load user profile:', e);
+        }
     }
 
     private updateLayout = () => {
@@ -174,10 +188,21 @@ export class ProfileScene implements UIScene {
                     title: 'RESET STATS',
                     message: 'Are you sure you want to reset all your game statistics? This cannot be undone.',
                     confirmText: 'YES, RESET',
-                    onConfirm: () => {
-                        this.settingsManager.resetGameStats();
-                        // Force re-render or update stats
-                        // The render loop pulls from settingsManager every frame, so it should update automatically
+                    onConfirm: async () => {
+                        // Reset logic here - ideally call a db reset method
+                        // For now, just reset stats in DB
+                        if (this.userProfile) {
+                            this.userProfile.stats = {
+                                gamesPlayed: 0,
+                                wins: 0,
+                                losses: 0,
+                                winStreak: 0,
+                                ballsPotted: 0,
+                                tournamentsWon: 0,
+                                totalEarnings: 0
+                            };
+                            await db.user.put(this.userProfile);
+                        }
                     }
                 });
             });
@@ -190,12 +215,23 @@ export class ProfileScene implements UIScene {
         const width = ctx.canvas.width;
         const height = ctx.canvas.height;
         this.renderBackground(ctx, width, height);
-        const stats = this.settingsManager.getGameStats();
+
+        const stats = this.userProfile?.stats;
         const navHeight = this.navigationBar.getHeight();
-        this.renderHero(ctx, width, navHeight, stats);
-        this.renderStats(ctx, width, navHeight, stats);
-        this.renderAchievements(ctx, width, height, navHeight, stats);
-        this.renderButtons(ctx);
+
+        if (stats) {
+            this.renderHero(ctx, width, navHeight, stats);
+            this.renderStats(ctx, width, navHeight, stats);
+            this.renderAchievements(ctx, width, height, navHeight, stats);
+            this.renderButtons(ctx);
+        } else {
+            // Loading state
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = '24px Inter';
+            ctx.textAlign = 'center';
+            ctx.fillText('Loading Profile...', width / 2, height / 2);
+        }
+
         this.navigationBar.render(ctx, width);
     }
 
@@ -203,7 +239,7 @@ export class ProfileScene implements UIScene {
         drawSceneBackground(ctx, width, height, 'green');
     }
 
-    private renderHero(ctx: CanvasRenderingContext2D, width: number, navHeight: number, stats: GameStats) {
+    private renderHero(ctx: CanvasRenderingContext2D, width: number, navHeight: number, stats: UserStats) {
         const panelRect = this.layout?.heroRect ?? {
             x: width * 0.08,
             y: navHeight + 20,
@@ -225,14 +261,28 @@ export class ProfileScene implements UIScene {
         ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
         ctx.shadowBlur = 8;
         drawPanel(ctx, avatarRect);
+
+        // Render Avatar
+        const avatarUrl = AssetRegistry.avatars.player();
+        const avatarImg = AssetLoader.getCached(avatarUrl);
+
+        if (avatarImg) {
+            ctx.drawImage(avatarImg, avatarRect.x + 4, avatarRect.y + 4, avatarRect.width - 8, avatarRect.height - 8);
+        } else {
+            AssetLoader.loadImage(avatarUrl);
+            // Fallback
+            ctx.fillStyle = '#333';
+            ctx.fillRect(avatarRect.x + 4, avatarRect.y + 4, avatarRect.width - 8, avatarRect.height - 8);
+            ctx.font = `700 ${LayoutConstants.Fonts.Size.XXLarge}px ${LayoutConstants.Fonts.Family.Heading}`;
+            ctx.fillStyle = ColorTokens.text.primary;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('BR', avatarRect.x + avatarRect.width / 2, avatarRect.y + avatarRect.height / 2);
+        }
+
         ctx.strokeStyle = ColorTokens.action.info;
         ctx.lineWidth = 2;
         ctx.strokeRect(avatarRect.x + 4, avatarRect.y + 4, avatarRect.width - 8, avatarRect.height - 8);
-        ctx.font = `700 ${LayoutConstants.Fonts.Size.XXLarge}px ${LayoutConstants.Fonts.Family.Heading}`;
-        ctx.fillStyle = ColorTokens.text.primary;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('BR', avatarRect.x + avatarRect.width / 2, avatarRect.y + avatarRect.height / 2);
         ctx.restore();
 
         ctx.save();
@@ -240,7 +290,7 @@ export class ProfileScene implements UIScene {
         ctx.font = `600 ${LayoutConstants.Fonts.Size.Hero}px ${LayoutConstants.Fonts.Family.Display}`;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
-        ctx.fillText('Brian Rivera', avatarRect.x + avatarRect.width + 24, panelRect.y + 32);
+        ctx.fillText(this.userProfile?.name || 'Player', avatarRect.x + avatarRect.width + 24, panelRect.y + 32);
 
         ctx.font = `${LayoutConstants.Fonts.Size.Medium}px ${LayoutConstants.Fonts.Family.Body}`;
         ctx.fillStyle = 'rgba(255,255,255,0.7)'; // Subtitle text
@@ -256,7 +306,7 @@ export class ProfileScene implements UIScene {
         ctx.restore();
     }
 
-    private renderStats(ctx: CanvasRenderingContext2D, width: number, navHeight: number, stats: GameStats) {
+    private renderStats(ctx: CanvasRenderingContext2D, width: number, navHeight: number, stats: UserStats) {
         const panelRect = this.layout?.statsRect ?? {
             x: width * 0.08,
             y: navHeight + 250,
@@ -285,7 +335,7 @@ export class ProfileScene implements UIScene {
         });
     }
 
-    private renderAchievements(ctx: CanvasRenderingContext2D, width: number, height: number, navHeight: number, stats: GameStats) {
+    private renderAchievements(ctx: CanvasRenderingContext2D, width: number, height: number, navHeight: number, stats: UserStats) {
         const panelRect = this.layout?.achievementsRect ?? {
             x: width * 0.08,
             y: navHeight + 420,
@@ -327,7 +377,7 @@ export class ProfileScene implements UIScene {
         });
     }
 
-    private getStatCards(stats: GameStats) {
+    private getStatCards(stats: UserStats) {
         return [
             {
                 label: 'Win Rate',
@@ -347,11 +397,11 @@ export class ProfileScene implements UIScene {
         ];
     }
 
-    private getAchievementProgress(stats: GameStats) {
+    private getAchievementProgress(stats: UserStats) {
         const defs: AchievementDef[] = [
             { title: 'Rail Rush Veteran', desc: 'Clear 100 racks', key: 'gamesPlayed', target: 100 },
             { title: 'Precision Shooter', desc: 'Pocket 250 balls', key: 'ballsPotted', target: 250 },
-            { title: 'Hot Streak', desc: 'Win 10 in a row', key: 'maxWinStreak', target: 10 }
+            { title: 'Hot Streak', desc: 'Win 10 in a row', key: 'winStreak', target: 10 }
         ];
         return defs.map((def) => {
             const current = (stats[def.key] as number) ?? 0;
@@ -366,13 +416,13 @@ export class ProfileScene implements UIScene {
         });
     }
 
-    private formatWinRate(stats: GameStats) {
+    private formatWinRate(stats: UserStats) {
         if (!stats.gamesPlayed) return '--';
         const rate = Math.round((stats.wins / stats.gamesPlayed) * 100);
         return `${rate}%`;
     }
 
-    private deriveRank(stats: GameStats) {
+    private deriveRank(stats: UserStats) {
         if (stats.wins >= 200) return 'Legend';
         if (stats.wins >= 120) return 'Vanguard';
         if (stats.wins >= 60) return 'Specialist';

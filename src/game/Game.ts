@@ -23,7 +23,7 @@ import { HelpPanel } from '../ui/HelpPanel';
 import { scenarioManager } from '../debug/ScenarioManager';
 import { Player, PlayerType, BallGroup } from './Player';
 import { GameStateMachine, GameState } from './GameStateMachine';
-import { PoolAI, AIDifficulty } from '../ai/PoolAI';
+import { PoolAI } from '../ai/PoolAI';
 import { GameModeBase } from './modes/GameModeBase';
 import { TimeAttackMode, TimeAttackDifficulty } from './modes/TimeAttackMode';
 import { PerfectGameMode } from './modes/PerfectGameMode';
@@ -35,6 +35,8 @@ import { PlaybackController } from './PlaybackController';
 import { MatchData } from '../debug/PhysicsRecorder';
 import { PlaybackPanel } from '../ui/PlaybackPanel';
 import { uiStateMachine, UIState } from '../ui/UIStateMachine';
+import { db } from '../data/db';
+import { MatchRecord } from '../data/models';
 
 export enum GameMode {
   PRACTICE,
@@ -181,8 +183,8 @@ export class Game {
         this.aimAssist = !!detail.settings.aimAssist;
         // Update other live game settings if needed
         if (this.ai) {
-          const diff = this.mapAIDifficulty(detail.settings.aiDifficulty ?? 'MEDIUM');
-          this.ai.difficulty = diff;
+          const opponentId = this.mapDifficultyToOpponentId(detail.settings.aiDifficulty ?? 'MEDIUM');
+          this.ai.setOpponent(opponentId);
         }
       }
     });
@@ -573,9 +575,9 @@ export class Game {
     // React to AI difficulty changes from settings panel
     window.addEventListener('game:ai-difficulty-changed', (e: Event) => {
       const value = (e as CustomEvent<{ value: 'EASY' | 'MEDIUM' | 'HARD' | 'EXPERT' }>).detail?.value ?? 'MEDIUM';
-      const diff = this.mapAIDifficulty(value);
+      const opponentId = this.mapDifficultyToOpponentId(value);
       if (this.ai) {
-        this.ai.difficulty = diff;
+        this.ai.setOpponent(opponentId);
       }
     });
 
@@ -856,8 +858,8 @@ export class Game {
 
     // Initialize AI with difficulty from settings
     const gs = this.hud.settingsManager.getGameSettings();
-    const diff = this.mapAIDifficulty(gs.aiDifficulty ?? 'MEDIUM');
-    this.ai = new PoolAI(diff);
+    const opponentId = this.mapDifficultyToOpponentId(gs.aiDifficulty ?? 'MEDIUM');
+    this.ai = new PoolAI(opponentId);
 
     // Set up rules callbacks
     this.rules.onGroupAssigned = (playerId: number, group: number) => {
@@ -883,7 +885,7 @@ export class Game {
       this.hud.showFoul(this.formatFoulMessage(message));
     };
 
-    this.rules.onGameOver = (winner: number) => {
+    this.rules.onGameOver = async (winner: number) => {
       console.log('[8-Ball] Game over! Winner:', winner);
       this.canShoot = false;
       if (this.stateMachine && this.stateMachine.state !== GameState.GAME_OVER) {
@@ -892,7 +894,42 @@ export class Game {
 
       // Check if winner is AI or human player
       const winningPlayer = this.players.find(p => p.id === winner);
-      console.log('[8-Ball] Winning player:', { id: winningPlayer?.id, type: winningPlayer?.type, isAI: winningPlayer?.isAI() });
+      const humanPlayer = this.players.find(p => !p.isAI());
+      const aiPlayer = this.players.find(p => p.isAI());
+
+      // Save match record if it's a valid Human vs AI game
+      if (humanPlayer && aiPlayer) {
+        const isWin = winningPlayer?.id === humanPlayer.id;
+        const record: MatchRecord = {
+          timestamp: Date.now(),
+          opponentId: this.ai?.getOpponentDef().id || 'unknown',
+          opponentName: aiPlayer.name,
+          userScore: isWin ? 1 : 0,
+          opponentScore: isWin ? 0 : 1,
+          result: isWin ? 'win' : 'loss',
+          earnings: isWin ? 100 : 10, // Base earnings
+          leagueId: 'bronze_1', // Default for now
+        };
+
+        try {
+          await db.matches.add(record);
+          // Update user stats
+          await db.user.where('id').equals(1).modify(user => {
+            user.stats.gamesPlayed++;
+            user.stats.totalEarnings += record.earnings;
+            if (isWin) {
+              user.stats.wins++;
+              user.coins += record.earnings;
+            } else {
+              user.stats.losses++;
+              user.coins += record.earnings;
+            }
+          });
+          console.log('Match saved to DB:', record);
+        } catch (e) {
+          console.error('Failed to save match:', e);
+        }
+      }
 
       let winnerMessage: string;
       if (winningPlayer && winningPlayer.isAI()) {
@@ -915,13 +952,13 @@ export class Game {
     this.hud.setTurn(1, false);
   }
 
-  private mapAIDifficulty(value: 'EASY' | 'MEDIUM' | 'HARD' | 'EXPERT'): AIDifficulty {
+  private mapDifficultyToOpponentId(value: 'EASY' | 'MEDIUM' | 'HARD' | 'EXPERT'): string {
     switch (value) {
-      case 'EASY': return AIDifficulty.EASY;
-      case 'HARD': return AIDifficulty.HARD;
-      case 'EXPERT': return AIDifficulty.EXPERT;
+      case 'EASY': return 'rookie_rick';
+      case 'HARD': return 'shark_sally';
+      case 'EXPERT': return 'the_machine';
       case 'MEDIUM':
-      default: return AIDifficulty.MEDIUM;
+      default: return 'steady_steve';
     }
   }
 
@@ -1486,7 +1523,7 @@ export class Game {
     if (!this.aiSelectedShot) {
       const elapsed = performance.now() - this.aiThinkingStartTime;
 
-      if (elapsed >= this.ai.thinkingTime) {
+      if (elapsed >= this.ai.getThinkingTime()) {
         // Select shot
         console.log('[AI] Selecting shot for player', currentPlayer.id, 'group:', currentPlayer.group);
 
@@ -1524,19 +1561,17 @@ export class Game {
       // Animate cue like a real player, then execute the shot
       if (!this.aiShotAnim) {
         const r = Math.random;
-        const diff = this.ai?.difficulty ?? AIDifficulty.MEDIUM;
+        const stats = this.ai?.getOpponentDef().stats;
+        const accuracy = stats?.accuracy ?? 0.5;
+
         // Per-shot randomized dynamics
         const baseW1 = 1.0 + r() * 1.5; // cycles/sec
         const baseW2 = 2.0 + r() * 2.0;
-        // Angle waggle amplitude in degrees by difficulty
-        const aAmpDeg = (() => {
-          switch (diff) {
-            case AIDifficulty.EASY: return 2.2 + r() * 0.8;
-            case AIDifficulty.MEDIUM: return 1.0 + r() * 0.8;
-            case AIDifficulty.HARD: return 0.35 + r() * 0.25;
-            case AIDifficulty.EXPERT: return 0.15 + r() * 0.15;
-          }
-        })();
+
+        // Angle waggle amplitude in degrees based on accuracy (inverse relationship)
+        // High accuracy (1.0) -> low waggle (~0.15 deg)
+        // Low accuracy (0.0) -> high waggle (~2.5 deg)
+        const aAmpDeg = (2.5 - (accuracy * 2.35)) + r() * (1 - accuracy) * 0.5;
         const pAmp = Math.min(this.aiSelectedShot.power * (0.10 + r() * 0.08), 3.2);
         const warmupDur = 0.45 + r() * 0.35; // 0.45-0.8s
         const approachDur = 0.35 + r() * 0.25; // 0.35-0.6s
@@ -1613,8 +1648,10 @@ export class Game {
         } else if (p.phase === 'strike') {
           const t = Math.min(1, p.elapsed / strikeDuration);
           const eased = t * t; // accelerate in
-          // Final micro-refinement on hard/expert: ease angle back to precise aim
-          const refine = (this.ai && (this.ai.difficulty === AIDifficulty.HARD || this.ai.difficulty === AIDifficulty.EXPERT)) ? (1 - (1 - eased) * 0.5) : eased;
+          // Final micro-refinement on high accuracy: ease angle back to precise aim
+          const stats = this.ai?.getOpponentDef().stats;
+          const isHighSkill = (stats?.accuracy ?? 0) > 0.7;
+          const refine = isHighSkill ? (1 - (1 - eased) * 0.5) : eased;
           this.currentPower = p.targetPower * (0.7 + 0.3 * eased);
           this.lockedAngle = p.aimAngle * refine + this.lockedAngle * (1 - refine);
           // force fresh prediction (align aim line with cue)

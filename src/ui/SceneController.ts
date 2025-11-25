@@ -10,6 +10,7 @@ import { ProfileScene } from './scenes/ProfileScene';
 import { ConfirmScene } from './scenes/ConfirmScene';
 import { InGameMenuScene } from './scenes/InGameMenuScene';
 import { SettingsScene } from './scenes/SettingsScene';
+import { LeagueScene } from './scenes/LeagueScene';
 import { uiSoundService } from './UISoundService';
 
 export interface UIScene {
@@ -54,6 +55,7 @@ export class SceneController {
         this.registerScene(UIState.EVENTS, new EventsScene());
         this.registerScene(UIState.EVENT_GOLDEN_SPIN, new GoldenSpinScene());
         this.registerScene(UIState.PROFILE, new ProfileScene());
+        this.registerScene(UIState.LEAGUE, new LeagueScene());
         this.registerScene(UIState.CONFIRM, new ConfirmScene());
         this.registerScene(UIState.IN_GAME_MENU, new InGameMenuScene());
 

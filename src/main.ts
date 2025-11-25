@@ -9,7 +9,9 @@ import './ui/UIRoot';
 import { uiStateMachine, UIState } from './ui/UIStateMachine';
 import './ui/SceneController';
 
-function main() {
+import { initializeUserIfNeeded } from './data/db';
+
+async function main() {
   const gameCanvas = document.getElementById('game-canvas') as HTMLCanvasElement;
   const debugCanvas = document.getElementById('debug-canvas') as HTMLCanvasElement;
 
@@ -17,6 +19,9 @@ function main() {
     console.error('Canvas elements not found');
     return;
   }
+
+  // Initialize database
+  await initializeUserIfNeeded();
 
   const game = new Game(gameCanvas, debugCanvas);
   (window as any).poolGame = game;

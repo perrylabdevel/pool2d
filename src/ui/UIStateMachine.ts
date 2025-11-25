@@ -4,6 +4,7 @@ export enum UIState {
     SHOP = 'SHOP',
     EVENTS = 'EVENTS',
     EVENT_GOLDEN_SPIN = 'EVENT_GOLDEN_SPIN',
+    LEAGUE = 'LEAGUE',
     PROFILE = 'PROFILE',
     CONFIRM = 'CONFIRM',
     SETTINGS = 'SETTINGS',
@@ -67,6 +68,7 @@ export class UIStateMachine {
             UIState.EVENTS,
             UIState.EVENT_GOLDEN_SPIN,
             UIState.SETTINGS,
+            UIState.LEAGUE,
             UIState.PROFILE
         ];
         const fromIndex = hierarchy.indexOf(from);

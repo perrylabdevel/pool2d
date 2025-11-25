@@ -169,8 +169,8 @@ export class LobbyScene implements UIScene {
                 action: () => uiStateMachine.transitionTo(UIState.EVENTS)
             },
             {
-                id: 'mini', text: 'Mini Games', subtitle: 'Coming Soon', icon: '🎮', col: 2, row: 2, cols: 1, rows: 1, color: SemanticColors.lobby.cardMiniGames,
-                action: () => { }
+                id: 'league', text: 'Leagues', subtitle: 'Climb the Ranks', icon: '🏆', col: 2, row: 2, cols: 1, rows: 1, color: SemanticColors.lobby.cardMiniGames,
+                action: () => uiStateMachine.transitionTo(UIState.LEAGUE)
             }
         ];
 
