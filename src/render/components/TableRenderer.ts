@@ -110,7 +110,11 @@ export class TableRenderer {
             color: new THREE.Color(CONFIG.TABLE_COLOR),
             roughness: 0.8,
             metalness: 0.1,
-            side: THREE.DoubleSide
+            side: THREE.DoubleSide,
+            stencilWrite: true,
+            stencilFunc: THREE.AlwaysStencilFunc,
+            stencilRef: 1,
+            stencilZPass: THREE.ReplaceStencilOp,
         });
         this.tableMesh = new THREE.Mesh(feltGeometry, feltMaterial);
         this.tableMesh.receiveShadow = true;
@@ -367,6 +371,10 @@ export class TableRenderer {
             color: new THREE.Color(CONFIG.RAIL_COLOR),
             roughness: 0.5,
             metalness: 0.3,
+            stencilWrite: true,
+            stencilFunc: THREE.NotEqualStencilFunc,
+            stencilRef: 2,
+            stencilZPass: THREE.KeepStencilOp,
         });
 
         const inner = CONFIG.RAIL_THICKNESS_INNER;
@@ -514,7 +522,10 @@ export class TableRenderer {
                 thetaLength
             );
             const pocketMesh = new THREE.Mesh(pocketGeometry, sideMaterial.clone());
-            pocketMesh.position.set(pocket.center.x, pocketY, 0);
+            // Raise the pocket so the top edge is flush with the frame surface (Z=0.38)
+            // Cylinder center is at 0, height is shelfDepth. Top is at +shelfDepth/2.
+            // We want top at 0.38, so center should be at 0.38 - shelfDepth/2.
+            pocketMesh.position.set(pocket.center.x, pocketY, 0.38 - shelfDepth / 2);
             pocketMesh.rotation.x = Math.PI / 2;
             pocketMesh.rotation.z = pocketRotationZ;
 
@@ -557,7 +568,7 @@ export class TableRenderer {
             });
             const occluderGeometry = new THREE.CircleGeometry(visualRadius, 64);
             const occluderMesh = new THREE.Mesh(occluderGeometry, occluderMaterial);
-            occluderMesh.position.set(pocket.center.x, pocketY, 0.40);
+            occluderMesh.position.set(pocket.center.x, pocketY, 0.385); // Just above frame surface
             occluderMesh.rotation.z = pocketRotationZ;
             occluderMesh.renderOrder = this.layerOrder.orderPockets - 0.3;
             occluderMesh.visible = this.layerVisibility.showPockets;
@@ -578,9 +589,12 @@ export class TableRenderer {
                 side: THREE.DoubleSide,
                 depthTest: true,
                 depthWrite: true,
+                stencilWrite: true,
+                stencilFunc: THREE.NotEqualStencilFunc,
+                stencilRef: 1,
             });
             const bottomMesh = new THREE.Mesh(bottomGeometry, bottomMaterial);
-            bottomMesh.position.set(pocket.center.x, pocketY, 0.43);
+            bottomMesh.position.set(pocket.center.x, pocketY, 0.388);
             bottomMesh.rotation.z = pocketRotationZ;
 
             bottomMesh.renderOrder = this.layerOrder.orderPockets - 0.2;
@@ -631,7 +645,7 @@ export class TableRenderer {
             gradientMat.userData.baseOpacity = baseOpacity;
             gradientMat.opacity = baseOpacity * this.pocketGradientStrength;
             const gradientMesh = new THREE.Mesh(gradientGeometry, gradientMat);
-            gradientMesh.position.set(pocket.center.x, pocketY, 0.44);
+            gradientMesh.position.set(pocket.center.x, pocketY, 0.39);
             gradientMesh.rotation.z = pocketRotationZ;
 
             gradientMesh.renderOrder = this.layerOrder.orderPockets + 0.1;
@@ -654,7 +668,7 @@ export class TableRenderer {
                 thetaLength
             );
             const shadowMesh = new THREE.Mesh(shadowGeometry, pocketShadowMaterial);
-            shadowMesh.position.set(pocket.center.x, pocketY, 0.48);
+            shadowMesh.position.set(pocket.center.x, pocketY, 0.392);
             shadowMesh.rotation.x = Math.PI / 2;
             shadowMesh.rotation.z = pocketRotationZ;
 
@@ -676,7 +690,7 @@ export class TableRenderer {
                 side: THREE.DoubleSide,
             });
             const grooveMesh = new THREE.Mesh(grooveGeometry, grooveMaterial);
-            grooveMesh.position.set(pocket.center.x, pocketY, 0.46);
+            grooveMesh.position.set(pocket.center.x, pocketY, 0.395);
             grooveMesh.rotation.z = pocketRotationZ;
             grooveMesh.renderOrder = this.layerOrder.orderPockets + 0.21;
             grooveMesh.visible = this.layerVisibility.showPockets;
@@ -697,7 +711,7 @@ export class TableRenderer {
                 side: THREE.DoubleSide,
             });
             const rimMesh = new THREE.Mesh(rimGeometry, rimMaterial);
-            rimMesh.position.set(pocket.center.x, pocketY, 0.47);
+            rimMesh.position.set(pocket.center.x, pocketY, 0.398);
             rimMesh.rotation.z = pocketRotationZ;
             rimMesh.renderOrder = this.layerOrder.orderPockets + 0.22;
             rimMesh.visible = this.layerVisibility.showPockets;
@@ -718,7 +732,7 @@ export class TableRenderer {
                 side: THREE.DoubleSide,
             });
             const rim2Mesh = new THREE.Mesh(rim2Geometry, rim2Material);
-            rim2Mesh.position.set(pocket.center.x, pocketY, 0.47);
+            rim2Mesh.position.set(pocket.center.x, pocketY, 0.398);
             rim2Mesh.rotation.z = pocketRotationZ;
             rim2Mesh.renderOrder = this.layerOrder.orderPockets + 0.22;
             rim2Mesh.visible = this.layerVisibility.showPockets;
@@ -743,6 +757,9 @@ export class TableRenderer {
             depthWrite: true,
             transparent: true,
             opacity: 0.75,
+            stencilWrite: true,
+            stencilFunc: THREE.NotEqualStencilFunc,
+            stencilRef: 1,
         });
 
         pockets.forEach((pocket) => {
@@ -764,7 +781,7 @@ export class TableRenderer {
                 thetaLength
             );
             const capMesh = new THREE.Mesh(capGeometry, capMaterial.clone());
-            capMesh.position.set(pocket.center.x, pocketY, 0.6);
+            capMesh.position.set(pocket.center.x, pocketY, 0.42); // Just above overlays
             capMesh.rotation.x = Math.PI / 2;
             capMesh.rotation.z = pocketRotationZ;
 
@@ -1259,6 +1276,9 @@ export class TableRenderer {
             depthTest: false,
             depthWrite: false,
             side: THREE.DoubleSide,
+            stencilWrite: true,
+            stencilFunc: THREE.NotEqualStencilFunc,
+            stencilRef: 1,
         });
         this.pocketShadowMaterial.userData = this.pocketShadowMaterial.userData ?? {};
         this.pocketShadowMaterial.userData.baseOpacity = this.pocketShadowMaterial.userData.baseOpacity ?? (this.pocketShadowMaterial.opacity ?? 1);

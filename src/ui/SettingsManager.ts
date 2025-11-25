@@ -8,6 +8,17 @@ export interface GameSettings {
   call8Ball: boolean;
   showFPS: boolean;
   aiDifficulty?: 'EASY' | 'MEDIUM' | 'HARD' | 'EXPERT';
+  BREAK_SPEED_THRESHOLD: number;
+  BALL_IN_HAND_ANYWHERE: boolean;
+  SHOW_AIM_INFO: boolean;
+}
+
+export interface DebugSettings {
+  DEBUG_BIH_LOG: boolean;
+  DEBUG_DRAW_NORMALS: boolean;
+  DEBUG_DRAW_VELOCITIES: boolean;
+  DEBUG_DRAW_AABB: boolean;
+  DEBUG_DRAW_CONTACTS: boolean;
 }
 
 export interface UIColors {
@@ -72,6 +83,24 @@ export interface PhysicsSettings {
   POCKET_ANIMATION_UNDERFELT_PX: number;
   POCKET_ANIMATION_FADE_START: number;
   POCKET_ANIMATION_CLIP_RADIUS_SCALE: number;
+  PHYSICS_DT: number;
+  MAX_SUBSTEPS: number;
+  CUE_POWER_MIN: number;
+  CUE_DRAG_SCALE: number;
+  AIM_LINE_LENGTH: number;
+  GHOST_LINE_LENGTH: number;
+  FINE_AIM_SENSITIVITY: number;
+  MICRO_AIM_MAX_DEGREES: number;
+  DISTANCE_AIM_SCALING_ENABLED: boolean;
+  DISTANCE_AIM_MIN_DISTANCE: number;
+  DISTANCE_AIM_MAX_DISTANCE: number;
+  DISTANCE_AIM_MIN_SENSITIVITY: number;
+  BALL_IN_HAND_POCKET_MARGIN_IN: number;
+  BALL_IN_HAND_ITERATIONS: number;
+  POCKET_CAPTURE_SPEED_THRESHOLD: number;
+  POCKET_CAPTURE_DAMPING: number;
+  POCKET_CAPTURE_PULL_DISTANCE: number;
+  POCKET_CAPTURE_GRAVITY: number;
 }
 
 export interface GeometrySettings {
@@ -139,6 +168,12 @@ export interface RenderSettings extends RenderLayerSettings {
   pocketWallColor: string;
   // Pocket gradient overall strength (alpha multiplier 0..1)
   pocketGradientStrength: number;
+  HUD_BALL_CHIP_SIZE_PX: number;
+  CUE_LENGTH_IN: number;
+  CUE_VISUAL_PADDING_IN: number;
+  MIN_WORLD_PADDING_IN: number;
+  CUE_BALL_MEASLE_RADIUS_RATIO: number;
+  CUE_BALL_MEASLE_COLOR: string;
 }
 
 const STORAGE_KEYS = {
@@ -150,6 +185,7 @@ const STORAGE_KEYS = {
   MODERN_GEOMETRY_SETTINGS: 'pool2d_modern_geometry_settings',
   AUDIO_SETTINGS: 'pool2d_audio_settings',
   GAME_STATS: 'pool2d_game_stats',
+  DEBUG_SETTINGS: 'pool2d_debug_settings',
 };
 
 const DEFAULT_GAME_SETTINGS: GameSettings = {
@@ -157,6 +193,9 @@ const DEFAULT_GAME_SETTINGS: GameSettings = {
   call8Ball: false,
   showFPS: true,
   aiDifficulty: 'MEDIUM',
+  BREAK_SPEED_THRESHOLD: CONFIG.BREAK_SPEED_THRESHOLD ?? 5.0,
+  BALL_IN_HAND_ANYWHERE: CONFIG.BALL_IN_HAND_ANYWHERE ?? false,
+  SHOW_AIM_INFO: CONFIG.SHOW_AIM_INFO ?? true,
 };
 
 const DEFAULT_UI_COLORS: UIColors = {
@@ -191,6 +230,32 @@ const DEFAULT_PHYSICS_SETTINGS: PhysicsSettings = {
   POCKET_ANIMATION_UNDERFELT_PX: (CONFIG as any).POCKET_ANIMATION_UNDERFELT_PX ?? 10,
   POCKET_ANIMATION_FADE_START: CONFIG.POCKET_ANIMATION_FADE_START ?? 0.9,
   POCKET_ANIMATION_CLIP_RADIUS_SCALE: CONFIG.POCKET_ANIMATION_CLIP_RADIUS_SCALE ?? 1.4,
+  PHYSICS_DT: CONFIG.PHYSICS_DT ?? 1 / 120,
+  MAX_SUBSTEPS: CONFIG.MAX_SUBSTEPS ?? 10,
+  CUE_POWER_MIN: CONFIG.CUE_POWER_MIN ?? 0.5,
+  CUE_DRAG_SCALE: CONFIG.CUE_DRAG_SCALE ?? 0.08,
+  AIM_LINE_LENGTH: CONFIG.AIM_LINE_LENGTH ?? 20,
+  GHOST_LINE_LENGTH: CONFIG.GHOST_LINE_LENGTH ?? 30,
+  FINE_AIM_SENSITIVITY: CONFIG.FINE_AIM_SENSITIVITY ?? 0.1,
+  MICRO_AIM_MAX_DEGREES: CONFIG.MICRO_AIM_MAX_DEGREES ?? 2.5,
+  DISTANCE_AIM_SCALING_ENABLED: CONFIG.DISTANCE_AIM_SCALING_ENABLED ?? true,
+  DISTANCE_AIM_MIN_DISTANCE: CONFIG.DISTANCE_AIM_MIN_DISTANCE ?? 15,
+  DISTANCE_AIM_MAX_DISTANCE: CONFIG.DISTANCE_AIM_MAX_DISTANCE ?? 60,
+  DISTANCE_AIM_MIN_SENSITIVITY: CONFIG.DISTANCE_AIM_MIN_SENSITIVITY ?? 0.35,
+  BALL_IN_HAND_POCKET_MARGIN_IN: CONFIG.BALL_IN_HAND_POCKET_MARGIN_IN ?? 0.1,
+  BALL_IN_HAND_ITERATIONS: CONFIG.BALL_IN_HAND_ITERATIONS ?? 7,
+  POCKET_CAPTURE_SPEED_THRESHOLD: CONFIG.POCKET_CAPTURE_SPEED_THRESHOLD ?? 45,
+  POCKET_CAPTURE_DAMPING: CONFIG.POCKET_CAPTURE_DAMPING ?? 0.25,
+  POCKET_CAPTURE_PULL_DISTANCE: CONFIG.POCKET_CAPTURE_PULL_DISTANCE ?? 0.8,
+  POCKET_CAPTURE_GRAVITY: CONFIG.POCKET_CAPTURE_GRAVITY ?? 60,
+};
+
+export const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
+  DEBUG_BIH_LOG: CONFIG.DEBUG_BIH_LOG ?? false,
+  DEBUG_DRAW_NORMALS: CONFIG.DEBUG_DRAW_NORMALS ?? true,
+  DEBUG_DRAW_VELOCITIES: CONFIG.DEBUG_DRAW_VELOCITIES ?? true,
+  DEBUG_DRAW_AABB: CONFIG.DEBUG_DRAW_AABB ?? true,
+  DEBUG_DRAW_CONTACTS: CONFIG.DEBUG_DRAW_CONTACTS ?? true,
 };
 
 export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
@@ -231,6 +296,7 @@ export class SettingsManager {
   private renderSettings: RenderSettings;
   private modernGeometrySettings: ModernPocketGeometry | null;
   private audioSettings: AudioSettings;
+  private debugSettings: DebugSettings;
   private gameStats: GameStats;
 
   constructor() {
@@ -241,13 +307,15 @@ export class SettingsManager {
     this.renderSettings = this.loadRenderSettings();
     this.modernGeometrySettings = this.loadModernGeometrySettings();
     this.audioSettings = this.loadAudioSettings();
+    this.debugSettings = this.loadDebugSettings();
     this.gameStats = this.loadGameStats();
-    
+
     // Apply loaded settings
     this.applyPhysicsSettings();
     this.applyUIColors();
     this.applyGeometrySettings();
     this.applyRenderSettings();
+    this.applyDebugSettings();
   }
 
   // Game Settings
@@ -270,7 +338,14 @@ export class SettingsManager {
     } catch (e) {
       console.warn('Failed to save game settings:', e);
     }
+    this.applyGameSettings();
     window.dispatchEvent(new CustomEvent('settings:game-changed', { detail: { settings: this.getGameSettings() } }));
+  }
+
+  private applyGameSettings() {
+    CONFIG.BREAK_SPEED_THRESHOLD = this.gameSettings.BREAK_SPEED_THRESHOLD;
+    CONFIG.BALL_IN_HAND_ANYWHERE = this.gameSettings.BALL_IN_HAND_ANYWHERE;
+    CONFIG.SHOW_AIM_INFO = this.gameSettings.SHOW_AIM_INFO;
   }
 
   getGameSettings(): GameSettings {
@@ -345,6 +420,53 @@ export class SettingsManager {
       console.warn('Failed to reset audio settings:', e);
     }
     window.dispatchEvent(new CustomEvent('settings:audio-changed', { detail: { settings: this.getAudioSettings() } }));
+  }
+
+  // Debug Settings
+  loadDebugSettings(): DebugSettings {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.DEBUG_SETTINGS);
+      if (stored) {
+        return { ...DEFAULT_DEBUG_SETTINGS, ...JSON.parse(stored) };
+      }
+    } catch (e) {
+      console.warn('Failed to load debug settings:', e);
+    }
+    return { ...DEFAULT_DEBUG_SETTINGS };
+  }
+
+  saveDebugSettings(settings: Partial<DebugSettings>) {
+    this.debugSettings = { ...this.debugSettings, ...settings };
+    try {
+      localStorage.setItem(STORAGE_KEYS.DEBUG_SETTINGS, JSON.stringify(this.debugSettings));
+    } catch (e) {
+      console.warn('Failed to save debug settings:', e);
+    }
+    this.applyDebugSettings();
+    window.dispatchEvent(new CustomEvent('settings:debug-changed', { detail: { settings: this.getDebugSettings() } }));
+  }
+
+  getDebugSettings(): DebugSettings {
+    return { ...this.debugSettings };
+  }
+
+  resetDebugSettings() {
+    this.debugSettings = { ...DEFAULT_DEBUG_SETTINGS };
+    try {
+      localStorage.setItem(STORAGE_KEYS.DEBUG_SETTINGS, JSON.stringify(this.debugSettings));
+    } catch (e) {
+      console.warn('Failed to reset debug settings:', e);
+    }
+    this.applyDebugSettings();
+    window.dispatchEvent(new CustomEvent('settings:debug-changed', { detail: { settings: this.getDebugSettings() } }));
+  }
+
+  private applyDebugSettings() {
+    CONFIG.DEBUG_BIH_LOG = this.debugSettings.DEBUG_BIH_LOG;
+    CONFIG.DEBUG_DRAW_NORMALS = this.debugSettings.DEBUG_DRAW_NORMALS;
+    CONFIG.DEBUG_DRAW_VELOCITIES = this.debugSettings.DEBUG_DRAW_VELOCITIES;
+    CONFIG.DEBUG_DRAW_AABB = this.debugSettings.DEBUG_DRAW_AABB;
+    CONFIG.DEBUG_DRAW_CONTACTS = this.debugSettings.DEBUG_DRAW_CONTACTS;
   }
 
   // Game Stats
@@ -722,6 +844,12 @@ export class SettingsManager {
       pocketGradientEdgeColor: '#141414',
       pocketWallColor: '#0a0a0a',
       pocketGradientStrength: 1.0,
+      HUD_BALL_CHIP_SIZE_PX: CONFIG.HUD_BALL_CHIP_SIZE_PX ?? 42,
+      CUE_LENGTH_IN: CONFIG.CUE_LENGTH_IN ?? 58,
+      CUE_VISUAL_PADDING_IN: CONFIG.CUE_VISUAL_PADDING_IN ?? 20,
+      MIN_WORLD_PADDING_IN: CONFIG.MIN_WORLD_PADDING_IN ?? 6,
+      CUE_BALL_MEASLE_RADIUS_RATIO: CONFIG.CUE_BALL_MEASLE_RADIUS_RATIO ?? 0.12,
+      CUE_BALL_MEASLE_COLOR: CONFIG.CUE_BALL_MEASLE_COLOR ?? '#c62828',
     };
     try {
       localStorage.setItem(STORAGE_KEYS.RENDER_SETTINGS, JSON.stringify(this.renderSettings));
@@ -764,7 +892,7 @@ export class SettingsManager {
     // Signal that geometry parameters changed (requires rebuild)
     try {
       console.info('[Settings] Geometry updated', this.geometrySettings);
-    } catch {}
+    } catch { }
     window.dispatchEvent(new CustomEvent('settings:geometry-changed'));
   }
 
@@ -785,12 +913,13 @@ export class SettingsManager {
       localStorage.removeItem(STORAGE_KEYS.GEOMETRY_SETTINGS);
       localStorage.removeItem(STORAGE_KEYS.MODERN_GEOMETRY_SETTINGS);
       localStorage.removeItem(STORAGE_KEYS.GAME_STATS);
-      
+
       this.gameSettings = { ...DEFAULT_GAME_SETTINGS };
       this.uiColors = { ...DEFAULT_UI_COLORS };
       this.physicsSettings = { ...DEFAULT_PHYSICS_SETTINGS };
       this.geometrySettings = this.loadGeometrySettings();
       this.modernGeometrySettings = null;
+      this.debugSettings = { ...DEFAULT_DEBUG_SETTINGS };
       this.gameStats = { ...DEFAULT_GAME_STATS };
       this.renderSettings = {
         ...defaultRenderLayerSettings,
@@ -824,7 +953,7 @@ export class SettingsManager {
         pocketWallColor: '#0a0a0a',
         pocketGradientStrength: 1.0,
       };
-      
+
       this.applyPhysicsSettings();
       this.applyUIColors();
       this.applyGeometrySettings();

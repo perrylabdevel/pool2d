@@ -3,7 +3,7 @@
  * Handles comprehensive save/load of all application settings
  */
 
-import { SettingsManager, PhysicsSettings, GameSettings, UIColors, GeometrySettings, RenderSettings } from './SettingsManager';
+import { SettingsManager, PhysicsSettings, GameSettings, UIColors, GeometrySettings, RenderSettings, DebugSettings } from './SettingsManager';
 import { CONFIG } from '../config';
 
 export interface CompleteSettings {
@@ -14,13 +14,14 @@ export interface CompleteSettings {
   colors: Partial<UIColors>;
   geometry: Partial<GeometrySettings>;
   render: Partial<RenderSettings>;
+  debug: Partial<DebugSettings>;
 }
 
 /**
  * SettingsIO handles importing and exporting settings to/from JSON
  */
 export class SettingsIO {
-  constructor(private settingsManager: SettingsManager) {}
+  constructor(private settingsManager: SettingsManager) { }
 
   /**
    * Export all current settings to a JSON object
@@ -33,7 +34,9 @@ export class SettingsIO {
       game: this.settingsManager.getGameSettings(),
       colors: this.settingsManager.getUIColors(),
       geometry: this.settingsManager.getGeometrySettings(),
+      geometry: this.settingsManager.getGeometrySettings(),
       render: this.settingsManager.getRenderSettings(),
+      debug: this.settingsManager.getDebugSettings(),
     };
   }
 
@@ -115,6 +118,10 @@ export class SettingsIO {
 
     if (settings.render) {
       this.settingsManager.saveRenderSettings(settings.render);
+    }
+
+    if (settings.debug) {
+      this.settingsManager.saveDebugSettings(settings.debug);
     }
 
     if (settings.geometry && !skipGeometry) {
@@ -217,7 +224,7 @@ export class SettingsIO {
     // Basic structure check
     return (
       'version' in settings &&
-      ('physics' in settings || 'game' in settings || 'colors' in settings || 'geometry' in settings || 'render' in settings)
+      ('physics' in settings || 'game' in settings || 'colors' in settings || 'geometry' in settings || 'render' in settings || 'debug' in settings)
     );
   }
 }
