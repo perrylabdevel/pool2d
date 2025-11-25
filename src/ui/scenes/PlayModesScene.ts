@@ -63,7 +63,8 @@ export class PlayModesScene implements UIScene {
 
         // Load card images using AssetLoader
         this.cardImages['practice'] = AssetLoader.loadImageSync(AssetRegistry.modeCards.practice());
-        // Add more mode cards as they're created in the registry
+        this.cardImages['8ball'] = AssetLoader.loadImageSync(AssetRegistry.modeCards.eightBall());
+        this.cardImages['time-attack'] = AssetLoader.loadImageSync(AssetRegistry.modeCards.timeAttack());
 
         canvas.addEventListener('mousemove', this.onMouseMove);
         canvas.addEventListener('click', this.onClick);
@@ -132,7 +133,8 @@ export class PlayModesScene implements UIScene {
                 desc: 'Traditional 8-ball rules and gameplay',
                 color: '#1a5490', // Classic blue
                 icon: '🎱',
-                price: 100
+                price: 100,
+                image: this.cardImages['8ball']
             },
             {
                 id: 'time-attack',
@@ -141,7 +143,8 @@ export class PlayModesScene implements UIScene {
                 desc: 'Clear the table before time runs out',
                 color: '#d4651f', // Energetic orange
                 icon: '⏱️',
-                price: 'Free'
+                price: 'Free',
+                image: this.cardImages['time-attack']
             },
         ];
 

@@ -269,7 +269,7 @@ export class ShopScene implements UIScene {
         const width = ctx.canvas.width;
         const height = ctx.canvas.height;
         this.renderBackground(ctx, width, height);
-        this.renderHeader(ctx, width); // Added renderHeader call which was missing in original render but defined
+        // Header is handled by NavigationBar
         this.renderTabs(ctx);
         this.renderCards(ctx);
         this.renderFooter(ctx);
@@ -278,26 +278,6 @@ export class ShopScene implements UIScene {
 
     private renderBackground(ctx: CanvasRenderingContext2D, width: number, height: number) {
         drawSceneBackground(ctx, width, height, 'blue');
-    }
-
-    private renderHeader(ctx: CanvasRenderingContext2D, width: number) {
-        const title = 'Cue Workshop';
-        ctx.save();
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'top';
-        ctx.font = '600 46px "Orbitron", Arial, sans-serif';
-        ctx.fillStyle = ColorTokens.text.primary;
-        ctx.shadowColor = 'rgba(0,0,0,0.6)'; // Text shadow
-        ctx.shadowBlur = 12;
-        ctx.fillText(title.toUpperCase(), 60, 40);
-
-        ctx.font = '14px "Nunito", Arial, sans-serif';
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = 'rgba(255,255,255,0.6)'; // Subtitle text
-        ctx.fillText('Rotate your arsenal and apply neon finishes instantly.', 62, 92);
-        ctx.restore();
-
-        drawCurrencyPill(ctx, width - 200, 50, 2500, 'coins');
     }
 
     private renderTabs(ctx: CanvasRenderingContext2D) {

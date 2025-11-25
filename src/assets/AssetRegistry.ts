@@ -45,8 +45,8 @@ export const AssetRegistry = {
   modeCards: {
     practice: () => new URL('./img/lobby-cards/practice.png', import.meta.url).href,
     // Add specific mode cards here as you create them:
-    // eightBall: () => new URL('./img/mode-cards/8ball.png', import.meta.url).href,
-    // timeAttack: () => new URL('./img/mode-cards/time-attack.png', import.meta.url).href,
+    eightBall: () => new URL('./img/mode-cards/8ball.png', import.meta.url).href,
+    timeAttack: () => new URL('./img/mode-cards/time-attack.png', import.meta.url).href,
   },
 
   /**
