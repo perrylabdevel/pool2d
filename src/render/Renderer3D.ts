@@ -686,6 +686,7 @@ export class Renderer3D extends BaseRenderer {
   }
 
   setPocketGradientStrength(value: number) {
+    console.log('[Renderer3D] setPocketGradientStrength', value);
     this.tableRenderer.setPocketGradientStrength(value);
   }
 
@@ -697,6 +698,7 @@ export class Renderer3D extends BaseRenderer {
     gradientEdge?: string;
     wallColor?: string;
   }) {
+    console.log('[Renderer3D] setPocketShadeColors', colors);
     this.tableRenderer.setPocketShadeColors(colors);
   }
 
@@ -710,6 +712,7 @@ export class Renderer3D extends BaseRenderer {
     rimOuterOpacity: number;
     rimInnerOpacity: number;
   }) {
+    console.log('[Renderer3D] setPocketGrooveSettings', settings);
     this.tableRenderer.setPocketGrooveSettings(settings);
   }
 

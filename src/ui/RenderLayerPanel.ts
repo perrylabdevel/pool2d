@@ -389,6 +389,7 @@ export class RenderLayerPanel {
         gradientEdge: pocketGradEdge?.value ?? this.settings.pocketGradientEdgeColor,
         wallColor: wallColor?.value ?? this.settings.pocketWallColor,
       };
+      console.log('[RenderLayerPanel] applyPocketColors', payload);
       this.settings.grooveColor = payload.grooveColor;
       this.settings.rimColor = payload.rimColor;
       this.settings.pocketBottomColor = payload.bottomColor;
@@ -415,6 +416,7 @@ export class RenderLayerPanel {
       if (!pocketGradStrength) return;
       const val = parseFloat(pocketGradStrength.value);
       if (!Number.isFinite(val)) return;
+      console.log('[RenderLayerPanel] gradient strength slider', val);
       this.settings.pocketGradientStrength = val;
       this.settingsManager.saveRenderSettings({ pocketGradientStrength: val } as Partial<RenderSettings>);
       this.renderer.setPocketGradientStrength(val);
@@ -480,6 +482,7 @@ export class RenderLayerPanel {
   }
 
   private updateGroove(key: keyof RenderSettings, value: number) {
+    console.log('[RenderLayerPanel] groove slider update', key, value);
     (this.settings as any)[key] = value;
     this.settingsManager.saveRenderSettings({ [key]: value } as Partial<RenderSettings>);
     this.renderer.setPocketGrooveSettings({
@@ -510,7 +513,7 @@ export class RenderLayerPanel {
       if (!input) return;
       this.orderInputs[key] = input;
 
-      input.addEventListener('change', () => {
+      const handleChange = () => {
         let value = parseFloat(input.value);
         if (!Number.isFinite(value)) {
           value = defaultRenderLayerSettings[key];
@@ -521,7 +524,11 @@ export class RenderLayerPanel {
         this.settings = updated;
         this.applyToRenderer(updated);
         this.settingsManager.saveRenderSettings({ [key]: clamped } as Partial<RenderSettings>);
-      });
+      };
+
+      // Listen to both 'input' (live updates) and 'change' (final value)
+      input.addEventListener('input', handleChange);
+      input.addEventListener('change', handleChange);
     });
   }
 

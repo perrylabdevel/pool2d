@@ -17,6 +17,8 @@ export class TableRenderer {
     railMeshes: THREE.Mesh[] = [];
     pocketMeshes: THREE.Mesh[] = [];
     pocketBottomMeshes: THREE.Mesh[] = [];
+    private pocketMaskMeshes: THREE.Mesh[] = [];
+    private pocketOccluderMeshes: THREE.Mesh[] = [];
     pocketGradientMeshes: THREE.Mesh[] = [];
     private pocketGrooveMeshes: THREE.Mesh[] = [];
     private pocketRimMeshes: THREE.Mesh[] = [];
@@ -351,7 +353,7 @@ export class TableRenderer {
     initializeRails(rails: Rail[]) {
         this.debugRailSegments = [];
         this.railLines = [];
-        
+
         // Clear existing per-rail highlight meshes
         this.railHighlightMeshes.forEach(mesh => {
             this.scene.remove(mesh);
@@ -481,6 +483,9 @@ export class TableRenderer {
     }
 
     initializePockets(pockets: PocketDef[]) {
+        // Clean up existing pocket meshes before creating new ones
+        this.cleanupPocketMeshes();
+
         this.lastPocketDefs = pockets.map(p => ({ ...p }));
         const sideMaterial = this.getPocketSideMaterial();
 
@@ -489,8 +494,8 @@ export class TableRenderer {
             const wallTaperRadius = visualRadius * 0.75;
             const shelfDepthIn = pocket.shelfDepth ?? CONFIG.POCKET_SHELF_DEPTH_IN;
             const shelfDepth = Math.max(0.1, shelfDepthIn) * 1.5;
-            // Normalize shelf depth for groove geometry (preserve original behavior with /2.0)
-            const depthFactor = Math.max(0, Math.min(1, (shelfDepthIn ?? 0.5) / 2.0));
+            // Normalize shelf depth for groove geometry using full 0-3 slider range
+            const depthFactor = Math.max(0, Math.min(1, (shelfDepthIn ?? 0.5) / 3.0));
             const angleRad = THREE.MathUtils.degToRad(pocket.cutAngleDeg ?? 0);
 
             const pocketRotationZ = angleRad;
@@ -519,6 +524,46 @@ export class TableRenderer {
             this.scene.add(pocketMesh);
             this.pocketMeshes.push(pocketMesh);
 
+            // Stencil mask disc to prevent rails from rendering in pocket area
+            // Uses stencil buffer: this disc writes stencil=2, rails check stencil!=2
+            const stencilMaskMaterial = new THREE.MeshBasicMaterial({
+                colorWrite: false,  // Don't write to color buffer
+                depthWrite: false,
+                depthTest: false,
+                stencilWrite: true,
+                stencilFunc: THREE.AlwaysStencilFunc,
+                stencilRef: 2,
+                stencilZPass: THREE.ReplaceStencilOp,
+            });
+            // Size slightly larger than visual radius to ensure full coverage of rail overlap
+            const stencilMaskGeometry = new THREE.CircleGeometry(visualRadius * 1.08, 64);
+            const stencilMaskMesh = new THREE.Mesh(stencilMaskGeometry, stencilMaskMaterial);
+            stencilMaskMesh.position.set(pocket.center.x, pocketY, 0.01);
+            stencilMaskMesh.rotation.z = pocketRotationZ;
+            // Render BEFORE rails so stencil is set before rail rendering
+            stencilMaskMesh.renderOrder = this.layerOrder.orderRails - 2;
+            stencilMaskMesh.visible = this.layerVisibility.showPockets;
+            this.scene.add(stencilMaskMesh);
+            this.pocketOccluderMeshes.push(stencilMaskMesh);
+
+            // Solid opaque black disc to occlude elements behind the pocket
+            // This actually draws black to cover the table/frame/etc beneath
+            const occluderMaterial = new THREE.MeshBasicMaterial({
+                color: 0x000000,
+                transparent: false,
+                depthTest: true,
+                depthWrite: true,
+                side: THREE.FrontSide,
+            });
+            const occluderGeometry = new THREE.CircleGeometry(visualRadius, 64);
+            const occluderMesh = new THREE.Mesh(occluderGeometry, occluderMaterial);
+            occluderMesh.position.set(pocket.center.x, pocketY, 0.40);
+            occluderMesh.rotation.z = pocketRotationZ;
+            occluderMesh.renderOrder = this.layerOrder.orderPockets - 0.3;
+            occluderMesh.visible = this.layerVisibility.showPockets;
+            this.scene.add(occluderMesh);
+            this.pocketMaskMeshes.push(occluderMesh);
+
             // Calculate groove inner radius first (needed for both gradient and bottom sizing)
             const grooveInner = visualRadius * (this.grooveInnerBase + this.grooveInnerDepthScale * depthFactor);
 
@@ -531,11 +576,11 @@ export class TableRenderer {
             const bottomMaterial = new THREE.MeshBasicMaterial({
                 color: this.pocketBottomColor,
                 side: THREE.DoubleSide,
-                depthTest: false,
-                depthWrite: false,
+                depthTest: true,
+                depthWrite: true,
             });
             const bottomMesh = new THREE.Mesh(bottomGeometry, bottomMaterial);
-            bottomMesh.position.set(pocket.center.x, pocketY, 0.05);
+            bottomMesh.position.set(pocket.center.x, pocketY, 0.43);
             bottomMesh.rotation.z = pocketRotationZ;
 
             bottomMesh.renderOrder = this.layerOrder.orderPockets - 0.2;
@@ -577,17 +622,20 @@ export class TableRenderer {
             const gradientMat = new THREE.MeshBasicMaterial({
                 map: gradientTexture,
                 transparent: true,
-                depthTest: false,
+                depthTest: true,
                 depthWrite: false,
                 side: THREE.DoubleSide,
             });
-            gradientMat.opacity = 0.65 + 0.35 * depthFactor;
+            const baseOpacity = 0.65 + 0.35 * depthFactor;
+            gradientMat.userData = gradientMat.userData ?? {};
+            gradientMat.userData.baseOpacity = baseOpacity;
+            gradientMat.opacity = baseOpacity * this.pocketGradientStrength;
             const gradientMesh = new THREE.Mesh(gradientGeometry, gradientMat);
-            gradientMesh.position.set(pocket.center.x, pocketY, 0.16);
+            gradientMesh.position.set(pocket.center.x, pocketY, 0.44);
             gradientMesh.rotation.z = pocketRotationZ;
 
             gradientMesh.renderOrder = this.layerOrder.orderPockets + 0.1;
-            gradientMesh.visible = this.layerVisibility.showPockets;
+            gradientMesh.visible = this.layerVisibility.showPockets && !this.debugMode && this.pocketGradientStrength > 1e-3;
             this.scene.add(gradientMesh);
             this.pocketGradientMeshes.push(gradientMesh);
 
@@ -606,13 +654,13 @@ export class TableRenderer {
                 thetaLength
             );
             const shadowMesh = new THREE.Mesh(shadowGeometry, pocketShadowMaterial);
-            shadowMesh.position.set(pocket.center.x, pocketY, 0.3);
+            shadowMesh.position.set(pocket.center.x, pocketY, 0.48);
             shadowMesh.rotation.x = Math.PI / 2;
             shadowMesh.rotation.z = pocketRotationZ;
 
             shadowMesh.renderOrder = this.layerOrder.orderPockets + 0.2;
             shadowMesh.visible = this.layerVisibility.showPockets;
-            this.enforceRenderOrderControl(shadowMesh, { disableDepth: true });
+            this.enforceRenderOrderControl(shadowMesh);
             this.scene.add(shadowMesh);
             this.pocketShadowMeshes.push(shadowMesh);
 
@@ -628,11 +676,11 @@ export class TableRenderer {
                 side: THREE.DoubleSide,
             });
             const grooveMesh = new THREE.Mesh(grooveGeometry, grooveMaterial);
-            grooveMesh.position.set(pocket.center.x, pocketY, 0.21);
+            grooveMesh.position.set(pocket.center.x, pocketY, 0.46);
             grooveMesh.rotation.z = pocketRotationZ;
             grooveMesh.renderOrder = this.layerOrder.orderPockets + 0.21;
             grooveMesh.visible = this.layerVisibility.showPockets;
-            this.enforceRenderOrderControl(grooveMesh, { disableDepth: true });
+            this.enforceRenderOrderControl(grooveMesh);
             this.scene.add(grooveMesh);
             this.pocketGrooveMeshes.push(grooveMesh);
 
@@ -649,7 +697,7 @@ export class TableRenderer {
                 side: THREE.DoubleSide,
             });
             const rimMesh = new THREE.Mesh(rimGeometry, rimMaterial);
-            rimMesh.position.set(pocket.center.x, pocketY, 0.22);
+            rimMesh.position.set(pocket.center.x, pocketY, 0.47);
             rimMesh.rotation.z = pocketRotationZ;
             rimMesh.renderOrder = this.layerOrder.orderPockets + 0.22;
             rimMesh.visible = this.layerVisibility.showPockets;
@@ -670,7 +718,7 @@ export class TableRenderer {
                 side: THREE.DoubleSide,
             });
             const rim2Mesh = new THREE.Mesh(rim2Geometry, rim2Material);
-            rim2Mesh.position.set(pocket.center.x, pocketY, 0.22);
+            rim2Mesh.position.set(pocket.center.x, pocketY, 0.47);
             rim2Mesh.rotation.z = pocketRotationZ;
             rim2Mesh.renderOrder = this.layerOrder.orderPockets + 0.22;
             rim2Mesh.visible = this.layerVisibility.showPockets;
@@ -837,6 +885,47 @@ export class TableRenderer {
         mat.needsUpdate = true;
     }
 
+    private cleanupPocketMeshes() {
+        const disposeArray = (arr: THREE.Mesh[]) => {
+            arr.forEach(m => {
+                this.scene.remove(m);
+                m.geometry.dispose();
+                const mat = m.material as THREE.Material | THREE.Material[];
+                if (Array.isArray(mat)) mat.forEach(mm => mm.dispose()); else mat.dispose();
+            });
+        };
+
+        disposeArray(this.pocketMeshes);
+        this.pocketMeshes = [];
+
+        disposeArray(this.pocketBottomMeshes);
+        this.pocketBottomMeshes = [];
+
+        disposeArray(this.pocketMaskMeshes);
+        this.pocketMaskMeshes = [];
+
+        disposeArray(this.pocketOccluderMeshes);
+        this.pocketOccluderMeshes = [];
+
+        disposeArray(this.pocketGradientMeshes);
+        this.pocketGradientMeshes = [];
+
+        disposeArray(this.pocketGrooveMeshes);
+        this.pocketGrooveMeshes = [];
+
+        disposeArray(this.pocketRimMeshes);
+        this.pocketRimMeshes = [];
+
+        disposeArray(this.pocketCapMeshes);
+        this.pocketCapMeshes = [];
+
+        disposeArray(this.pocketShadowMeshes);
+        this.pocketShadowMeshes = [];
+
+        disposeArray(this.pocketHighlightMeshes);
+        this.pocketHighlightMeshes = [];
+    }
+
     dispose() {
         if (this.tableMesh) {
             this.scene.remove(this.tableMesh);
@@ -935,6 +1024,22 @@ export class TableRenderer {
             if (Array.isArray(mat)) mat.forEach(mm => mm.dispose()); else mat.dispose();
         });
         this.pocketBottomMeshes = [];
+
+        this.pocketMaskMeshes.forEach(m => {
+            this.scene.remove(m);
+            m.geometry.dispose();
+            const mat = m.material as THREE.Material | THREE.Material[];
+            if (Array.isArray(mat)) mat.forEach(mm => mm.dispose()); else mat.dispose();
+        });
+        this.pocketMaskMeshes = [];
+
+        this.pocketOccluderMeshes.forEach(m => {
+            this.scene.remove(m);
+            m.geometry.dispose();
+            const mat = m.material as THREE.Material | THREE.Material[];
+            if (Array.isArray(mat)) mat.forEach(mm => mm.dispose()); else mat.dispose();
+        });
+        this.pocketOccluderMeshes = [];
 
         this.pocketGradientMeshes.forEach(m => {
             this.scene.remove(m);
@@ -1077,15 +1182,15 @@ export class TableRenderer {
                 transparent: false,
                 opacity: 1.0,
                 depthTest: true,
-                depthWrite: false,
+                depthWrite: true,
                 side: THREE.DoubleSide,
             });
         }
         return this.pocketSideMaterial;
     }
 
-    private getPocketGradientTexture(): THREE.CanvasTexture {
-        if (this.pocketGradientTexture) {
+    private getPocketGradientTexture(forceRegen: boolean = false): THREE.CanvasTexture {
+        if (this.pocketGradientTexture && !forceRegen) {
             return this.pocketGradientTexture;
         }
 
@@ -1108,17 +1213,20 @@ export class TableRenderer {
 
         const toRgbaStr = (c: { r: number; g: number; b: number }, a: number) => `rgba(${Math.round(c.r * 255)}, ${Math.round(c.g * 255)}, ${Math.round(c.b * 255)}, ${a})`;
 
+        // Apply gradient strength directly to texture alpha for reliable updates
         const s = Math.max(0, Math.min(1, this.pocketGradientStrength));
+        const baseAlpha = 0.85;
         const gradient = ctx.createRadialGradient(center, center, 0, center, center, radius);
-        // Use more uniform alpha distribution for better depth perception from overhead
-        // Higher alpha at all stops so the gradient colors show through consistently
-        gradient.addColorStop(0.0, toRgbaStr(centerCol, 0.85 * s));
-        gradient.addColorStop(0.25, toRgbaStr(midCol, 0.85 * s));
-        gradient.addColorStop(0.6, toRgbaStr(nearCol, 0.85 * s));
-        gradient.addColorStop(1.0, toRgbaStr(edgeCol, 0.85 * s));
+        gradient.addColorStop(0.0, toRgbaStr(centerCol, baseAlpha * s));
+        gradient.addColorStop(0.25, toRgbaStr(midCol, baseAlpha * s));
+        gradient.addColorStop(0.6, toRgbaStr(nearCol, baseAlpha * s));
+        gradient.addColorStop(1.0, toRgbaStr(edgeCol, baseAlpha * s));
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, size, size);
 
+        if (this.pocketGradientTexture) {
+            this.pocketGradientTexture.dispose();
+        }
         this.pocketGradientTexture = new THREE.CanvasTexture(canvas);
         this.pocketGradientTexture.colorSpace = THREE.SRGBColorSpace;
         this.pocketGradientTexture.wrapS = THREE.ClampToEdgeWrapping;
@@ -1194,7 +1302,7 @@ export class TableRenderer {
         );
 
         const highlightMesh = new THREE.Mesh(highlightGeometry, highlightMaterial);
-        highlightMesh.position.set(pocket.center.x, yPos, 0.2);
+        highlightMesh.position.set(pocket.center.x, yPos, 0.49);
         highlightMesh.renderOrder = this.layerOrder.orderPockets + 0.25;
         highlightMesh.visible = this.layerVisibility.showPockets;
         this.enforceRenderOrderControl(highlightMesh, { disableDepth: false });
@@ -1479,6 +1587,9 @@ export class TableRenderer {
             depthTest: true,
             depthWrite: false,
             side: THREE.DoubleSide,
+            stencilWrite: false,
+            stencilFunc: THREE.NotEqualStencilFunc,  // Only render where stencil != 2
+            stencilRef: 2,
         });
         material.userData = material.userData ?? {};
         material.userData.baseOpacity = material.userData.baseOpacity ?? material.opacity;
@@ -1536,6 +1647,9 @@ export class TableRenderer {
             polygonOffset: true,
             polygonOffsetFactor: -2,
             polygonOffsetUnits: -2,
+            stencilWrite: false,
+            stencilFunc: THREE.NotEqualStencilFunc,  // Only render where stencil != 2
+            stencilRef: 2,
         });
         material.userData = material.userData ?? {};
         material.userData.baseOpacity = material.userData.baseOpacity ?? material.opacity;
@@ -1690,7 +1804,9 @@ export class TableRenderer {
                 material.map = null;
                 material.color.copy(capDebugColor);
             } else {
-                material.map = material.userData.baseMap ?? this.getPocketGradientTexture();
+                const tex = material.userData.baseMap ?? this.getPocketGradientTexture();
+                material.userData.baseMap = tex;
+                material.map = tex;
                 material.color.copy(baseColor);
             }
             material.needsUpdate = true;
@@ -1702,7 +1818,9 @@ export class TableRenderer {
     private applyPocketsVisibility(visible: boolean) {
         this.pocketMeshes.forEach((mesh) => (mesh.visible = visible));
         this.pocketBottomMeshes.forEach((mesh) => (mesh.visible = visible));
-        const gradientVisible = visible && !this.debugMode;
+        this.pocketMaskMeshes.forEach((mesh) => (mesh.visible = visible));
+        this.pocketOccluderMeshes.forEach((mesh) => (mesh.visible = visible));
+        const gradientVisible = visible && !this.debugMode && this.pocketGradientStrength > 1e-3;
         this.pocketGradientMeshes.forEach((mesh) => (mesh.visible = gradientVisible));
         this.pocketShadowMeshes.forEach((mesh) => (mesh.visible = visible));
         this.pocketHighlightMeshes.forEach((mesh) => (mesh.visible = visible));
@@ -1737,15 +1855,32 @@ export class TableRenderer {
 
     setPocketGradientStrength(value: number) {
         this.pocketGradientStrength = Math.max(0, Math.min(1, value));
-        if (this.pocketGradientTexture) {
-            this.pocketGradientTexture.dispose();
-            this.pocketGradientTexture = null;
-        }
-        const tex = this.getPocketGradientTexture();
-        this.pocketGradientMeshes.forEach((m) => {
+        console.log('[TableRenderer] setPocketGradientStrength', this.pocketGradientStrength, 'meshes', this.pocketGradientMeshes.length);
+        const tex = this.getPocketGradientTexture(true);
+        const gradientVisible = this.pocketGradientStrength > 1e-3 && !this.debugMode && this.layerVisibility.showPockets;
+        this.pocketGradientMeshes.forEach((m, idx) => {
+            const mat = m.material as THREE.MeshBasicMaterial;
+            const baseOpacity = mat.userData?.baseOpacity ?? mat.opacity ?? 1;
+            mat.map = tex;
+            mat.opacity = baseOpacity * this.pocketGradientStrength;
+            mat.transparent = true;
+            if (mat.map) {
+                mat.map.needsUpdate = true;
+            }
+            mat.needsUpdate = true;
+            m.visible = gradientVisible;
+            console.log('[TableRenderer] gradient mesh', idx, 'opacity', mat.opacity.toFixed(3), 'visible', m.visible);
+        });
+        this.pocketCapMeshes.forEach((m, idx) => {
             const mat = m.material as THREE.MeshBasicMaterial;
             mat.map = tex;
+            mat.userData = mat.userData ?? {};
+            mat.userData.baseMap = tex;
+            if (mat.map) {
+                mat.map.needsUpdate = true;
+            }
             mat.needsUpdate = true;
+            console.log('[TableRenderer] cap mesh', idx, 'map refreshed');
         });
     }
 
@@ -1757,6 +1892,7 @@ export class TableRenderer {
         gradientEdge?: string;
         wallColor?: string;
     }) {
+        console.log('[TableRenderer] setPocketShadeColors', colors);
         if (colors.grooveColor) {
             try { this.grooveColor = new THREE.Color(colors.grooveColor); } catch { }
             this.pocketGrooveMeshes.forEach((m) => {
@@ -1784,6 +1920,19 @@ export class TableRenderer {
             this.pocketGradientMeshes.forEach((m) => {
                 const mat = m.material as THREE.MeshBasicMaterial;
                 mat.map = tex;
+                if (mat.map) {
+                    mat.map.needsUpdate = true;
+                }
+                mat.needsUpdate = true;
+            });
+            this.pocketCapMeshes.forEach((m) => {
+                const mat = m.material as THREE.MeshBasicMaterial;
+                mat.map = tex;
+                mat.userData = mat.userData ?? {};
+                mat.userData.baseMap = tex;
+                if (mat.map) {
+                    mat.map.needsUpdate = true;
+                }
                 mat.needsUpdate = true;
             });
         }
@@ -1974,13 +2123,27 @@ export class TableRenderer {
         });
         this.pocketRimMeshes = [];
 
+        // Remove existing bottom/gradient meshes as they depend on groove inner radius
+        this.pocketBottomMeshes.forEach((m) => {
+            this.scene.remove(m);
+            m.geometry.dispose();
+            (m.material as THREE.Material).dispose();
+        });
+        this.pocketBottomMeshes = [];
+        this.pocketGradientMeshes.forEach((m) => {
+            this.scene.remove(m);
+            m.geometry.dispose();
+            (m.material as THREE.Material).dispose();
+        });
+        this.pocketGradientMeshes = [];
+
         if (!this.lastPocketDefs.length) return;
-        // Recreate groove/rim for current pockets
+        // Recreate groove/rim/bottom/gradient for current pockets
         this.lastPocketDefs.forEach((p) => {
             const visualRadius = p.visualRadius ?? (p as any).radius ?? 2.5;
             const shelfDepthIn = p.shelfDepth ?? CONFIG.POCKET_SHELF_DEPTH_IN;
-            // Normalize shelf depth for groove geometry (preserve original behavior with /2.0)
-            const depthFactor = Math.max(0, Math.min(1, (shelfDepthIn ?? 0.5) / 2.0));
+            // Normalize shelf depth for groove geometry using full 0-3 slider range
+            const depthFactor = Math.max(0, Math.min(1, (shelfDepthIn ?? 0.5) / 3.0));
 
             const grooveInner = visualRadius * (this.grooveInnerBase + this.grooveInnerDepthScale * depthFactor);
             const grooveOuter = grooveInner + visualRadius * this.grooveThicknessFactor;
@@ -1994,7 +2157,7 @@ export class TableRenderer {
                 side: THREE.DoubleSide,
             });
             const gm = new THREE.Mesh(grooveGeometry, grooveMaterial);
-            gm.position.set(p.center.x, p.center.y, 0.21);
+            gm.position.set(p.center.x, p.center.y, 0.46);
             gm.rotation.z = THREE.MathUtils.degToRad(p.cutAngleDeg ?? 0);
             gm.renderOrder = this.layerOrder.orderPockets + 0.21;
             gm.visible = this.layerVisibility.showPockets;
@@ -2015,7 +2178,7 @@ export class TableRenderer {
                 side: THREE.DoubleSide,
             });
             const rm = new THREE.Mesh(rimGeometry, rimMaterial);
-            rm.position.set(p.center.x, p.center.y, 0.22);
+            rm.position.set(p.center.x, p.center.y, 0.47);
             rm.rotation.z = THREE.MathUtils.degToRad(p.cutAngleDeg ?? 0);
             rm.renderOrder = this.layerOrder.orderPockets + 0.22;
             rm.visible = this.layerVisibility.showPockets;
@@ -2036,13 +2199,83 @@ export class TableRenderer {
                 side: THREE.DoubleSide,
             });
             const rm2 = new THREE.Mesh(rim2Geometry, rim2Material);
-            rm2.position.set(p.center.x, p.center.y, 0.22);
+            rm2.position.set(p.center.x, p.center.y, 0.47);
             rm2.rotation.z = THREE.MathUtils.degToRad(p.cutAngleDeg ?? 0);
             rm2.renderOrder = this.layerOrder.orderPockets + 0.22;
             rm2.visible = this.layerVisibility.showPockets;
             this.enforceRenderOrderControl(rm2, { disableDepth: true });
             this.scene.add(rm2);
             this.pocketRimMeshes.push(rm2);
+
+            // Rebuild Bottom Mesh
+            const circleShape = new THREE.Shape();
+            const radius = grooveInner * 0.98; // Slightly smaller than groove inner
+            circleShape.absarc(0, 0, radius, 0, Math.PI * 2, false);
+            const bottomGeometry = new THREE.ShapeGeometry(circleShape);
+
+            const bottomMaterial = new THREE.MeshBasicMaterial({
+                color: this.pocketBottomColor,
+                side: THREE.DoubleSide,
+                depthTest: true,
+                depthWrite: true,
+            });
+            const bottomMesh = new THREE.Mesh(bottomGeometry, bottomMaterial);
+            bottomMesh.position.set(p.center.x, p.center.y, 0.43);
+            bottomMesh.rotation.z = THREE.MathUtils.degToRad(p.cutAngleDeg ?? 0);
+
+            bottomMesh.renderOrder = this.layerOrder.orderPockets - 0.2;
+            bottomMesh.visible = this.layerVisibility.showPockets;
+            this.scene.add(bottomMesh);
+            this.pocketBottomMeshes.push(bottomMesh);
+
+            // Rebuild Gradient Mesh
+            const gradientInnerRadius = Math.max(0.01, grooveInner * 0.99); // Just inside groove
+            const gradientGeometry = new THREE.RingGeometry(
+                gradientInnerRadius,
+                visualRadius,
+                64,
+                1,
+                0,
+                Math.PI * 2
+            );
+
+            const uvAttribute = gradientGeometry.attributes.uv;
+            const posAttribute = gradientGeometry.attributes.position;
+            for (let i = 0; i < uvAttribute.count; i++) {
+                const x = posAttribute.getX(i);
+                const y = posAttribute.getY(i);
+                // Map UV from inner radius to outer radius of the ring
+                const distFromCenter = Math.sqrt(x * x + y * y);
+                const normalizedDist = (distFromCenter - gradientInnerRadius) / (visualRadius - gradientInnerRadius);
+                const u = (x / visualRadius + 1) * 0.5;
+                const v = (y / visualRadius + 1) * 0.5;
+                // Remap so gradient goes from inner edge (0) to outer edge (1)
+                const remappedU = 0.5 + (u - 0.5) * (1 - normalizedDist);
+                const remappedV = 0.5 + (v - 0.5) * (1 - normalizedDist);
+                uvAttribute.setXY(i, remappedU, remappedV);
+            }
+            uvAttribute.needsUpdate = true;
+
+            const gradientTexture = this.getPocketGradientTexture();
+            const gradientMat = new THREE.MeshBasicMaterial({
+                map: gradientTexture,
+                transparent: true,
+                depthTest: true,
+                depthWrite: false,
+                side: THREE.DoubleSide,
+            });
+            const baseOpacity = 0.65 + 0.35 * depthFactor;
+            gradientMat.userData = gradientMat.userData ?? {};
+            gradientMat.userData.baseOpacity = baseOpacity;
+            gradientMat.opacity = baseOpacity * this.pocketGradientStrength;
+            const gradientMesh = new THREE.Mesh(gradientGeometry, gradientMat);
+            gradientMesh.position.set(p.center.x, p.center.y, 0.44);
+            gradientMesh.rotation.z = THREE.MathUtils.degToRad(p.cutAngleDeg ?? 0);
+
+            gradientMesh.renderOrder = this.layerOrder.orderPockets + 0.1;
+            gradientMesh.visible = this.layerVisibility.showPockets && !this.debugMode && this.pocketGradientStrength > 1e-3;
+            this.scene.add(gradientMesh);
+            this.pocketGradientMeshes.push(gradientMesh);
         });
     }
 }
