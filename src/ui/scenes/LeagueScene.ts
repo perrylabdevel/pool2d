@@ -10,6 +10,7 @@ import { getLeagueById } from '../../game/leagues/LeagueSystem';
 import { UserProfile } from '../../data/models';
 import { AssetRegistry } from '../../assets/AssetRegistry';
 import { AssetLoader } from '../../assets/AssetLoader';
+import { OPPONENTS } from '../../ai/OpponentRegistry';
 
 export class LeagueScene implements UIScene {
     private canvas: HTMLCanvasElement | null = null;
@@ -340,37 +341,28 @@ export class LeagueScene implements UIScene {
     private ensureMockStandings(leagueId: string, includeUser: boolean) {
         if (this.standingsCache[leagueId]) return this.standingsCache[leagueId];
 
-        const avatars = [
-            AssetRegistry.avatars.player(),
-            AssetRegistry.avatars.rookieRick(),
-            AssetRegistry.avatars.sharkSally(),
-            AssetRegistry.avatars.theMachine(),
-            AssetRegistry.avatars.nervousNed(),
-            AssetRegistry.avatars.casualCarl(),
-            AssetRegistry.avatars.slowSam(),
-            AssetRegistry.avatars.luckyLucy(),
-            AssetRegistry.avatars.steadySteve(),
-            AssetRegistry.avatars.bankShotBetty(),
-            AssetRegistry.avatars.angleAndy(),
-            AssetRegistry.avatars.comboChris(),
-            AssetRegistry.avatars.defensiveDan(),
-            AssetRegistry.avatars.spinDoctorSid(),
-            AssetRegistry.avatars.powerPete(),
-            AssetRegistry.avatars.finesseFiona(),
-            AssetRegistry.avatars.trickshotTim(),
-            AssetRegistry.avatars.precisionPaul(),
-            AssetRegistry.avatars.viperVicky(),
-            AssetRegistry.avatars.masterMike(),
-            AssetRegistry.avatars.legendLarry(),
-        ];
+        // Filter opponents by league tier (bronze, silver, gold, etc.)
+        const leagueTier = leagueId.split('_')[0]; // Extract 'bronze' from 'bronze_1'
+        const leagueOpponents = OPPONENTS.filter(opp => opp.leagueId.startsWith(leagueTier));
 
-        const namePool = [
-            'Rookie Rick', 'Shark Sally', 'The Machine', 'Nervous Ned', 'Casual Carl', 'Slow Sam', 'Lucky Lucy',
-            'Steady Steve', 'Betty Banks', 'Angle Andy', 'Combo Chris', 'Defensive Dan', 'Spin Sid', 'Power Pete',
-            'Finesse Fiona', 'Trickshot Tim', 'Precision Paul', 'Viper Vicky', 'Master Mike', 'Legend Larry',
-            'Cool Hand Lee', 'Smooth Sasha', 'Railrunner Ray', 'Banker Bella', 'Laser Liam', 'Gritty Grant',
-            'Pocket Piper', 'Cue Queen', 'Ghost Breaker', 'Side Pocket Sue', 'Frozen Freddie'
-        ];
+        // If no opponents in this league, return empty standings
+        if (leagueOpponents.length === 0) {
+            this.standingsCache[leagueId] = [];
+            return this.standingsCache[leagueId];
+        }
+
+        // Build avatar and name arrays from league-specific opponents
+        const avatars = leagueOpponents.map((opp: any) => {
+            const key = opp.avatarId;
+            const registry = AssetRegistry.avatars as any;
+            if (registry[key] && typeof registry[key] === 'function') {
+                return registry[key]();
+            }
+            console.warn(`Missing avatar for ${opp.name} (${key}), using default`);
+            return AssetRegistry.avatars.default();
+        });
+
+        const namePool = leagueOpponents.map((opp: any) => opp.name);
 
         const seed = leagueId.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0) + 12345;
         let rng = seed;
@@ -384,15 +376,26 @@ export class LeagueScene implements UIScene {
         const decayMax = 2400;
         const standings: Array<{ rank: number; name: string; score: number; isUser: boolean; avatar: string }> = [];
 
+        // Shuffle opponent order using seeded RNG for variety
+        const opponentIndices = Array.from({ length: avatars.length }, (_, i) => i);
+        for (let i = opponentIndices.length - 1; i > 0; i--) {
+            const j = Math.floor(next() * (i + 1));
+            [opponentIndices[i], opponentIndices[j]] = [opponentIndices[j], opponentIndices[i]];
+        }
+
         let score = baseScore;
-        const userIndex = includeUser ? 12 + Math.floor(next() * 20) : -1; // place user somewhere in upper-mid
         const userName = (this.userProfile?.name || 'You');
         const userAvatar = AssetRegistry.avatars.player();
 
-        for (let i = 0; i < 100; i++) {
+        // Determine user placement (if includeUser)
+        const totalEntries = includeUser ? avatars.length + 1 : avatars.length;
+        const userIndex = includeUser ? Math.min(8 + Math.floor(next() * 6), avatars.length - 1) : -1; // place user in middle range
+
+        for (let i = 0; i < totalEntries; i++) {
             const isUser = i === userIndex;
-            const name = isUser ? userName : namePool[i % namePool.length] + (i >= namePool.length ? ` ${i}` : '');
-            const avatar = isUser ? userAvatar : avatars[i % avatars.length];
+            const oppIdx = isUser ? i : i - (userIndex !== -1 && i > userIndex ? 1 : 0);
+            const name = isUser ? userName : namePool[opponentIndices[oppIdx]];
+            const avatar = isUser ? userAvatar : avatars[opponentIndices[oppIdx]];
             standings.push({
                 rank: i + 1,
                 name,

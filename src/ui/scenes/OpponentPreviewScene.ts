@@ -109,21 +109,24 @@ export class OpponentPreviewScene implements UIScene {
 
     private getAvatarUrl(avatarId: string): string {
         // Try to get from AssetRegistry directly if it matches a key
-        const avatars = AssetRegistry.avatars as Record<string, () => string>;
-        if (avatarId in avatars) {
-            return avatars[avatarId]();
+        // We cast to any because TS doesn't know for sure if the string key exists on the object
+        const registry = AssetRegistry.avatars as any;
+        if (avatarId in registry) {
+            return registry[avatarId]();
         }
 
         // Legacy mappings
         const avatarMap: Record<string, () => string> = {
             'avatar_default': AssetRegistry.avatars.default,
             'avatar_player': AssetRegistry.avatars.player,
-            'avatar_shark_sally': AssetRegistry.avatars.sharkSally,
-            'avatar_sally': AssetRegistry.avatars.sharkSally,
-            'avatar_the_machine': AssetRegistry.avatars.theMachine,
-            'avatar_machine': AssetRegistry.avatars.theMachine,
-            'avatar_rookie_rick': AssetRegistry.avatars.rookieRick,
-            'avatar_rick': AssetRegistry.avatars.rookieRick,
+            'avatar_shark_sally': AssetRegistry.avatars.shark_sally,
+            'avatar_sally': AssetRegistry.avatars.shark_sally,
+            'avatar_the_machine': AssetRegistry.avatars.the_machine,
+            'avatar_machine': AssetRegistry.avatars.the_machine,
+            'avatar_rookie_rick': AssetRegistry.avatars.rookie_rick,
+            'avatar_rick': AssetRegistry.avatars.rookie_rick,
+            'avatar_ned': AssetRegistry.avatars.nervous_ned,
+            'avatar_nervous_ned': AssetRegistry.avatars.nervous_ned,
         };
         const getter = avatarMap[avatarId];
         return getter ? getter() : AssetRegistry.avatars.default();

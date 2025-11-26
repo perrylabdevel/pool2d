@@ -223,9 +223,11 @@ body {
 
 .hud-player .avatar .avatar-photo {
   position: absolute;
-  inset: 16% 14%;
+  inset: 8% 14%;
+  /* Shifted up to show full face */
   width: 72%;
-  height: 68%;
+  height: 72%;
+  /* Made taller to show mouth */
   object-fit: cover;
   border-radius: 10px;
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
@@ -284,16 +286,19 @@ body {
   width: var(--ball-chip-size, 32px);
   height: var(--ball-chip-size, 32px);
   border-radius: 50%;
-  background: #050505; /* Dark pocket hole */
+  background: #050505;
+  /* Dark pocket hole */
   /* Gradient border for subtle depth */
   border: 2px solid transparent;
   background-image: linear-gradient(#050505, #050505), linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.05) 50%, rgba(255, 255, 255, 0.3) 100%);
   background-origin: border-box;
   background-clip: content-box, border-box;
-  
-  box-shadow: 
-    inset 0 3px 8px rgba(0, 0, 0, 1), /* Inner depth */
-    0 2px 4px rgba(0, 0, 0, 0.5); /* Outer shadow */
+
+  box-shadow:
+    inset 0 3px 8px rgba(0, 0, 0, 1),
+    /* Inner depth */
+    0 2px 4px rgba(0, 0, 0, 0.5);
+  /* Outer shadow */
   position: relative;
   display: inline-flex;
   align-items: center;

@@ -34,13 +34,13 @@ export async function initializeUserIfNeeded() {
     const count = await db.user.count();
     if (count === 0) {
         await db.user.add({
-            name: 'Player 1',
+            name: 'sosumidude',
             level: 1,
             xp: 0,
             coins: 500, // Starting coins
             gold: 5,    // Starting gold
             leagueId: 'bronze_1',
-            avatarId: 'avatar_default',
+            avatarId: 'player',
             equippedCueId: 'cue_standard',
             equippedTableId: 'table_standard',
             stats: {

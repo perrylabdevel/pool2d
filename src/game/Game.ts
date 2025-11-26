@@ -809,6 +809,18 @@ export class Game {
         this.hud.hideTurnIndicator();
         this.hud.setTurn(1, false);
         this.hud.setPlayer2Visible(false);
+
+        // Set default player visuals, then load from DB
+        this.hud.setPlayerVisuals(1, this.getAvatarUrl(), this.getFrameForLeague());
+
+        // Load user profile visuals async and update when ready
+        db.user.get(1).then((user) => {
+          if (!user) return;
+          this.hud.setPlayerName(1, user.name || 'Player');
+          this.hud.setPlayerVisuals(1, this.getAvatarUrl(user.avatarId), this.getFrameForLeague(user.leagueId));
+        }).catch((err) => {
+          console.warn('Failed to load user profile for practice mode visuals', err);
+        });
       } else if (this.mode === GameMode.PLAYBACK) {
         // Playback mode initialization handled by startPlayback
         // We just need to ensure we don't overwrite it
@@ -851,7 +863,7 @@ export class Game {
     this.hud.setPlayerName(1, humanPlayer.name);
     this.hud.setPlayerName(2, aiPlayer.name);
     this.hud.setPlayerVisuals(1, this.getAvatarUrl(), this.getFrameForLeague());
-    this.hud.setPlayerVisuals(2, this.getAvatarUrl('rookieRick'), this.getFrameForLeague('bronze_1'));
+    this.hud.setPlayerVisuals(2, this.getAvatarUrl('rookie_rick'), this.getFrameForLeague('bronze_1'));
 
     console.log('[8-Ball] Players initialized:', {
       player0: { id: this.players[0].id, type: this.players[0].type, isAI: this.players[0].isAI() },
@@ -1041,8 +1053,8 @@ export class Game {
 
   private normalizeAvatarKey(avatarId?: string): string {
     if (!avatarId) return 'player';
-    const trimmed = avatarId.replace(/^avatar_/, '');
-    return trimmed.replace(/_([a-z0-9])/g, (_m, c: string) => c.toUpperCase());
+    // Just strip the 'avatar_' prefix if present, keep snake_case format
+    return avatarId.replace(/^avatar_/, '');
   }
 
   initializeTimeAttack() {

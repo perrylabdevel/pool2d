@@ -389,11 +389,12 @@ export class NavigationBar {
         const frameImg = AssetLoader.getCached(frameUrl) || AssetLoader.loadImageSync(frameUrl);
 
         // Avatar photo clipped to a rounded rect inside the frame bounds
-        const photoPadding = height * 0.2;
+        // Match HUD positioning: inset 8% top to show full face including mouth
+        const photoPadding = height * 0.14;  // Reduced from 0.2 to match HUD horizontal padding
         const photoX = x + photoPadding;
-        const photoY = y + photoPadding * 0.9;
+        const photoY = y + height * 0.08;  // 8% from top to match HUD
         const photoW = width - photoPadding * 2;
-        const photoH = height - photoPadding * 1.6;
+        const photoH = height * 0.72;  // 72% height to match HUD
         const photoRadius = Math.max(8, height * 0.12);
 
         if (avatarImg && avatarImg.complete && avatarImg.naturalWidth > 0) {
@@ -471,7 +472,7 @@ export class NavigationBar {
 
     private normalizeAvatarKey(avatarId?: string): string {
         if (!avatarId) return 'player';
-        const trimmed = avatarId.replace(/^avatar_/, '');
-        return trimmed.replace(/_([a-z0-9])/g, (_m, c: string) => c.toUpperCase());
+        // Just strip the 'avatar_' prefix if present, keep snake_case format
+        return avatarId.replace(/^avatar_/, '');
     }
 }

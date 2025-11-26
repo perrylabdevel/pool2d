@@ -68,26 +68,26 @@ export const AssetRegistry = {
   avatars: {
     default: () => new URL('./img/avatars/avatar_default.png', import.meta.url).href,
     player: () => new URL('./img/avatars/avatar_player.png', import.meta.url).href,
-    sharkSally: () => new URL('./img/avatars/avatar_shark_sally.png', import.meta.url).href,
-    theMachine: () => new URL('./img/avatars/avatar_the_machine.png', import.meta.url).href,
-    rookieRick: () => new URL('./img/avatars/avatar_rookie_rick.png', import.meta.url).href,
-    nervousNed: () => new URL('./img/avatars/avatar_ned.png', import.meta.url).href,
-    casualCarl: () => new URL('./img/avatars/avatar_carl.png', import.meta.url).href,
-    slowSam: () => new URL('./img/avatars/avatar_sam.png', import.meta.url).href,
-    luckyLucy: () => new URL('./img/avatars/avatar_lucy.png', import.meta.url).href,
-    steadySteve: () => new URL('./img/avatars/avatar_steve.png', import.meta.url).href,
-    bankShotBetty: () => new URL('./img/avatars/avatar_betty.png', import.meta.url).href,
-    angleAndy: () => new URL('./img/avatars/avatar_andy.png', import.meta.url).href,
-    comboChris: () => new URL('./img/avatars/avatar_chris.png', import.meta.url).href,
-    defensiveDan: () => new URL('./img/avatars/avatar_dan.png', import.meta.url).href,
-    spinDoctorSid: () => new URL('./img/avatars/avatar_sid.png', import.meta.url).href,
-    powerPete: () => new URL('./img/avatars/avatar_pete.png', import.meta.url).href,
-    finesseFiona: () => new URL('./img/avatars/avatar_fiona.png', import.meta.url).href,
-    trickshotTim: () => new URL('./img/avatars/avatar_tim.png', import.meta.url).href,
-    precisionPaul: () => new URL('./img/avatars/avatar_paul.png', import.meta.url).href,
-    viperVicky: () => new URL('./img/avatars/avatar_vicky.png', import.meta.url).href,
-    masterMike: () => new URL('./img/avatars/avatar_mike.png', import.meta.url).href,
-    legendLarry: () => new URL('./img/avatars/avatar_larry.png', import.meta.url).href,
+    shark_sally: () => new URL('./img/avatars/shark_sally.png', import.meta.url).href,
+    the_machine: () => new URL('./img/avatars/the_machine.png', import.meta.url).href,
+    rookie_rick: () => new URL('./img/avatars/rookie_rick.png', import.meta.url).href,
+    nervous_ned: () => new URL('./img/avatars/nervous_ned.png', import.meta.url).href,
+    casual_carl: () => new URL('./img/avatars/casual_carl.png', import.meta.url).href,
+    slow_sam: () => new URL('./img/avatars/slow_sam.png', import.meta.url).href,
+    lucky_lucy: () => new URL('./img/avatars/lucky_lucy.png', import.meta.url).href,
+    steady_steve: () => new URL('./img/avatars/steady_steve.png', import.meta.url).href,
+    bankshot_betty: () => new URL('./img/avatars/bankshot_betty.png', import.meta.url).href,
+    angle_andy: () => new URL('./img/avatars/angle_andy.png', import.meta.url).href,
+    combo_chris: () => new URL('./img/avatars/combo_chris.png', import.meta.url).href,
+    defensive_dan: () => new URL('./img/avatars/defensive_dan.png', import.meta.url).href,
+    spin_doctor_sid: () => new URL('./img/avatars/spin_doctor_sid.png', import.meta.url).href,
+    power_pete: () => new URL('./img/avatars/power_pete.png', import.meta.url).href,
+    finesse_fiona: () => new URL('./img/avatars/finesse_fiona.png', import.meta.url).href,
+    trickshot_tim: () => new URL('./img/avatars/trickshot_tim.png', import.meta.url).href,
+    precision_paul: () => new URL('./img/avatars/precision_paul.png', import.meta.url).href,
+    viper_vicky: () => new URL('./img/avatars/viper_vicky.png', import.meta.url).href,
+    master_mike: () => new URL('./img/avatars/master_mike.png', import.meta.url).href,
+    legend_larry: () => new URL('./img/avatars/legend_larry.png', import.meta.url).href,
   },
 
   /**
@@ -119,7 +119,7 @@ export const AssetRegistry = {
  * Type helpers for type-safe asset access
  */
 export type AssetCategory = keyof typeof AssetRegistry;
-export type AssetKey<T extends AssetCategory> = keyof typeof AssetRegistry[T];
+export type AssetKey<T extends AssetCategory> = Extract<keyof typeof AssetRegistry[T], string>;
 
 /**
  * Helper function to get all asset URLs from a category
