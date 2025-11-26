@@ -6,7 +6,7 @@ import { Renderer3D } from '../render/Renderer3D';
 import { InputManager } from '../input/Input';
 import { DebugDraw } from '../debug/DebugDraw';
 import { HUD } from '../ui/HUD';
-import { CONFIG, CUE_BALL_POSITION, RACK_POSITIONS, BALL_8 } from '../config';
+import { CONFIG, CUE_BALL_POSITION, RACK_POSITIONS, BALL_8, BALL_CUE } from '../config';
 import { getTableGeometry } from '../geometry/Geometry';
 import { clampBallInHand } from '../geometry/Placement';
 import { EightBallRules, GameState as RulesGameState, type BallInHandPlacement } from '../rules/EightBall';
@@ -35,8 +35,9 @@ import { PlaybackController } from './PlaybackController';
 import { MatchData } from '../debug/PhysicsRecorder';
 import { PlaybackPanel } from '../ui/PlaybackPanel';
 import { uiStateMachine, UIState } from '../ui/UIStateMachine';
-import { db } from '../data/db';
+import { db, getChestSlots, updateChestSlot } from '../data/db';
 import { MatchRecord } from '../data/models';
+import { getChestForLeague, CHEST_DEFINITIONS } from './economy/ChestSystem';
 
 export enum GameMode {
   PRACTICE,
@@ -856,9 +857,17 @@ export class Game {
       rulesCurrentPlayer: this.rules.currentPlayer,
     });
 
-    // Initialize AI with difficulty from settings
-    const gs = this.hud.settingsManager.getGameSettings();
-    const opponentId = this.mapDifficultyToOpponentId(gs.aiDifficulty ?? 'MEDIUM');
+    // Initialize AI with selected opponent from preview, or fall back to difficulty setting
+    const selectedOpponentId = (window as any).__selectedOpponentId;
+    let opponentId: string;
+    if (selectedOpponentId) {
+      opponentId = selectedOpponentId;
+      // Clear for next match
+      (window as any).__selectedOpponentId = null;
+    } else {
+      const gs = this.hud.settingsManager.getGameSettings();
+      opponentId = this.mapDifficultyToOpponentId(gs.aiDifficulty ?? 'MEDIUM');
+    }
     this.ai = new PoolAI(opponentId);
 
     // Set up rules callbacks
@@ -911,6 +920,8 @@ export class Game {
           leagueId: 'bronze_1', // Default for now
         };
 
+        let chestAwarded: string | null = null;
+
         try {
           await db.matches.add(record);
           // Update user stats
@@ -919,16 +930,46 @@ export class Game {
             user.stats.totalEarnings += record.earnings;
             if (isWin) {
               user.stats.wins++;
+              user.stats.winStreak++;
               user.coins += record.earnings;
             } else {
               user.stats.losses++;
+              user.stats.winStreak = 0; // Reset streak on loss
               user.coins += record.earnings;
             }
           });
           console.log('Match saved to DB:', record);
+
+          // Award chest for winning (Miniclip style)
+          if (isWin) {
+            chestAwarded = await this.awardChestForWin(record.leagueId);
+          }
+
+          // Sync currency store with database
+          const user = await db.user.get(1);
+          if (user) {
+            const { currencyStore } = await import('../ui/CurrencyStore');
+            currencyStore.setBalances({ coins: user.coins, gold: user.gold });
+          }
         } catch (e) {
           console.error('Failed to save match:', e);
         }
+
+        // Transition to match result screen
+        const matchResultData = {
+          isWin,
+          earnings: record.earnings,
+          opponentName: aiPlayer.name,
+          opponentId: record.opponentId,
+          chestAwarded,
+          leagueId: record.leagueId,
+        };
+        (window as any).__lastMatchResult = matchResultData;
+
+        // Small delay before transitioning to result screen
+        setTimeout(() => {
+          uiStateMachine.transitionTo(UIState.MATCH_RESULT);
+        }, 1500);
       }
 
       let winnerMessage: string;
@@ -1436,8 +1477,30 @@ export class Game {
       this.audio.playPocketDrop(intensity);
     }
 
+    // Track balls potted by human player (exclude cue ball)
+    if (ball.id !== BALL_CUE && this.mode === GameMode.EIGHT_BALL) {
+      // Check if current shooter is human
+      const currentPlayer = this.players[this.currentPlayerIndex];
+      if (currentPlayer && !currentPlayer.isAI()) {
+        this.trackBallPotted();
+      }
+    }
+
     // Update HUD to show pocketed balls in ball chips
     this.updateHUDPlayerBalls();
+  }
+
+  /**
+   * Track a ball potted by the human player
+   */
+  private async trackBallPotted(): Promise<void> {
+    try {
+      await db.user.where('id').equals(1).modify(user => {
+        user.stats.ballsPotted++;
+      });
+    } catch (e) {
+      console.error('Failed to track ball potted:', e);
+    }
   }
 
   private playBallCollisionAudio(ballA: Ball, ballB: Ball) {
@@ -2389,6 +2452,57 @@ export class Game {
       return `${message} Place the cue ball behind the head string.`;
     }
     return message;
+  }
+
+  /**
+   * Award a chest for winning a match (Miniclip style)
+   * Chests are stored in slots and need to be unlocked with time or gold
+   * Returns the chest type awarded, or null if no slot available
+   */
+  private async awardChestForWin(leagueId: string): Promise<string | null> {
+    try {
+      // Get league tier from leagueId (e.g., 'bronze_1' -> tier 1)
+      const tierMatch = leagueId.match(/^(bronze|silver|gold|platinum|diamond)/i);
+      let tier = 1;
+      if (tierMatch) {
+        const tierMap: Record<string, number> = {
+          bronze: 1,
+          silver: 2,
+          gold: 3,
+          platinum: 4,
+          diamond: 5
+        };
+        tier = tierMap[tierMatch[1].toLowerCase()] || 1;
+      }
+
+      // Determine chest type based on league
+      const chestType = getChestForLeague(tier);
+      const chestDef = CHEST_DEFINITIONS[chestType];
+
+      // Get current chest slots
+      const slots = await getChestSlots();
+
+      // Find first empty slot
+      const emptySlot = slots.find(s => s.status === 'empty');
+      if (!emptySlot) {
+        console.log('📦 Chest earned but no empty slots! Player needs to open existing chests.');
+        return null;
+      }
+
+      // Award chest to empty slot
+      await updateChestSlot(emptySlot.slotIndex, {
+        chestType: chestType,
+        status: 'locked',
+        unlockStartTime: null,
+        unlockEndTime: null
+      });
+
+      console.log(`📦 ${chestDef.name} awarded to slot ${emptySlot.slotIndex}!`);
+      return chestType;
+    } catch (e) {
+      console.error('Failed to award chest:', e);
+      return null;
+    }
   }
 
   private updateBallInHandAssistState(): void {

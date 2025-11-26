@@ -7,8 +7,6 @@ import { NavigationBar } from '../components/NavigationBar';
 import { SettingsManager } from '../SettingsManager';
 import { notificationService } from '../NotificationService';
 import { drawSceneBackground } from '../components/SceneBackground';
-import { AssetRegistry } from '../../assets/AssetRegistry';
-import { AssetLoader } from '../../assets/AssetLoader';
 
 type ShopButton = {
     id: 'back' | 'equip';
@@ -52,23 +50,7 @@ const CHIPS: Chip[] = [
     { id: 'chip_purple', name: 'Purple Swapped', color: '#7b2cbf', rarity: 'EPIC', desc: 'Royal purple finish.' }
 ];
 
-type Chest = {
-    id: string;
-    name: string;
-    rarity: 'COMMON' | 'RARE' | 'EPIC';
-    price: number;
-    currency: 'COINS' | 'GOLD';
-    desc: string;
-    asset: string;
-};
-
-const CHESTS: Chest[] = [
-    { id: 'chest_common', name: 'Rookie Chest', rarity: 'COMMON', price: 500, currency: 'COINS', desc: 'Contains basic cues and chips.', asset: AssetRegistry.economy.chestCommon() },
-    { id: 'chest_rare', name: 'Pro Chest', rarity: 'RARE', price: 2000, currency: 'COINS', desc: 'Better chance for rare items.', asset: AssetRegistry.economy.chestRare() },
-    { id: 'chest_epic', name: 'Master Chest', rarity: 'EPIC', price: 50, currency: 'GOLD', desc: 'Guaranteed epic item!', asset: AssetRegistry.economy.chestEpic() }
-];
-
-type ShopTab = 'CUES' | 'CHIPS' | 'CHESTS';
+type ShopTab = 'CUES' | 'CHIPS';
 
 export class ShopScene implements UIScene {
     private canvas: HTMLCanvasElement | null = null;
@@ -83,8 +65,7 @@ export class ShopScene implements UIScene {
     private currentTab: ShopTab = 'CUES';
     private tabRects: { [key in ShopTab]: Rect } = {
         CUES: { x: 0, y: 0, width: 0, height: 0 },
-        CHIPS: { x: 0, y: 0, width: 0, height: 0 },
-        CHESTS: { x: 0, y: 0, width: 0, height: 0 }
+        CHIPS: { x: 0, y: 0, width: 0, height: 0 }
     };
     private navigationBar: NavigationBar;
 
@@ -140,13 +121,12 @@ export class ShopScene implements UIScene {
         const tabHeight = 40;
         const tabY = navHeight + 30;
         const tabCenterX = width / 2;
-        const totalTabsWidth = tabWidth * 3 + 20; // 10px gap
+        const totalTabsWidth = tabWidth * 2 + 10; // 10px gap between 2 tabs
 
         this.tabRects.CUES = { x: tabCenterX - totalTabsWidth / 2, y: tabY, width: tabWidth, height: tabHeight };
         this.tabRects.CHIPS = { x: tabCenterX - totalTabsWidth / 2 + tabWidth + 10, y: tabY, width: tabWidth, height: tabHeight };
-        this.tabRects.CHESTS = { x: tabCenterX - totalTabsWidth / 2 + (tabWidth + 10) * 2, y: tabY, width: tabWidth, height: tabHeight };
 
-        const items = this.currentTab === 'CUES' ? CUES : this.currentTab === 'CHIPS' ? CHIPS : CHESTS;
+        const items = this.currentTab === 'CUES' ? CUES : CHIPS;
         const columns = Math.max(1, Math.floor((width - horizontalPadding * 2) / (cardWidth + gap)));
         const startX = (width - Math.min(columns, items.length) * cardWidth - Math.max(0, Math.min(columns, items.length) - 1) * gap) / 2;
         const startY = navHeight + 100;
@@ -269,13 +249,6 @@ export class ShopScene implements UIScene {
             this.updateLayout();
             return;
         }
-        if (x >= this.tabRects.CHESTS.x && x <= this.tabRects.CHESTS.x + this.tabRects.CHESTS.width &&
-            y >= this.tabRects.CHESTS.y && y <= this.tabRects.CHESTS.y + this.tabRects.CHESTS.height) {
-            this.currentTab = 'CHESTS';
-            this.selectedCardIndex = 0;
-            this.updateLayout();
-            return;
-        }
     };
 
     private handleButtonClick(id: ShopButton['id']) {
@@ -337,7 +310,6 @@ export class ShopScene implements UIScene {
 
         drawTab(this.tabRects.CUES, 'CUES', this.currentTab === 'CUES');
         drawTab(this.tabRects.CHIPS, 'CHIPS', this.currentTab === 'CHIPS');
-        drawTab(this.tabRects.CHESTS, 'CHESTS', this.currentTab === 'CHESTS');
     }
 
     private renderCards(ctx: CanvasRenderingContext2D) {
@@ -348,12 +320,9 @@ export class ShopScene implements UIScene {
             if (this.currentTab === 'CUES') {
                 const cue = CUES[index];
                 if (cue) this.drawCueCard(ctx, rect, cue, isSelected, isHovered);
-            } else if (this.currentTab === 'CHIPS') {
+            } else {
                 const chip = CHIPS[index];
                 if (chip) this.drawChipCard(ctx, rect, chip, isSelected, isHovered);
-            } else {
-                const chest = CHESTS[index];
-                if (chest) this.drawChestCard(ctx, rect, chest, isSelected, isHovered);
             }
         });
     }
@@ -1224,74 +1193,6 @@ export class ShopScene implements UIScene {
             default:
                 return ColorTokens.text.primary;
         }
-    }
-
-    private drawChestCard(ctx: CanvasRenderingContext2D, rect: Rect, chest: Chest, isSelected: boolean, isHovered: boolean) {
-        const { x, y, width, height } = rect;
-        const radius = LayoutConstants.Radii.Large;
-
-        ctx.save();
-
-        // Hover/Selected glow effect
-        if (isHovered || isSelected) {
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
-            ctx.shadowBlur = 28;
-            ctx.shadowOffsetY = 14;
-        } else {
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
-            ctx.shadowBlur = 20;
-            ctx.shadowOffsetY = 10;
-        }
-
-        // Card Background
-        drawRoundedRect(ctx, x, y, width, height, radius);
-        const bgGradient = ctx.createLinearGradient(x, y, x, y + height);
-        bgGradient.addColorStop(0, '#2a2a2a');
-        bgGradient.addColorStop(1, '#1a1a1a');
-        ctx.fillStyle = bgGradient;
-        ctx.fill();
-
-        // Chest Image
-        const imgSize = 150;
-        const imgX = x + (width - imgSize) / 2;
-        const imgY = y + 40;
-
-        const chestImg = AssetLoader.getCached(chest.asset);
-        if (chestImg) {
-            ctx.drawImage(chestImg, imgX, imgY, imgSize, imgSize);
-        } else {
-            AssetLoader.loadImage(chest.asset);
-            // Fallback
-            ctx.fillStyle = '#444';
-            ctx.fillRect(imgX, imgY, imgSize, imgSize);
-        }
-
-        // Name
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = '900 24px "Rajdhani", sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(chest.name.toUpperCase(), x + width / 2, y + height * 0.65);
-
-        // Price
-        ctx.fillStyle = chest.currency === 'GOLD' ? ColorTokens.currency.cash : ColorTokens.currency.coins;
-        ctx.font = '700 20px "Rajdhani", sans-serif';
-        ctx.fillText(`${chest.price} ${chest.currency}`, x + width / 2, y + height * 0.75);
-
-        // Description
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-        ctx.font = '14px "Nunito", sans-serif';
-        ctx.fillText(chest.desc, x + width / 2, y + height * 0.85);
-
-        // Buy Button (Visual only for now)
-        const btnHeight = 40;
-        const btnWidth = width * 0.8;
-        const btnX = x + (width - btnWidth) / 2;
-        const btnY = y + height - btnHeight - 20;
-
-        drawGlossyButton(ctx, { x: btnX, y: btnY, width: btnWidth, height: btnHeight }, 'BUY', ColorTokens.action.success, isHovered);
-
-        ctx.restore();
     }
 
     private syncEquippedCue() {

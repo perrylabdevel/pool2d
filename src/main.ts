@@ -1,7 +1,7 @@
 // Main entry point
 
 import { Game } from './game/Game';
-import { notificationService } from './ui/NotificationService';
+import './ui/NotificationService';
 import './ui/ModalService';
 import './ui/DockBridge';
 import './ui/UISoundService';
@@ -10,6 +10,7 @@ import { uiStateMachine, UIState } from './ui/UIStateMachine';
 import './ui/SceneController';
 
 import { initializeUserIfNeeded } from './data/db';
+import { currencyStore } from './ui/CurrencyStore';
 
 async function main() {
   const gameCanvas = document.getElementById('game-canvas') as HTMLCanvasElement;
@@ -22,6 +23,9 @@ async function main() {
 
   // Initialize database
   await initializeUserIfNeeded();
+
+  // Initialize currency store from database
+  await currencyStore.initialize();
 
   const game = new Game(gameCanvas, debugCanvas);
   (window as any).poolGame = game;

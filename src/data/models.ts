@@ -69,3 +69,17 @@ export interface LeagueDef {
     minLevel: number;
     icon: string;
 }
+
+/**
+ * Chest slot for Miniclip-style chest inventory
+ */
+export type ChestSlotStatus = 'empty' | 'locked' | 'unlocking' | 'ready';
+
+export interface ChestSlotData {
+    id?: number;             // Auto-incremented by Dexie
+    slotIndex: number;       // 0-3
+    chestType: string | null;
+    status: ChestSlotStatus;
+    unlockStartTime: number | null;
+    unlockEndTime: number | null;
+}

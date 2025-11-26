@@ -194,7 +194,7 @@ export class LeagueScene implements UIScene {
             { rank: 2, name: 'The Machine', score: 11200, isUser: false, avatar: AssetRegistry.avatars.theMachine() },
             { rank: 3, name: this.userProfile?.name || 'Player', score: this.userProfile?.stats.totalEarnings || 0, isUser: true, avatar: AssetRegistry.avatars.player() },
             { rank: 4, name: 'Rookie Rick', score: 4500, isUser: false, avatar: AssetRegistry.avatars.rookieRick() },
-            { rank: 5, name: 'Steady Steve', score: 3200, isUser: false, avatar: AssetRegistry.avatars.default() },
+            { rank: 5, name: 'Steady Steve', score: 3200, isUser: false, avatar: AssetRegistry.avatars.steadySteve() },
         ];
 
         const rowHeight = 70; // Increased height for avatars

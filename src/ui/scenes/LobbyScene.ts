@@ -6,6 +6,7 @@ import {
 } from '../components/UIComponents';
 import { ColorTokens, SemanticColors } from '../theme/ColorTokens';
 import { NavigationBar } from '../components/NavigationBar';
+import { ChestSlotsBar, CHEST_BAR_HEIGHT } from '../components/ChestSlotsBar';
 import { Game, GameMode } from '../../game/Game';
 import { GameState } from '../../game/GameStateMachine';
 import { ConfirmScene } from './ConfirmScene';
@@ -33,6 +34,7 @@ export class LobbyScene implements UIScene {
     private keyHandler: ((e: KeyboardEvent) => void) | null = null;
     private cameFromGame: boolean = false;
     private navigationBar: NavigationBar;
+    private chestSlotsBar: ChestSlotsBar;
 
     private cardImages: Record<string, HTMLImageElement> = {};
 
@@ -44,6 +46,7 @@ export class LobbyScene implements UIScene {
             showCurrencies: true,
             showSettings: true
         });
+        this.chestSlotsBar = new ChestSlotsBar();
     }
     private cardImageUrls: Record<string, string> = {
         play: AssetRegistry.lobbyCards.playRanked(),
@@ -62,6 +65,17 @@ export class LobbyScene implements UIScene {
         for (const [id, url] of Object.entries(this.cardImageUrls)) {
             this.cardImages[id] = AssetLoader.loadImageSync(url);
         }
+
+        // Load chest slots (async - will re-render when loaded)
+        this.chestSlotsBar.loadSlots().then(() => {
+            // Trigger re-layout after slots are loaded
+            if (this.canvas) {
+                this.setupLayout(this.canvas.width, this.canvas.height);
+            }
+        });
+
+        // Expose for testing: window.chestBar.addTestChest('chest_common')
+        (window as any).chestBar = this.chestSlotsBar;
 
         this.setupLayout(this.canvas.width, this.canvas.height);
         this.canvas.addEventListener('mousemove', this.onMouseMove);
@@ -111,6 +125,9 @@ export class LobbyScene implements UIScene {
         this.navigationBar.setupLayout(width);
         const navHeight = this.navigationBar.getHeight();
 
+        // Setup chest slots bar at the bottom
+        this.chestSlotsBar.setupLayout(width, height);
+
         // Miniclip-style grid layout with weighted columns for landscape/portrait cards
         const padding = 24;
         const gap = 16;
@@ -141,9 +158,8 @@ export class LobbyScene implements UIScene {
             {
                 id: 'play', text: '1 vs 1', subtitle: 'Play Ranked', icon: '🎱', col: 0, row: 0, cols: 2, rows: 2, color: SemanticColors.lobby.cardPlayRanked,
                 action: () => {
-                    const game = (window as any).poolGame;
-                    if (game) { game.mode = GameMode.EIGHT_BALL; game.restart(); }
-                    uiStateMachine.transitionTo(UIState.IN_GAME);
+                    // Go to opponent preview before starting match
+                    uiStateMachine.transitionTo(UIState.OPPONENT_PREVIEW);
                 }
             },
             {
@@ -174,8 +190,8 @@ export class LobbyScene implements UIScene {
             }
         ];
 
-        // Calculate available height for cards
-        const availableHeight = height - topSpacing - padding * 2;
+        // Calculate available height for cards (reserve space for chest bar at bottom)
+        const availableHeight = height - topSpacing - padding * 2 - CHEST_BAR_HEIGHT;
 
         // Determine row heights - use simpler fixed approach to ensure everything fits
         const rowCount = 3; // We have 3 rows total
@@ -255,6 +271,13 @@ export class LobbyScene implements UIScene {
             return;
         }
 
+        // Check chest slots bar
+        if (this.chestSlotsBar.handleMouseMove(x, y)) {
+            this.hoveredButton = null;
+            this.canvas.style.cursor = this.chestSlotsBar.getCursor();
+            return;
+        }
+
         this.hoveredButton = null;
         for (const btn of this.buttons) {
             if (x >= btn.rect.x && x <= btn.rect.x + btn.rect.width &&
@@ -266,7 +289,7 @@ export class LobbyScene implements UIScene {
         this.canvas.style.cursor = this.hoveredButton ? 'pointer' : 'default';
     };
 
-    private onClick = (e: MouseEvent) => {
+    private onClick = async (e: MouseEvent) => {
         if (!this.canvas) return;
         const rect = this.canvas.getBoundingClientRect();
         const x = e.clientX - rect.left;
@@ -274,6 +297,11 @@ export class LobbyScene implements UIScene {
 
         // Check navigation bar first
         if (this.navigationBar.handleClick(x, y)) {
+            return;
+        }
+
+        // Check chest slots bar
+        if (await this.chestSlotsBar.handleClick(x, y)) {
             return;
         }
 
@@ -332,13 +360,16 @@ export class LobbyScene implements UIScene {
         return hasShotStarted || ballsMoving;
     }
 
-    update(_dt: number): void { }
+    update(dt: number): void {
+        this.chestSlotsBar.update(dt);
+    }
 
     render(ctx: CanvasRenderingContext2D): void {
         const width = ctx.canvas.width;
         const height = ctx.canvas.height;
         this.renderBackground(ctx, width, height);
         this.renderCards(ctx);
+        this.chestSlotsBar.render(ctx, width);
         this.navigationBar.render(ctx, width);
     }
 

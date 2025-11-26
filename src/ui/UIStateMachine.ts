@@ -9,7 +9,9 @@ export enum UIState {
     CONFIRM = 'CONFIRM',
     SETTINGS = 'SETTINGS',
     IN_GAME = 'IN_GAME',
-    IN_GAME_MENU = 'IN_GAME_MENU'
+    IN_GAME_MENU = 'IN_GAME_MENU',
+    MATCH_RESULT = 'MATCH_RESULT',
+    OPPONENT_PREVIEW = 'OPPONENT_PREVIEW'
 }
 
 export enum TransitionType {

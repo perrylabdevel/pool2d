@@ -5,7 +5,7 @@ export const OPPONENTS: OpponentDef[] = [
     {
         id: 'rookie_rick',
         name: 'Rookie Rick',
-        avatarId: 'avatar_rick',
+        avatarId: 'rookieRick',
         leagueId: 'bronze_1',
         bio: 'Just started playing last week. Still figuring out which end of the cue to hold.',
         stats: { accuracy: 0.4, consistency: 0.3, aggression: 0.8, speed: 0.4, spinPreference: 0.0, errorRate: 0.25 }
@@ -13,7 +13,7 @@ export const OPPONENTS: OpponentDef[] = [
     {
         id: 'nervous_ned',
         name: 'Nervous Ned',
-        avatarId: 'avatar_ned',
+        avatarId: 'nervousNed',
         leagueId: 'bronze_1',
         bio: 'Shakes a lot when the pressure is on. Easy to beat if you keep him waiting.',
         stats: { accuracy: 0.45, consistency: 0.2, aggression: 0.2, speed: 0.3, spinPreference: 0.0, errorRate: 0.2 }
@@ -21,7 +21,7 @@ export const OPPONENTS: OpponentDef[] = [
     {
         id: 'casual_carl',
         name: 'Casual Carl',
-        avatarId: 'avatar_carl',
+        avatarId: 'casualCarl',
         leagueId: 'bronze_2',
         bio: 'Plays for fun on weekends. Not great, but hits the ball hard.',
         stats: { accuracy: 0.5, consistency: 0.4, aggression: 0.9, speed: 0.7, spinPreference: 0.1, errorRate: 0.15 }
@@ -29,7 +29,7 @@ export const OPPONENTS: OpponentDef[] = [
     {
         id: 'slow_sam',
         name: 'Slow Sam',
-        avatarId: 'avatar_sam',
+        avatarId: 'slowSam',
         leagueId: 'bronze_2',
         bio: 'Takes forever to shoot. Tries to calculate angles but usually gets them wrong.',
         stats: { accuracy: 0.55, consistency: 0.5, aggression: 0.3, speed: 0.1, spinPreference: 0.1, errorRate: 0.1 }
@@ -37,7 +37,7 @@ export const OPPONENTS: OpponentDef[] = [
     {
         id: 'lucky_lucy',
         name: 'Lucky Lucy',
-        avatarId: 'avatar_lucy',
+        avatarId: 'luckyLucy',
         leagueId: 'bronze_3',
         bio: 'Somehow makes shots that shouldn\'t go in. Don\'t underestimate her luck.',
         stats: { accuracy: 0.5, consistency: 0.3, aggression: 0.7, speed: 0.6, spinPreference: 0.2, errorRate: 0.15 }
@@ -47,7 +47,7 @@ export const OPPONENTS: OpponentDef[] = [
     {
         id: 'steady_steve',
         name: 'Steady Steve',
-        avatarId: 'avatar_steve',
+        avatarId: 'steadySteve',
         leagueId: 'silver_1',
         bio: 'Reliable but predictable. Won\'t make many mistakes, but won\'t wow you either.',
         stats: { accuracy: 0.65, consistency: 0.7, aggression: 0.4, speed: 0.5, spinPreference: 0.2, errorRate: 0.08 }
@@ -55,7 +55,7 @@ export const OPPONENTS: OpponentDef[] = [
     {
         id: 'bank_shot_betty',
         name: 'Bank Shot Betty',
-        avatarId: 'avatar_betty',
+        avatarId: 'bankShotBetty',
         leagueId: 'silver_1',
         bio: 'Loves banking shots off the rails. Sometimes it works beautifully.',
         stats: { accuracy: 0.6, consistency: 0.6, aggression: 0.6, speed: 0.6, spinPreference: 0.3, errorRate: 0.1 }
@@ -63,7 +63,7 @@ export const OPPONENTS: OpponentDef[] = [
     {
         id: 'angle_andy',
         name: 'Angle Andy',
-        avatarId: 'avatar_andy',
+        avatarId: 'angleAndy',
         leagueId: 'silver_2',
         bio: 'Math teacher by day, pool player by night. Knows his geometry.',
         stats: { accuracy: 0.7, consistency: 0.65, aggression: 0.5, speed: 0.4, spinPreference: 0.2, errorRate: 0.05 }
@@ -71,7 +71,7 @@ export const OPPONENTS: OpponentDef[] = [
     {
         id: 'combo_chris',
         name: 'Combo Chris',
-        avatarId: 'avatar_chris',
+        avatarId: 'comboChris',
         leagueId: 'silver_2',
         bio: 'Always looking for the combination shot. High risk, high reward.',
         stats: { accuracy: 0.65, consistency: 0.5, aggression: 0.8, speed: 0.6, spinPreference: 0.3, errorRate: 0.12 }
@@ -79,7 +79,7 @@ export const OPPONENTS: OpponentDef[] = [
     {
         id: 'defensive_dan',
         name: 'Defensive Dan',
-        avatarId: 'avatar_dan',
+        avatarId: 'defensiveDan',
         leagueId: 'silver_3',
         bio: 'Will safety you to death. Hates taking risks.',
         stats: { accuracy: 0.7, consistency: 0.8, aggression: 0.1, speed: 0.3, spinPreference: 0.4, errorRate: 0.05 }
@@ -89,7 +89,7 @@ export const OPPONENTS: OpponentDef[] = [
     {
         id: 'spin_doctor_sid',
         name: 'Spin Doctor Sid',
-        avatarId: 'avatar_sid',
+        avatarId: 'spinDoctorSid',
         leagueId: 'gold_1',
         bio: 'Master of english. Can make the cue ball dance.',
         stats: { accuracy: 0.75, consistency: 0.7, aggression: 0.6, speed: 0.5, spinPreference: 0.9, errorRate: 0.08 }
@@ -97,7 +97,7 @@ export const OPPONENTS: OpponentDef[] = [
     {
         id: 'power_pete',
         name: 'Power Pete',
-        avatarId: 'avatar_pete',
+        avatarId: 'powerPete',
         leagueId: 'gold_1',
         bio: 'Breaks like a cannon. Overpowers shots but has great potting ability.',
         stats: { accuracy: 0.75, consistency: 0.6, aggression: 0.9, speed: 0.8, spinPreference: 0.5, errorRate: 0.1 }
@@ -105,7 +105,7 @@ export const OPPONENTS: OpponentDef[] = [
     {
         id: 'finesse_fiona',
         name: 'Finesse Fiona',
-        avatarId: 'avatar_fiona',
+        avatarId: 'finesseFiona',
         leagueId: 'gold_2',
         bio: 'Soft touch. Perfect speed control on every shot.',
         stats: { accuracy: 0.8, consistency: 0.9, aggression: 0.4, speed: 0.5, spinPreference: 0.6, errorRate: 0.03 }
@@ -113,7 +113,7 @@ export const OPPONENTS: OpponentDef[] = [
     {
         id: 'shark_sally',
         name: 'Shark Sally',
-        avatarId: 'avatar_sally',
+        avatarId: 'sharkSally',
         leagueId: 'gold_3',
         bio: 'Will hustle you for everything you have. Ruthless efficiency.',
         stats: { accuracy: 0.85, consistency: 0.85, aggression: 0.7, speed: 0.7, spinPreference: 0.7, errorRate: 0.02 }
@@ -123,7 +123,7 @@ export const OPPONENTS: OpponentDef[] = [
     {
         id: 'trickshot_tim',
         name: 'Trickshot Tim',
-        avatarId: 'avatar_tim',
+        avatarId: 'trickshotTim',
         leagueId: 'platinum_1',
         bio: 'Internet famous for his trick shots. Can escape any snooker.',
         stats: { accuracy: 0.88, consistency: 0.8, aggression: 0.8, speed: 0.6, spinPreference: 0.95, errorRate: 0.05 }
@@ -131,7 +131,7 @@ export const OPPONENTS: OpponentDef[] = [
     {
         id: 'precision_paul',
         name: 'Precision Paul',
-        avatarId: 'avatar_paul',
+        avatarId: 'precisionPaul',
         leagueId: 'platinum_2',
         bio: 'Never misses a straight shot. Positioning is his only weakness.',
         stats: { accuracy: 0.95, consistency: 0.9, aggression: 0.5, speed: 0.5, spinPreference: 0.4, errorRate: 0.01 }
@@ -139,7 +139,7 @@ export const OPPONENTS: OpponentDef[] = [
     {
         id: 'viper_vicky',
         name: 'Viper Vicky',
-        avatarId: 'avatar_vicky',
+        avatarId: 'viperVicky',
         leagueId: 'platinum_3',
         bio: 'Strikes fast and deadly. Don\'t blink.',
         stats: { accuracy: 0.9, consistency: 0.85, aggression: 0.85, speed: 0.95, spinPreference: 0.7, errorRate: 0.04 }
@@ -149,7 +149,7 @@ export const OPPONENTS: OpponentDef[] = [
     {
         id: 'master_mike',
         name: 'Master Mike',
-        avatarId: 'avatar_mike',
+        avatarId: 'masterMike',
         leagueId: 'diamond_1',
         bio: 'Former world champion. Has seen it all.',
         stats: { accuracy: 0.95, consistency: 0.95, aggression: 0.6, speed: 0.6, spinPreference: 0.8, errorRate: 0.01 }
@@ -157,7 +157,7 @@ export const OPPONENTS: OpponentDef[] = [
     {
         id: 'legend_larry',
         name: 'Legend Larry',
-        avatarId: 'avatar_larry',
+        avatarId: 'legendLarry',
         leagueId: 'diamond_2',
         bio: 'A living legend. The table is his canvas.',
         stats: { accuracy: 0.98, consistency: 0.98, aggression: 0.7, speed: 0.7, spinPreference: 0.9, errorRate: 0.0 }
@@ -165,7 +165,7 @@ export const OPPONENTS: OpponentDef[] = [
     {
         id: 'the_machine',
         name: 'The Machine',
-        avatarId: 'avatar_machine',
+        avatarId: 'theMachine',
         leagueId: 'diamond_3',
         bio: 'Is it even human? Flawless execution. Zero emotion.',
         stats: { accuracy: 1.0, consistency: 1.0, aggression: 0.8, speed: 1.0, spinPreference: 1.0, errorRate: 0.0 }

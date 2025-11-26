@@ -1,10 +1,11 @@
 import Dexie, { Table } from 'dexie';
-import { UserProfile, MatchRecord, InventoryItem } from './models';
+import { UserProfile, MatchRecord, InventoryItem, ChestSlotData } from './models';
 
 export class PoolDatabase extends Dexie {
     user!: Table<UserProfile>;
     matches!: Table<MatchRecord>;
     inventory!: Table<InventoryItem>;
+    chestSlots!: Table<ChestSlotData>;
 
     constructor() {
         super('Pool2D_DB');
@@ -14,6 +15,14 @@ export class PoolDatabase extends Dexie {
             user: '++id, name', // Primary key and indexed props
             matches: '++id, timestamp, opponentId, result',
             inventory: '++id, itemId, type, [type+isEquipped]' // Compound index for finding equipped items
+        });
+
+        // Version 2: Add chest slots for Miniclip-style chest system
+        this.version(2).stores({
+            user: '++id, name',
+            matches: '++id, timestamp, opponentId, result',
+            inventory: '++id, itemId, type, [type+isEquipped]',
+            chestSlots: '++id, slotIndex, status'
         });
     }
 }
@@ -46,4 +55,35 @@ export async function initializeUserIfNeeded() {
         });
         console.log('🆕 New user profile created!');
     }
+
+    // Initialize chest slots if they don't exist
+    await initializeChestSlotsIfNeeded();
+}
+
+// Initialize 4 empty chest slots for Miniclip-style chest system
+export async function initializeChestSlotsIfNeeded() {
+    const count = await db.chestSlots.count();
+    if (count === 0) {
+        // Create 4 empty slots
+        for (let i = 0; i < 4; i++) {
+            await db.chestSlots.add({
+                slotIndex: i,
+                chestType: null,
+                status: 'empty',
+                unlockStartTime: null,
+                unlockEndTime: null
+            });
+        }
+        console.log('📦 Chest slots initialized (4 empty slots)');
+    }
+}
+
+// Get all chest slots
+export async function getChestSlots(): Promise<ChestSlotData[]> {
+    return db.chestSlots.orderBy('slotIndex').toArray();
+}
+
+// Update a chest slot
+export async function updateChestSlot(slotIndex: number, data: Partial<ChestSlotData>): Promise<void> {
+    await db.chestSlots.where('slotIndex').equals(slotIndex).modify(data);
 }

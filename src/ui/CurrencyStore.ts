@@ -1,3 +1,5 @@
+import { db } from '../data/db';
+
 export interface CurrencyBalances {
     coins: number;
     gold: number;
@@ -6,12 +8,32 @@ export interface CurrencyBalances {
 type Listener = (balances: CurrencyBalances) => void;
 
 /**
- * Simple in-memory currency store so scenes share wallet values.
- * Can be replaced with a real backend/session store later.
+ * Currency store that syncs with the database.
+ * Provides real-time currency updates across all UI scenes.
  */
 class CurrencyStore {
-    private balances: CurrencyBalances = { coins: 2500, gold: 85 };
+    private balances: CurrencyBalances = { coins: 0, gold: 0 };
     private listeners: Listener[] = [];
+    private initialized: boolean = false;
+
+    /**
+     * Initialize the store by loading from database
+     */
+    async initialize(): Promise<void> {
+        if (this.initialized) return;
+
+        try {
+            const user = await db.user.get(1);
+            if (user) {
+                this.balances = { coins: user.coins, gold: user.gold };
+                console.log('💰 Currency loaded from DB:', this.balances);
+            }
+            this.initialized = true;
+            this.notify();
+        } catch (e) {
+            console.error('Failed to load currency from DB:', e);
+        }
+    }
 
     getBalances(): CurrencyBalances {
         return { ...this.balances };
@@ -20,16 +42,41 @@ class CurrencyStore {
     setBalances(balances: CurrencyBalances) {
         this.balances = { ...balances };
         this.notify();
+        this.syncToDatabase();
     }
 
     addCoins(amount: number) {
         this.balances.coins += amount;
         this.notify();
+        this.syncToDatabase();
     }
 
     addGold(amount: number) {
         this.balances.gold += amount;
         this.notify();
+        this.syncToDatabase();
+    }
+
+    /**
+     * Deduct coins if available, returns true if successful
+     */
+    spendCoins(amount: number): boolean {
+        if (this.balances.coins < amount) return false;
+        this.balances.coins -= amount;
+        this.notify();
+        this.syncToDatabase();
+        return true;
+    }
+
+    /**
+     * Deduct gold if available, returns true if successful
+     */
+    spendGold(amount: number): boolean {
+        if (this.balances.gold < amount) return false;
+        this.balances.gold -= amount;
+        this.notify();
+        this.syncToDatabase();
+        return true;
     }
 
     subscribe(listener: Listener): () => void {
@@ -44,6 +91,17 @@ class CurrencyStore {
     private notify() {
         const snapshot = this.getBalances();
         this.listeners.forEach(l => l(snapshot));
+    }
+
+    private async syncToDatabase() {
+        try {
+            await db.user.where('id').equals(1).modify({
+                coins: this.balances.coins,
+                gold: this.balances.gold
+            });
+        } catch (e) {
+            console.error('Failed to sync currency to DB:', e);
+        }
     }
 }
 
