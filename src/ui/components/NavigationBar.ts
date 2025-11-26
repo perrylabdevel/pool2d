@@ -5,6 +5,7 @@ import { uiStateMachine, UIState } from '../UIStateMachine';
 import { currencyStore } from '../CurrencyStore';
 import { AssetRegistry } from '../../assets/AssetRegistry';
 import { AssetLoader } from '../../assets/AssetLoader';
+import { db } from '../../data/db';
 
 export interface NavigationBarConfig {
     title?: string;
@@ -31,6 +32,9 @@ export class NavigationBar {
     private hoveredButton: NavButton | null = null;
     private height = 104; // Match HUD header: 12px header padding + (8px player padding + 64px avatar + 8px player padding) + 12px header padding
     private logoImage: HTMLImageElement;
+    private profileAvatarUrl: string | null = null;
+    private profileFrameUrl: string | null = null;
+    private profileLoadStarted = false;
 
     constructor(config: NavigationBarConfig) {
         this.config = {
@@ -44,6 +48,7 @@ export class NavigationBar {
 
         // Load logo image
         this.logoImage = AssetLoader.loadImageSync(AssetRegistry.branding.logo());
+        this.ensureProfileVisualsLoaded();
     }
 
     updateConfig(config: Partial<NavigationBarConfig>) {
@@ -372,36 +377,52 @@ export class NavigationBar {
 
     private renderProfileButton(ctx: CanvasRenderingContext2D, btn: NavButton, isHovered: boolean) {
         const { x, y, width, height } = btn.rect;
+        this.ensureProfileVisualsLoaded();
+
         ctx.save();
-        ctx.fillStyle = isHovered ? 'rgba(0, 0, 0, 0.45)' : 'rgba(0, 0, 0, 0.35)';
+        ctx.fillStyle = isHovered ? 'rgba(0, 0, 0, 0.5)' : 'rgba(0, 0, 0, 0.35)';
         ctx.fillRect(x, y, width, height);
 
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
-        ctx.fillRect(x, y + 6, 1, height - 12);
-        ctx.fillRect(x + width - 1, y + 6, 1, height - 12);
+        const avatarUrl = this.profileAvatarUrl || this.getAvatarUrl();
+        const frameUrl = this.profileFrameUrl || this.getFrameForLeague();
+        const avatarImg = AssetLoader.getCached(avatarUrl) || AssetLoader.loadImageSync(avatarUrl);
+        const frameImg = AssetLoader.getCached(frameUrl) || AssetLoader.loadImageSync(frameUrl);
 
-        const overlay = ctx.createLinearGradient(x, y, x, y + height);
-        overlay.addColorStop(0, 'rgba(255, 255, 255, 0.12)');
-        overlay.addColorStop(0.3, 'rgba(255, 255, 255, 0.04)');
-        overlay.addColorStop(1, 'rgba(255, 255, 255, 0)');
-        ctx.fillStyle = overlay;
-        ctx.fillRect(x, y, width, height / 2);
+        // Avatar photo clipped to a rounded rect inside the frame bounds
+        const photoPadding = height * 0.2;
+        const photoX = x + photoPadding;
+        const photoY = y + photoPadding * 0.9;
+        const photoW = width - photoPadding * 2;
+        const photoH = height - photoPadding * 1.6;
+        const photoRadius = Math.max(8, height * 0.12);
 
-        const centerX = x + width / 2;
-        const headRadius = height * 0.18;
-        const bodyRadius = height * 0.3;
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
-        ctx.beginPath();
-        ctx.arc(centerX, y + height * 0.38, headRadius, 0, Math.PI * 2);
-        ctx.fill();
+        if (avatarImg && avatarImg.complete && avatarImg.naturalWidth > 0) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.roundRect(photoX, photoY, photoW, photoH, photoRadius);
+            ctx.clip();
+            ctx.drawImage(avatarImg, photoX, photoY, photoW, photoH);
+            ctx.restore();
+        } else {
+            // Fallback gradient block
+            const gradient = ctx.createLinearGradient(photoX, photoY, photoX, photoY + photoH);
+            gradient.addColorStop(0, 'rgba(255, 255, 255, 0.08)');
+            gradient.addColorStop(1, 'rgba(255, 255, 255, 0.02)');
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.roundRect(photoX, photoY, photoW, photoH, photoRadius);
+            ctx.fill();
+        }
 
-        ctx.beginPath();
-        ctx.moveTo(centerX - bodyRadius, y + height * 0.7);
-        ctx.quadraticCurveTo(centerX, y + height * 0.5, centerX + bodyRadius, y + height * 0.7);
-        ctx.lineTo(centerX + bodyRadius, y + height * 0.95);
-        ctx.lineTo(centerX - bodyRadius, y + height * 0.95);
-        ctx.closePath();
-        ctx.fill();
+        // Frame overlay
+        if (frameImg && frameImg.complete && frameImg.naturalWidth > 0) {
+            const aspect = frameImg.naturalWidth / frameImg.naturalHeight;
+            const frameHeight = height * 0.96;
+            const frameWidth = frameHeight * aspect;
+            const frameX = x + (width - frameWidth) / 2;
+            const frameY = y + (height - frameHeight) / 2;
+            ctx.drawImage(frameImg, frameX, frameY, frameWidth, frameHeight);
+        }
 
         ctx.restore();
     }
@@ -415,5 +436,42 @@ export class NavigationBar {
 
     private isInside(x: number, y: number, rect: Rect): boolean {
         return x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height;
+    }
+
+    private ensureProfileVisualsLoaded() {
+        if (this.profileLoadStarted) return;
+        this.profileLoadStarted = true;
+        db.user.get(1).then((user) => {
+            this.profileAvatarUrl = this.getAvatarUrl(user?.avatarId);
+            this.profileFrameUrl = this.getFrameForLeague(user?.leagueId);
+        }).catch(() => {
+            this.profileAvatarUrl = this.getAvatarUrl();
+            this.profileFrameUrl = this.getFrameForLeague();
+        });
+    }
+
+    private getFrameForLeague(leagueId?: string): string {
+        const id = (leagueId || '').toLowerCase();
+        if (id.includes('diamond')) return AssetRegistry.frames.diamond();
+        if (id.includes('platinum')) return AssetRegistry.frames.platinum();
+        if (id.includes('gold')) return AssetRegistry.frames.gold();
+        if (id.includes('silver')) return AssetRegistry.frames.silver();
+        if (id.includes('master')) return AssetRegistry.frames.master();
+        if (id.includes('elite')) return AssetRegistry.frames.elite();
+        if (id.includes('emerald')) return AssetRegistry.frames.emerald();
+        if (id.includes('crystal')) return AssetRegistry.frames.crystal();
+        return AssetRegistry.frames.bronze();
+    }
+
+    private getAvatarUrl(avatarId?: string): string {
+        const normalized = this.normalizeAvatarKey(avatarId);
+        const fn = (AssetRegistry.avatars as Record<string, () => string>)[normalized] || AssetRegistry.avatars.player;
+        return fn();
+    }
+
+    private normalizeAvatarKey(avatarId?: string): string {
+        if (!avatarId) return 'player';
+        const trimmed = avatarId.replace(/^avatar_/, '');
+        return trimmed.replace(/_([a-z0-9])/g, (_m, c: string) => c.toUpperCase());
     }
 }

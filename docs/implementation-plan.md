@@ -1,4 +1,4 @@
-# RailRush - Implementation Plan
+      # RailRush - Implementation Plan
 
 ## Executive Summary
 
@@ -123,12 +123,14 @@ Style: Stylized portraits, consistent art style with existing avatars
 
 ### Current State
 
-- ✅ 15 leagues defined (Bronze I-III, Silver I-III, etc.)
-- ✅ LeagueScene exists with placeholder standings
+- ✅ 15 leagues defined (Bronze I-III, Silver I-III, etc.) + Master/Elite/Emerald/Crystal
+- ✅ LeagueScene exists with premium visual styling
 - ✅ Entry fees and prize pools defined
-- ❌ Standings are hardcoded, not dynamic
+- ✅ Dynamic headers and sticky section headers implemented
+- ✅ Mock standings data with user highlighting
+- ❌ Standings are mock data, not persisted in DB
 - ❌ No weekly reset mechanism
-- ❌ No league progression (promotion/relegation)
+- ❌ No league progression (promotion/relegation) logic
 - ❌ No leaderboard persistence
 
 ### Implementation Tasks
@@ -184,8 +186,9 @@ interface LeagueStanding {
 
 ### Current State
 
-- ✅ 3 league frame images (bronze, silver, gold)
-- ❌ Missing platinum and diamond frames
+- ✅ League frame sprites (bronze, silver, gold, platinum, diamond, plus master/elite/emerald variants) exist in `src/assets/img/avatar-frames-Recovered.png`
+- ⚠️ Need to slice/export individual frame PNGs for use in-game
+- ⚠️ Existing `frame_bronze/silver/gold.png` in `src/assets/img/frames/` are placeholders that should be replaced
 - ✅ 3 chest images (common, rare, epic)
 - ❌ Missing legendary chest image
 - ⚠️ Using emoji fallbacks for league icons (🏆, 🥈, 🥇, 💠, 💎)
@@ -195,19 +198,201 @@ interface LeagueStanding {
 #### 4.1 League Frame Images
 
 ```
-Required:
-- frame_platinum.png (platinum metallic style)
-- frame_diamond.png (sparkling diamond style)
+Required (rounded-rectangle frames only; no inner circles):
+- frame_bronze.png
+- frame_silver.png
+- frame_gold.png
+- frame_platinum.png
+- frame_diamond.png
+- frame_master.png
+- frame_elite.png
+- frame_emerald.png
+- frame_crystal.png (extra unlabeled blue variant from the sheet)
+
+Notes:
+- Frames are applied to HUD player/opponent and navigation profile without additional CSS borders.
+
+Replace placeholder bronze/silver/gold assets with new exports sliced from `avatar-frames-Recovered.png`.
 
 Update AssetRegistry.ts:
 frames: {
-    bronze: ...,
-    silver: ...,
-    gold: ...,
+    bronze: () => new URL('./img/frames/frame_bronze.png', ...),
+    silver: () => new URL('./img/frames/frame_silver.png', ...),
+    gold: () => new URL('./img/frames/frame_gold.png', ...),
     platinum: () => new URL('./img/frames/frame_platinum.png', ...),
     diamond: () => new URL('./img/frames/frame_diamond.png', ...),
+    master: () => new URL('./img/frames/frame_master.png', ...),
+    elite: () => new URL('./img/frames/frame_elite.png', ...),
+    emerald: () => new URL('./img/frames/frame_emerald.png', ...),
 }
 ```
+
+#### 4.2 Legendary Chest Image
+
+```
+Required:
+- chest_legendary.png (golden/ornate style)
+
+Update AssetRegistry.ts:
+economy: {
+    chestLegendary: () => new URL('./img/economy/chest_legendary.png', ...),
+}
+```
+
+#### 4.3 Currency Icons
+
+```
+Consider adding:
+- coin_icon.png (for currency displays)
+- gold_icon.png (for premium currency)
+```
+
+---
+
+## 5. CURRENCY & ECONOMY SYNC
+
+### Current State
+
+- ✅ CurrencyStore exists (in-memory)
+- ✅ Database has coins/gold in UserProfile
+- ❌ CurrencyStore doesn't sync with database
+- ❌ Entry fee deduction not implemented
+- ❌ Prize pool winnings not fully implemented
+
+### Implementation Tasks
+
+#### 5.1 Sync CurrencyStore with Database
+
+```typescript
+// On app load:
+const user = await db.user.get(1);
+currencyStore.setBalances({ coins: user.coins, gold: user.gold });
+
+// On currency change:
+currencyStore.subscribe(async (balances) => {
+  await db.user.where('id').equals(1).modify({
+    coins: balances.coins,
+    gold: balances.gold,
+  });
+});
+```
+
+#### 5.2 Match Entry Fee Flow
+
+```
+1. Before match: Check if user can afford entry fee
+2. Deduct entry fee when match starts
+3. On win: Add prize pool to winnings
+4. On loss: Entry fee already deducted
+```
+
+---
+
+## 6. GAME MODE COMPLETION
+
+### Current State
+
+- ✅ Practice mode works
+- ✅ 8-Ball vs AI works
+- ✅ Time Attack mode exists
+- ✅ Speed Pool mode exists
+- ⚠️ Perfect Game mode partially implemented
+- ❌ Online multiplayer not implemented (future)
+
+### Implementation Tasks
+
+#### 6.1 Polish Arcade Modes
+
+```
+- Add high score persistence for each mode
+- Add leaderboards for arcade modes
+- Add rewards for beating personal bests
+```
+
+#### 6.2 Tournament Mode (Future)
+
+```
+- Bracket-style knockout tournament
+- 8 or 16 player brackets
+- Mix of AI opponents
+- Increasing entry fees and prizes
+```
+
+---
+
+## 7. INVENTORY SYSTEM
+
+### Current State
+
+- ✅ InventoryItem model exists
+- ✅ Shop shows cues and chips
+- ❌ Purchased items not saved to inventory
+- ❌ No "owned" indicators in shop
+- ❌ Inventory view not implemented
+
+### Implementation Tasks
+
+#### 7.1 Complete Inventory Flow
+
+```
+1. When equipping cue/chip, save to inventory if not owned
+2. Mark owned items in shop
+3. Add "Inventory" tab or button in shop/profile
+4. Show all owned items with equip option
+```
+
+---
+
+## 8. EVENTS SYSTEM
+
+### Current State
+
+- ✅ Golden Spin event works
+- ⚠️ Bullseye marked "Coming Soon"
+- ⚠️ Win Streak marked "Coming Soon"
+
+### Implementation Tasks
+
+#### 8.1 Bullseye Event
+
+```
+- Aim-based challenge: Hit targets on table
+- Increasing difficulty levels
+- Time limit per shot
+- Rewards based on score
+```
+
+#### 8.2 Win Streak Event
+
+```
+- Track consecutive wins
+- Multiplying rewards for each win
+- Lose streak on loss
+- Daily/weekly reset
+```
+
+---
+
+## 9. ONLINE MULTIPLAYER (Future Phase)
+
+### Preparation Tasks
+
+```
+- Abstract Player to support remote players
+- Add WebSocket connection layer
+- Add matchmaking queue UI
+- Add friend list and invites
+- Add chat system
+- Add report/block functionality
+```
+
+---
+
+## IMPLEMENTATION PRIORITY
+
+### Phase 1: Core Polish (1-2 weeks)
+
+1. ✅ Complete stats tracking in Game.ts
 
 #### 4.2 Legendary Chest Image
 
@@ -383,8 +568,8 @@ currencyStore.subscribe(async (balances) => {
 ### Phase 2: Progression (1-2 weeks)
 
 1. XP & Leveling system
-2. Dynamic league standings
-3. League season timer
+2. ✅ Dynamic league standings (UI Complete, Logic Pending)
+3. ✅ League season timer (UI Complete)
 4. Promotion/relegation logic
 5. Missing frame/chest assets
 
@@ -413,7 +598,7 @@ currencyStore.subscribe(async (balances) => {
 | `src/ui/CurrencyStore.ts`               | Sync with database                       |
 | `src/ui/scenes/MatchResultScene.ts`     | NEW - Post-game screen                   |
 | `src/ui/scenes/OpponentPreviewScene.ts` | NEW - Pre-match preview                  |
-| `src/ui/scenes/LeagueScene.ts`          | Dynamic standings, timer                 |
+| `src/ui/scenes/LeagueScene.ts`          | ✅ Dynamic standings, timer, sticky headers |
 | `src/ui/scenes/ProfileScene.ts`         | XP bar, level display, rivals            |
 | `src/assets/AssetRegistry.ts`           | Add missing asset refs                   |
 | `src/assets/img/avatars/`               | Add 15 missing avatars                   |

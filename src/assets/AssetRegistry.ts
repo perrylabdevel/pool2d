@@ -36,6 +36,7 @@ export const AssetRegistry = {
     shop: () => new URL('./img/lobby-cards/shop.png', import.meta.url).href,
     events: () => new URL('./img/lobby-cards/events.png', import.meta.url).href,
     miniGames: () => new URL('./img/lobby-cards/mini-games.png', import.meta.url).href,
+    league: () => new URL('./img/lobby-cards/league.png', import.meta.url).href,
   },
 
   /**
@@ -96,6 +97,12 @@ export const AssetRegistry = {
     bronze: () => new URL('./img/frames/frame_bronze.png', import.meta.url).href,
     silver: () => new URL('./img/frames/frame_silver.png', import.meta.url).href,
     gold: () => new URL('./img/frames/frame_gold.png', import.meta.url).href,
+    platinum: () => new URL('./img/frames/frame_platinum.png', import.meta.url).href,
+    diamond: () => new URL('./img/frames/frame_diamond.png', import.meta.url).href,
+    master: () => new URL('./img/frames/frame_master.png', import.meta.url).href,
+    elite: () => new URL('./img/frames/frame_elite.png', import.meta.url).href,
+    emerald: () => new URL('./img/frames/frame_emerald.png', import.meta.url).href,
+    crystal: () => new URL('./img/frames/frame_crystal.png', import.meta.url).href, // unlabeled blue variant
   },
 
   /**

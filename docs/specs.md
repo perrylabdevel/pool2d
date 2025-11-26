@@ -28,6 +28,7 @@ Deliver a tournament-grade billiards sandbox that can double as a physics labora
 | Geometry    | Live jaw/rail/pocket tuning, independent corner/side capture radii                         | ✅     |
 | Renderer    | Three.js table + balls, 2D HUD overlay, render-layer toggles, DPI scaling slider           | ✅     |
 | Tooling     | Scenario manager, physics recorder, debug overlay, local-storage persistence               | ✅     |
+| Leagues     | 9-tier league system (Bronze to Crystal), dynamic standings, weekly prize pools            | ✅     |
 | Automation  | Vitest unit tests for key math utilities                                                   | ⚙️ planned |
 
 > Note: Rounded frame corners are now handled via `frameOutline`, keeping rail endpoints fixed so physics stay deterministic regardless of frame styling.
@@ -46,6 +47,7 @@ Deliver a tournament-grade billiards sandbox that can double as a physics labora
 - [x] Three.js renderer with FBX ball assets and axis-aware trajectories
 - [x] Shot Capture & Recorder UX polish
 - [x] Settings persistence (physics, colors, render, geometry)
+- [x] League Scene Implementation (Standings, Dynamic Headers, Progression)
 - [ ] Automated regression scenes (headless) using scenario manager
 - [ ] Optional AI shot suggestion / solver
 - [ ] Additional rule sets (9-ball, straight pool)

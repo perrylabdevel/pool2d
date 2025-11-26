@@ -158,6 +158,7 @@ Implications:
 - Full-screen UI scenes render on the `#ui-stage` canvas via `SceneController`:
   - **LobbyScene**: Main hub with play modes, shop, profile access
   - **PlayModesScene**: Game mode selection (Practice, 8-Ball, Time Attack)
+  - **LeagueScene**: Standings, league progression, and rewards
   - **ShopScene**: Cue workshop and equipment management
   - **ProfileScene**: Player stats, achievements, rank display
   - **SettingsScene**: Tabbed settings (Gameplay, Colors, Audio)

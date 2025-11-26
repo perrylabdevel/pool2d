@@ -54,7 +54,8 @@ export class LobbyScene implements UIScene {
         arcade: AssetRegistry.lobbyCards.arcade(),
         shop: AssetRegistry.lobbyCards.shop(),
         events: AssetRegistry.lobbyCards.events(),
-        mini: AssetRegistry.lobbyCards.miniGames()
+        mini: AssetRegistry.lobbyCards.miniGames(),
+        league: AssetRegistry.lobbyCards.league()
     };
 
     mount(): void {

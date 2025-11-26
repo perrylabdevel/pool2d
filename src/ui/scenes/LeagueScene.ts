@@ -15,6 +15,10 @@ export class LeagueScene implements UIScene {
     private canvas: HTMLCanvasElement | null = null;
     private navigationBar: NavigationBar;
     private userProfile: UserProfile | null | undefined = null;
+    private standingsCache: Record<string, Array<{ rank: number; name: string; score: number; isUser: boolean; avatar: string }>> = {};
+    private scrollOffset = 0;
+    private maxScroll = 0;
+    private touchStartY: number | null = null;
     private layout: {
         headerRect: Rect;
         standingsRect: Rect;
@@ -40,6 +44,9 @@ export class LeagueScene implements UIScene {
 
         this.canvas.addEventListener('mousemove', this.onMouseMove);
         this.canvas.addEventListener('click', this.onClick);
+        this.canvas.addEventListener('wheel', this.onWheel, { passive: true });
+        this.canvas.addEventListener('touchstart', this.onTouchStart, { passive: true });
+        this.canvas.addEventListener('touchmove', this.onTouchMove, { passive: true });
         window.addEventListener('resize', this.updateLayout);
     }
 
@@ -47,6 +54,9 @@ export class LeagueScene implements UIScene {
         if (!this.canvas) return;
         this.canvas.removeEventListener('mousemove', this.onMouseMove);
         this.canvas.removeEventListener('click', this.onClick);
+        this.canvas.removeEventListener('wheel', this.onWheel);
+        this.canvas.removeEventListener('touchstart', this.onTouchStart);
+        this.canvas.removeEventListener('touchmove', this.onTouchMove);
         window.removeEventListener('resize', this.updateLayout);
         this.canvas.style.cursor = 'default';
     }
@@ -77,9 +87,9 @@ export class LeagueScene implements UIScene {
 
         const standingsRect: Rect = {
             x: paddingX,
-            y: headerRect.y + headerRect.height + gap,
+            y: headerRect.y + headerRect.height + gap + 10, // Add explicit top padding
             width: contentWidth,
-            height: height - (headerRect.y + headerRect.height) - gap * 2
+            height: height - (headerRect.y + headerRect.height) - gap * 2 - 10
         };
 
         this.layout = {
@@ -118,6 +128,26 @@ export class LeagueScene implements UIScene {
         }
     };
 
+    private onWheel = (e: WheelEvent) => {
+        if (!this.layout) return;
+        const delta = e.deltaY;
+        this.scrollOffset = Math.max(0, Math.min(this.scrollOffset + delta, this.maxScroll));
+    };
+
+    private onTouchStart = (e: TouchEvent) => {
+        if (e.touches.length > 0) {
+            this.touchStartY = e.touches[0].clientY;
+        }
+    };
+
+    private onTouchMove = (e: TouchEvent) => {
+        if (!this.layout || this.touchStartY === null) return;
+        const currentY = e.touches[0].clientY;
+        const delta = this.touchStartY - currentY;
+        this.touchStartY = currentY;
+        this.scrollOffset = Math.max(0, Math.min(this.scrollOffset + delta, this.maxScroll));
+    };
+
     update(_dt: number): void { }
 
     render(ctx: CanvasRenderingContext2D): void {
@@ -126,8 +156,43 @@ export class LeagueScene implements UIScene {
         this.renderBackground(ctx, width, height);
 
         if (this.layout && this.userProfile) {
-            this.renderHeader(ctx, this.layout.headerRect);
-            this.renderStandings(ctx, this.layout.standingsRect);
+            const sections = this.getLeagueSections();
+            const sectionHeaderH = 48;
+            const rowH = 56;
+
+            // Calculate total height for scrolling
+            let totalHeight = 40; // Title space
+            sections.forEach(section => {
+                totalHeight += sectionHeaderH + section.standings.length * rowH + 20;
+            });
+            this.maxScroll = Math.max(0, totalHeight - this.layout.standingsRect.height);
+
+            // Determine Active Section for Header
+            let activeSection = sections[0];
+            let currentH = 40; // Start after title
+
+            for (const section of sections) {
+                const sectionH = sectionHeaderH + section.standings.length * rowH + 20;
+                if (this.scrollOffset < currentH + sectionH - sectionHeaderH) { // Switch when header pushes up
+                    activeSection = section;
+                    break;
+                }
+                currentH += sectionH;
+            }
+
+            // Render Header (Fixed)
+            this.renderHeader(ctx, this.layout.headerRect, activeSection);
+
+            // Render Standings (Scrollable)
+            // Clip to standings rect
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(this.layout.standingsRect.x, this.layout.standingsRect.y, this.layout.standingsRect.width, this.layout.standingsRect.height);
+            ctx.clip();
+
+            this.renderStandings(ctx, this.layout.standingsRect, sections);
+
+            ctx.restore();
         } else if (!this.userProfile) {
             // Loading state
             ctx.fillStyle = '#FFFFFF';
@@ -143,107 +208,372 @@ export class LeagueScene implements UIScene {
         drawSceneBackground(ctx, width, height, 'blue');
     }
 
-    private renderHeader(ctx: CanvasRenderingContext2D, rect: Rect) {
+    private renderHeader(ctx: CanvasRenderingContext2D, rect: Rect, section: any) {
+        // Main Panel Background (Glass/Premium feel)
+        ctx.save();
+
+        // Drop shadow for the main header panel
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+        ctx.shadowBlur = 15;
+        ctx.shadowOffsetY = 8;
+
         drawPanel(ctx, rect);
 
-        const leagueId = this.userProfile?.leagueId || 'bronze_1';
-        const leagueDef = getLeagueById(leagueId);
+        // Reset shadow
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
 
-        // Draw League Icon/Frame
-        const frameUrl = leagueId.includes('gold') ? AssetRegistry.frames.gold() :
-            leagueId.includes('silver') ? AssetRegistry.frames.silver() :
-                AssetRegistry.frames.bronze();
+        const colors = section.colors;
+        const leagueDef = getLeagueById(section.id + '_1') || getLeagueById('bronze_1'); // Fallback
 
-        const frameImg = AssetLoader.getCached(frameUrl);
-        if (frameImg) {
-            ctx.drawImage(frameImg, rect.x + 20, rect.y + 20, 100, 100);
-        } else {
-            AssetLoader.loadImage(frameUrl); // Trigger load
-            // Fallback circle
-            ctx.beginPath();
-            ctx.arc(rect.x + 70, rect.y + 70, 40, 0, Math.PI * 2);
-            ctx.fillStyle = '#444';
-            ctx.fill();
+        // League Badge / Icon Area
+        const badgeSize = 100;
+        const badgeX = rect.x + 30;
+        const badgeY = rect.y + (rect.height - badgeSize) / 2;
+
+        // Badge Glow
+        const glowGradient = ctx.createRadialGradient(
+            badgeX + badgeSize / 2, badgeY + badgeSize / 2, 0,
+            badgeX + badgeSize / 2, badgeY + badgeSize / 2, badgeSize
+        );
+        glowGradient.addColorStop(0, colors.primary);
+        glowGradient.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = glowGradient;
+        ctx.globalAlpha = 0.3;
+        ctx.fillRect(badgeX - 20, badgeY - 20, badgeSize + 40, badgeSize + 40);
+        ctx.globalAlpha = 1.0;
+
+        // Badge Circle
+        ctx.beginPath();
+        ctx.arc(badgeX + badgeSize / 2, badgeY + badgeSize / 2, badgeSize / 2, 0, Math.PI * 2);
+        const badgeGrad = ctx.createLinearGradient(badgeX, badgeY, badgeX + badgeSize, badgeY + badgeSize);
+        badgeGrad.addColorStop(0, colors.primary);
+        badgeGrad.addColorStop(1, colors.accent);
+        ctx.fillStyle = badgeGrad;
+        ctx.fill();
+
+        // Badge Inner Border
+        ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // League Initial/Icon
+        ctx.fillStyle = '#0b101c';
+        ctx.font = `700 48px ${LayoutConstants.Fonts.Family.Heading}`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(section.id.charAt(0).toUpperCase(), badgeX + badgeSize / 2, badgeY + badgeSize / 2 + 2);
+
+        // Text Content
+        const textX = badgeX + badgeSize + 30;
+        const textCenterY = rect.y + rect.height / 2;
+
+        // League Name Logic
+        // If it's the user's actual league, show full name (e.g. Bronze I)
+        // If it's another league, show generic name (e.g. Silver League)
+        const userLeagueId = this.userProfile?.leagueId || 'bronze_1';
+        const isUserLeague = userLeagueId.startsWith(section.id);
+
+        let displayName = section.title;
+        if (isUserLeague) {
+            const userLeagueDef = getLeagueById(userLeagueId);
+            if (userLeagueDef) displayName = userLeagueDef.name.toUpperCase();
         }
 
-        const textX = rect.x + 140;
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = `800 36px ${LayoutConstants.Fonts.Family.Heading}`;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'bottom';
+        ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        ctx.shadowBlur = 4;
+        ctx.fillText(displayName, textX, textCenterY - 4);
+        ctx.shadowBlur = 0;
+
+        // Prize Pool & Timer
+        ctx.font = `600 16px ${LayoutConstants.Fonts.Family.Body}`;
+        ctx.fillStyle = ColorTokens.text.secondary;
+        ctx.textBaseline = 'top';
+        ctx.fillText(`Prize Pool: `, textX, textCenterY + 8);
+
+        const prizeX = textX + ctx.measureText('Prize Pool: ').width;
+        ctx.fillStyle = ColorTokens.currency.coins;
+        // Use prize pool from the section's base league definition (e.g. silver_1)
+        // or just a generic value for visual consistency if needed.
+        // Let's use the leagueDef we fetched.
+        ctx.fillText(`${leagueDef?.prizePool.toLocaleString()} Coins`, prizeX, textCenterY + 8);
+
+        // Timer Pill
+        const timerText = 'Ends in: 2d 14h';
+        const timerWidth = ctx.measureText(timerText).width + 24;
+        const timerX = rect.x + rect.width - timerWidth - 30;
+        const timerY = textCenterY - 14;
+
+        ctx.beginPath();
+        ctx.roundRect(timerX, timerY, timerWidth, 28, 14);
+        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
 
         ctx.fillStyle = '#FFFFFF';
-        ctx.font = `700 32px ${LayoutConstants.Fonts.Family.Heading}`;
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'top';
-        ctx.fillText(leagueDef?.name.toUpperCase() || 'UNKNOWN LEAGUE', textX, rect.y + 30);
+        ctx.font = `600 14px ${LayoutConstants.Fonts.Family.Body}`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(timerText, timerX + timerWidth / 2, timerY + 14);
 
-        ctx.font = `16px ${LayoutConstants.Fonts.Family.Body}`;
-        ctx.fillStyle = 'rgba(255,255,255,0.7)';
-        ctx.fillText(`Prize Pool: ${leagueDef?.prizePool.toLocaleString()} Coins`, textX, rect.y + 80);
-        ctx.fillText(`Ends in: 2d 14h`, textX, rect.y + 105);
+        ctx.restore();
     }
 
-    private renderStandings(ctx: CanvasRenderingContext2D, rect: Rect) {
-        drawPanel(ctx, rect);
+    private getLeagueSections() {
+        const baseLeague = (this.userProfile?.leagueId || 'bronze_1').split('_')[0];
+        const bases = ['bronze', 'silver', 'gold', 'platinum', 'diamond', 'master', 'elite', 'emerald', 'crystal'];
+        return bases.map(id => ({
+            id,
+            title: `${id.toUpperCase()} LEAGUE`,
+            colors: this.getLeagueColors(id),
+            standings: this.ensureMockStandings(id, id === baseLeague),
+        }));
+    }
 
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = `600 20px ${LayoutConstants.Fonts.Family.Heading}`;
-        ctx.textAlign = 'left';
-        ctx.fillText('Standings', rect.x + 30, rect.y + 40);
+    private ensureMockStandings(leagueId: string, includeUser: boolean) {
+        if (this.standingsCache[leagueId]) return this.standingsCache[leagueId];
 
-        // Placeholder standings data
-        const standings = [
-            { rank: 1, name: 'Shark Sally', score: 12500, isUser: false, avatar: AssetRegistry.avatars.sharkSally() },
-            { rank: 2, name: 'The Machine', score: 11200, isUser: false, avatar: AssetRegistry.avatars.theMachine() },
-            { rank: 3, name: this.userProfile?.name || 'Player', score: this.userProfile?.stats.totalEarnings || 0, isUser: true, avatar: AssetRegistry.avatars.player() },
-            { rank: 4, name: 'Rookie Rick', score: 4500, isUser: false, avatar: AssetRegistry.avatars.rookieRick() },
-            { rank: 5, name: 'Steady Steve', score: 3200, isUser: false, avatar: AssetRegistry.avatars.steadySteve() },
+        const avatars = [
+            AssetRegistry.avatars.player(),
+            AssetRegistry.avatars.rookieRick(),
+            AssetRegistry.avatars.sharkSally(),
+            AssetRegistry.avatars.theMachine(),
+            AssetRegistry.avatars.nervousNed(),
+            AssetRegistry.avatars.casualCarl(),
+            AssetRegistry.avatars.slowSam(),
+            AssetRegistry.avatars.luckyLucy(),
+            AssetRegistry.avatars.steadySteve(),
+            AssetRegistry.avatars.bankShotBetty(),
+            AssetRegistry.avatars.angleAndy(),
+            AssetRegistry.avatars.comboChris(),
+            AssetRegistry.avatars.defensiveDan(),
+            AssetRegistry.avatars.spinDoctorSid(),
+            AssetRegistry.avatars.powerPete(),
+            AssetRegistry.avatars.finesseFiona(),
+            AssetRegistry.avatars.trickshotTim(),
+            AssetRegistry.avatars.precisionPaul(),
+            AssetRegistry.avatars.viperVicky(),
+            AssetRegistry.avatars.masterMike(),
+            AssetRegistry.avatars.legendLarry(),
         ];
 
-        const rowHeight = 70; // Increased height for avatars
-        const startY = rect.y + 80;
+        const namePool = [
+            'Rookie Rick', 'Shark Sally', 'The Machine', 'Nervous Ned', 'Casual Carl', 'Slow Sam', 'Lucky Lucy',
+            'Steady Steve', 'Betty Banks', 'Angle Andy', 'Combo Chris', 'Defensive Dan', 'Spin Sid', 'Power Pete',
+            'Finesse Fiona', 'Trickshot Tim', 'Precision Paul', 'Viper Vicky', 'Master Mike', 'Legend Larry',
+            'Cool Hand Lee', 'Smooth Sasha', 'Railrunner Ray', 'Banker Bella', 'Laser Liam', 'Gritty Grant',
+            'Pocket Piper', 'Cue Queen', 'Ghost Breaker', 'Side Pocket Sue', 'Frozen Freddie'
+        ];
 
-        standings.forEach((entry, index) => {
-            const y = startY + index * rowHeight;
+        const seed = leagueId.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0) + 12345;
+        let rng = seed;
+        const next = () => {
+            rng = (rng * 1103515245 + 12345) & 0x7fffffff;
+            return rng / 0x7fffffff;
+        };
 
-            // Highlight user row
-            if (entry.isUser) {
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-                ctx.fillRect(rect.x + 10, y - 10, rect.width - 20, rowHeight - 5);
+        const baseScore = 150000 - ['bronze', 'silver', 'gold', 'platinum', 'diamond', 'master', 'elite', 'emerald', 'crystal', 'ruby', 'legend'].indexOf(leagueId) * 15000;
+        const decayMin = 600;
+        const decayMax = 2400;
+        const standings: Array<{ rank: number; name: string; score: number; isUser: boolean; avatar: string }> = [];
+
+        let score = baseScore;
+        const userIndex = includeUser ? 12 + Math.floor(next() * 20) : -1; // place user somewhere in upper-mid
+        const userName = (this.userProfile?.name || 'You');
+        const userAvatar = AssetRegistry.avatars.player();
+
+        for (let i = 0; i < 100; i++) {
+            const isUser = i === userIndex;
+            const name = isUser ? userName : namePool[i % namePool.length] + (i >= namePool.length ? ` ${i}` : '');
+            const avatar = isUser ? userAvatar : avatars[i % avatars.length];
+            standings.push({
+                rank: i + 1,
+                name,
+                score: Math.max(1000, Math.floor(score)),
+                isUser,
+                avatar
+            });
+            const decay = decayMin + (decayMax - decayMin) * next();
+            score = score - decay;
+        }
+
+        this.standingsCache[leagueId] = standings;
+        return standings;
+    }
+
+    private getLeagueColors(leagueId: string): { primary: string; accent: string } {
+        const id = leagueId.toLowerCase();
+        if (id.includes('crystal')) return { primary: '#a3f0ff', accent: '#e0fbff' };
+        if (id.includes('emerald')) return { primary: '#2fa54a', accent: '#7ae28c' };
+        if (id.includes('elite')) return { primary: '#f26b1d', accent: '#ffb16c' };
+        if (id.includes('master')) return { primary: '#7f4cc5', accent: '#c3a3f5' };
+        if (id.includes('diamond')) return { primary: '#66d4ff', accent: '#b6f2ff' };
+        if (id.includes('platinum')) return { primary: '#7ac3ff', accent: '#d7f1ff' };
+        if (id.includes('gold')) return { primary: '#d6a014', accent: '#f9e59a' };
+        if (id.includes('silver')) return { primary: '#8ea8c6', accent: '#d6e0eb' };
+        return { primary: '#b06f2e', accent: '#f3c594' }; // bronze/default
+    }
+
+    private renderStandings(ctx: CanvasRenderingContext2D, rect: Rect, sections: any[]) {
+        // Main container background
+        drawPanel(ctx, rect);
+
+        // Title
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = `700 24px ${LayoutConstants.Fonts.Family.Heading}`;
+        ctx.textAlign = 'left';
+        ctx.fillText('Standings', rect.x + 30, rect.y + 40 - this.scrollOffset);
+
+        const sectionHeaderH = 48;
+        const rowH = 56;
+        const avatarSize = 36;
+
+        // Content area (below title)
+        const contentY = rect.y + 60;
+
+        // 1. Render all rows first
+        let currentY = contentY - this.scrollOffset;
+
+        sections.forEach((section) => {
+            const sectionStartY = currentY;
+            const sectionH = sectionHeaderH + section.standings.length * rowH + 20;
+
+            // Optimization: Only render if potentially visible in the viewport
+            if (sectionStartY + sectionH > rect.y && sectionStartY < rect.y + rect.height) {
+                // Rows start after header
+                let rowY = sectionStartY + sectionHeaderH;
+
+                section.standings.forEach((entry: any, index: number) => {
+                    if (rowY + rowH > rect.y && rowY < rect.y + rect.height) {
+                        const rowX = rect.x + 12;
+                        const rowW = rect.width - 24;
+
+                        // Row Background
+                        if (entry.isUser) {
+                            ctx.fillStyle = 'rgba(255, 215, 0, 0.15)';
+                            ctx.fillRect(rowX, rowY, rowW, rowH);
+                            ctx.fillStyle = ColorTokens.action.warning;
+                            ctx.fillRect(rowX, rowY, 4, rowH);
+                        } else if (index % 2 === 0) {
+                            ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
+                            ctx.fillRect(rowX, rowY, rowW, rowH);
+                        }
+
+                        // Rank
+                        const rankColor = entry.rank <= 3 ? ColorTokens.action.warning : '#FFFFFF';
+                        ctx.fillStyle = rankColor;
+                        ctx.font = `700 18px ${LayoutConstants.Fonts.Family.Heading}`;
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(`#${entry.rank}`, rowX + 30, rowY + rowH / 2);
+
+                        // Avatar
+                        const avatarX = rowX + 60;
+                        const avatarY = rowY + (rowH - avatarSize) / 2;
+
+                        ctx.save();
+                        ctx.beginPath();
+                        ctx.arc(avatarX + avatarSize / 2, avatarY + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
+                        ctx.clip();
+
+                        const avatarImg = AssetLoader.getCached(entry.avatar);
+                        if (avatarImg) {
+                            ctx.drawImage(avatarImg, avatarX, avatarY, avatarSize, avatarSize);
+                        } else {
+                            AssetLoader.loadImage(entry.avatar);
+                            ctx.fillStyle = '#444';
+                            ctx.fillRect(avatarX, avatarY, avatarSize, avatarSize);
+                        }
+                        ctx.restore();
+
+                        // Avatar Border
+                        ctx.beginPath();
+                        ctx.arc(avatarX + avatarSize / 2, avatarY + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
+                        ctx.strokeStyle = entry.isUser ? ColorTokens.action.warning : 'rgba(255,255,255,0.2)';
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+
+                        // Name
+                        ctx.fillStyle = entry.isUser ? '#FFFFFF' : ColorTokens.text.primary;
+                        ctx.font = `600 16px ${LayoutConstants.Fonts.Family.Body}`;
+                        ctx.textAlign = 'left';
+                        ctx.fillText(entry.name, avatarX + avatarSize + 16, rowY + rowH / 2 + 1);
+
+                        // Score
+                        ctx.fillStyle = ColorTokens.action.success;
+                        ctx.font = `700 15px ${LayoutConstants.Fonts.Family.Body}`;
+                        ctx.textAlign = 'right';
+                        ctx.fillText(entry.score.toLocaleString(), rowX + rowW - 20, rowY + rowH / 2 + 1);
+
+                        // Separator
+                        ctx.fillStyle = 'rgba(255,255,255,0.05)';
+                        ctx.fillRect(rowX + 10, rowY + rowH - 1, rowW - 20, 1);
+                    }
+                    rowY += rowH;
+                });
+            }
+            currentY += sectionH;
+        });
+
+        // 2. Render Sticky Headers
+        currentY = contentY - this.scrollOffset;
+
+        sections.forEach((section) => {
+            const sectionH = sectionHeaderH + section.standings.length * rowH + 20;
+            const sectionTop = currentY;
+            const sectionBottom = sectionTop + sectionH;
+
+            // Check if this section is visible or active
+            if (sectionBottom > rect.y) {
+                // Calculate sticky position
+                let headerY = sectionTop;
+
+                // Sticky: clamp to top of visible area (rect.y)
+                if (headerY < rect.y) {
+                    headerY = rect.y;
+                }
+
+                // Push: if bottom of section is passing the header height, push header up
+                const pushPoint = sectionBottom - sectionHeaderH;
+                if (headerY > pushPoint) {
+                    headerY = pushPoint;
+                }
+
+                // Only draw if within bounds (and visible)
+                if (headerY < rect.y + rect.height) {
+                    // Draw Header
+                    const grad = ctx.createLinearGradient(rect.x, headerY, rect.x + rect.width, headerY + sectionHeaderH);
+                    grad.addColorStop(0, section.colors.primary);
+                    grad.addColorStop(1, section.colors.accent);
+
+                    ctx.fillStyle = grad;
+                    ctx.beginPath();
+                    ctx.roundRect(rect.x + 12, headerY, rect.width - 24, sectionHeaderH, [8, 8, 0, 0]);
+                    ctx.fill();
+
+                    // Shadow for sticky header
+                    if (headerY === rect.y) {
+                        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+                        ctx.fillRect(rect.x + 12, headerY + sectionHeaderH, rect.width - 24, 4);
+                    }
+
+                    // Header Text
+                    ctx.fillStyle = '#0b101c';
+                    ctx.font = `800 16px ${LayoutConstants.Fonts.Family.Heading}`;
+                    ctx.textAlign = 'left';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(section.title, rect.x + 30, headerY + sectionHeaderH / 2 + 1);
+                }
             }
 
-            // Rank
-            ctx.fillStyle = entry.rank <= 3 ? ColorTokens.action.warning : '#FFFFFF';
-            ctx.font = `700 24px ${LayoutConstants.Fonts.Family.Heading}`;
-            ctx.textAlign = 'center';
-            ctx.fillText(`#${entry.rank}`, rect.x + 40, y + 30);
-
-            // Avatar
-            const avatarSize = 50;
-            const avatarX = rect.x + 80;
-            const avatarY = y + 5;
-            const avatarImg = AssetLoader.getCached(entry.avatar);
-
-            ctx.save();
-            ctx.beginPath();
-            ctx.arc(avatarX + avatarSize / 2, avatarY + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
-            ctx.clip();
-            if (avatarImg) {
-                ctx.drawImage(avatarImg, avatarX, avatarY, avatarSize, avatarSize);
-            } else {
-                AssetLoader.loadImage(entry.avatar);
-                ctx.fillStyle = '#666';
-                ctx.fillRect(avatarX, avatarY, avatarSize, avatarSize);
-            }
-            ctx.restore();
-
-            // Name
-            ctx.fillStyle = '#FFFFFF';
-            ctx.font = `600 18px ${LayoutConstants.Fonts.Family.Body}`;
-            ctx.textAlign = 'left';
-            ctx.fillText(entry.name, rect.x + 150, y + 30);
-
-            // Score
-            ctx.fillStyle = ColorTokens.action.success;
-            ctx.textAlign = 'right';
-            ctx.fillText(entry.score.toLocaleString(), rect.x + rect.width - 40, y + 30);
+            currentY += sectionH;
         });
     }
 }

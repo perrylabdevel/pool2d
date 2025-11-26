@@ -7,6 +7,7 @@ import { GameSettingsPanel } from './GameSettingsPanel';
 import { notificationService } from './NotificationService';
 import { uiStateMachine, UIState } from './UIStateMachine';
 import { sceneController } from './SceneController';
+import { AssetRegistry } from '../assets/AssetRegistry';
 
 export class HUD {
   fpsElement: HTMLElement | null;
@@ -195,6 +196,35 @@ export class HUD {
     if (!panel) return;
     const nameEl = panel.querySelector('.name') as HTMLElement | null;
     if (nameEl) nameEl.textContent = name;
+  }
+
+  /**
+   * Set avatar + frame imagery for a player panel.
+   * Accepts absolute URLs (already resolved via AssetRegistry).
+   */
+  setPlayerVisuals(player: number, avatarUrl: string, frameUrl: string) {
+    const panel = (player === 1 ? this.player1Panel : this.player2Panel) as HTMLElement | null;
+    if (!panel) return;
+    const avatar = panel.querySelector('.avatar') as HTMLElement | null;
+    if (!avatar) return;
+
+    // Clear previous children and rebuild layers
+    avatar.innerHTML = '';
+    avatar.classList.add('has-frame');
+
+    const photo = document.createElement('img');
+    photo.className = 'avatar-photo';
+    photo.src = avatarUrl || AssetRegistry.avatars.player();
+    photo.alt = player === 1 ? 'Player avatar' : 'Opponent avatar';
+
+    const frame = document.createElement('img');
+    frame.className = 'avatar-frame-img';
+    frame.src = frameUrl || AssetRegistry.frames.bronze();
+    frame.alt = player === 1 ? 'Player frame' : 'Opponent frame';
+    frame.loading = 'eager';
+
+    avatar.appendChild(photo);
+    avatar.appendChild(frame);
   }
 
   /**

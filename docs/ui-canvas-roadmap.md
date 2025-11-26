@@ -43,6 +43,7 @@
 3. **Shop Scene** (placeholder) - Currently a temporary slate with a Back button. Needs cue carousel, rarity badges, and equip CTA backed by `SettingsManager`.
 4. **Profile Scene** (placeholder) - Same story as Shop; still needs the ported modal layout, player stats, and CTA chips.
 5. **Settings Scene** - Not started. Will replace the existing modal stack once Profile/Shop prove out the canvas UI tree.
+6. **League Scene** (Implemented) - Full-screen standings list with dynamic headers, sticky section headers, and premium visual styling.
 
 ### Phase 3 - Transitions & Effects (Partially implemented)
 - **Done**: SceneController supports cross-fade, slide-left, and slide-right transitions plus UISoundService hooks.

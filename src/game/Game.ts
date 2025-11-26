@@ -38,6 +38,7 @@ import { uiStateMachine, UIState } from '../ui/UIStateMachine';
 import { db, getChestSlots, updateChestSlot } from '../data/db';
 import { MatchRecord } from '../data/models';
 import { getChestForLeague, CHEST_DEFINITIONS } from './economy/ChestSystem';
+import { AssetRegistry } from '../assets/AssetRegistry';
 
 export enum GameMode {
   PRACTICE,
@@ -846,9 +847,11 @@ export class Game {
     this.players = [humanPlayer, aiPlayer];
     this.currentPlayerIndex = 0; // Human starts
 
-    // Update HUD player names
+    // Update HUD player names with defaults while data loads
     this.hud.setPlayerName(1, humanPlayer.name);
     this.hud.setPlayerName(2, aiPlayer.name);
+    this.hud.setPlayerVisuals(1, this.getAvatarUrl(), this.getFrameForLeague());
+    this.hud.setPlayerVisuals(2, this.getAvatarUrl('rookieRick'), this.getFrameForLeague('bronze_1'));
 
     console.log('[8-Ball] Players initialized:', {
       player0: { id: this.players[0].id, type: this.players[0].type, isAI: this.players[0].isAI() },
@@ -869,6 +872,20 @@ export class Game {
       opponentId = this.mapDifficultyToOpponentId(gs.aiDifficulty ?? 'MEDIUM');
     }
     this.ai = new PoolAI(opponentId);
+    const opponentDef = this.ai.getOpponentDef();
+    aiPlayer.name = opponentDef.name;
+    this.hud.setPlayerName(2, aiPlayer.name);
+    this.hud.setPlayerVisuals(2, this.getAvatarUrl(opponentDef.avatarId), this.getFrameForLeague(opponentDef.leagueId));
+
+    // Load user profile visuals async and update HUD when ready
+    db.user.get(1).then((user) => {
+      if (!user) return;
+      humanPlayer.name = user.name || humanPlayer.name;
+      this.hud.setPlayerName(1, humanPlayer.name);
+      this.hud.setPlayerVisuals(1, this.getAvatarUrl(user.avatarId), this.getFrameForLeague(user.leagueId));
+    }).catch((err) => {
+      console.warn('Failed to load user profile for HUD visuals', err);
+    });
 
     // Set up rules callbacks
     this.rules.onGroupAssigned = (playerId: number, group: number) => {
@@ -1001,6 +1018,31 @@ export class Game {
       case 'MEDIUM':
       default: return 'steady_steve';
     }
+  }
+
+  private getFrameForLeague(leagueId?: string): string {
+    const id = (leagueId || '').toLowerCase();
+    if (id.includes('diamond')) return AssetRegistry.frames.diamond();
+    if (id.includes('platinum')) return AssetRegistry.frames.platinum();
+    if (id.includes('gold')) return AssetRegistry.frames.gold();
+    if (id.includes('silver')) return AssetRegistry.frames.silver();
+    if (id.includes('master')) return AssetRegistry.frames.master();
+    if (id.includes('elite')) return AssetRegistry.frames.elite();
+    if (id.includes('emerald')) return AssetRegistry.frames.emerald();
+    if (id.includes('crystal')) return AssetRegistry.frames.crystal();
+    return AssetRegistry.frames.bronze();
+  }
+
+  private getAvatarUrl(avatarId?: string): string {
+    const normalized = this.normalizeAvatarKey(avatarId);
+    const avatarFn = (AssetRegistry.avatars as Record<string, () => string>)[normalized] || AssetRegistry.avatars.player;
+    return avatarFn();
+  }
+
+  private normalizeAvatarKey(avatarId?: string): string {
+    if (!avatarId) return 'player';
+    const trimmed = avatarId.replace(/^avatar_/, '');
+    return trimmed.replace(/_([a-z0-9])/g, (_m, c: string) => c.toUpperCase());
   }
 
   initializeTimeAttack() {

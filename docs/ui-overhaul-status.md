@@ -26,6 +26,7 @@
   - **SettingsScene**: Tabbed settings (Gameplay, Colors, Audio) with all controls functional
   - **ConfirmScene**: Modal-style confirmation dialogs for destructive actions
   - **InGameMenuScene**: Pause menu with return to game, settings, and lobby options
+  - **LeagueScene**: Full-screen standings list with dynamic headers, sticky section headers, and premium visual styling
 
 ## 🚧 In Progress
 - **Settings Scene + Home Hub Sunset**: Legacy DOM hub still boots the game; once scenes cover all workflows, remove `homeHub.init()` from the default flow.

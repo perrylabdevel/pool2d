@@ -20,6 +20,22 @@ export const LEAGUES: LeagueDef[] = [
     { id: 'diamond_1', name: 'Diamond I', tier: 5, entryFee: 500000, prizePool: 1000000, minLevel: 50, icon: '💎' },
     { id: 'diamond_2', name: 'Diamond II', tier: 5, entryFee: 1000000, prizePool: 2000000, minLevel: 60, icon: '💎' },
     { id: 'diamond_3', name: 'Diamond III', tier: 5, entryFee: 5000000, prizePool: 10000000, minLevel: 70, icon: '💎' },
+
+    { id: 'master_1', name: 'Master I', tier: 6, entryFee: 10000000, prizePool: 20000000, minLevel: 80, icon: '👑' },
+    { id: 'master_2', name: 'Master II', tier: 6, entryFee: 25000000, prizePool: 50000000, minLevel: 90, icon: '👑' },
+    { id: 'master_3', name: 'Master III', tier: 6, entryFee: 50000000, prizePool: 100000000, minLevel: 100, icon: '👑' },
+
+    { id: 'elite_1', name: 'Elite I', tier: 7, entryFee: 100000000, prizePool: 200000000, minLevel: 110, icon: '🔥' },
+    { id: 'elite_2', name: 'Elite II', tier: 7, entryFee: 250000000, prizePool: 500000000, minLevel: 120, icon: '🔥' },
+    { id: 'elite_3', name: 'Elite III', tier: 7, entryFee: 500000000, prizePool: 1000000000, minLevel: 130, icon: '🔥' },
+
+    { id: 'emerald_1', name: 'Emerald I', tier: 8, entryFee: 1000000000, prizePool: 2000000000, minLevel: 140, icon: '❇️' },
+    { id: 'emerald_2', name: 'Emerald II', tier: 8, entryFee: 2500000000, prizePool: 5000000000, minLevel: 150, icon: '❇️' },
+    { id: 'emerald_3', name: 'Emerald III', tier: 8, entryFee: 5000000000, prizePool: 10000000000, minLevel: 160, icon: '❇️' },
+
+    { id: 'crystal_1', name: 'Crystal I', tier: 9, entryFee: 10000000000, prizePool: 20000000000, minLevel: 170, icon: '💠' },
+    { id: 'crystal_2', name: 'Crystal II', tier: 9, entryFee: 25000000000, prizePool: 50000000000, minLevel: 180, icon: '💠' },
+    { id: 'crystal_3', name: 'Crystal III', tier: 9, entryFee: 50000000000, prizePool: 100000000000, minLevel: 190, icon: '💠' },
 ];
 
 export function getLeagueById(id: string): LeagueDef | undefined {

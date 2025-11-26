@@ -33,6 +33,7 @@ This document replaces the legacy “plan vs. status” split. It tracks the cur
 - Notification + UI sound kits
 - DockBridge wrapper w/ persisted collapsed state
 - HUD refresh (ball chips rendered via `Renderer3D.generateBallIcons`, foul toasts, pocket-call prompts)
+- League Scene (Standings list, dynamic headers, sticky sections, premium styling)
 
 ## Legacy Dock & Tooling
 

@@ -1,6 +1,6 @@
 import { UIScene } from '../SceneController';
 import { uiStateMachine, UIState } from '../UIStateMachine';
-import { drawPanel, drawGlossyButton, drawCurrencyPill, drawRoundedRect, Rect, UIColors } from '../components/UIComponents';
+import { drawGlossyButton, drawRoundedRect, drawChip, Rect } from '../components/UIComponents';
 import { ColorTokens } from '../theme/ColorTokens';
 import { LayoutConstants } from '../theme/LayoutConstants';
 import { NavigationBar } from '../components/NavigationBar';
@@ -435,7 +435,7 @@ export class ShopScene implements UIScene {
         const chipSize = 120;
         const chipX = x + width / 2;
         const chipY = y + height * 0.4;
-        this.drawChip(ctx, chipX, chipY, chipSize, chip.color);
+        drawChip(ctx, chipX, chipY, chipSize, chip.color);
 
         // RARITY BADGE - Top right corner with glow
         const rarityPadding = 16;
@@ -631,185 +631,7 @@ export class ShopScene implements UIScene {
         ctx.restore();
     }
 
-    private drawChip(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, color: string) {
-        const radius = size / 2;
 
-        // Colors derived from CSS .swap class
-        const mainColor = '#ffffff';
-        const altColor = color;
-
-        ctx.save();
-        ctx.translate(x, y);
-
-        // 1. Base Background & Conic Gradient with Depth
-        const segments = 12; // Reduced segments for chunkier, more premium look
-        const segmentAngle = (Math.PI * 2) / segments;
-        const offsetAngle = -15 * (Math.PI / 180);
-
-        ctx.rotate(offsetAngle);
-
-        // Draw base cylinder/edge depth (Shadow)
-        ctx.beginPath();
-        ctx.arc(0, 4, radius, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(0,0,0,0.2)';
-        ctx.fill();
-
-        for (let i = 0; i < segments; i++) {
-            const start = i * segmentAngle;
-            const mid = start + (segmentAngle / 2);
-            const end = start + segmentAngle;
-
-            // Alt color segment (Colored)
-            ctx.beginPath();
-            ctx.moveTo(0, 0);
-            ctx.arc(0, 0, radius, start, mid);
-            ctx.fillStyle = altColor;
-            ctx.fill();
-
-            // Add bevel highlight to colored segment
-            ctx.beginPath();
-            ctx.arc(0, 0, radius - 2, start, mid);
-            ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-            ctx.lineWidth = 1;
-            ctx.stroke();
-
-            // Main color segment (White)
-            ctx.beginPath();
-            ctx.moveTo(0, 0);
-            ctx.arc(0, 0, radius, mid, end);
-            ctx.fillStyle = mainColor;
-            ctx.fill();
-        }
-
-        // Reset rotation for overlays
-        ctx.rotate(-offsetAngle);
-
-        // 2. Radial Gradients Overlays (Lighting)
-        // Top-left highlight
-        const grad1 = ctx.createRadialGradient(-radius * 0.3, -radius * 0.3, 0, -radius * 0.3, -radius * 0.3, radius);
-        grad1.addColorStop(0, 'rgba(255,255,255,0.25)');
-        grad1.addColorStop(0.5, 'transparent');
-        ctx.fillStyle = grad1;
-        ctx.beginPath();
-        ctx.arc(0, 0, radius, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Bottom-right shadow
-        const grad2 = ctx.createRadialGradient(radius * 0.3, radius * 0.3, 0, radius * 0.3, radius * 0.3, radius);
-        grad2.addColorStop(0, 'rgba(0,0,0,0.05)');
-        grad2.addColorStop(0.6, 'rgba(0,0,0,0.25)');
-        ctx.fillStyle = grad2;
-        ctx.beginPath();
-        ctx.arc(0, 0, radius, 0, Math.PI * 2);
-        ctx.fill();
-
-        // 3. Inner Shadows (Box Shadow inset)
-        const drawInsetRing = (r: number, width: number, color: string) => {
-            ctx.beginPath();
-            ctx.arc(0, 0, r, 0, Math.PI * 2);
-            ctx.arc(0, 0, r - width, 0, Math.PI * 2, true);
-            ctx.fillStyle = color;
-            ctx.fill();
-        };
-
-        // Multiple rings for complex edge detail
-        drawInsetRing(radius, 4, 'rgba(0,0,0,0.1)');
-        drawInsetRing(radius - 4, 2, 'rgba(255,255,255,0.3)'); // Highlight ring
-
-        // 4. Inner Disk
-        const innerRadius = radius * 0.6;
-
-        // Shadow under the inner disk
-        ctx.beginPath();
-        ctx.arc(0, 2, innerRadius, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(0,0,0,0.2)';
-        ctx.fill();
-
-        // Inner disk background
-        const innerGrad = ctx.createRadialGradient(
-            -innerRadius * 0.2, -innerRadius * 0.2, 0,
-            0, 0, innerRadius
-        );
-        innerGrad.addColorStop(0, altColor);
-        innerGrad.addColorStop(1, this.mixColor(altColor, '#000000', 0.8)); // Darker edge
-
-        ctx.beginPath();
-        ctx.arc(0, 0, innerRadius, 0, Math.PI * 2);
-        ctx.fillStyle = innerGrad;
-        ctx.fill();
-
-        // Inner Pattern (Dashed Ring)
-        ctx.beginPath();
-        ctx.arc(0, 0, innerRadius * 0.8, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([4, 4]);
-        ctx.stroke();
-        ctx.setLineDash([]);
-
-        // Center indentation
-        ctx.beginPath();
-        ctx.arc(0, 0, innerRadius * 0.4, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(0,0,0,0.1)';
-        ctx.fill();
-
-        // Specular highlight on inner disk
-        ctx.beginPath();
-        ctx.ellipse(-innerRadius * 0.3, -innerRadius * 0.3, innerRadius * 0.15, innerRadius * 0.1, Math.PI / 4, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(255,255,255,0.4)';
-        ctx.fill();
-
-        // 5. Edge Notch Texture (The mask effect) - Refined
-        const maskInner = radius * 0.75;
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(0, 0, radius, 0, Math.PI * 2);
-        ctx.arc(0, 0, maskInner, 0, Math.PI * 2, true);
-        ctx.clip();
-
-        const notchSegments = 24;
-        const notchAngle = (Math.PI * 2) / notchSegments;
-
-        for (let i = 0; i < notchSegments; i++) {
-            const angle = i * notchAngle;
-            // Draw small notches
-            ctx.beginPath();
-            ctx.moveTo(0, 0);
-            ctx.arc(0, 0, radius * 1.1, angle, angle + notchAngle * 0.2);
-            ctx.fillStyle = 'rgba(0,0,0,0.15)';
-            ctx.fill();
-        }
-        ctx.restore();
-
-        ctx.restore();
-    }
-
-    private hexToRgba(hex: string, alpha: number): string {
-        const r = parseInt(hex.slice(1, 3), 16);
-        const g = parseInt(hex.slice(3, 5), 16);
-        const b = parseInt(hex.slice(5, 7), 16);
-        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-    }
-
-    private mixColor(color1: string, color2: string, weight: number): string {
-        // Simple linear interpolation
-        const c1 = {
-            r: parseInt(color1.slice(1, 3), 16),
-            g: parseInt(color1.slice(3, 5), 16),
-            b: parseInt(color1.slice(5, 7), 16)
-        };
-        const c2 = {
-            r: parseInt(color2.slice(1, 3), 16),
-            g: parseInt(color2.slice(3, 5), 16),
-            b: parseInt(color2.slice(5, 7), 16)
-        };
-
-        const r = Math.round(c1.r * weight + c2.r * (1 - weight));
-        const g = Math.round(c1.g * weight + c2.g * (1 - weight));
-        const b = Math.round(c1.b * weight + c2.b * (1 - weight));
-
-        return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
-    }
 
     private drawCueCard(ctx: CanvasRenderingContext2D, rect: Rect, cue: CueCard, isSelected: boolean, isHovered: boolean) {
         const { x, y, width, height } = rect;
@@ -1174,6 +996,8 @@ export class ShopScene implements UIScene {
         ctx.restore();
     }
 
+
+
     private renderFooter(ctx: CanvasRenderingContext2D) {
         // No footer buttons - cards are directly clickable
         this.buttons.forEach((button) => {
@@ -1227,5 +1051,3 @@ function adjustBrightness(color: string, amount: number): string {
 
     return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
 }
-
-
