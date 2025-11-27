@@ -26,6 +26,14 @@ class CurrencyStore {
             const user = await db.user.get(1);
             if (user) {
                 this.balances = { coins: user.coins, gold: user.gold };
+
+                // Auto-fix negative balance or force top-up if needed
+                if (this.balances.coins < 0) {
+                    this.balances.coins = 10000;
+                    this.syncToDatabase();
+                    console.log('💰 Fixed negative balance to 10,000');
+                }
+
                 console.log('💰 Currency loaded from DB:', this.balances);
             }
             this.initialized = true;

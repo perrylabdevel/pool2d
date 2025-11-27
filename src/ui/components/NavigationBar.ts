@@ -388,21 +388,50 @@ export class NavigationBar {
         const avatarImg = AssetLoader.getCached(avatarUrl) || AssetLoader.loadImageSync(avatarUrl);
         const frameImg = AssetLoader.getCached(frameUrl) || AssetLoader.loadImageSync(frameUrl);
 
-        // Avatar photo clipped to a rounded rect inside the frame bounds
-        // Match HUD positioning: inset 8% top to show full face including mouth
-        const photoPadding = height * 0.14;  // Reduced from 0.2 to match HUD horizontal padding
-        const photoX = x + photoPadding;
-        const photoY = y + height * 0.08;  // 8% from top to match HUD
-        const photoW = width - photoPadding * 2;
-        const photoH = height * 0.72;  // 72% height to match HUD
-        const photoRadius = Math.max(8, height * 0.12);
+        // Frame dimensions (Portrait aspect ratio 72:108 from CSS)
+        const frameAspect = 72 / 108;
+        const frameH = height * 0.95; // Use most of the height
+        const frameW = frameH * frameAspect;
+        const frameX = x + (width - frameW) / 2;
+        const frameY = y + (height - frameH) / 2;
+
+        // Avatar Photo positioning (relative to frame)
+        // Matches CSS: inset: 8% 14%; width: 72%; height: 72%
+        const photoX = frameX + (frameW * 0.14);
+        const photoY = frameY + (frameH * 0.08);
+        const photoW = frameW * 0.72;
+        const photoH = frameH * 0.72;
+
+        // Border radius 10px relative to original 108px height
+        const radius = 10 * (frameH / 108);
 
         if (avatarImg && avatarImg.complete && avatarImg.naturalWidth > 0) {
             ctx.save();
             ctx.beginPath();
-            ctx.roundRect(photoX, photoY, photoW, photoH, photoRadius);
+            // Rounded rect clip
+            ctx.roundRect(photoX, photoY, photoW, photoH, radius);
             ctx.clip();
-            ctx.drawImage(avatarImg, photoX, photoY, photoW, photoH);
+
+            // Simulate object-fit: cover
+            const imgRatio = avatarImg.naturalWidth / avatarImg.naturalHeight;
+            const targetRatio = photoW / photoH;
+
+            let sx = 0;
+            let sy = 0;
+            let sw = avatarImg.naturalWidth;
+            let sh = avatarImg.naturalHeight;
+
+            if (imgRatio > targetRatio) {
+                // Image is wider than target: crop width
+                sw = sh * targetRatio;
+                sx = (avatarImg.naturalWidth - sw) / 2;
+            } else {
+                // Image is taller than target: crop height
+                sh = sw / targetRatio;
+                sy = (avatarImg.naturalHeight - sh) / 2;
+            }
+
+            ctx.drawImage(avatarImg, sx, sy, sw, sh, photoX, photoY, photoW, photoH);
             ctx.restore();
         } else {
             // Fallback gradient block
@@ -411,18 +440,13 @@ export class NavigationBar {
             gradient.addColorStop(1, 'rgba(255, 255, 255, 0.02)');
             ctx.fillStyle = gradient;
             ctx.beginPath();
-            ctx.roundRect(photoX, photoY, photoW, photoH, photoRadius);
+            ctx.roundRect(photoX, photoY, photoW, photoH, radius);
             ctx.fill();
         }
 
         // Frame overlay
         if (frameImg && frameImg.complete && frameImg.naturalWidth > 0) {
-            const aspect = frameImg.naturalWidth / frameImg.naturalHeight;
-            const frameHeight = height * 0.96;
-            const frameWidth = frameHeight * aspect;
-            const frameX = x + (width - frameWidth) / 2;
-            const frameY = y + (height - frameHeight) / 2;
-            ctx.drawImage(frameImg, frameX, frameY, frameWidth, frameHeight);
+            ctx.drawImage(frameImg, frameX, frameY, frameW, frameH);
         }
 
         ctx.restore();

@@ -1,7 +1,7 @@
 Project TODO
 
 - UI & Navigation
-  - Remove legacy home hub (`homeHub.init()`) from default flow once all workflows are covered by canvas scenes
+  - [x] Remove legacy home hub (`homeHub.init()`) from default flow once all workflows are covered by canvas scenes
   - Add focus management + keyboard navigation to all canvas scenes
   - Implement hero effects and animations for scene transitions
   - Add matchmaking/lobby system for multiplayer

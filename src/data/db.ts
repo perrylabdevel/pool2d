@@ -37,7 +37,7 @@ export async function initializeUserIfNeeded() {
             name: 'sosumidude',
             level: 1,
             xp: 0,
-            coins: 500, // Starting coins
+            coins: 10000, // Starting coins (Updated to 10k)
             gold: 5,    // Starting gold
             leagueId: 'bronze_1',
             avatarId: 'player',

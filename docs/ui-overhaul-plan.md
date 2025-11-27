@@ -7,8 +7,6 @@ This document replaces the legacy “plan vs. status” split. It tracks the cur
 - **UI State & Scene Stack (`src/ui/UIStateMachine.ts`, `src/ui/SceneController.ts`)**
   - HUD buttons and keyboard shortcuts transition between `LOBBY`, `PLAY_MODES`, `SHOP`, `PROFILE`, `IN_GAME`, and `IN_GAME_MENU`.
   - `SceneController` renders each state on the dedicated `#ui-stage` canvas with cross-fades/slide transitions so gameplay overlays stay isolated on `#ui-canvas`.
-- **Home Hub (`src/ui/HomeHub.ts`)**
-  - Legacy DOM/modal hub kept alive for bootstrapping and dev shortcuts (`homeHub.init()` still fires on start), but the goal is to replace it fully with the canvas Lobby scene.
 - **ModalService (`src/ui/ModalService.ts`)**
   - Handles overlay, animations, confirm dialogs, ESC-to-close, and sound hooks via `UISoundService`. Still powers legacy modals until their scene equivalents exist.
 - **In-Game Menu (`src/ui/scenes/InGameMenuScene.ts`)**
@@ -66,8 +64,7 @@ This document replaces the legacy “plan vs. status” split. It tracks the cur
 | Area | Files |
 | --- | --- |
 | Modal stack & sounds | `src/ui/ModalService.ts`, `src/ui/UISoundService.ts` |
-| Home Hub & footer actions | `src/ui/HomeHub.ts`, `src/ui/HubSettings.ts`, `src/ui/ShopModal.ts`, `src/ui/ProfileModal.ts`, `src/ui/HelpModal.ts` |
-| Pause & in-game navigation | `src/ui/InGameMenu.ts`, `src/ui/HUD.ts` (HUD button opens hub) |
+| Pause & in-game navigation | `src/ui/scenes/InGameMenuScene.ts`, `src/ui/HUD.ts` (HUD button opens menu) |
 | Dock legacy panels | `src/ui/DockBridge.ts`, `src/ui/*Panel.ts`, `src/ui/panels/*` |
 | Styling | `styles/design-tokens.css`, `styles/main.css` |
 

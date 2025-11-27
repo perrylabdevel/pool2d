@@ -225,14 +225,18 @@ export function drawCurrencyPill(
         // ctx.fillText(label, textAreaStart, y + height / 2 - 2);
 
         // Value (large, centered vertically)
-        ctx.fillStyle = ColorTokens.text.primary;
-        ctx.font = `${LayoutConstants.Fonts.Weight.Bold} ${valueFontSize}px ${LayoutConstants.Fonts.Family.Display}`;
+        ctx.fillStyle = '#FFFFFF'; // Force white
+        // Use standard sans-serif for cleaner look as requested
+        ctx.font = `900 ${valueFontSize}px "Arial", sans-serif`;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-        ctx.shadowColor = 'rgba(0,0,0,0.5)';
-        ctx.shadowBlur = 4;
+        // Remove heavy shadow, use subtle one
+        ctx.shadowColor = 'rgba(0,0,0,0.3)';
+        ctx.shadowBlur = 2;
+        ctx.shadowOffsetY = 1;
         ctx.fillText(amount.toLocaleString(), textAreaStart, y + height / 2 + 1);
         ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
 
     } else {
         // Default theme (e.g. for tooltips or other UI)
@@ -327,200 +331,165 @@ function mixColor(color1: string, color2: string, weight: number): string {
 export function drawChip(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, color: string) {
     const radius = size / 2;
 
-    // Colors derived from CSS .swap class
-    const mainColor = '#ffffff';
-    const altColor = color;
-
     ctx.save();
     ctx.translate(x, y);
 
-    // 1. Base Background & Conic Gradient with Depth
-    const segments = 12; // Reduced segments for chunkier, more premium look
-    const segmentAngle = (Math.PI * 2) / segments;
-    const offsetAngle = -15 * (Math.PI / 180);
+    // 1. Drop Shadow
+    ctx.shadowColor = 'rgba(0,0,0,0.4)';
+    ctx.shadowBlur = 5;
+    ctx.shadowOffsetY = 3;
 
-    ctx.rotate(offsetAngle);
+    // 2. Outer Ring (Gradient for Depth)
+    // Create a gradient that goes from light to dark to simulate a beveled edge
+    const ringGrad = ctx.createLinearGradient(-radius, -radius, radius, radius);
+    // Adjust base color for gradient
+    const lightColor = adjustColor(color, 40);
+    const darkColor = adjustColor(color, -40);
+    ringGrad.addColorStop(0, lightColor);
+    ringGrad.addColorStop(1, darkColor);
 
-    // Draw base cylinder/edge depth (Shadow)
     ctx.beginPath();
-    ctx.arc(0, 4, radius, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.arc(0, 0, radius, 0, Math.PI * 2);
+    ctx.fillStyle = ringGrad;
     ctx.fill();
 
-    for (let i = 0; i < segments; i++) {
-        const start = i * segmentAngle;
-        const mid = start + (segmentAngle / 2);
-        const end = start + segmentAngle;
+    // 3. Dashes on Ring (Inset look)
+    const dashCount = 8;
+    const dashWidth = size * 0.15;
+    const dashHeight = size * 0.08;
 
-        // Alt color segment (Colored)
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.arc(0, 0, radius, start, mid);
-        ctx.fillStyle = altColor;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+    for (let i = 0; i < dashCount; i++) {
+        ctx.save();
+        ctx.rotate((i * Math.PI * 2) / dashCount);
+        ctx.translate(0, -radius + dashHeight / 2 + 3);
+
+        // Draw rounded rect for dash
+        drawRoundedRect(ctx, -dashWidth / 2, -dashHeight / 2, dashWidth, dashHeight, 2);
         ctx.fill();
-
-        // Add bevel highlight to colored segment
-        ctx.beginPath();
-        ctx.arc(0, 0, radius - 2, start, mid);
-        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-
-        // Main color segment (White)
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.arc(0, 0, radius, mid, end);
-        ctx.fillStyle = mainColor;
-        ctx.fill();
+        ctx.restore();
     }
 
-    // Reset rotation for overlays
-    ctx.rotate(-offsetAngle);
+    // 4. Inner Circle (White with shadow)
+    const innerRadius = radius * 0.65;
 
-    // 2. Radial Gradients Overlays (Lighting)
-    // Top-left highlight
-    const grad1 = ctx.createRadialGradient(-radius * 0.3, -radius * 0.3, 0, -radius * 0.3, -radius * 0.3, radius);
-    grad1.addColorStop(0, 'rgba(255,255,255,0.25)');
-    grad1.addColorStop(0.5, 'transparent');
-    ctx.fillStyle = grad1;
-    ctx.beginPath();
-    ctx.arc(0, 0, radius, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Bottom-right shadow
-    const grad2 = ctx.createRadialGradient(radius * 0.3, radius * 0.3, 0, radius * 0.3, radius * 0.3, radius);
-    grad2.addColorStop(0, 'rgba(0,0,0,0.05)');
-    grad2.addColorStop(0.6, 'rgba(0,0,0,0.25)');
-    ctx.fillStyle = grad2;
-    ctx.beginPath();
-    ctx.arc(0, 0, radius, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 3. Inner Shadows (Box Shadow inset)
-    const drawInsetRing = (r: number, width: number, color: string) => {
-        ctx.beginPath();
-        ctx.arc(0, 0, r, 0, Math.PI * 2);
-        ctx.arc(0, 0, r - width, 0, Math.PI * 2, true);
-        ctx.fillStyle = color;
-        ctx.fill();
-    };
-
-    // Multiple rings for complex edge detail
-    drawInsetRing(radius, 4, 'rgba(0,0,0,0.1)');
-    drawInsetRing(radius - 4, 2, 'rgba(255,255,255,0.3)'); // Highlight ring
-
-    // 4. Inner Disk
-    const innerRadius = radius * 0.6;
-
-    // Shadow under the inner disk
-    ctx.beginPath();
-    ctx.arc(0, 2, innerRadius, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(0,0,0,0.2)';
-    ctx.fill();
-
-    // Inner disk background
-    const innerGrad = ctx.createRadialGradient(
-        -innerRadius * 0.2, -innerRadius * 0.2, 0,
-        0, 0, innerRadius
-    );
-    innerGrad.addColorStop(0, altColor);
-    innerGrad.addColorStop(1, mixColor(altColor, '#000000', 0.8)); // Darker edge
-
+    // Inner shadow (simulated by drawing a dark circle then a slightly smaller white one)
     ctx.beginPath();
     ctx.arc(0, 0, innerRadius, 0, Math.PI * 2);
-    ctx.fillStyle = innerGrad;
+    ctx.fillStyle = 'rgba(0,0,0,0.2)'; // Shadow rim
     ctx.fill();
 
-    // Inner Pattern (Dashed Ring)
     ctx.beginPath();
-    ctx.arc(0, 0, innerRadius * 0.8, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([4, 4]);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // Center indentation
-    ctx.beginPath();
-    ctx.arc(0, 0, innerRadius * 0.4, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(0,0,0,0.1)';
+    ctx.arc(0, 0, innerRadius - 1, 0, Math.PI * 2);
+    const innerFaceGrad = ctx.createLinearGradient(0, -innerRadius, 0, innerRadius);
+    innerFaceGrad.addColorStop(0, '#FFFFFF');
+    innerFaceGrad.addColorStop(1, '#F0F0F0');
+    ctx.fillStyle = innerFaceGrad;
     ctx.fill();
 
-    // Specular highlight on inner disk
+    // 5. Symbol: Diamond (Suit shape)
+    // Draw a diamond shape in the center
+    const symbolSize = innerRadius * 0.6;
+    ctx.fillStyle = '#000000';
+    ctx.shadowColor = 'rgba(0,0,0,0.2)';
+    ctx.shadowBlur = 2;
+    ctx.shadowOffsetY = 1;
+
     ctx.beginPath();
-    ctx.ellipse(-innerRadius * 0.3, -innerRadius * 0.3, innerRadius * 0.15, innerRadius * 0.1, Math.PI / 4, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.moveTo(0, -symbolSize); // Top
+    ctx.lineTo(symbolSize * 0.7, 0); // Right
+    ctx.lineTo(0, symbolSize); // Bottom
+    ctx.lineTo(-symbolSize * 0.7, 0); // Left
+    ctx.closePath();
     ctx.fill();
 
-    // 5. Edge Notch Texture (The mask effect) - Refined
-    const maskInner = radius * 0.75;
-    ctx.save();
+    // Shine/Gloss
     ctx.beginPath();
-    ctx.arc(0, 0, radius, 0, Math.PI * 2);
-    ctx.arc(0, 0, maskInner, 0, Math.PI * 2, true);
-    ctx.clip();
-
-    const notchSegments = 24;
-    const notchAngle = (Math.PI * 2) / notchSegments;
-
-    for (let i = 0; i < notchSegments; i++) {
-        const angle = i * notchAngle;
-        // Draw small notches
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.arc(0, 0, radius * 1.1, angle, angle + notchAngle * 0.2);
-        ctx.fillStyle = 'rgba(0,0,0,0.15)';
-        ctx.fill();
-    }
-    ctx.restore();
+    ctx.ellipse(-radius * 0.3, -radius * 0.3, radius * 0.25, radius * 0.12, Math.PI / 4, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.fill();
 
     ctx.restore();
 }
 
 export function drawCoin(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
     const radius = size / 2;
-    const goldColor = '#FFD700';
-    const darkGold = '#B8860B';
 
     ctx.save();
     ctx.translate(x, y);
 
-    // 1. Base Coin (Gold)
-    const grad = ctx.createRadialGradient(-radius * 0.3, -radius * 0.3, 0, 0, 0, radius);
-    grad.addColorStop(0, '#FFFACD'); // LemonChiffon highlight
-    grad.addColorStop(0.4, goldColor);
-    grad.addColorStop(1, darkGold);
+    // 1. Drop Shadow
+    ctx.shadowColor = 'rgba(0,0,0,0.4)';
+    ctx.shadowBlur = 5;
+    ctx.shadowOffsetY = 3;
+
+    // 2. Outer Rim (Beveled Gold)
+    const rimGrad = ctx.createLinearGradient(-radius, -radius, radius, radius);
+    rimGrad.addColorStop(0, '#FFEC8B'); // Light Gold
+    rimGrad.addColorStop(0.5, '#DAA520'); // GoldenRod
+    rimGrad.addColorStop(1, '#B8860B'); // Dark GoldenRod
 
     ctx.beginPath();
     ctx.arc(0, 0, radius, 0, Math.PI * 2);
-    ctx.fillStyle = grad;
+    ctx.fillStyle = rimGrad;
     ctx.fill();
 
-    // 2. Edge Detail (Ridges)
-    ctx.strokeStyle = '#DAA520';
+    // 3. Inner Face (Recessed)
+    const innerRadius = radius * 0.75;
+    const faceGrad = ctx.createRadialGradient(0, -innerRadius * 0.5, 0, 0, 0, innerRadius);
+    faceGrad.addColorStop(0, '#FFD700'); // Gold
+    faceGrad.addColorStop(1, '#FFA500'); // Orange-Gold
+
+    ctx.beginPath();
+    ctx.arc(0, 0, innerRadius, 0, Math.PI * 2);
+    ctx.fillStyle = faceGrad;
+    ctx.fill();
+
+    // Darker outline for center area visibility (User Request)
+    ctx.strokeStyle = 'rgba(0,0,0,0.4)'; // Darker, more visible
     ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(0, 0, radius - 1, 0, Math.PI * 2);
     ctx.stroke();
 
-    // 3. Inner Ring
-    ctx.beginPath();
-    ctx.arc(0, 0, radius * 0.75, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-    ctx.lineWidth = 1;
+    // Inner Rim Highlight (to separate rim from face)
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+    ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    // 4. Dollar Sign / Symbol
-    ctx.fillStyle = 'rgba(184, 134, 11, 0.8)'; // Dark gold text
-    ctx.font = `bold ${size * 0.6}px "Georgia", serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('$', 0, size * 0.05);
+    // 4. Symbol: Crown
+    const crownSize = innerRadius * 0.6;
+    const cy = size * 0.05; // slight offset
 
-    // 5. Shine
+    ctx.fillStyle = '#B8860B'; // Dark Gold for symbol
+    ctx.shadowColor = 'rgba(0,0,0,0.2)';
+    ctx.shadowBlur = 2;
+    ctx.shadowOffsetY = 1;
+
     ctx.beginPath();
-    ctx.ellipse(-radius * 0.3, -radius * 0.3, radius * 0.2, radius * 0.1, Math.PI / 4, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+    // Crown points
+    const w = crownSize;
+    const h = crownSize * 0.8;
+    const bottomY = cy + h / 2;
+    const topY = cy - h / 2;
+
+    // Base
+    ctx.moveTo(-w / 2, bottomY);
+    ctx.lineTo(w / 2, bottomY);
+    // Right side up to point
+    ctx.lineTo(w / 2, cy);
+    ctx.lineTo(w / 2 + w * 0.1, topY); // Right tip
+    ctx.lineTo(w / 6, cy + h * 0.2); // Dip
+    ctx.lineTo(0, topY - h * 0.2); // Center tip (higher)
+    ctx.lineTo(-w / 6, cy + h * 0.2); // Dip
+    ctx.lineTo(-w / 2 - w * 0.1, topY); // Left tip
+    ctx.lineTo(-w / 2, cy);
+    ctx.closePath();
+
+    ctx.fill();
+
+    // 5. Shine/Gloss
+    ctx.beginPath();
+    ctx.ellipse(-radius * 0.3, -radius * 0.3, radius * 0.25, radius * 0.12, Math.PI / 4, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
     ctx.fill();
 
     ctx.restore();

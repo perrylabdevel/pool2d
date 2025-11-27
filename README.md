@@ -73,10 +73,10 @@ npm run test
 - **R**: Restart table
 
 ### UI & Modes
-- **ESC**: Pause menu (resume/settings/quit to Home Hub)
+- **ESC**: Pause menu (resume/settings/quit to Lobby)
 - **Shift + L**: Toggle legacy dock panels via DockBridge
-- **H / ?**: Open Help modal (also linked from Home Hub)
-- **HUD Menu button**: Opens Home Hub overlay while pausing play
+- **H / ?**: Open Help modal (also linked from Lobby)
+- **HUD Menu button**: Opens In-Game Menu while pausing play
 - **1 / 2 / 3 / 4**: Switch rules presets (Casual / Tournament / APA / Practice)
 - **8 / T / P / V**: Jump to 8-ball, Time Attack, Perfect Game, or Speed Pool modes (Practice returns with same key)
 
@@ -95,9 +95,9 @@ src/
 ├── config.ts          # Physics, geometry, render defaults
 ├── main.ts            # Bootstraps canvases, starts Game loop
 ├── game/Game.ts       # Fixed-timestep loop, input wiring, rule integration
-├── ui/HomeHub.ts      # Modal launcher + mode cards + footer actions
+├── ui/SceneController.ts # Canvas scene manager (Lobby, Shop, Profile, etc.)
 ├── ui/ModalService.ts # Modal stack, animations, confirm dialogs
-├── ui/InGameMenu.ts   # ESC menu tied into ModalService hub
+├── ui/scenes/InGameMenuScene.ts # ESC menu tied into SceneController
 ├── ui/HubSettings.ts  # Settings surfaced inside modal chrome
 ├── ui/UIPanels/*.ts   # Legacy dock panels (physics, geometry, render layers)
 ├── physics/
