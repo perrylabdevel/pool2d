@@ -15,6 +15,8 @@ import {
   type AxisColorPalette,
 } from './RenderUtils';
 import { BaseRenderer } from './BaseRenderer';
+import { ColorTokens } from '../ui/theme/ColorTokens';
+import { LayoutConstants } from '../ui/theme/LayoutConstants';
 
 import { PredictionResult } from '../physics/Prediction';
 import type { MicroDialRenderState, PocketAnimationEvent } from './ControlTypes';
@@ -56,12 +58,12 @@ export class Renderer extends BaseRenderer {
     const containerHeight = container.clientHeight;
     
     // External margin around canvas
-    const externalMargin = 40;
+    const externalMargin = LayoutConstants.Spacing.ExternalMargin;
     
     // Internal padding within canvas (around table)
     // Ensure cue stick is fully visible when the cue ball is near rails
     const cueReach = (CONFIG.BALL_RADIUS + 25) + (CONFIG.CUE_VISUAL_PADDING_IN ?? 0);
-    const internalPadding = Math.max(40, cueReach);
+    const internalPadding = Math.max(LayoutConstants.Spacing.InternalPadding, cueReach);
     
     // Calculate available space for canvas after external margins
     const availableWidth = containerWidth - externalMargin * 2;
@@ -85,7 +87,7 @@ export class Renderer extends BaseRenderer {
   }
   
   clear() {
-    this.ctx.fillStyle = '#0a0a0a';
+    this.ctx.fillStyle = ColorTokens.background.canvas;
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
   }
 

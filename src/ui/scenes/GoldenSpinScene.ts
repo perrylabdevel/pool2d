@@ -3,6 +3,7 @@ import { NavigationBar } from '../components/NavigationBar';
 import { uiStateMachine, UIState } from '../UIStateMachine';
 import { drawSceneBackground } from '../components/SceneBackground';
 import { LayoutConstants } from '../theme/LayoutConstants';
+import { ColorTokens } from '../theme/ColorTokens';
 import { drawRoundedRect } from '../components/UIComponents';
 import { currencyStore } from '../CurrencyStore';
 import { uiSoundService } from '../UISoundService';
@@ -33,23 +34,23 @@ export class GoldenSpinScene implements UIScene {
     private navigationBar: NavigationBar;
     private centerX = 0;
     private centerY = 0;
-    private wheelRadius = 220;
+    private wheelRadius = LayoutConstants.Wheel.Radius;
     private centerInteractiveRadius = 0;
     private hoveredCenter = false;
 
     private prizes: PrizeSlice[] = [
-        { label: '500', amount: 500, type: 'coins', weight: 14, color: '#4A90E2' },
-        { label: '750', amount: 750, type: 'coins', weight: 14, color: '#50E3C2' },
-        { label: '1,000', amount: 1000, type: 'coins', weight: 12, color: '#B8E986' },
-        { label: '1,500', amount: 1500, type: 'coins', weight: 10, color: '#BD10E0' },
-        { label: '2,500', amount: 2500, type: 'coins', weight: 8, color: '#9013FE' },
-        { label: '5', amount: 5, type: 'gold', weight: 8, color: '#F5A623' },
-        { label: '5,000', amount: 5000, type: 'coins', weight: 6, color: '#4A4A4A' },
-        { label: '10', amount: 10, type: 'gold', weight: 5, color: '#F8E71C' },
-        { label: '10,000', amount: 10000, type: 'coins', weight: 4, color: '#D0021B' },
-        { label: 'JACKPOT', amount: 50000, type: 'jackpot', weight: 3, color: '#000000' },
-        { label: '25', amount: 25, type: 'gold', weight: 2, color: '#8B572A' },
-        { label: '100', amount: 100, type: 'gold', weight: 1, color: '#FFD700' }
+        { label: '500', amount: 500, type: 'coins', weight: 14, color: ColorTokens.wheel.blue },
+        { label: '750', amount: 750, type: 'coins', weight: 14, color: ColorTokens.wheel.teal },
+        { label: '1,000', amount: 1000, type: 'coins', weight: 12, color: ColorTokens.wheel.green },
+        { label: '1,500', amount: 1500, type: 'coins', weight: 10, color: ColorTokens.wheel.purple },
+        { label: '2,500', amount: 2500, type: 'coins', weight: 8, color: ColorTokens.wheel.violet },
+        { label: '5', amount: 5, type: 'gold', weight: 8, color: ColorTokens.wheel.orange },
+        { label: '5,000', amount: 5000, type: 'coins', weight: 6, color: ColorTokens.wheel.gray },
+        { label: '10', amount: 10, type: 'gold', weight: 5, color: ColorTokens.wheel.yellow },
+        { label: '10,000', amount: 10000, type: 'coins', weight: 4, color: ColorTokens.wheel.red },
+        { label: 'JACKPOT', amount: 50000, type: 'jackpot', weight: 3, color: ColorTokens.wheel.black },
+        { label: '25', amount: 25, type: 'gold', weight: 2, color: ColorTokens.wheel.brown },
+        { label: '100', amount: 100, type: 'gold', weight: 1, color: ColorTokens.wheel.gold }
     ];
 
     private currentRotation = 0;

@@ -108,23 +108,23 @@ export class ShopScene implements UIScene {
         this.navigationBar.setupLayout(width);
         const navHeight = this.navigationBar.getHeight();
 
-        const horizontalPadding = Math.max(40, width * 0.05);
+        const horizontalPadding = Math.max(LayoutConstants.Spacing.HorizontalPaddingMin, width * 0.05);
 
         // No footer buttons needed - cards are directly clickable
         this.buttons = [];
 
-        const cardWidth = 240;
-        const cardHeight = 320;
-        const gap = 28;
+        const cardWidth = LayoutConstants.Cards.Width;
+        const cardHeight = LayoutConstants.Cards.Height;
+        const gap = LayoutConstants.Cards.Gap;
         // Setup Tab Rects
-        const tabWidth = 100;
-        const tabHeight = 40;
-        const tabY = navHeight + 30;
+        const tabWidth = LayoutConstants.Tabs.Width;
+        const tabHeight = LayoutConstants.Tabs.Height;
+        const tabY = navHeight + LayoutConstants.Tabs.OffsetY;
         const tabCenterX = width / 2;
-        const totalTabsWidth = tabWidth * 2 + 10; // 10px gap between 2 tabs
+        const totalTabsWidth = tabWidth * 2 + LayoutConstants.Tabs.Gap;
 
         this.tabRects.CUES = { x: tabCenterX - totalTabsWidth / 2, y: tabY, width: tabWidth, height: tabHeight };
-        this.tabRects.CHIPS = { x: tabCenterX - totalTabsWidth / 2 + tabWidth + 10, y: tabY, width: tabWidth, height: tabHeight };
+        this.tabRects.CHIPS = { x: tabCenterX - totalTabsWidth / 2 + tabWidth + LayoutConstants.Tabs.Gap, y: tabY, width: tabWidth, height: tabHeight };
 
         const items = this.currentTab === 'CUES' ? CUES : CHIPS;
         const columns = Math.max(1, Math.floor((width - horizontalPadding * 2) / (cardWidth + gap)));
@@ -220,14 +220,14 @@ export class ShopScene implements UIScene {
                         cueTipColor: cue.tipColor
                     });
                     this.equippedCueId = cue.id;
-                    notificationService.show(`${cue.name} ready to dominate!`, 'success', 2400);
+                    notificationService.show(`${cue.name} ready to dominate!`, 'success', LayoutConstants.Animation.Notification.Toast);
                 }
             } else {
                 const chip = CHIPS[this.selectedCardIndex];
                 if (chip && chip.id !== this.equippedChipId) {
                     // TODO: Save chip selection to settings if needed
                     this.equippedChipId = chip.id;
-                    notificationService.show(`${chip.name} selected!`, 'success', 2400);
+                    notificationService.show(`${chip.name} selected!`, 'success', LayoutConstants.Animation.Notification.Toast);
                 }
             }
         }
@@ -264,7 +264,7 @@ export class ShopScene implements UIScene {
                 cueTipColor: cue.tipColor
             });
             this.equippedCueId = cue.id;
-            notificationService.show(`${cue.name} ready to dominate!`, 'success', 2400);
+            notificationService.show(`${cue.name} ready to dominate!`, 'success', LayoutConstants.Animation.Notification.Toast);
         }
     }
 
@@ -288,20 +288,20 @@ export class ShopScene implements UIScene {
     private renderTabs(ctx: CanvasRenderingContext2D) {
         const drawTab = (rect: Rect, label: string, isActive: boolean) => {
             ctx.save();
-            drawRoundedRect(ctx, rect.x, rect.y, rect.width, rect.height, 8);
+            drawRoundedRect(ctx, rect.x, rect.y, rect.width, rect.height, LayoutConstants.Radii.Medium);
 
             if (isActive) {
                 ctx.fillStyle = ColorTokens.brand.primary;
                 ctx.shadowColor = ColorTokens.brand.primary;
-                ctx.shadowBlur = 10;
+                ctx.shadowBlur = LayoutConstants.Shadows.Glow.blur;
             } else {
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+                ctx.fillStyle = ColorTokens.border.default;
                 ctx.shadowBlur = 0;
             }
             ctx.fill();
 
-            ctx.fillStyle = isActive ? '#000000' : '#FFFFFF';
-            ctx.font = '700 14px "Rajdhani", sans-serif';
+            ctx.fillStyle = isActive ? ColorTokens.text.dark : ColorTokens.text.primary;
+            ctx.font = `${LayoutConstants.Fonts.Weight.Bold} ${LayoutConstants.Fonts.Size.Small}px ${LayoutConstants.Fonts.Family.Game}`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(label, rect.x + rect.width / 2, rect.y + rect.height / 2);
@@ -330,37 +330,37 @@ export class ShopScene implements UIScene {
     private drawChipCard(ctx: CanvasRenderingContext2D, rect: Rect, chip: Chip, isSelected: boolean, isHovered: boolean) {
         const { x, y, width, height } = rect;
         const radius = LayoutConstants.Radii.Large;
-        const frameWidth = 6; // Outer decorative frame
-        const bevelWidth = 3; // Middle bevel layer
-        const borderWidth = 2; // Inner border
+        const frameWidth = LayoutConstants.Cards.FrameWidth;
+        const bevelWidth = LayoutConstants.Cards.BevelWidth;
+        const borderWidth = LayoutConstants.Cards.BorderWidth;
 
         ctx.save();
 
         // Enhanced drop shadow
         if (isHovered || isSelected) {
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
-            ctx.shadowBlur = 28;
-            ctx.shadowOffsetY = 14;
+            ctx.shadowColor = ColorTokens.effects.shadowHeavy;
+            ctx.shadowBlur = LayoutConstants.Shadows.Large.blur;
+            ctx.shadowOffsetY = LayoutConstants.Shadows.Large.offsetY;
         } else {
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
-            ctx.shadowBlur = 20;
-            ctx.shadowOffsetY = 10;
+            ctx.shadowColor = ColorTokens.effects.shadowLight;
+            ctx.shadowBlur = LayoutConstants.Shadows.Medium.blur;
+            ctx.shadowOffsetY = LayoutConstants.Shadows.Medium.offsetY;
         }
 
         // Outer Frame - Metallic/Wood-grain effect
         drawRoundedRect(ctx, x, y, width, height, radius);
         const frameGradient = ctx.createLinearGradient(x, y, x, y + height);
-        frameGradient.addColorStop(0, '#8B7355'); // Lighter wood/bronze
-        frameGradient.addColorStop(0.5, '#6B5745'); // Mid wood/bronze
-        frameGradient.addColorStop(1, '#4B3725'); // Darker wood/bronze
+        frameGradient.addColorStop(0, ColorTokens.card.frame.light);
+        frameGradient.addColorStop(0.5, ColorTokens.card.frame.mid);
+        frameGradient.addColorStop(1, ColorTokens.card.frame.dark);
         ctx.fillStyle = frameGradient;
         ctx.fill();
 
         // Add metallic shine to frame
         const shineGradient = ctx.createLinearGradient(x, y, x + width / 3, y);
-        shineGradient.addColorStop(0, 'rgba(255, 255, 255, 0.4)');
-        shineGradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.1)');
-        shineGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        shineGradient.addColorStop(0, ColorTokens.effects.gloss.start);
+        shineGradient.addColorStop(0.5, ColorTokens.effects.gloss.mid);
+        shineGradient.addColorStop(1, ColorTokens.effects.gloss.none);
         ctx.fillStyle = shineGradient;
         ctx.fill();
 
@@ -378,16 +378,16 @@ export class ShopScene implements UIScene {
 
         drawRoundedRect(ctx, bevelX, bevelY, bevelFullWidth, bevelFullHeight, bevelRadius);
         const bevelGradient = ctx.createLinearGradient(bevelX, bevelY, bevelX, bevelY + bevelFullHeight);
-        bevelGradient.addColorStop(0, '#3a3a3a'); // Dark top for inset look
-        bevelGradient.addColorStop(0.5, '#2a2a2a'); // Mid
-        bevelGradient.addColorStop(1, '#4a4a4a'); // Lighter bottom
+        bevelGradient.addColorStop(0, ColorTokens.card.bevel.top);
+        bevelGradient.addColorStop(0.5, ColorTokens.card.bevel.mid);
+        bevelGradient.addColorStop(1, ColorTokens.card.bevel.bottom);
         ctx.fillStyle = bevelGradient;
         ctx.fill();
 
         // Bevel highlight (top edge)
         drawRoundedRect(ctx, bevelX, bevelY, bevelFullWidth, bevelFullHeight, bevelRadius);
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = ColorTokens.border.emphasis;
+        ctx.lineWidth = LayoutConstants.Lines.Thin;
         ctx.stroke();
 
         // Inner content area (inset from bevel)
@@ -407,7 +407,7 @@ export class ShopScene implements UIScene {
             innerY + innerHeight * 0.3,
             innerWidth * 0.8
         );
-        bgGradient.addColorStop(0, 'rgba(40, 40, 50, 1)');
+        bgGradient.addColorStop(0, ColorTokens.background.panelSolid);
         bgGradient.addColorStop(1, ColorTokens.background.panel);
         ctx.fillStyle = bgGradient;
         ctx.fill();
@@ -415,7 +415,7 @@ export class ShopScene implements UIScene {
         // Hover/Selection Glow
         if (isHovered || isSelected) {
             ctx.save();
-            ctx.globalAlpha = isSelected ? 0.25 : 0.15;
+            ctx.globalAlpha = isSelected ? LayoutConstants.Opacity.SelectedOverlay : LayoutConstants.Opacity.HoverOverlay;
             const glowGrad = ctx.createRadialGradient(
                 innerX + innerWidth / 2,
                 innerY + innerHeight * 0.4,
@@ -432,7 +432,7 @@ export class ShopScene implements UIScene {
         }
 
         // Draw the Chip
-        const chipSize = 120;
+        const chipSize = LayoutConstants.Chips.Medium;
         const chipX = x + width / 2;
         const chipY = y + height * 0.4;
         drawChip(ctx, chipX, chipY, chipSize, chip.color);
@@ -512,11 +512,11 @@ export class ShopScene implements UIScene {
         ctx.restore();
 
         // Description text with accent color and word wrapping
-        ctx.font = '600 11px "Nunito", Arial';
+        ctx.font = `${LayoutConstants.Fonts.Weight.SemiBold} 11px ${LayoutConstants.Fonts.Family.Body}`;
         ctx.fillStyle = chip.color;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+        ctx.shadowColor = ColorTokens.effects.shadowText;
         ctx.shadowBlur = 6;
 
         // Word wrap the description
@@ -545,7 +545,7 @@ export class ShopScene implements UIScene {
 
         // Equipped Badge
         if (chip.id === this.equippedChipId) {
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; // Dark overlay for equipped badge
+            ctx.fillStyle = ColorTokens.background.overlayHeavy;
             ctx.fillRect(innerX, innerY + innerHeight - 36, innerWidth, 36);
             ctx.fillStyle = ColorTokens.action.success;
             ctx.font = '600 14px "Montserrat", Arial';
@@ -556,7 +556,7 @@ export class ShopScene implements UIScene {
 
         // Inner border (decorative line inside the frame)
         drawRoundedRect(ctx, innerX, innerY, innerWidth, innerHeight, innerRadius);
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+        ctx.strokeStyle = ColorTokens.border.darkStrong;
         ctx.lineWidth = borderWidth;
         ctx.stroke();
 
@@ -570,23 +570,23 @@ export class ShopScene implements UIScene {
             innerHeight - innerHighlightInset * 2,
             innerRadius - innerHighlightInset
         );
-        const highlightGradient = ctx.createLinearGradient(
+        const chipHighlightGradient = ctx.createLinearGradient(
             innerX,
             innerY,
             innerX,
             innerY + innerHeight / 4
         );
-        highlightGradient.addColorStop(0, 'rgba(255, 255, 255, 0.2)');
-        highlightGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
-        ctx.strokeStyle = highlightGradient;
-        ctx.lineWidth = 1;
+        chipHighlightGradient.addColorStop(0, ColorTokens.border.subtle);
+        chipHighlightGradient.addColorStop(1, ColorTokens.effects.gloss.none);
+        ctx.strokeStyle = chipHighlightGradient;
+        ctx.lineWidth = LayoutConstants.Lines.Thin;
         ctx.stroke();
 
         // Corner decorations (small accent lines at corners)
-        const cornerSize = Math.min(20, innerWidth * 0.05);
+        const cornerSize = Math.min(LayoutConstants.Cards.CornerAccentSize, innerWidth * 0.05);
         const cornerInset = frameWidth + bevelWidth + 2;
-        ctx.strokeStyle = 'rgba(255, 215, 0, 0.6)'; // Gold accents
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = ColorTokens.card.cornerAccent;
+        ctx.lineWidth = LayoutConstants.Lines.Normal;
 
         // Top-left corner
         ctx.beginPath();
@@ -619,10 +619,10 @@ export class ShopScene implements UIScene {
         // Hover/Selected glow effect (outer glow)
         if (isHovered || isSelected) {
             drawRoundedRect(ctx, x - 2, y - 2, width + 4, height + 4, radius + 2);
-            ctx.strokeStyle = isSelected ? chip.color : '#00B4FF';
-            ctx.lineWidth = 4;
-            ctx.shadowColor = isSelected ? `${chip.color}99` : 'rgba(0, 180, 255, 0.6)';
-            ctx.shadowBlur = 20;
+            ctx.strokeStyle = isSelected ? chip.color : ColorTokens.ui.teal;
+            ctx.lineWidth = LayoutConstants.Lines.Heavy;
+            ctx.shadowColor = isSelected ? `${chip.color}99` : ColorTokens.effects.glow;
+            ctx.shadowBlur = LayoutConstants.Shadows.Medium.blur;
             ctx.stroke();
             ctx.shadowBlur = 0;
             ctx.shadowColor = 'transparent';
@@ -636,37 +636,37 @@ export class ShopScene implements UIScene {
     private drawCueCard(ctx: CanvasRenderingContext2D, rect: Rect, cue: CueCard, isSelected: boolean, isHovered: boolean) {
         const { x, y, width, height } = rect;
         const radius = LayoutConstants.Radii.Large;
-        const frameWidth = 6; // Outer decorative frame
-        const bevelWidth = 3; // Middle bevel layer
-        const borderWidth = 2; // Inner border
+        const frameWidth = LayoutConstants.Cards.FrameWidth;
+        const bevelWidth = LayoutConstants.Cards.BevelWidth;
+        const borderWidth = LayoutConstants.Cards.BorderWidth;
 
         ctx.save();
 
         // Enhanced drop shadow
         if (isHovered || isSelected) {
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
-            ctx.shadowBlur = 28;
-            ctx.shadowOffsetY = 14;
+            ctx.shadowColor = ColorTokens.effects.shadowHeavy;
+            ctx.shadowBlur = LayoutConstants.Shadows.Large.blur;
+            ctx.shadowOffsetY = LayoutConstants.Shadows.Large.offsetY;
         } else {
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
-            ctx.shadowBlur = 20;
-            ctx.shadowOffsetY = 10;
+            ctx.shadowColor = ColorTokens.effects.shadowLight;
+            ctx.shadowBlur = LayoutConstants.Shadows.Medium.blur;
+            ctx.shadowOffsetY = LayoutConstants.Shadows.Medium.offsetY;
         }
 
         // Outer Frame - Metallic/Wood-grain effect
         drawRoundedRect(ctx, x, y, width, height, radius);
         const frameGradient = ctx.createLinearGradient(x, y, x, y + height);
-        frameGradient.addColorStop(0, '#8B7355'); // Lighter wood/bronze
-        frameGradient.addColorStop(0.5, '#6B5745'); // Mid wood/bronze
-        frameGradient.addColorStop(1, '#4B3725'); // Darker wood/bronze
+        frameGradient.addColorStop(0, ColorTokens.card.frame.light);
+        frameGradient.addColorStop(0.5, ColorTokens.card.frame.mid);
+        frameGradient.addColorStop(1, ColorTokens.card.frame.dark);
         ctx.fillStyle = frameGradient;
         ctx.fill();
 
         // Add metallic shine to frame
         const shineGradient = ctx.createLinearGradient(x, y, x + width / 3, y);
-        shineGradient.addColorStop(0, 'rgba(255, 255, 255, 0.4)');
-        shineGradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.1)');
-        shineGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        shineGradient.addColorStop(0, ColorTokens.effects.gloss.start);
+        shineGradient.addColorStop(0.5, ColorTokens.effects.gloss.mid);
+        shineGradient.addColorStop(1, ColorTokens.effects.gloss.none);
         ctx.fillStyle = shineGradient;
         ctx.fill();
 
@@ -684,16 +684,16 @@ export class ShopScene implements UIScene {
 
         drawRoundedRect(ctx, bevelX, bevelY, bevelFullWidth, bevelFullHeight, bevelRadius);
         const bevelGradient = ctx.createLinearGradient(bevelX, bevelY, bevelX, bevelY + bevelFullHeight);
-        bevelGradient.addColorStop(0, '#3a3a3a'); // Dark top for inset look
-        bevelGradient.addColorStop(0.5, '#2a2a2a'); // Mid
-        bevelGradient.addColorStop(1, '#4a4a4a'); // Lighter bottom
+        bevelGradient.addColorStop(0, ColorTokens.card.bevel.top);
+        bevelGradient.addColorStop(0.5, ColorTokens.card.bevel.mid);
+        bevelGradient.addColorStop(1, ColorTokens.card.bevel.bottom);
         ctx.fillStyle = bevelGradient;
         ctx.fill();
 
         // Bevel highlight (top edge)
         drawRoundedRect(ctx, bevelX, bevelY, bevelFullWidth, bevelFullHeight, bevelRadius);
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = ColorTokens.border.emphasis;
+        ctx.lineWidth = LayoutConstants.Lines.Thin;
         ctx.stroke();
 
         // Inner content area (inset from bevel)
@@ -713,7 +713,7 @@ export class ShopScene implements UIScene {
             innerY + innerHeight * 0.3,
             innerWidth * 0.8
         );
-        bgGradient.addColorStop(0, 'rgba(40, 40, 50, 1)');
+        bgGradient.addColorStop(0, ColorTokens.background.panelSolid);
         bgGradient.addColorStop(1, ColorTokens.background.panel);
         ctx.fillStyle = bgGradient;
         ctx.fill();
@@ -721,7 +721,7 @@ export class ShopScene implements UIScene {
         // Accent glow background effect
         if (isHovered || isSelected) {
             ctx.save();
-            ctx.globalAlpha = isSelected ? 0.25 : 0.15;
+            ctx.globalAlpha = isSelected ? LayoutConstants.Opacity.SelectedOverlay : LayoutConstants.Opacity.HoverOverlay;
             const glowGrad = ctx.createRadialGradient(
                 innerX + innerWidth / 2,
                 innerY + innerHeight * 0.4,
@@ -742,9 +742,9 @@ export class ShopScene implements UIScene {
         drawRoundedRect(ctx, innerX, innerY, innerWidth, innerHeight, innerRadius);
         ctx.clip();
 
-        ctx.globalAlpha = 0.08;
+        ctx.globalAlpha = LayoutConstants.Opacity.DiagonalStripe;
         ctx.strokeStyle = cue.accent;
-        ctx.lineWidth = 2;
+        ctx.lineWidth = LayoutConstants.Lines.Normal;
         for (let i = -innerHeight; i < innerWidth + innerHeight; i += 20) {
             ctx.beginPath();
             ctx.moveTo(innerX + i, innerY);
@@ -763,8 +763,8 @@ export class ShopScene implements UIScene {
 
         ctx.save();
         // Cue shadow
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
-        ctx.shadowBlur = 12;
+        ctx.shadowColor = ColorTokens.effects.shadowHeavy;
+        ctx.shadowBlur = LayoutConstants.Shadows.Glow.blur;
         ctx.shadowOffsetX = 4;
         ctx.shadowOffsetY = 4;
 
@@ -803,9 +803,9 @@ export class ShopScene implements UIScene {
         ctx.restore();
 
         // RARITY BADGE - Top right corner with glow
-        const rarityPadding = 16;
-        const rarityHeight = 28;
-        ctx.font = '700 11px "Rajdhani", "Montserrat", Arial';
+        const rarityPadding = LayoutConstants.Spacing.Medium;
+        const rarityHeight = LayoutConstants.CurrencyPill.Height;
+        ctx.font = `${LayoutConstants.Fonts.Weight.Bold} 11px ${LayoutConstants.Fonts.Family.Game}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         const rarityWidth = ctx.measureText(cue.rarity).width + 32;
@@ -831,9 +831,9 @@ export class ShopScene implements UIScene {
         ctx.shadowColor = 'transparent';
 
         // Rarity text
-        ctx.fillStyle = '#FFFFFF';
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-        ctx.shadowBlur = 4;
+        ctx.fillStyle = ColorTokens.text.primary;
+        ctx.shadowColor = ColorTokens.effects.shadowText;
+        ctx.shadowBlur = LayoutConstants.Shadows.Text.blur;
         ctx.fillText(cue.rarity, rarityX + rarityWidth / 2, rarityY + rarityHeight / 2);
         ctx.shadowBlur = 0;
         ctx.shadowColor = 'transparent';
@@ -861,11 +861,11 @@ export class ShopScene implements UIScene {
         }
 
         // Name with strong shadow
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
-        ctx.shadowBlur = 8;
-        ctx.shadowOffsetX = 2;
-        ctx.shadowOffsetY = 2;
-        ctx.fillStyle = '#FFFFFF';
+        ctx.shadowColor = ColorTokens.effects.shadowText;
+        ctx.shadowBlur = LayoutConstants.Shadows.Small.blur;
+        ctx.shadowOffsetX = LayoutConstants.Shadows.Text.offsetX;
+        ctx.shadowOffsetY = LayoutConstants.Shadows.Text.offsetY;
+        ctx.fillStyle = ColorTokens.text.primary;
         ctx.fillText(nameText, innerX + 20, textStartY);
         ctx.shadowBlur = 0;
         ctx.shadowOffsetX = 0;
@@ -877,11 +877,11 @@ export class ShopScene implements UIScene {
         ctx.restore();
 
         // Description text with accent color and word wrapping
-        ctx.font = '600 11px "Nunito", Arial';
+        ctx.font = `${LayoutConstants.Fonts.Weight.SemiBold} 11px ${LayoutConstants.Fonts.Family.Body}`;
         ctx.fillStyle = cue.accent;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+        ctx.shadowColor = ColorTokens.effects.shadowText;
         ctx.shadowBlur = 6;
 
         // Word wrap the description
@@ -910,7 +910,7 @@ export class ShopScene implements UIScene {
 
         // Equipped badge
         if (cue.id === this.equippedCueId) {
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; // Dark overlay for equipped badge
+            ctx.fillStyle = ColorTokens.background.overlayHeavy;
             ctx.fillRect(innerX, innerY + innerHeight - 36, innerWidth, 36);
             ctx.fillStyle = ColorTokens.action.success;
             ctx.font = '600 14px "Montserrat", Arial';
@@ -984,10 +984,10 @@ export class ShopScene implements UIScene {
         // Hover/Selected glow effect (outer glow)
         if (isHovered || isSelected) {
             drawRoundedRect(ctx, x - 2, y - 2, width + 4, height + 4, radius + 2);
-            ctx.strokeStyle = isSelected ? cue.accent : '#00B4FF';
-            ctx.lineWidth = 4;
-            ctx.shadowColor = isSelected ? `${cue.accent}99` : 'rgba(0, 180, 255, 0.6)';
-            ctx.shadowBlur = 20;
+            ctx.strokeStyle = isSelected ? cue.accent : ColorTokens.ui.teal;
+            ctx.lineWidth = LayoutConstants.Lines.Heavy;
+            ctx.shadowColor = isSelected ? `${cue.accent}99` : ColorTokens.effects.glow;
+            ctx.shadowBlur = LayoutConstants.Shadows.Medium.blur;
             ctx.stroke();
             ctx.shadowBlur = 0;
             ctx.shadowColor = 'transparent';

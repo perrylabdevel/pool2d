@@ -10,6 +10,7 @@ import {
     Rect
 } from '../components/UIComponents';
 import { ColorTokens } from '../theme/ColorTokens';
+import { LayoutConstants } from '../theme/LayoutConstants';
 import { GameMode } from '../../game/Game';
 import { NavigationBar } from '../components/NavigationBar';
 import { drawSceneBackground } from '../components/SceneBackground';
@@ -261,38 +262,38 @@ export class PlayModesScene implements UIScene {
         if (!card.rect) return;
 
         const { x, y, width, height } = card.rect;
-        const radius = 16;
-        const frameWidth = 6; // Outer decorative frame
-        const bevelWidth = 3; // Middle bevel layer
-        const borderWidth = 2; // Inner border
+        const radius = LayoutConstants.Radii.XLarge;
+        const frameWidth = LayoutConstants.Cards.FrameWidth;
+        const bevelWidth = LayoutConstants.Cards.BevelWidth;
+        const borderWidth = LayoutConstants.Cards.BorderWidth;
 
         ctx.save();
 
         // Enhanced drop shadow
         if (isHovered) {
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
-            ctx.shadowBlur = 28;
-            ctx.shadowOffsetY = 14;
+            ctx.shadowColor = ColorTokens.effects.shadowHeavy;
+            ctx.shadowBlur = LayoutConstants.Shadows.Large.blur;
+            ctx.shadowOffsetY = LayoutConstants.Shadows.Large.offsetY;
         } else {
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
-            ctx.shadowBlur = 20;
-            ctx.shadowOffsetY = 10;
+            ctx.shadowColor = ColorTokens.effects.shadowLight;
+            ctx.shadowBlur = LayoutConstants.Shadows.Medium.blur;
+            ctx.shadowOffsetY = LayoutConstants.Shadows.Medium.offsetY;
         }
 
         // Outer Frame - Metallic/Wood-grain effect
         drawRoundedRect(ctx, x, y, width, height, radius);
         const frameGradient = ctx.createLinearGradient(x, y, x, y + height);
-        frameGradient.addColorStop(0, '#8B7355'); // Lighter wood/bronze
-        frameGradient.addColorStop(0.5, '#6B5745'); // Mid wood/bronze
-        frameGradient.addColorStop(1, '#4B3725'); // Darker wood/bronze
+        frameGradient.addColorStop(0, ColorTokens.card.frame.light);
+        frameGradient.addColorStop(0.5, ColorTokens.card.frame.mid);
+        frameGradient.addColorStop(1, ColorTokens.card.frame.dark);
         ctx.fillStyle = frameGradient;
         ctx.fill();
 
         // Add metallic shine to frame
         const shineGradient = ctx.createLinearGradient(x, y, x + width / 3, y);
-        shineGradient.addColorStop(0, 'rgba(255, 255, 255, 0.4)');
-        shineGradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.1)');
-        shineGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        shineGradient.addColorStop(0, ColorTokens.effects.gloss.start);
+        shineGradient.addColorStop(0.5, ColorTokens.effects.gloss.mid);
+        shineGradient.addColorStop(1, ColorTokens.effects.gloss.none);
         ctx.fillStyle = shineGradient;
         ctx.fill();
 
@@ -310,16 +311,16 @@ export class PlayModesScene implements UIScene {
 
         drawRoundedRect(ctx, bevelX, bevelY, bevelFullWidth, bevelFullHeight, bevelRadius);
         const bevelGradient = ctx.createLinearGradient(bevelX, bevelY, bevelX, bevelY + bevelFullHeight);
-        bevelGradient.addColorStop(0, '#3a3a3a'); // Dark top for inset look
-        bevelGradient.addColorStop(0.5, '#2a2a2a'); // Mid
-        bevelGradient.addColorStop(1, '#4a4a4a'); // Lighter bottom
+        bevelGradient.addColorStop(0, ColorTokens.card.bevel.top);
+        bevelGradient.addColorStop(0.5, ColorTokens.card.bevel.mid);
+        bevelGradient.addColorStop(1, ColorTokens.card.bevel.bottom);
         ctx.fillStyle = bevelGradient;
         ctx.fill();
 
         // Bevel highlight (top edge)
         drawRoundedRect(ctx, bevelX, bevelY, bevelFullWidth, bevelFullHeight, bevelRadius);
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = ColorTokens.border.emphasis;
+        ctx.lineWidth = LayoutConstants.Lines.Thin;
         ctx.stroke();
 
         // Inner content area (inset from bevel)
@@ -416,12 +417,12 @@ export class PlayModesScene implements UIScene {
             ctx.shadowColor = 'transparent';
 
             const freeFontSize = Math.min(16, innerHeight * 0.05);
-            ctx.font = `700 ${freeFontSize}px "Rajdhani", sans-serif`;
-            ctx.fillStyle = '#FFFFFF';
+            ctx.font = `${LayoutConstants.Fonts.Weight.Bold} ${freeFontSize}px ${LayoutConstants.Fonts.Family.Game}`;
+            ctx.fillStyle = ColorTokens.text.primary;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-            ctx.shadowBlur = 4;
+            ctx.shadowColor = ColorTokens.effects.shadowText;
+            ctx.shadowBlur = LayoutConstants.Shadows.Text.blur;
             ctx.fillText('FREE', freeBadgeX + freeBadgeWidth / 2, freeBadgeY + priceHeight / 2);
             ctx.shadowBlur = 0;
             ctx.shadowColor = 'transparent';
@@ -463,16 +464,16 @@ export class PlayModesScene implements UIScene {
             ctx.fill();
 
             // Coin border
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.strokeStyle = ColorTokens.effects.gloss.start;
             ctx.lineWidth = 1.5;
             ctx.stroke();
 
             // Price text
-            ctx.fillStyle = '#FFD700';
+            ctx.fillStyle = ColorTokens.brand.primary;
             ctx.textAlign = 'left';
             ctx.textBaseline = 'middle';
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-            ctx.shadowBlur = 4;
+            ctx.shadowColor = ColorTokens.effects.shadowText;
+            ctx.shadowBlur = LayoutConstants.Shadows.Text.blur;
             ctx.fillText(priceText, coinX + coinRadius + 8, coinY);
             ctx.shadowBlur = 0;
             ctx.shadowColor = 'transparent';
@@ -490,11 +491,11 @@ export class PlayModesScene implements UIScene {
         ctx.textBaseline = 'bottom';
 
         // Title with strong shadow for readability
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
-        ctx.shadowBlur = 12;
-        ctx.shadowOffsetX = 2;
-        ctx.shadowOffsetY = 2;
-        ctx.fillStyle = '#FFFFFF';
+        ctx.shadowColor = ColorTokens.effects.shadowText;
+        ctx.shadowBlur = LayoutConstants.Shadows.Glow.blur;
+        ctx.shadowOffsetX = LayoutConstants.Shadows.Text.offsetX;
+        ctx.shadowOffsetY = LayoutConstants.Shadows.Text.offsetY;
+        ctx.fillStyle = ColorTokens.text.primary;
         ctx.fillText(card.title, textStartX, textStartY);
         ctx.shadowBlur = 0;
         ctx.shadowOffsetX = 0;
@@ -508,30 +509,7 @@ export class PlayModesScene implements UIScene {
         ctx.fillRect(textStartX, textStartY + 4, Math.min(titleWidth, innerWidth - textPadding * 2), 4);
 
         // Subtitle with color accent
-        const subtitleFontSize = Math.min(16, innerWidth * 0.065);
-        ctx.font = `700 ${subtitleFontSize}px "Rajdhani", sans-serif`;
-        ctx.fillStyle = card.color;
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'bottom';
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-        ctx.shadowBlur = 6;
-        ctx.fillText(card.subtitle, textStartX, textStartY + 26);
-        ctx.shadowBlur = 0;
-        ctx.shadowColor = 'transparent';
-
-        // Description below subtitle
-        const descFontSize = Math.min(12, innerWidth * 0.05);
-        ctx.font = `600 ${descFontSize}px "Nunito", Arial`;
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-        ctx.shadowBlur = 4;
-        ctx.fillText(card.desc, textStartX, textStartY + 42);
-        ctx.shadowBlur = 0;
-        ctx.shadowColor = 'transparent';
-
-        // Inner border (decorative line inside the frame)
-        drawRoundedRect(ctx, innerX, innerY, innerWidth, innerHeight, innerRadius);
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+        ctx.strokeStyle = ColorTokens.border.darkStrong;
         ctx.lineWidth = borderWidth;
         ctx.stroke();
 

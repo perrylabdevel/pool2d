@@ -13,8 +13,10 @@ import {
     getAxisPalette,
     type AxisAlignment
 } from '../RenderUtils';
+import { ColorTokens } from '../../ui/theme/ColorTokens';
+import { LayoutConstants } from '../../ui/theme/LayoutConstants';
 
-const EMPTY_CHIP_BORDER = 'rgba(255, 255, 255, 0.15)';
+const EMPTY_CHIP_BORDER = ColorTokens.border.emphasis;
 
 export class CueRenderer {
     // 3D objects to remove if present (legacy cleanup)
@@ -75,11 +77,11 @@ export class CueRenderer {
 
         // Scale cue thickness with world scale (about 1 inch diameter in world units)
         const scale = this.getScale();
-        const cueThicknessInches = 1.0; // Standard cue stick diameter
+        const cueThicknessInches = LayoutConstants.Cue.ThicknessInches;
         const cueThicknessPixels = cueThicknessInches * scale;
 
         // Calculate tip position (about 0.4 inches from the near end - slightly exaggerated for visibility)
-        const tipLengthInches = 0.4;
+        const tipLengthInches = LayoutConstants.Cue.TipLengthInches;
         const tipEnd = {
             x: ballX - Math.cos(angle) * cueDistance,
             y: ballY - Math.sin(angle) * cueDistance
@@ -92,11 +94,11 @@ export class CueRenderer {
         const tipEndScreen = this.worldToScreen(tipEnd.x, tipEnd.y);
 
         // Get cue colors from settings
-        const cueStickColor = (CONFIG as any).CUE_STICK_COLOR || '#8B4513';
-        const cueTipColor = (CONFIG as any).CUE_TIP_COLOR || '#4A90E2';
+        const cueStickColor = (CONFIG as any).CUE_STICK_COLOR || ColorTokens.cue.defaultStick;
+        const cueTipColor = (CONFIG as any).CUE_TIP_COLOR || ColorTokens.cue.defaultTip;
 
         // Draw main cue stick with gradient shading for 3D effect
-        const lineWidth = Math.max(4, cueThicknessPixels);
+        const lineWidth = Math.max(LayoutConstants.Cue.MinThicknessPixels, cueThicknessPixels);
 
         // Create gradient perpendicular to cue direction for cylindrical appearance
         const dx = cueEnd.x - tipStartScreen.x;

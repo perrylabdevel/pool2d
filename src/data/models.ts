@@ -108,10 +108,4 @@ export interface ClubDef {
     tableId: string; // e.g., 'standard', 'lux', 'neon'
 }
 
-export interface ChestDef {
-    id: string;
-    type: 'bronze' | 'gold' | 'platinum' | 'diamond';
-    minCoins: number;
-    maxCoins: number;
-    unlockTimeMs: number;
-}
+// ChestDef removed - use ChestDefinition from game/economy/ChestSystem.ts instead

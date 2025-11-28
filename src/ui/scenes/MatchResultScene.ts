@@ -1,17 +1,32 @@
 /**
  * MatchResultScene - Post-game results screen
- * Shows win/loss, earnings, chest earned, and options to play again or return to lobby
+ * Shows win/loss, earnings, trophies, chest earned, and options to play again or return to lobby
  */
 
 import { UIScene } from '../SceneController';
 import { uiStateMachine, UIState } from '../UIStateMachine';
-import { drawRoundedRect, drawGlossyButton, Rect } from '../components/UIComponents';
+import { drawRoundedRect, Rect } from '../components/UIComponents';
 import { ColorTokens } from '../theme/ColorTokens';
 import { LayoutConstants } from '../theme/LayoutConstants';
 import { drawSceneBackground } from '../components/SceneBackground';
 import { ChestRenderer } from '../components/ChestRenderer';
+import { ChestType, CHEST_DEFINITIONS } from '../../game/economy/ChestSystem';
 
-// ... (imports)
+interface MatchResultData {
+    isWin: boolean;
+    earnings: number;
+    trophyChange: number;
+    opponentName: string;
+    opponentId: string;
+    chestAwarded: string | null;
+    clubId: string | null;
+}
+
+interface ResultButton extends Rect {
+    label: string;
+    action: () => void;
+    primary?: boolean;
+}
 
 export class MatchResultScene implements UIScene {
     private canvas: HTMLCanvasElement | null = null;
@@ -19,15 +34,18 @@ export class MatchResultScene implements UIScene {
     private hoveredButton: ResultButton | null = null;
     private resultData: MatchResultData | null = null;
     private animationProgress: number = 0;
+    private animationStartTime: number = 0;
 
     mount(): void {
         this.canvas = document.getElementById('ui-stage') as HTMLCanvasElement;
         if (!this.canvas) return;
 
         // Get match result data
-        this.resultData = (window as any).__lastMatchResult || null;
+        this.resultData = (window as unknown as { __lastMatchResult?: MatchResultData }).__lastMatchResult || null;
+        console.log('MatchResultScene mounted with data:', this.resultData);
 
         this.animationProgress = 0;
+        this.animationStartTime = Date.now();
         this.setupLayout();
 
         this.canvas.addEventListener('mousemove', this.onMouseMove);
@@ -43,7 +61,205 @@ export class MatchResultScene implements UIScene {
         this.canvas.style.cursor = 'default';
     }
 
-    // ... (rest of methods)
+    private setupLayout = () => {
+        if (!this.canvas) return;
+        const width = this.canvas.width;
+        const height = this.canvas.height;
+        const centerX = width / 2;
+
+        const buttonWidth = 200;
+        const buttonHeight = 50;
+        const buttonGap = 20;
+        const buttonY = height - 120;
+
+        this.buttons = [
+            {
+                x: centerX - buttonWidth - buttonGap / 2,
+                y: buttonY,
+                width: buttonWidth,
+                height: buttonHeight,
+                label: 'LOBBY',
+                action: () => uiStateMachine.transitionTo(UIState.LOBBY),
+            },
+            {
+                x: centerX + buttonGap / 2,
+                y: buttonY,
+                width: buttonWidth,
+                height: buttonHeight,
+                label: 'PLAY AGAIN',
+                primary: true,
+                action: () => uiStateMachine.transitionTo(UIState.CLUB_SELECTION),
+            },
+        ];
+    };
+
+    private onResize = () => {
+        this.setupLayout();
+    };
+
+    private onMouseMove = (e: MouseEvent) => {
+        if (!this.canvas) return;
+        const rect = this.canvas.getBoundingClientRect();
+        const scaleX = this.canvas.width / rect.width;
+        const scaleY = this.canvas.height / rect.height;
+        const x = (e.clientX - rect.left) * scaleX;
+        const y = (e.clientY - rect.top) * scaleY;
+
+        this.hoveredButton = null;
+        for (const btn of this.buttons) {
+            if (x >= btn.x && x <= btn.x + btn.width &&
+                y >= btn.y && y <= btn.y + btn.height) {
+                this.hoveredButton = btn;
+                break;
+            }
+        }
+        this.canvas.style.cursor = this.hoveredButton ? 'pointer' : 'default';
+    };
+
+    private onClick = (e: MouseEvent) => {
+        if (!this.canvas) return;
+        const rect = this.canvas.getBoundingClientRect();
+        const scaleX = this.canvas.width / rect.width;
+        const scaleY = this.canvas.height / rect.height;
+        const x = (e.clientX - rect.left) * scaleX;
+        const y = (e.clientY - rect.top) * scaleY;
+
+        for (const btn of this.buttons) {
+            if (x >= btn.x && x <= btn.x + btn.width &&
+                y >= btn.y && y <= btn.y + btn.height) {
+                btn.action();
+                return;
+            }
+        }
+    };
+
+    update(_dt: number): void {
+        // Animate in over 0.8 seconds
+        const elapsed = Date.now() - this.animationStartTime;
+        this.animationProgress = Math.min(1, elapsed / 800);
+    }
+
+    render(ctx: CanvasRenderingContext2D): void {
+        const width = ctx.canvas.width;
+        const height = ctx.canvas.height;
+        const centerX = width / 2;
+
+        // Background
+        drawSceneBackground(ctx, width, height, this.resultData?.isWin ? 'green' : 'red');
+
+        // Dim overlay
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+        ctx.fillRect(0, 0, width, height);
+
+        const progress = this.easeOutBack(this.animationProgress);
+
+        // Result card
+        const cardWidth = Math.min(450, width - 40);
+        const cardHeight = 400;
+        const cardX = centerX - cardWidth / 2;
+        const cardY = (height - cardHeight) / 2 - 30;
+
+        // Card background with scale animation
+        ctx.save();
+        ctx.translate(centerX, cardY + cardHeight / 2);
+        ctx.scale(progress, progress);
+        ctx.translate(-centerX, -(cardY + cardHeight / 2));
+
+        // Card shadow
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+        ctx.shadowBlur = 30;
+        ctx.shadowOffsetY = 10;
+
+        drawRoundedRect(ctx, cardX, cardY, cardWidth, cardHeight, 20);
+        ctx.fillStyle = 'rgba(20, 25, 35, 0.95)';
+        ctx.fill();
+
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
+
+        // Border glow
+        ctx.strokeStyle = this.resultData?.isWin ? '#00FF88' : '#FF4444';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        ctx.restore();
+
+        // Content (fade in after card)
+        const contentProgress = Math.max(0, (this.animationProgress - 0.3) / 0.7);
+        if (contentProgress > 0) {
+            ctx.globalAlpha = contentProgress;
+            this.renderContent(ctx, centerX, cardY, cardWidth);
+            ctx.globalAlpha = 1;
+        }
+
+        // Buttons
+        if (this.animationProgress > 0.5) {
+            const buttonProgress = Math.min(1, (this.animationProgress - 0.5) / 0.5);
+            ctx.globalAlpha = buttonProgress;
+            this.renderButtons(ctx);
+            ctx.globalAlpha = 1;
+        }
+    }
+
+    private renderContent(ctx: CanvasRenderingContext2D, centerX: number, cardY: number, _cardWidth: number) {
+        const data = this.resultData;
+        if (!data) return;
+
+        let y = cardY + 50;
+
+        // Result title
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = `bold 42px ${LayoutConstants.Fonts.Family.Heading}`;
+        ctx.fillStyle = data.isWin ? '#00FF88' : '#FF4444';
+        ctx.fillText(data.isWin ? 'VICTORY!' : 'DEFEAT', centerX, y);
+
+        y += 50;
+
+        // Opponent name
+        ctx.font = `18px ${LayoutConstants.Fonts.Family.Body}`;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.fillText(`vs ${data.opponentName}`, centerX, y);
+
+        y += 50;
+
+        // Stats row
+        const statsY = y;
+        const statWidth = 120;
+        const statsStartX = centerX - statWidth;
+
+        // Trophies
+        this.renderStat(ctx, statsStartX, statsY, '🏆', 
+            data.trophyChange >= 0 ? `+${data.trophyChange}` : `${data.trophyChange}`,
+            data.trophyChange >= 0 ? '#FFD700' : '#FF4444'
+        );
+
+        // Coins
+        this.renderStat(ctx, statsStartX + statWidth * 2, statsY, '💰',
+            data.earnings > 0 ? `+${data.earnings.toLocaleString()}` : '0',
+            data.earnings > 0 ? '#00FF88' : '#888888'
+        );
+
+        y += 80;
+
+        // Chest section
+        if (data.chestAwarded) {
+            this.renderChestSection(ctx, centerX, y, 1);
+        }
+    }
+
+    private renderStat(ctx: CanvasRenderingContext2D, x: number, y: number, icon: string, value: string, color: string) {
+        ctx.textAlign = 'center';
+        
+        // Icon
+        ctx.font = '32px sans-serif';
+        ctx.fillText(icon, x, y);
+
+        // Value
+        ctx.font = `bold 24px ${LayoutConstants.Fonts.Family.Heading}`;
+        ctx.fillStyle = color;
+        ctx.fillText(value, x, y + 40);
+    }
 
     private renderChestSection(ctx: CanvasRenderingContext2D, centerX: number, y: number, progress: number) {
         if (!this.resultData?.chestAwarded) return;
@@ -62,7 +278,7 @@ export class MatchResultScene implements UIScene {
         ctx.fillText('CHEST EARNED', centerX, y);
 
         // Chest image using ChestRenderer
-        const chestSize = 80;
+        const chestSize = 70;
         const chestX = centerX - chestSize / 2;
         const chestY = y + 10;
 
@@ -74,7 +290,7 @@ export class MatchResultScene implements UIScene {
 
         // Add glow
         ctx.shadowColor = ColorTokens.action.warning;
-        ctx.shadowBlur = 20;
+        ctx.shadowBlur = 15;
 
         ChestRenderer.drawChest(ctx, chestX, chestY, chestSize, rendererType);
 
@@ -82,10 +298,47 @@ export class MatchResultScene implements UIScene {
 
         // Chest name
         ctx.fillStyle = ColorTokens.action.warning;
-        ctx.font = `bold 18px ${LayoutConstants.Fonts.Family.Heading}`;
-        ctx.fillText(chestDef.name, centerX, y + 110);
+        ctx.font = `bold 16px ${LayoutConstants.Fonts.Family.Heading}`;
+        ctx.fillText(chestDef.name, centerX, y + 95);
 
         ctx.restore();
+    }
+
+    private renderButtons(ctx: CanvasRenderingContext2D) {
+        for (const btn of this.buttons) {
+            const isHovered = this.hoveredButton === btn;
+            
+            // Button background
+            drawRoundedRect(ctx, btn.x, btn.y, btn.width, btn.height, 25);
+            
+            if (btn.primary) {
+                const grad = ctx.createLinearGradient(btn.x, btn.y, btn.x, btn.y + btn.height);
+                grad.addColorStop(0, isHovered ? '#00FF88' : '#00CC66');
+                grad.addColorStop(1, isHovered ? '#00CC66' : '#009944');
+                ctx.fillStyle = grad;
+            } else {
+                ctx.fillStyle = isHovered ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.1)';
+            }
+            ctx.fill();
+
+            // Border
+            ctx.strokeStyle = btn.primary ? '#00FF88' : 'rgba(255, 255, 255, 0.3)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Label
+            ctx.fillStyle = btn.primary ? '#000000' : '#FFFFFF';
+            ctx.font = `bold 18px ${LayoutConstants.Fonts.Family.Heading}`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(btn.label, btn.x + btn.width / 2, btn.y + btn.height / 2);
+        }
+    }
+
+    private easeOutBack(x: number): number {
+        const c1 = 1.70158;
+        const c3 = c1 + 1;
+        return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
     }
 }
 

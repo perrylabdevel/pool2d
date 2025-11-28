@@ -1,6 +1,6 @@
 import { UIScene } from '../SceneController';
 import { UIState, uiStateMachine } from '../UIStateMachine';
-import { Rect } from '../components/UIComponents';
+import { Rect, drawGlossyButton } from '../components/UIComponents';
 import { ColorTokens } from '../theme/ColorTokens';
 import { LayoutConstants } from '../theme/LayoutConstants';
 import { NavigationBar } from '../components/NavigationBar';
@@ -10,6 +10,8 @@ import { UserProfile } from '../../data/models';
 import { CLUBS } from '../../game/clubs/ClubRegistry';
 import { sceneController } from '../SceneController';
 import { ConfirmScene } from './ConfirmScene';
+import { currencyStore } from '../CurrencyStore';
+import { notificationService } from '../NotificationService';
 
 export class ClubSelectionScene implements UIScene {
     private canvas: HTMLCanvasElement | null = null;
@@ -176,12 +178,26 @@ export class ClubSelectionScene implements UIScene {
                 returnState: UIState.CLUB_SELECTION,
                 onConfirm: () => {
                     console.log(`Selected club: ${club.name}`);
+
+                    // Deduct entry fee
+                    const success = currencyStore.spendCoins(club.entryFee);
+                    if (!success) {
+                        notificationService.show('Not enough coins!', 'error', 2000);
+                        return;
+                    }
+
+                    notificationService.show(`-${club.entryFee.toLocaleString()} coins`, 'info', 1500);
+
                     // Start Game with this club config
                     const game = (window as any).poolGame;
                     if (game && typeof game.startMatch === 'function') {
+                        // Store entry fee for prize calculation on win
+                        game.currentEntryFee = club.entryFee;
                         game.startMatch(club.id);
                     } else {
                         console.error('Game instance not found or startMatch not available');
+                        // Refund if game didn't start
+                        currencyStore.addCoins(club.entryFee);
                     }
                     uiStateMachine.transitionTo(UIState.IN_GAME);
                 }
@@ -247,7 +263,7 @@ export class ClubSelectionScene implements UIScene {
         }
 
         const cardWidth = 300;
-        const cardHeight = 450; // Increased height
+        const cardHeight = 450;
         const gap = 20;
         const startY = this.layout.listRect.y + (this.layout.listRect.height - cardHeight) / 2;
 
@@ -260,98 +276,192 @@ export class ClubSelectionScene implements UIScene {
                 const isTrophiesLocked = (this.userProfile!.trophies || 0) < club.minTrophies;
                 const isLocked = isCoinsLocked || isTrophiesLocked;
 
-                // Card Background
+                // --- Arcade Card Style ---
+                const radius = 16;
+                const frameWidth = 8;
+                const bevelWidth = 4;
+                const borderWidth = 2;
+
                 ctx.save();
 
                 // Shadow
                 ctx.shadowColor = 'rgba(0,0,0,0.5)';
-                ctx.shadowBlur = 15;
+                ctx.shadowBlur = 20;
                 ctx.shadowOffsetY = 10;
 
-                // Base
-                ctx.fillStyle = isLocked ? '#2a2a2a' : '#1e2532';
+                // Outer Frame - Metallic/Wood-grain effect
+                // Use darker colors for locked state
+                const frameColorStart = isLocked ? '#444444' : '#8B7355';
+                const frameColorMid = isLocked ? '#333333' : '#6B5745';
+                const frameColorEnd = isLocked ? '#222222' : '#4B3725';
+
                 ctx.beginPath();
-                ctx.roundRect(cardX, startY, cardWidth, cardHeight, 16);
+                ctx.roundRect(cardX, startY, cardWidth, cardHeight, radius);
+                const frameGradient = ctx.createLinearGradient(cardX, startY, cardX, startY + cardHeight);
+                frameGradient.addColorStop(0, frameColorStart);
+                frameGradient.addColorStop(0.5, frameColorMid);
+                frameGradient.addColorStop(1, frameColorEnd);
+                ctx.fillStyle = frameGradient;
                 ctx.fill();
+
+                // Metallic shine on frame
+                if (!isLocked) {
+                    const shineGradient = ctx.createLinearGradient(cardX, startY, cardX + cardWidth / 3, startY);
+                    shineGradient.addColorStop(0, 'rgba(255, 255, 255, 0.4)');
+                    shineGradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.1)');
+                    shineGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+                    ctx.fillStyle = shineGradient;
+                    ctx.fill();
+                }
 
                 // Reset Shadow
                 ctx.shadowColor = 'transparent';
                 ctx.shadowBlur = 0;
                 ctx.shadowOffsetY = 0;
 
-                // Header / Image Area (Placeholder)
-                const headerHeight = 180;
-                const headerGrad = ctx.createLinearGradient(cardX, startY, cardX, startY + headerHeight);
-                if (isLocked) {
-                    headerGrad.addColorStop(0, '#444');
-                    headerGrad.addColorStop(1, '#333');
-                } else {
-                    // Generate a color based on index for variety
-                    const hue = (index * 30) % 360;
-                    headerGrad.addColorStop(0, `hsl(${hue}, 60%, 40%)`);
-                    headerGrad.addColorStop(1, `hsl(${hue}, 60%, 20%)`);
-                }
+                // Middle Bevel Layer
+                const bevelX = cardX + frameWidth;
+                const bevelY = startY + frameWidth;
+                const bevelFullWidth = cardWidth - frameWidth * 2;
+                const bevelFullHeight = cardHeight - frameWidth * 2;
+                const bevelRadius = radius - frameWidth;
 
-                ctx.fillStyle = headerGrad;
                 ctx.beginPath();
-                ctx.roundRect(cardX, startY, cardWidth, headerHeight, [16, 16, 0, 0]);
+                ctx.roundRect(bevelX, bevelY, bevelFullWidth, bevelFullHeight, bevelRadius);
+                const bevelGradient = ctx.createLinearGradient(bevelX, bevelY, bevelX, bevelY + bevelFullHeight);
+                bevelGradient.addColorStop(0, '#3a3a3a');
+                bevelGradient.addColorStop(0.5, '#2a2a2a');
+                bevelGradient.addColorStop(1, '#4a4a4a');
+                ctx.fillStyle = bevelGradient;
                 ctx.fill();
+
+                // Bevel highlight
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+
+                // Inner Content Area
+                const innerX = bevelX + bevelWidth;
+                const innerY = bevelY + bevelWidth;
+                const innerWidth = bevelFullWidth - bevelWidth * 2;
+                const innerHeight = bevelFullHeight - bevelWidth * 2;
+                const innerRadius = bevelRadius - bevelWidth;
+
+                // Clip to inner area
+                ctx.save();
+                ctx.beginPath();
+                ctx.roundRect(innerX, innerY, innerWidth, innerHeight, innerRadius);
+                ctx.clip();
+
+                // Background for content (Dark)
+                ctx.fillStyle = '#1a1a1a';
+                ctx.fill();
+
+                // Header Gradient (Top half)
+                const headerHeight = 160;
+                const headerGrad = ctx.createLinearGradient(innerX, innerY, innerX, innerY + headerHeight);
+                if (isLocked) {
+                    headerGrad.addColorStop(0, '#333');
+                    headerGrad.addColorStop(1, '#222');
+                } else {
+                    const hue = (index * 30) % 360;
+                    headerGrad.addColorStop(0, `hsl(${hue}, 60%, 30%)`);
+                    headerGrad.addColorStop(1, `hsl(${hue}, 60%, 15%)`);
+                }
+                ctx.fillStyle = headerGrad;
+                ctx.fillRect(innerX, innerY, innerWidth, headerHeight);
 
                 // Club Name
                 ctx.fillStyle = isLocked ? '#888' : '#FFFFFF';
-                ctx.font = `700 24px ${LayoutConstants.Fonts.Family.Heading}`;
+                ctx.font = `700 28px "Rajdhani", ${LayoutConstants.Fonts.Family.Heading}`;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.fillText(club.name, cardX + cardWidth / 2, startY + headerHeight + 40);
+                ctx.shadowColor = 'rgba(0,0,0,0.5)';
+                ctx.shadowBlur = 4;
+                ctx.fillText(club.name, innerX + innerWidth / 2, innerY + headerHeight / 2);
+                ctx.shadowBlur = 0;
+
+                // Content Text
+                const contentStartY = innerY + headerHeight + 20;
 
                 // Entry Fee
                 ctx.font = `600 16px ${LayoutConstants.Fonts.Family.Body}`;
-                ctx.fillStyle = isLocked ? '#666' : ColorTokens.currency.coins;
-                ctx.fillText('Entry Fee:', cardX + cardWidth / 2, startY + headerHeight + 80);
+                ctx.fillStyle = isLocked ? '#666' : '#AAAAAA';
+                ctx.fillText('ENTRY FEE', innerX + innerWidth / 2, contentStartY);
 
                 ctx.font = `800 24px ${LayoutConstants.Fonts.Family.Heading}`;
                 ctx.fillStyle = isLocked ? '#888' : ColorTokens.currency.coins;
-                ctx.fillText(club.entryFee.toLocaleString(), cardX + cardWidth / 2, startY + headerHeight + 110);
+                ctx.fillText(club.entryFee.toLocaleString(), innerX + innerWidth / 2, contentStartY + 30);
 
                 // Prize Pool
                 ctx.font = `600 14px ${LayoutConstants.Fonts.Family.Body}`;
-                ctx.fillStyle = isLocked ? '#555' : ColorTokens.text.secondary;
-                ctx.fillText(`Prize: ${(club.entryFee * 2).toLocaleString()}`, cardX + cardWidth / 2, startY + headerHeight + 145);
+                ctx.fillStyle = isLocked ? '#555' : '#AAAAAA';
+                ctx.fillText(`PRIZE: ${(club.entryFee * 2).toLocaleString()}`, innerX + innerWidth / 2, contentStartY + 60);
 
                 // Trophy Requirement
                 ctx.font = `700 14px ${LayoutConstants.Fonts.Family.Body}`;
                 const trophyReq = club.minTrophies || 0;
                 const trophyLocked = (this.userProfile!.trophies || 0) < trophyReq;
 
-                // Render trophy text at +175, which is 180+175 = 355.
-                // Button starts at 450 - 48 - 20 = 382.
-                // 355 < 382. No overlap!
                 if (trophyReq > 0) {
                     ctx.fillStyle = trophyLocked ? '#FF4444' : '#FFD700';
-                    ctx.fillText(`🏆 Requires ${trophyReq.toLocaleString()}`, cardX + cardWidth / 2, startY + headerHeight + 175);
+                    ctx.fillText(`🏆 ${trophyReq.toLocaleString()} REQUIRED`, innerX + innerWidth / 2, contentStartY + 90);
                 } else {
-                    ctx.fillStyle = '#888888';
-                    ctx.fillText(`🏆 No Trophy Requirement`, cardX + cardWidth / 2, startY + headerHeight + 175);
+                    ctx.fillStyle = '#666666';
+                    ctx.fillText(`🏆 NO REQUIREMENT`, innerX + innerWidth / 2, contentStartY + 90);
                 }
 
-                // Play Button (Visual)
+                ctx.restore(); // End Clip
+
+                // Play Button (Inside the card, at bottom)
                 const btnH = 48;
-                const btnW = cardWidth - 40;
-                const btnX = cardX + 20;
-                const btnY = startY + cardHeight - btnH - 20;
+                const btnW = innerWidth - 40;
+                const btnX = innerX + 20;
+                const btnY = innerY + innerHeight - btnH - 20;
 
-                ctx.beginPath();
-                ctx.roundRect(btnX, btnY, btnW, btnH, 24);
-                if (isLocked) {
-                    ctx.fillStyle = '#444';
-                } else {
-                    ctx.fillStyle = '#00B4FF'; // Hardcoded blue for now as action.primary might be missing
+                const btnRect = { x: btnX, y: btnY, width: btnW, height: btnH };
+                const btnLabel = isLocked ? 'LOCKED' : 'PLAY';
+                const btnColor = isLocked ? '#333333' : '#00FF88'; // Use green for play to match arcade theme
+
+                // Use drawGlossyButton for consistent look
+                drawGlossyButton(ctx, btnRect, btnLabel, btnColor, false); // No hover state tracked for individual list items yet
+
+
+                // Corner Decorations (Gold Accents)
+                if (!isLocked) {
+                    const cornerSize = 15;
+                    const cornerInset = frameWidth + bevelWidth + 4;
+                    ctx.strokeStyle = 'rgba(255, 215, 0, 0.8)'; // Gold
+                    ctx.lineWidth = 2;
+
+                    // Top-left
+                    ctx.beginPath();
+                    ctx.moveTo(cardX + cornerInset + cornerSize, startY + cornerInset);
+                    ctx.lineTo(cardX + cornerInset, startY + cornerInset);
+                    ctx.lineTo(cardX + cornerInset, startY + cornerInset + cornerSize);
+                    ctx.stroke();
+
+                    // Top-right
+                    ctx.beginPath();
+                    ctx.moveTo(cardX + cardWidth - cornerInset - cornerSize, startY + cornerInset);
+                    ctx.lineTo(cardX + cardWidth - cornerInset, startY + cornerInset);
+                    ctx.lineTo(cardX + cardWidth - cornerInset, startY + cornerInset + cornerSize);
+                    ctx.stroke();
+
+                    // Bottom-left
+                    ctx.beginPath();
+                    ctx.moveTo(cardX + cornerInset, startY + cardHeight - cornerInset - cornerSize);
+                    ctx.lineTo(cardX + cornerInset, startY + cardHeight - cornerInset);
+                    ctx.lineTo(cardX + cornerInset + cornerSize, startY + cardHeight - cornerInset);
+                    ctx.stroke();
+
+                    // Bottom-right
+                    ctx.beginPath();
+                    ctx.moveTo(cardX + cardWidth - cornerInset, startY + cardHeight - cornerInset - cornerSize);
+                    ctx.lineTo(cardX + cardWidth - cornerInset, startY + cardHeight - cornerInset);
+                    ctx.lineTo(cardX + cardWidth - cornerInset - cornerSize, startY + cardHeight - cornerInset);
+                    ctx.stroke();
                 }
-                ctx.fill();
-
-                ctx.fillStyle = isLocked ? '#888' : '#FFFFFF';
-                ctx.font = `700 18px ${LayoutConstants.Fonts.Family.Heading}`;
-                ctx.fillText(isLocked ? 'LOCKED' : 'PLAY', btnX + btnW / 2, btnY + btnH / 2 + 1);
 
                 ctx.restore();
             }

@@ -1,5 +1,20 @@
 import { LeagueDef } from '../../data/models';
 
+// Re-export trophy-based league tier system
+// These are now the authoritative source for player ranking
+export { 
+    LEAGUE_TIERS, 
+    getLeagueForTrophies, 
+    getNextLeagueTier,
+    getLeagueProgress,
+    type LeagueTier 
+} from '../economy/TrophySystem';
+
+/**
+ * Legacy league definitions for standings display
+ * Note: Player's current league is now determined by TrophySystem.getLeagueForTrophies()
+ * These definitions are kept for LeagueScene standings compatibility
+ */
 export const LEAGUES: LeagueDef[] = [
     { id: 'bronze_1', name: 'Bronze I', tier: 1, entryFee: 50, prizePool: 100, minLevel: 1, icon: '🏆' },
     { id: 'bronze_2', name: 'Bronze II', tier: 1, entryFee: 100, prizePool: 200, minLevel: 2, icon: '🏆' },

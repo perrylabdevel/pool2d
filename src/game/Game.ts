@@ -38,6 +38,8 @@ import { uiStateMachine, UIState } from '../ui/UIStateMachine';
 import { db, getChestSlots, updateChestSlot } from '../data/db';
 import { MatchRecord } from '../data/models';
 import { getChestForLeague, CHEST_DEFINITIONS } from './economy/ChestSystem';
+import { getClampedTrophyChange, getLeagueForTrophies } from './economy/TrophySystem';
+import { getClubById } from './clubs/ClubRegistry';
 import { AssetRegistry } from '../assets/AssetRegistry';
 
 export enum GameMode {
@@ -89,6 +91,8 @@ export class Game {
   predictor: Predictor;
   audio: AudioManager;
   mode: GameMode;
+  currentClubId: string | null = null; // Track which club the current match is in
+  currentEntryFee: number = 0; // Entry fee for prize calculation
   currentRuleset: string = 'TOURNAMENT'; // Tournament rules as default
   private lastBallScale: number;
   private _lastCanvasScale?: number;
@@ -703,6 +707,7 @@ export class Game {
   public startMatch(clubId: string) {
     console.log(`Starting match for club: ${clubId}`);
     this.mode = GameMode.EIGHT_BALL;
+    this.currentClubId = clubId; // Store for trophy calculations
 
     // Map club difficulty to AI difficulty
     // This is a simplified mapping for now
@@ -966,18 +971,39 @@ export class Game {
           userScore: isWin ? 1 : 0,
           opponentScore: isWin ? 0 : 1,
           result: isWin ? 'win' : 'loss',
-          earnings: isWin ? 100 : 10, // Base earnings
-          leagueId: 'bronze_1', // Default for now
+          earnings: isWin ? this.currentEntryFee * 2 : 0, // Winner gets 2x entry fee, loser gets nothing
+          leagueId: this.currentClubId || 'club_basement', // Use tracked club
         };
 
         let chestAwarded: string | null = null;
+        let trophyChange = 0;
 
         try {
           await db.matches.add(record);
-          // Update user stats
+          
+          // Get current user for trophy calculation
+          const currentUser = await db.user.get(1);
+          const currentTrophies = currentUser?.trophies || 0;
+          
+          // Calculate trophy change based on club and result
+          trophyChange = getClampedTrophyChange(
+            this.currentClubId || 'club_basement',
+            isWin,
+            currentTrophies
+          );
+          
+          // Update user stats and trophies
           await db.user.where('id').equals(1).modify(user => {
             user.stats.gamesPlayed++;
             user.stats.totalEarnings += record.earnings;
+            
+            // Update trophies
+            user.trophies = Math.max(0, (user.trophies || 0) + trophyChange);
+            
+            // Update league based on new trophy count
+            const newLeague = getLeagueForTrophies(user.trophies);
+            user.leagueId = newLeague.id;
+            
             if (isWin) {
               user.stats.wins++;
               user.stats.winStreak++;
@@ -988,18 +1014,22 @@ export class Game {
               user.coins += record.earnings;
             }
           });
-          console.log('Match saved to DB:', record);
+          console.log('Match saved to DB:', record, `Trophies: ${trophyChange > 0 ? '+' : ''}${trophyChange}`);
 
           // Award chest for winning (Miniclip style)
           if (isWin) {
-            chestAwarded = await this.awardChestForWin(record.leagueId);
+            chestAwarded = await this.awardChestForWin(this.currentClubId || 'club_basement');
           }
 
-          // Sync currency store with database
+          // Sync currency store with database (including trophies)
           const user = await db.user.get(1);
           if (user) {
             const { currencyStore } = await import('../ui/CurrencyStore');
-            currencyStore.setBalances({ coins: user.coins, gold: user.gold });
+            currencyStore.setBalances({ 
+              coins: user.coins, 
+              gold: user.gold,
+              trophies: user.trophies || 0
+            });
           }
         } catch (e) {
           console.error('Failed to save match:', e);
@@ -1009,10 +1039,11 @@ export class Game {
         const matchResultData = {
           isWin,
           earnings: record.earnings,
+          trophyChange,
           opponentName: aiPlayer.name,
           opponentId: record.opponentId,
           chestAwarded,
-          leagueId: record.leagueId,
+          clubId: this.currentClubId,
         };
         (window as any).__lastMatchResult = matchResultData;
 
@@ -2534,20 +2565,15 @@ export class Game {
    * Chests are stored in slots and need to be unlocked with time or gold
    * Returns the chest type awarded, or null if no slot available
    */
-  private async awardChestForWin(leagueId: string): Promise<string | null> {
+  private async awardChestForWin(clubId: string): Promise<string | null> {
     try {
-      // Get league tier from leagueId (e.g., 'bronze_1' -> tier 1)
-      const tierMatch = leagueId.match(/^(bronze|silver|gold|platinum|diamond)/i);
+      // Get tier from club difficulty (1-10 maps to chest tiers 1-5)
+      const club = getClubById(clubId);
       let tier = 1;
-      if (tierMatch) {
-        const tierMap: Record<string, number> = {
-          bronze: 1,
-          silver: 2,
-          gold: 3,
-          platinum: 4,
-          diamond: 5
-        };
-        tier = tierMap[tierMatch[1].toLowerCase()] || 1;
+      if (club) {
+        // Map difficulty 1-10 to tier 1-5
+        // difficulty 1-2 = tier 1, 3-4 = tier 2, 5-6 = tier 3, 7-8 = tier 4, 9-10 = tier 5
+        tier = Math.min(5, Math.ceil(club.difficulty / 2));
       }
 
       // Determine chest type based on league

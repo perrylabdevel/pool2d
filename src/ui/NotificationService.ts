@@ -7,6 +7,7 @@ export interface NotificationOptions {
 
 import { uiSoundService } from './UISoundService';
 import { drawRoundedRect } from './components/UIComponents';
+import { LayoutConstants } from './theme/LayoutConstants';
 
 interface BannerAnimation {
   startTime: number;
@@ -69,9 +70,9 @@ export class NotificationService {
 
   private showBanner(options: NotificationOptions) {
     this.currentBanner = options;
-    const enterDuration = 600;
-    const activeDuration = options.duration || 3000;
-    const exitDuration = 400;
+    const enterDuration = LayoutConstants.Animation.Notification.Enter;
+    const activeDuration = options.duration || LayoutConstants.Animation.Notification.Active;
+    const exitDuration = LayoutConstants.Animation.Notification.Exit;
 
     // Play sound
     if (options.type === 'error') {

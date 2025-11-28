@@ -43,9 +43,9 @@ export function drawGlossyButton(
     ctx.save();
 
     // 1. Heavy Drop Shadow (External)
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
-    ctx.shadowBlur = 8;
-    ctx.shadowOffsetY = 6;
+    ctx.shadowColor = ColorTokens.effects.shadowHeavy;
+    ctx.shadowBlur = LayoutConstants.Shadows.Small.blur;
+    ctx.shadowOffsetY = LayoutConstants.Shadows.Small.offsetY;
     ctx.fillStyle = 'rgba(0,0,0,0)';
     drawRoundedRect(ctx, x, y, width, height, r);
     ctx.fill();
@@ -56,11 +56,11 @@ export function drawGlossyButton(
     ctx.shadowOffsetY = 0;
 
     // 2. Metallic Rim (Thick Border)
-    const rimWidth = 3;
+    const rimWidth = LayoutConstants.Lines.Rim;
     const rimGrad = ctx.createLinearGradient(x, y, x, y + height);
-    rimGrad.addColorStop(0, '#ffffff');
-    rimGrad.addColorStop(0.5, '#888888');
-    rimGrad.addColorStop(1, '#444444');
+    rimGrad.addColorStop(0, ColorTokens.metallic.light);
+    rimGrad.addColorStop(0.5, ColorTokens.metallic.mid);
+    rimGrad.addColorStop(1, ColorTokens.metallic.dark);
 
     ctx.fillStyle = rimGrad;
     drawRoundedRect(ctx, x, y, width, height, r);
@@ -94,19 +94,19 @@ export function drawGlossyButton(
 
     // Top inner highlight (sharp)
     const innerHighlight = ctx.createLinearGradient(bx, by, bx, by + bh);
-    innerHighlight.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
-    innerHighlight.addColorStop(0.1, 'rgba(255, 255, 255, 0.1)');
-    innerHighlight.addColorStop(1, 'rgba(0, 0, 0, 0.4)');
+    innerHighlight.addColorStop(0, ColorTokens.effects.innerHighlight.start);
+    innerHighlight.addColorStop(0.1, ColorTokens.effects.innerHighlight.mid);
+    innerHighlight.addColorStop(1, ColorTokens.effects.innerHighlight.end);
 
     ctx.strokeStyle = innerHighlight;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = LayoutConstants.Lines.Normal;
     drawRoundedRect(ctx, bx + 1, by + 1, bw - 2, bh - 2, br);
     ctx.stroke();
 
     // Gloss Shine (Top Half - Sharp)
     const glossGrad = ctx.createLinearGradient(bx, by, bx, by + bh / 2);
-    glossGrad.addColorStop(0, 'rgba(255, 255, 255, 0.5)');
-    glossGrad.addColorStop(1, 'rgba(255, 255, 255, 0.05)');
+    glossGrad.addColorStop(0, ColorTokens.effects.gloss.start);
+    glossGrad.addColorStop(1, ColorTokens.effects.gloss.end);
     ctx.fillStyle = glossGrad;
     ctx.fillRect(bx, by, bw, bh / 2);
 
@@ -119,8 +119,8 @@ export function drawGlossyButton(
     ctx.textBaseline = 'middle';
 
     // Text Stroke (Outline)
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+    ctx.lineWidth = LayoutConstants.Lines.Thick;
+    ctx.strokeStyle = ColorTokens.effects.shadowText;
     ctx.strokeText(text, x + width / 2, y + height / 2);
 
     // Text Fill
@@ -178,27 +178,27 @@ export function drawCurrencyPill(
 
     if (theme === 'nav') {
         // Nav theme: Dark semi-transparent background with border
-        const pillRadius = 8; // Consistent squarer radius
+        const pillRadius = LayoutConstants.CurrencyPill.Radius;
 
         // Background
         const bodyGradient = ctx.createLinearGradient(x, y, x, y + height);
-        bodyGradient.addColorStop(0, 'rgba(20, 30, 50, 0.8)');
-        bodyGradient.addColorStop(1, 'rgba(10, 20, 40, 0.9)');
+        bodyGradient.addColorStop(0, ColorTokens.background.nav.gradientStart);
+        bodyGradient.addColorStop(1, ColorTokens.background.nav.gradientEnd);
 
         drawRoundedRect(ctx, x, y, width, height, pillRadius);
         ctx.fillStyle = bodyGradient;
         ctx.fill();
 
         // Border
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = ColorTokens.border.emphasis;
+        ctx.lineWidth = LayoutConstants.Lines.Thin;
         ctx.stroke();
 
         // Inner highlight (top edge)
         ctx.beginPath();
         ctx.moveTo(x + pillRadius, y + 1);
         ctx.lineTo(x + width - pillRadius, y + 1);
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.strokeStyle = ColorTokens.border.default;
         ctx.stroke();
 
         // Icon
@@ -210,7 +210,7 @@ export function drawCurrencyPill(
             drawCoin(ctx, iconX, iconY, iconSize);
         } else if (type === 'cash') {
             // Use green chip for cash
-            drawChip(ctx, iconX, iconY, iconSize, '#1fbf75');
+            drawChip(ctx, iconX, iconY, iconSize, ColorTokens.currency.cashChip);
         } else {
             drawTrophy(ctx, iconX, iconY, iconSize);
         }
@@ -228,13 +228,13 @@ export function drawCurrencyPill(
         // ctx.fillText(label, textAreaStart, y + height / 2 - 2);
 
         // Value (large, centered vertically)
-        ctx.fillStyle = '#FFFFFF'; // Force white
+        ctx.fillStyle = ColorTokens.text.primary;
         // Use standard sans-serif for cleaner look as requested
-        ctx.font = `900 ${valueFontSize}px "Arial", sans-serif`;
+        ctx.font = `${LayoutConstants.Fonts.Weight.Black} ${valueFontSize}px ${LayoutConstants.Fonts.Family.Default}`;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
         // Remove heavy shadow, use subtle one
-        ctx.shadowColor = 'rgba(0,0,0,0.3)';
+        ctx.shadowColor = ColorTokens.effects.shadowTextLight;
         ctx.shadowBlur = 2;
         ctx.shadowOffsetY = 1;
         ctx.fillText(amount.toLocaleString(), textAreaStart, y + height / 2 + 1);
@@ -272,17 +272,17 @@ export function drawCurrencyPill(
         drawRoundedRect(ctx, plusX, y + height / 2 - plusRadius, plusRadius * 2, plusRadius * 2, 6);
 
         const plusGrad = ctx.createLinearGradient(plusX, y, plusX, y + height);
-        plusGrad.addColorStop(0, '#4CAF50');
-        plusGrad.addColorStop(1, '#388E3C');
+        plusGrad.addColorStop(0, ColorTokens.action.success);
+        plusGrad.addColorStop(1, ColorTokens.action.successDark);
         ctx.fillStyle = plusGrad;
         ctx.fill();
 
-        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = ColorTokens.border.subtle;
+        ctx.lineWidth = LayoutConstants.Lines.Thin;
         ctx.stroke();
 
         // Plus sign
-        ctx.fillStyle = '#FFFFFF';
+        ctx.fillStyle = ColorTokens.text.primary;
         ctx.font = `bold ${Math.max(14, plusRadius * 1.2)}px Arial`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -379,22 +379,22 @@ export function drawChip(ctx: CanvasRenderingContext2D, x: number, y: number, si
     // Inner shadow (simulated by drawing a dark circle then a slightly smaller white one)
     ctx.beginPath();
     ctx.arc(0, 0, innerRadius, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(0,0,0,0.2)'; // Shadow rim
+    ctx.fillStyle = ColorTokens.chip.innerShadow;
     ctx.fill();
 
     ctx.beginPath();
     ctx.arc(0, 0, innerRadius - 1, 0, Math.PI * 2);
     const innerFaceGrad = ctx.createLinearGradient(0, -innerRadius, 0, innerRadius);
-    innerFaceGrad.addColorStop(0, '#FFFFFF');
-    innerFaceGrad.addColorStop(1, '#F0F0F0');
+    innerFaceGrad.addColorStop(0, ColorTokens.chip.innerFaceLight);
+    innerFaceGrad.addColorStop(1, ColorTokens.chip.innerFaceDark);
     ctx.fillStyle = innerFaceGrad;
     ctx.fill();
 
     // 5. Symbol: Diamond (Suit shape)
     // Draw a diamond shape in the center
     const symbolSize = innerRadius * 0.6;
-    ctx.fillStyle = '#000000';
-    ctx.shadowColor = 'rgba(0,0,0,0.2)';
+    ctx.fillStyle = ColorTokens.chip.symbolColor;
+    ctx.shadowColor = ColorTokens.chip.innerShadow;
     ctx.shadowBlur = 2;
     ctx.shadowOffsetY = 1;
 
@@ -409,7 +409,7 @@ export function drawChip(ctx: CanvasRenderingContext2D, x: number, y: number, si
     // Shine/Gloss
     ctx.beginPath();
     ctx.ellipse(-radius * 0.3, -radius * 0.3, radius * 0.25, radius * 0.12, Math.PI / 4, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.fillStyle = ColorTokens.effects.shine;
     ctx.fill();
 
     ctx.restore();
@@ -422,15 +422,15 @@ export function drawCoin(ctx: CanvasRenderingContext2D, x: number, y: number, si
     ctx.translate(x, y);
 
     // 1. Drop Shadow
-    ctx.shadowColor = 'rgba(0,0,0,0.4)';
+    ctx.shadowColor = ColorTokens.effects.shadowLight;
     ctx.shadowBlur = 5;
     ctx.shadowOffsetY = 3;
 
     // 2. Outer Rim (Beveled Gold)
     const rimGrad = ctx.createLinearGradient(-radius, -radius, radius, radius);
-    rimGrad.addColorStop(0, '#FFEC8B'); // Light Gold
-    rimGrad.addColorStop(0.5, '#DAA520'); // GoldenRod
-    rimGrad.addColorStop(1, '#B8860B'); // Dark GoldenRod
+    rimGrad.addColorStop(0, ColorTokens.coin.lightGold);
+    rimGrad.addColorStop(0.5, ColorTokens.coin.goldenRod);
+    rimGrad.addColorStop(1, ColorTokens.coin.darkGold);
 
     ctx.beginPath();
     ctx.arc(0, 0, radius, 0, Math.PI * 2);
@@ -440,8 +440,8 @@ export function drawCoin(ctx: CanvasRenderingContext2D, x: number, y: number, si
     // 3. Inner Face (Recessed)
     const innerRadius = radius * 0.75;
     const faceGrad = ctx.createRadialGradient(0, -innerRadius * 0.5, 0, 0, 0, innerRadius);
-    faceGrad.addColorStop(0, '#FFD700'); // Gold
-    faceGrad.addColorStop(1, '#FFA500'); // Orange-Gold
+    faceGrad.addColorStop(0, ColorTokens.coin.gold);
+    faceGrad.addColorStop(1, ColorTokens.coin.orangeGold);
 
     ctx.beginPath();
     ctx.arc(0, 0, innerRadius, 0, Math.PI * 2);
@@ -449,12 +449,12 @@ export function drawCoin(ctx: CanvasRenderingContext2D, x: number, y: number, si
     ctx.fill();
 
     // Darker outline for center area visibility (User Request)
-    ctx.strokeStyle = 'rgba(0,0,0,0.4)'; // Darker, more visible
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = ColorTokens.effects.shadowLight;
+    ctx.lineWidth = LayoutConstants.Lines.Normal;
     ctx.stroke();
 
     // Inner Rim Highlight (to separate rim from face)
-    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+    ctx.strokeStyle = ColorTokens.effects.gloss.start;
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
@@ -462,8 +462,8 @@ export function drawCoin(ctx: CanvasRenderingContext2D, x: number, y: number, si
     const crownSize = innerRadius * 0.6;
     const cy = size * 0.05; // slight offset
 
-    ctx.fillStyle = '#B8860B'; // Dark Gold for symbol
-    ctx.shadowColor = 'rgba(0,0,0,0.2)';
+    ctx.fillStyle = ColorTokens.coin.darkGold;
+    ctx.shadowColor = ColorTokens.chip.innerShadow;
     ctx.shadowBlur = 2;
     ctx.shadowOffsetY = 1;
 
@@ -492,7 +492,7 @@ export function drawCoin(ctx: CanvasRenderingContext2D, x: number, y: number, si
     // 5. Shine/Gloss
     ctx.beginPath();
     ctx.ellipse(-radius * 0.3, -radius * 0.3, radius * 0.25, radius * 0.12, Math.PI / 4, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+    ctx.fillStyle = ColorTokens.effects.gloss.start;
     ctx.fill();
 
     ctx.restore();
@@ -506,15 +506,15 @@ export function drawTrophy(ctx: CanvasRenderingContext2D, x: number, y: number, 
     ctx.translate(x, y);
 
     // Shadow
-    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    ctx.shadowColor = ColorTokens.effects.shadow;
     ctx.shadowBlur = 4;
     ctx.shadowOffsetY = 2;
 
     // Cup Gradient
     const grad = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
-    grad.addColorStop(0, '#FFD700'); // Gold
-    grad.addColorStop(0.5, '#FFA500'); // Orange
-    grad.addColorStop(1, '#B8860B'); // Dark Gold
+    grad.addColorStop(0, ColorTokens.coin.gold);
+    grad.addColorStop(0.5, ColorTokens.coin.orangeGold);
+    grad.addColorStop(1, ColorTokens.coin.darkGold);
 
     ctx.fillStyle = grad;
 
@@ -536,8 +536,8 @@ export function drawTrophy(ctx: CanvasRenderingContext2D, x: number, y: number, 
     ctx.fill();
 
     // Handles
-    ctx.strokeStyle = '#DAA520';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = ColorTokens.coin.goldenRod;
+    ctx.lineWidth = LayoutConstants.Lines.Normal;
     ctx.beginPath();
     // Left Handle
     ctx.moveTo(-w * 0.4, -h * 0.2);
