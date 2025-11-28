@@ -221,13 +221,23 @@ Most values in this file are physics/geometry related and should stay in `CONFIG
 
 ## Migration Checklist
 
-- [x] `ShopScene.ts` - Replace card dimensions, colors, shadows
-- [x] `GoldenSpinScene.ts` - Replace wheel colors, radius
+- [x] `ShopScene.ts` - Replace card dimensions, colors, shadows (65→11)
+- [x] `GoldenSpinScene.ts` - Replace wheel colors, radius (52→7)
 - [x] `Renderer.ts` - Replace canvas background, margins
 - [x] `UIComponents.ts` - Replace button shadows, metallic colors
 - [x] `CueRenderer.ts` - Replace cue dimensions, colors
 - [x] `NotificationService.ts` - Replace animation durations
-- [x] `PlayModesScene.ts` - Replace card frame, shadows, text styles
+- [x] `PlayModesScene.ts` - Replace card frame, shadows, badges (38→4)
+- [x] `EventsScene.ts` - Replace card frame, buttons, badges (29→5)
+- [x] `LeagueScene.ts` - Replace header, standings styling (30→10)
+- [x] `LobbyScene.ts` - Replace frame, bevel, shadows, hover (24→1)
+- [x] `OpponentPreviewScene.ts` - Replace card, avatar, stats styling (24→10)
+- [x] `ClubSelectionScene.ts` - Replace frame, text, buttons (24→0) ✅ COMPLETE
+- [x] `MatchResultScene.ts` - Replace card, buttons, stats (14→2)
+- [x] `ProfileScene.ts` - Replace loading, stats, achievements (12→0) ✅ COMPLETE
+- [x] `SettingsScene.ts` - Replace control backgrounds, shadows (21→1)
+- [x] `ConfirmScene.ts` - Minimal (1 remaining)
+- [x] `InGameMenuScene.ts` - Minimal (1 remaining)
 
 ---
 

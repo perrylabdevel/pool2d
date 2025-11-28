@@ -305,17 +305,17 @@ export class GoldenSpinScene implements UIScene {
         ctx.beginPath();
         ctx.arc(0, 0, this.wheelRadius + rimSize, 0, Math.PI * 2);
         const rimGrad = ctx.createLinearGradient(-this.wheelRadius, -this.wheelRadius, this.wheelRadius, this.wheelRadius);
-        rimGrad.addColorStop(0, '#FFD700');
+        rimGrad.addColorStop(0, ColorTokens.coin.gold);
         rimGrad.addColorStop(0.3, '#FDB931');
         rimGrad.addColorStop(0.6, '#FFFFE0');
-        rimGrad.addColorStop(1, '#D4AF37');
+        rimGrad.addColorStop(1, ColorTokens.coin.goldenRod);
         ctx.fillStyle = rimGrad;
         ctx.fill();
 
         // Inner dark rim
         ctx.beginPath();
         ctx.arc(0, 0, this.wheelRadius + 4, 0, Math.PI * 2);
-        ctx.fillStyle = '#222';
+        ctx.fillStyle = ColorTokens.background.primary;
         ctx.fill();
 
         // Rotate the wheel content
@@ -372,28 +372,28 @@ export class GoldenSpinScene implements UIScene {
             ctx.fill();
 
             // Separators (Border around the segment)
-            ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
-            ctx.lineWidth = 1;
+            ctx.strokeStyle = ColorTokens.effects.shadowText;
+            ctx.lineWidth = LayoutConstants.Lines.Thin;
             ctx.stroke();
 
             // Inner Bevel (Highlight)
             ctx.beginPath();
             ctx.arc(0, 0, innerRadius, start, end);
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)'; // Subtle highlight
-            ctx.lineWidth = 1.5;
+            ctx.strokeStyle = ColorTokens.border.emphasis;
+            ctx.lineWidth = LayoutConstants.Lines.Normal;
             ctx.stroke();
 
             // Outer Shadow
             ctx.beginPath();
             ctx.arc(0, 0, outerRadius, start, end);
-            ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)'; // Drop shadow
-            ctx.lineWidth = 1.5;
+            ctx.strokeStyle = ColorTokens.effects.shadowLight;
+            ctx.lineWidth = LayoutConstants.Lines.Normal;
             ctx.stroke();
 
             // Pattern Overlay (Dots)
             ctx.save();
             ctx.clip();
-            ctx.fillStyle = 'rgba(0,0,0,0.05)';
+            ctx.fillStyle = ColorTokens.background.overlay;
             for (let r = 20; r < this.wheelRadius; r += 15) {
                 for (let a = start; a < end; a += 0.15) {
                     if (Math.random() > 0.5) {
@@ -406,15 +406,15 @@ export class GoldenSpinScene implements UIScene {
             ctx.restore();
 
             // Slice borders
-            ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
-            ctx.lineWidth = 1;
+            ctx.strokeStyle = ColorTokens.border.dark;
+            ctx.lineWidth = LayoutConstants.Lines.Thin;
             ctx.stroke();
 
             // Inner Bezel/Highlight
             ctx.beginPath();
             ctx.arc(0, 0, this.wheelRadius - 4, start + 0.02, end - 0.02);
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-            ctx.lineWidth = 2;
+            ctx.strokeStyle = ColorTokens.effects.shine;
+            ctx.lineWidth = LayoutConstants.Lines.Normal;
             ctx.stroke();
 
             // Text and Icon
@@ -433,10 +433,10 @@ export class GoldenSpinScene implements UIScene {
             ctx.restore();
 
             // Label
-            ctx.shadowColor = 'rgba(0,0,0,0.5)';
-            ctx.shadowBlur = 4;
-            ctx.shadowOffsetY = 2;
-            ctx.fillStyle = '#FFF';
+            ctx.shadowColor = ColorTokens.effects.shadow;
+            ctx.shadowBlur = LayoutConstants.Shadows.Text.blur;
+            ctx.shadowOffsetY = LayoutConstants.Shadows.Text.offsetY;
+            ctx.fillStyle = ColorTokens.text.primary;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.font = `bold 16px ${LayoutConstants.Fonts.Family.Display}`;
@@ -455,13 +455,13 @@ export class GoldenSpinScene implements UIScene {
             ctx.arc(pegX, pegY, 4, 0, Math.PI * 2);
 
             const pegGrad = ctx.createRadialGradient(pegX - 1, pegY - 1, 0, pegX, pegY, 4);
-            pegGrad.addColorStop(0, '#FFF');
-            pegGrad.addColorStop(1, '#888');
+            pegGrad.addColorStop(0, ColorTokens.text.primary);
+            pegGrad.addColorStop(1, ColorTokens.metallic.mid);
             ctx.fillStyle = pegGrad;
             ctx.fill();
 
-            ctx.strokeStyle = '#000';
-            ctx.lineWidth = 1;
+            ctx.strokeStyle = ColorTokens.text.dark;
+            ctx.lineWidth = LayoutConstants.Lines.Thin;
             ctx.stroke();
         }
 
@@ -474,9 +474,9 @@ export class GoldenSpinScene implements UIScene {
             const coinRadius = 12;
             const stackHeight = 3;
 
-            ctx.fillStyle = '#FFD700';
-            ctx.strokeStyle = '#DAA520';
-            ctx.lineWidth = 1;
+            ctx.fillStyle = ColorTokens.coin.gold;
+            ctx.strokeStyle = ColorTokens.coin.goldenRod;
+            ctx.lineWidth = LayoutConstants.Lines.Thin;
 
             // Draw bottom coins
             for (let i = 0; i < stackHeight; i++) {
@@ -496,24 +496,24 @@ export class GoldenSpinScene implements UIScene {
             ctx.beginPath();
             ctx.ellipse(0, 0, coinRadius, coinRadius * 0.4, 0, 0, Math.PI * 2);
             const coinGrad = ctx.createRadialGradient(-2, -2, 0, 0, 0, coinRadius);
-            coinGrad.addColorStop(0, '#FFF');
-            coinGrad.addColorStop(1, '#FFD700');
+            coinGrad.addColorStop(0, ColorTokens.text.primary);
+            coinGrad.addColorStop(1, ColorTokens.coin.gold);
             ctx.fillStyle = coinGrad;
             ctx.fill();
             ctx.stroke();
 
             // $ Symbol
-            ctx.fillStyle = '#DAA520';
-            ctx.font = 'bold 12px sans-serif';
+            ctx.fillStyle = ColorTokens.coin.goldenRod;
+            ctx.font = `bold 12px ${LayoutConstants.Fonts.Family.Default}`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText('$', 0, 1);
 
         } else if (type === 'gold') {
             // Draw Gold Bar
-            ctx.fillStyle = '#FFD700';
-            ctx.strokeStyle = '#B8860B';
-            ctx.lineWidth = 1;
+            ctx.fillStyle = ColorTokens.coin.gold;
+            ctx.strokeStyle = ColorTokens.coin.darkGold;
+            ctx.lineWidth = LayoutConstants.Lines.Thin;
 
             // Trapezoid shape for bar
             ctx.beginPath();
@@ -524,9 +524,9 @@ export class GoldenSpinScene implements UIScene {
             ctx.closePath();
 
             const barGrad = ctx.createLinearGradient(-10, -10, 10, 10);
-            barGrad.addColorStop(0, '#FFF');
-            barGrad.addColorStop(0.5, '#FFD700');
-            barGrad.addColorStop(1, '#DAA520');
+            barGrad.addColorStop(0, ColorTokens.text.primary);
+            barGrad.addColorStop(0.5, ColorTokens.coin.gold);
+            barGrad.addColorStop(1, ColorTokens.coin.goldenRod);
             ctx.fillStyle = barGrad;
             ctx.fill();
             ctx.stroke();
@@ -535,14 +535,14 @@ export class GoldenSpinScene implements UIScene {
             ctx.beginPath();
             ctx.moveTo(-5, -6);
             ctx.lineTo(0, 6);
-            ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+            ctx.strokeStyle = ColorTokens.effects.gloss.start;
             ctx.stroke();
 
         } else if (type === 'jackpot') {
             // Draw Diamond
-            ctx.fillStyle = '#E0FFFF';
+            ctx.fillStyle = ColorTokens.wheel.teal;
             ctx.strokeStyle = '#00CED1';
-            ctx.lineWidth = 1;
+            ctx.lineWidth = LayoutConstants.Lines.Thin;
 
             ctx.beginPath();
             ctx.moveTo(0, -15); // Top point
@@ -552,7 +552,7 @@ export class GoldenSpinScene implements UIScene {
             ctx.closePath();
 
             const diamondGrad = ctx.createLinearGradient(-5, -10, 5, 10);
-            diamondGrad.addColorStop(0, '#FFF');
+            diamondGrad.addColorStop(0, ColorTokens.text.primary);
             diamondGrad.addColorStop(1, '#00CED1');
             ctx.fillStyle = diamondGrad;
             ctx.fill();
@@ -567,7 +567,7 @@ export class GoldenSpinScene implements UIScene {
             ctx.moveTo(-12, -5);
             ctx.lineTo(0, 15);
             ctx.lineTo(12, -5);
-            ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+            ctx.strokeStyle = ColorTokens.effects.gloss.start;
             ctx.stroke();
         }
     }
@@ -591,27 +591,27 @@ export class GoldenSpinScene implements UIScene {
         ctx.lineTo(tipX + pointerWidth / 2, tipY - pointerHeight);
         ctx.closePath();
 
-        ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        ctx.shadowColor = ColorTokens.effects.shadow;
         ctx.shadowBlur = 10;
         ctx.shadowOffsetY = 5;
 
         const pointerGrad = ctx.createLinearGradient(tipX, tipY - pointerHeight, tipX, tipY);
-        pointerGrad.addColorStop(0, '#D0021B');
+        pointerGrad.addColorStop(0, ColorTokens.wheel.red);
         pointerGrad.addColorStop(0.4, '#FF4444');
         pointerGrad.addColorStop(1, '#990000');
         ctx.fillStyle = pointerGrad;
         ctx.fill();
 
-        ctx.strokeStyle = '#FFF';
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = ColorTokens.text.primary;
+        ctx.lineWidth = LayoutConstants.Lines.Normal;
         ctx.stroke();
 
         // Pivot point
         ctx.beginPath();
         ctx.arc(tipX, tipY - pointerHeight + 10, 6, 0, Math.PI * 2);
-        ctx.fillStyle = '#DDD';
+        ctx.fillStyle = ColorTokens.metallic.light;
         ctx.fill();
-        ctx.strokeStyle = '#555';
+        ctx.strokeStyle = ColorTokens.metallic.dark;
         ctx.stroke();
 
         ctx.restore();
@@ -626,10 +626,10 @@ export class GoldenSpinScene implements UIScene {
 
         // Outer Glow if active
         if (!disabled && this.hoveredCenter) {
-            ctx.shadowColor = '#FFD700';
-            ctx.shadowBlur = 20;
+            ctx.shadowColor = ColorTokens.brand.primary;
+            ctx.shadowBlur = LayoutConstants.Shadows.Medium.blur;
         } else {
-            ctx.shadowColor = 'rgba(0,0,0,0.5)';
+            ctx.shadowColor = ColorTokens.effects.shadow;
             ctx.shadowBlur = 10;
             ctx.shadowOffsetY = 5;
         }
@@ -640,11 +640,11 @@ export class GoldenSpinScene implements UIScene {
 
         const btnGrad = ctx.createRadialGradient(0, -radius * 0.5, 0, 0, 0, radius);
         if (disabled) {
-            btnGrad.addColorStop(0, '#555');
-            btnGrad.addColorStop(1, '#333');
+            btnGrad.addColorStop(0, ColorTokens.metallic.dark);
+            btnGrad.addColorStop(1, ColorTokens.card.bevel.mid);
         } else {
-            btnGrad.addColorStop(0, '#FFD700');
-            btnGrad.addColorStop(1, '#FF8C00');
+            btnGrad.addColorStop(0, ColorTokens.brand.primary);
+            btnGrad.addColorStop(1, ColorTokens.coin.orangeGold);
         }
         ctx.fillStyle = btnGrad;
         ctx.fill();
@@ -652,17 +652,17 @@ export class GoldenSpinScene implements UIScene {
         // Bevel
         ctx.beginPath();
         ctx.arc(0, 0, radius - 4, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(255,255,255,0.4)';
-        ctx.lineWidth = 3;
+        ctx.strokeStyle = ColorTokens.effects.gloss.start;
+        ctx.lineWidth = LayoutConstants.Lines.Thick;
         ctx.stroke();
 
         // Text
-        ctx.fillStyle = disabled ? '#888' : '#FFF';
+        ctx.fillStyle = disabled ? ColorTokens.metallic.mid : ColorTokens.text.primary;
         ctx.font = `bold ${LayoutConstants.Fonts.Size.Large}px ${LayoutConstants.Fonts.Family.Display}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.shadowColor = 'rgba(0,0,0,0.5)';
-        ctx.shadowBlur = 4;
+        ctx.shadowColor = ColorTokens.effects.shadow;
+        ctx.shadowBlur = LayoutConstants.Shadows.Text.blur;
         ctx.fillText(disabled ? 'WAIT' : 'SPIN', 0, 2);
 
         ctx.restore();
@@ -674,16 +674,16 @@ export class GoldenSpinScene implements UIScene {
         const panelX = (width - panelWidth) / 2;
         const panelY = this.centerY + this.wheelRadius + 50;
 
-        drawRoundedRect(ctx, panelX, panelY, panelWidth, panelHeight, 16);
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        drawRoundedRect(ctx, panelX, panelY, panelWidth, panelHeight, LayoutConstants.Radii.XLarge);
+        ctx.fillStyle = ColorTokens.background.overlayDark;
         ctx.fill();
 
         // Border
-        ctx.strokeStyle = '#FFD700';
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = ColorTokens.brand.primary;
+        ctx.lineWidth = LayoutConstants.Lines.Normal;
         ctx.stroke();
 
-        ctx.fillStyle = '#FFF';
+        ctx.fillStyle = ColorTokens.text.primary;
         ctx.font = `bold 20px ${LayoutConstants.Fonts.Family.Default}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';

@@ -255,8 +255,8 @@ export class ClubSelectionScene implements UIScene {
         if (!this.layout) return;
 
         if (!this.userProfile) {
-            ctx.fillStyle = '#FFFFFF';
-            ctx.font = '24px Arial';
+            ctx.fillStyle = ColorTokens.text.primary;
+            ctx.font = `${LayoutConstants.Fonts.Size.XLarge}px ${LayoutConstants.Fonts.Family.Default}`;
             ctx.textAlign = 'center';
             ctx.fillText('Loading...', ctx.canvas.width / 2, ctx.canvas.height / 2);
             return;
@@ -285,15 +285,15 @@ export class ClubSelectionScene implements UIScene {
                 ctx.save();
 
                 // Shadow
-                ctx.shadowColor = 'rgba(0,0,0,0.5)';
-                ctx.shadowBlur = 20;
-                ctx.shadowOffsetY = 10;
+                ctx.shadowColor = ColorTokens.effects.shadow;
+                ctx.shadowBlur = LayoutConstants.Shadows.Medium.blur;
+                ctx.shadowOffsetY = LayoutConstants.Shadows.Medium.offsetY;
 
                 // Outer Frame - Metallic/Wood-grain effect
                 // Use darker colors for locked state
-                const frameColorStart = isLocked ? '#444444' : '#8B7355';
-                const frameColorMid = isLocked ? '#333333' : '#6B5745';
-                const frameColorEnd = isLocked ? '#222222' : '#4B3725';
+                const frameColorStart = isLocked ? ColorTokens.metallic.dark : ColorTokens.card.frame.light;
+                const frameColorMid = isLocked ? ColorTokens.card.bevel.mid : ColorTokens.card.frame.mid;
+                const frameColorEnd = isLocked ? ColorTokens.background.primary : ColorTokens.card.frame.dark;
 
                 ctx.beginPath();
                 ctx.roundRect(cardX, startY, cardWidth, cardHeight, radius);
@@ -307,9 +307,9 @@ export class ClubSelectionScene implements UIScene {
                 // Metallic shine on frame
                 if (!isLocked) {
                     const shineGradient = ctx.createLinearGradient(cardX, startY, cardX + cardWidth / 3, startY);
-                    shineGradient.addColorStop(0, 'rgba(255, 255, 255, 0.4)');
-                    shineGradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.1)');
-                    shineGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+                    shineGradient.addColorStop(0, ColorTokens.effects.gloss.start);
+                    shineGradient.addColorStop(0.5, ColorTokens.effects.gloss.mid);
+                    shineGradient.addColorStop(1, ColorTokens.effects.gloss.none);
                     ctx.fillStyle = shineGradient;
                     ctx.fill();
                 }
@@ -329,15 +329,15 @@ export class ClubSelectionScene implements UIScene {
                 ctx.beginPath();
                 ctx.roundRect(bevelX, bevelY, bevelFullWidth, bevelFullHeight, bevelRadius);
                 const bevelGradient = ctx.createLinearGradient(bevelX, bevelY, bevelX, bevelY + bevelFullHeight);
-                bevelGradient.addColorStop(0, '#3a3a3a');
-                bevelGradient.addColorStop(0.5, '#2a2a2a');
-                bevelGradient.addColorStop(1, '#4a4a4a');
+                bevelGradient.addColorStop(0, ColorTokens.card.bevel.top);
+                bevelGradient.addColorStop(0.5, ColorTokens.card.bevel.mid);
+                bevelGradient.addColorStop(1, ColorTokens.card.bevel.bottom);
                 ctx.fillStyle = bevelGradient;
                 ctx.fill();
 
                 // Bevel highlight
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-                ctx.lineWidth = 1;
+                ctx.strokeStyle = ColorTokens.border.emphasis;
+                ctx.lineWidth = LayoutConstants.Lines.Thin;
                 ctx.stroke();
 
                 // Inner Content Area
@@ -354,15 +354,15 @@ export class ClubSelectionScene implements UIScene {
                 ctx.clip();
 
                 // Background for content (Dark)
-                ctx.fillStyle = '#1a1a1a';
+                ctx.fillStyle = ColorTokens.background.tertiary;
                 ctx.fill();
 
                 // Header Gradient (Top half)
                 const headerHeight = 160;
                 const headerGrad = ctx.createLinearGradient(innerX, innerY, innerX, innerY + headerHeight);
                 if (isLocked) {
-                    headerGrad.addColorStop(0, '#333');
-                    headerGrad.addColorStop(1, '#222');
+                    headerGrad.addColorStop(0, ColorTokens.card.bevel.mid);
+                    headerGrad.addColorStop(1, ColorTokens.background.primary);
                 } else {
                     const hue = (index * 30) % 360;
                     headerGrad.addColorStop(0, `hsl(${hue}, 60%, 30%)`);
@@ -372,12 +372,12 @@ export class ClubSelectionScene implements UIScene {
                 ctx.fillRect(innerX, innerY, innerWidth, headerHeight);
 
                 // Club Name
-                ctx.fillStyle = isLocked ? '#888' : '#FFFFFF';
-                ctx.font = `700 28px "Rajdhani", ${LayoutConstants.Fonts.Family.Heading}`;
+                ctx.fillStyle = isLocked ? ColorTokens.metallic.mid : ColorTokens.text.primary;
+                ctx.font = `${LayoutConstants.Fonts.Weight.Bold} 28px ${LayoutConstants.Fonts.Family.Game}`;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.shadowColor = 'rgba(0,0,0,0.5)';
-                ctx.shadowBlur = 4;
+                ctx.shadowColor = ColorTokens.effects.shadow;
+                ctx.shadowBlur = LayoutConstants.Shadows.Text.blur;
                 ctx.fillText(club.name, innerX + innerWidth / 2, innerY + headerHeight / 2);
                 ctx.shadowBlur = 0;
 
@@ -385,17 +385,17 @@ export class ClubSelectionScene implements UIScene {
                 const contentStartY = innerY + headerHeight + 20;
 
                 // Entry Fee
-                ctx.font = `600 16px ${LayoutConstants.Fonts.Family.Body}`;
-                ctx.fillStyle = isLocked ? '#666' : '#AAAAAA';
+                ctx.font = `${LayoutConstants.Fonts.Weight.SemiBold} ${LayoutConstants.Fonts.Size.Medium}px ${LayoutConstants.Fonts.Family.Body}`;
+                ctx.fillStyle = isLocked ? ColorTokens.metallic.dark : ColorTokens.text.secondary;
                 ctx.fillText('ENTRY FEE', innerX + innerWidth / 2, contentStartY);
 
-                ctx.font = `800 24px ${LayoutConstants.Fonts.Family.Heading}`;
-                ctx.fillStyle = isLocked ? '#888' : ColorTokens.currency.coins;
+                ctx.font = `800 ${LayoutConstants.Fonts.Size.XLarge}px ${LayoutConstants.Fonts.Family.Heading}`;
+                ctx.fillStyle = isLocked ? ColorTokens.metallic.mid : ColorTokens.currency.coins;
                 ctx.fillText(club.entryFee.toLocaleString(), innerX + innerWidth / 2, contentStartY + 30);
 
                 // Prize Pool
-                ctx.font = `600 14px ${LayoutConstants.Fonts.Family.Body}`;
-                ctx.fillStyle = isLocked ? '#555' : '#AAAAAA';
+                ctx.font = `${LayoutConstants.Fonts.Weight.SemiBold} ${LayoutConstants.Fonts.Size.Small}px ${LayoutConstants.Fonts.Family.Body}`;
+                ctx.fillStyle = isLocked ? ColorTokens.metallic.dark : ColorTokens.text.secondary;
                 ctx.fillText(`PRIZE: ${(club.entryFee * 2).toLocaleString()}`, innerX + innerWidth / 2, contentStartY + 60);
 
                 // Trophy Requirement
@@ -404,10 +404,10 @@ export class ClubSelectionScene implements UIScene {
                 const trophyLocked = (this.userProfile!.trophies || 0) < trophyReq;
 
                 if (trophyReq > 0) {
-                    ctx.fillStyle = trophyLocked ? '#FF4444' : '#FFD700';
+                    ctx.fillStyle = trophyLocked ? ColorTokens.action.danger : ColorTokens.brand.primary;
                     ctx.fillText(`🏆 ${trophyReq.toLocaleString()} REQUIRED`, innerX + innerWidth / 2, contentStartY + 90);
                 } else {
-                    ctx.fillStyle = '#666666';
+                    ctx.fillStyle = ColorTokens.ui.gray;
                     ctx.fillText(`🏆 NO REQUIREMENT`, innerX + innerWidth / 2, contentStartY + 90);
                 }
 
@@ -421,7 +421,7 @@ export class ClubSelectionScene implements UIScene {
 
                 const btnRect = { x: btnX, y: btnY, width: btnW, height: btnH };
                 const btnLabel = isLocked ? 'LOCKED' : 'PLAY';
-                const btnColor = isLocked ? '#333333' : '#00FF88'; // Use green for play to match arcade theme
+                const btnColor = isLocked ? ColorTokens.card.bevel.mid : ColorTokens.action.success;
 
                 // Use drawGlossyButton for consistent look
                 drawGlossyButton(ctx, btnRect, btnLabel, btnColor, false); // No hover state tracked for individual list items yet
@@ -429,10 +429,10 @@ export class ClubSelectionScene implements UIScene {
 
                 // Corner Decorations (Gold Accents)
                 if (!isLocked) {
-                    const cornerSize = 15;
+                    const cornerSize = LayoutConstants.Cards.CornerAccentSize;
                     const cornerInset = frameWidth + bevelWidth + 4;
-                    ctx.strokeStyle = 'rgba(255, 215, 0, 0.8)'; // Gold
-                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = ColorTokens.card.cornerAccent;
+                    ctx.lineWidth = LayoutConstants.Lines.Normal;
 
                     // Top-left
                     ctx.beginPath();

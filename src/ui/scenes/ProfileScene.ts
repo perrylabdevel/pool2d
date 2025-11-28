@@ -226,8 +226,8 @@ export class ProfileScene implements UIScene {
             this.renderButtons(ctx);
         } else {
             // Loading state
-            ctx.fillStyle = '#FFFFFF';
-            ctx.font = '24px Inter';
+            ctx.fillStyle = ColorTokens.text.primary;
+            ctx.font = `${LayoutConstants.Fonts.Size.XLarge}px ${LayoutConstants.Fonts.Family.Body}`;
             ctx.textAlign = 'center';
             ctx.fillText('Loading Profile...', width / 2, height / 2);
         }
@@ -318,7 +318,7 @@ export class ProfileScene implements UIScene {
             ctx.drawImage(avatarImg, sx, sy, sw, sh, photoX, photoY, photoW, photoH);
         } else {
             AssetLoader.loadImage(avatarUrl);
-            ctx.fillStyle = '#333';
+            ctx.fillStyle = ColorTokens.metallic.dark;
             ctx.fillRect(photoX, photoY, photoW, photoH);
             ctx.font = `700 ${LayoutConstants.Fonts.Size.XXLarge}px ${LayoutConstants.Fonts.Family.Heading}`;
             ctx.fillStyle = ColorTokens.text.primary;
@@ -342,7 +342,7 @@ export class ProfileScene implements UIScene {
         ctx.fillText(this.userProfile?.name || 'Player', avatarRect.x + avatarRect.width + 24, panelRect.y + 32);
 
         ctx.font = `${LayoutConstants.Fonts.Size.Medium}px ${LayoutConstants.Fonts.Family.Body}`;
-        ctx.fillStyle = 'rgba(255,255,255,0.7)'; // Subtitle text
+        ctx.fillStyle = ColorTokens.text.secondary;
         ctx.fillText(
             `${stats.gamesPlayed} games • ${stats.winStreak} streak • ${stats.ballsPotted} pots`,
             avatarRect.x + avatarRect.width + 24,
@@ -350,7 +350,7 @@ export class ProfileScene implements UIScene {
         );
 
         ctx.font = `${LayoutConstants.Fonts.Size.Small}px ${LayoutConstants.Fonts.Family.Body}`;
-        ctx.fillStyle = 'rgba(255,255,255,0.55)'; // Muted text
+        ctx.fillStyle = ColorTokens.text.muted;
         ctx.fillText(`Overall rank: ${this.deriveRank(stats)}`, avatarRect.x + avatarRect.width + 24, panelRect.y + 108);
         ctx.restore();
     }
@@ -370,14 +370,14 @@ export class ProfileScene implements UIScene {
             const x = panelRect.x + 30 + index * cardWidth;
             const y = panelRect.y + 24;
             ctx.save();
-            ctx.fillStyle = 'rgba(0,0,0,0.35)';
+            ctx.fillStyle = ColorTokens.background.overlay;
             ctx.fillRect(x, y, cardWidth - 20, 90);
             ctx.fillStyle = card.accent;
             ctx.fillRect(x, y, 4, 90);
-            ctx.fillStyle = 'rgba(255,255,255,0.65)';
+            ctx.fillStyle = ColorTokens.text.secondary;
             ctx.font = `12px ${LayoutConstants.Fonts.Family.Body}`;
             ctx.fillText(card.label.toUpperCase(), x + 16, y + 20);
-            ctx.fillStyle = '#FFFFFF';
+            ctx.fillStyle = ColorTokens.text.primary;
             ctx.font = `600 26px ${LayoutConstants.Fonts.Family.Heading}`;
             ctx.fillText(card.value, x + 16, y + 60);
             ctx.restore();
@@ -394,27 +394,27 @@ export class ProfileScene implements UIScene {
         drawPanel(ctx, panelRect);
 
         ctx.save();
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = `600 20px ${LayoutConstants.Fonts.Family.Heading}`;
+        ctx.fillStyle = ColorTokens.text.primary;
+        ctx.font = `${LayoutConstants.Fonts.Weight.SemiBold} 20px ${LayoutConstants.Fonts.Family.Heading}`;
         ctx.fillText('Recent Achievements', panelRect.x + 30, panelRect.y + 40);
 
         const achievements = this.getAchievementProgress(stats);
         achievements.forEach((achievement, index) => {
             const rowY = panelRect.y + 80 + index * 70;
-            ctx.fillStyle = '#FFFFFF';
+            ctx.fillStyle = ColorTokens.text.primary;
             ctx.font = `15px ${LayoutConstants.Fonts.Family.Body}`;
             ctx.fillText(achievement.title, panelRect.x + 30, rowY);
 
-            ctx.fillStyle = 'rgba(255,255,255,0.65)';
+            ctx.fillStyle = ColorTokens.text.secondary;
             ctx.font = `13px ${LayoutConstants.Fonts.Family.Body}`;
             ctx.fillText(`${achievement.desc} (${achievement.current}/${achievement.target})`, panelRect.x + 30, rowY + 22);
 
             const barX = panelRect.x + panelRect.width - 220;
             const barY = rowY - 10;
             const barWidth = 180;
-            ctx.fillStyle = 'rgba(255,255,255,0.1)';
+            ctx.fillStyle = ColorTokens.border.default;
             ctx.fillRect(barX, barY, barWidth, 10);
-            ctx.fillStyle = '#00C6FF';
+            ctx.fillStyle = ColorTokens.ui.teal;
             ctx.fillRect(barX, barY, barWidth * achievement.progress, 10);
         });
         ctx.restore();

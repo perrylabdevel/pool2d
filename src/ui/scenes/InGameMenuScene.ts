@@ -2,6 +2,7 @@
 import { UIScene } from '../SceneController';
 import { uiStateMachine, UIState } from '../UIStateMachine';
 import { ColorTokens, SemanticColors } from '../theme/ColorTokens';
+import { LayoutConstants } from '../theme/LayoutConstants';
 import { drawGlossyButton, drawRoundedRect, Rect } from '../components/UIComponents';
 
 interface MenuButton {
@@ -163,7 +164,7 @@ export class InGameMenuScene implements UIScene {
     private renderTitle(ctx: CanvasRenderingContext2D, width: number, height: number) {
         ctx.save();
         ctx.fillStyle = ColorTokens.text.primary;
-        ctx.font = 'bold 56px Arial';
+        ctx.font = `bold ${LayoutConstants.Fonts.Size.Hero + 16}px ${LayoutConstants.Fonts.Family.Default}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.shadowColor = ColorTokens.effects.shadow;
@@ -182,7 +183,7 @@ export class InGameMenuScene implements UIScene {
     private renderHint(ctx: CanvasRenderingContext2D, width: number, height: number) {
         ctx.save();
         ctx.fillStyle = ColorTokens.text.secondary;
-        ctx.font = '14px Arial';
+        ctx.font = `${LayoutConstants.Fonts.Size.Small}px ${LayoutConstants.Fonts.Family.Default}`;
         ctx.textAlign = 'center';
         ctx.fillText('Press ESC to resume', width / 2, height / 2 + 180);
         ctx.restore();

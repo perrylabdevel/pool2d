@@ -241,8 +241,8 @@ export class OpponentPreviewScene implements UIScene {
         drawSceneBackground(ctx, width, height, 'blue');
 
         if (!this.selectedOpponent) {
-            ctx.fillStyle = '#FFFFFF';
-            ctx.font = '24px sans-serif';
+            ctx.fillStyle = ColorTokens.text.primary;
+            ctx.font = `${LayoutConstants.Fonts.Size.XLarge}px ${LayoutConstants.Fonts.Family.Body}`;
             ctx.textAlign = 'center';
             ctx.fillText('Loading opponent...', width / 2, height / 2);
             this.navigationBar.render(ctx, width);
@@ -260,25 +260,25 @@ export class OpponentPreviewScene implements UIScene {
 
         // Draw card background
         ctx.save();
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+        ctx.shadowColor = ColorTokens.effects.shadow;
         ctx.shadowBlur = 30;
         ctx.shadowOffsetY = 10;
-        drawRoundedRect(ctx, cardX, cardY, cardWidth, cardHeight, 20);
+        drawRoundedRect(ctx, cardX, cardY, cardWidth, cardHeight, LayoutConstants.Radii.XLarge);
         const cardGradient = ctx.createLinearGradient(cardX, cardY, cardX, cardY + cardHeight);
-        cardGradient.addColorStop(0, 'rgba(40, 45, 60, 0.95)');
-        cardGradient.addColorStop(1, 'rgba(25, 28, 38, 0.95)');
+        cardGradient.addColorStop(0, ColorTokens.background.panelSolid);
+        cardGradient.addColorStop(1, ColorTokens.background.panel);
         ctx.fillStyle = cardGradient;
         ctx.fill();
         ctx.restore();
 
         // Card border
-        drawRoundedRect(ctx, cardX, cardY, cardWidth, cardHeight, 20);
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-        ctx.lineWidth = 2;
+        drawRoundedRect(ctx, cardX, cardY, cardWidth, cardHeight, LayoutConstants.Radii.XLarge);
+        ctx.strokeStyle = ColorTokens.border.subtle;
+        ctx.lineWidth = LayoutConstants.Lines.Normal;
         ctx.stroke();
 
         // VS label
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.fillStyle = ColorTokens.text.muted;
         ctx.font = `16px ${LayoutConstants.Fonts.Family.Body}`;
         ctx.textAlign = 'center';
         ctx.fillText('YOUR OPPONENT', centerX, cardY + 30);
@@ -289,11 +289,11 @@ export class OpponentPreviewScene implements UIScene {
         const avatarY = cardY + 50;
 
         ctx.save();
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+        ctx.shadowColor = ColorTokens.effects.shadowLight;
         ctx.shadowBlur = 15;
         ctx.beginPath();
         ctx.arc(centerX, avatarY + avatarSize / 2, avatarSize / 2 + 4, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.fillStyle = ColorTokens.border.default;
         ctx.fill();
 
         // Clip for circular avatar
@@ -304,14 +304,14 @@ export class OpponentPreviewScene implements UIScene {
         if (this.opponentAvatar && this.opponentAvatar.complete && this.opponentAvatar.naturalWidth > 0) {
             ctx.drawImage(this.opponentAvatar, avatarX, avatarY, avatarSize, avatarSize);
         } else {
-            ctx.fillStyle = '#444';
+            ctx.fillStyle = ColorTokens.metallic.dark;
             ctx.fillRect(avatarX, avatarY, avatarSize, avatarSize);
         }
         ctx.restore();
 
         // Opponent name
         const nameY = avatarY + avatarSize + 30;
-        ctx.fillStyle = '#FFFFFF';
+        ctx.fillStyle = ColorTokens.text.primary;
         ctx.font = `bold 32px ${LayoutConstants.Fonts.Family.Display}`;
         ctx.textAlign = 'center';
         ctx.fillText(this.selectedOpponent.name, centerX, nameY);
@@ -325,8 +325,8 @@ export class OpponentPreviewScene implements UIScene {
         }
 
         // Bio
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-        ctx.font = `italic 16px ${LayoutConstants.Fonts.Family.Body}`;
+        ctx.fillStyle = ColorTokens.text.secondary;
+        ctx.font = `italic ${LayoutConstants.Fonts.Size.Medium}px ${LayoutConstants.Fonts.Family.Body}`;
         ctx.fillText(`"${this.selectedOpponent.bio}"`, centerX, nameY + 60);
 
         // Stats bars
@@ -335,7 +335,7 @@ export class OpponentPreviewScene implements UIScene {
 
         // Entry fee / Prize pool info
         const infoY = cardY + cardHeight - 40;
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.fillStyle = ColorTokens.text.muted;
         ctx.font = `14px ${LayoutConstants.Fonts.Family.Body}`;
         ctx.textAlign = 'center';
         ctx.fillText(`Entry Fee: ${this.entryFee.toLocaleString()} coins  •  Prize Pool: ${this.prizePool.toLocaleString()} coins`, centerX, infoY);
@@ -367,15 +367,15 @@ export class OpponentPreviewScene implements UIScene {
             const statY = y + index * gap;
 
             // Label
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-            ctx.font = `14px ${LayoutConstants.Fonts.Family.Body}`;
+            ctx.fillStyle = ColorTokens.text.secondary;
+            ctx.font = `${LayoutConstants.Fonts.Size.Small}px ${LayoutConstants.Fonts.Family.Body}`;
             ctx.textAlign = 'left';
             ctx.fillText(stat.label, x, statY + barHeight - 2);
 
             // Background bar
             const barX = x + labelWidth;
             const barWidth = width - labelWidth;
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.fillStyle = ColorTokens.border.default;
             drawRoundedRect(ctx, barX, statY, barWidth, barHeight, barHeight / 2);
             ctx.fill();
 

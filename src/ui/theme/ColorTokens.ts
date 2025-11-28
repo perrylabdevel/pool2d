@@ -55,6 +55,10 @@ export const ColorTokens = {
       gradientStart: 'rgba(20, 30, 50, 0.8)',
       gradientEnd: 'rgba(10, 20, 40, 0.9)',
     },
+    userHighlight: 'rgba(255, 215, 0, 0.15)',  // Gold highlight for user row
+    rowAlt: 'rgba(255, 255, 255, 0.03)',       // Alternating row background
+    goldHighlight: 'rgba(255, 215, 0, 0.3)',  // Gold badge background start
+    goldDark: 'rgba(184, 134, 11, 0.5)',      // Gold badge background end
   },
 
   // Border/Stroke Colors
@@ -126,6 +130,7 @@ export const ColorTokens = {
     shadowText: 'rgba(0, 0, 0, 0.8)',      // Text shadow
     shadowTextLight: 'rgba(0, 0, 0, 0.3)', // Light text shadow
     glow: 'rgba(0, 180, 255, 0.6)',        // Blue glow effect
+    glowTeal: 'rgba(0, 180, 255, 0.6)',   // Teal glow for hover states
   },
 
   // Metallic Rim Colors (for buttons)

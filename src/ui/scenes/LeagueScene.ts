@@ -212,8 +212,8 @@ export class LeagueScene implements UIScene {
             ctx.restore();
         } else {
             // Loading state
-            ctx.fillStyle = '#FFFFFF';
-            ctx.font = '24px Inter';
+            ctx.fillStyle = ColorTokens.text.primary;
+            ctx.font = `${LayoutConstants.Fonts.Size.XLarge}px ${LayoutConstants.Fonts.Family.Body}`;
             ctx.textAlign = 'center';
             ctx.fillText('Loading League Data...', width / 2, height / 2);
         }
@@ -230,7 +230,7 @@ export class LeagueScene implements UIScene {
         ctx.save();
 
         // Drop shadow for the main header panel
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+        ctx.shadowColor = ColorTokens.effects.shadow;
         ctx.shadowBlur = 15;
         ctx.shadowOffsetY = 8;
 
@@ -255,7 +255,7 @@ export class LeagueScene implements UIScene {
             badgeX + badgeSize / 2, badgeY + badgeSize / 2, badgeSize
         );
         glowGradient.addColorStop(0, colors.primary);
-        glowGradient.addColorStop(1, 'rgba(0,0,0,0)');
+        glowGradient.addColorStop(1, ColorTokens.effects.gloss.none);
         ctx.fillStyle = glowGradient;
         ctx.globalAlpha = 0.3;
         ctx.fillRect(badgeX - 20, badgeY - 20, badgeSize + 40, badgeSize + 40);
@@ -271,12 +271,12 @@ export class LeagueScene implements UIScene {
         ctx.fill();
 
         // Badge Inner Border
-        ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-        ctx.lineWidth = 3;
+        ctx.strokeStyle = ColorTokens.effects.shine;
+        ctx.lineWidth = LayoutConstants.Lines.Thick;
         ctx.stroke();
 
         // League Initial/Icon
-        ctx.fillStyle = '#0b101c';
+        ctx.fillStyle = ColorTokens.background.primary;
         ctx.font = `700 48px ${LayoutConstants.Fonts.Family.Heading}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -290,12 +290,12 @@ export class LeagueScene implements UIScene {
         // Always show generic name (e.g. BRONZE LEAGUE) to avoid confusion
         const displayName = section.title;
 
-        ctx.fillStyle = '#FFFFFF';
+        ctx.fillStyle = ColorTokens.text.primary;
         ctx.font = `800 36px ${LayoutConstants.Fonts.Family.Heading}`;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'bottom';
-        ctx.shadowColor = 'rgba(0,0,0,0.5)';
-        ctx.shadowBlur = 4;
+        ctx.shadowColor = ColorTokens.effects.shadow;
+        ctx.shadowBlur = LayoutConstants.Shadows.Text.blur;
         ctx.fillText(displayName, textX, textCenterY - 4);
         ctx.shadowBlur = 0;
 
@@ -320,13 +320,13 @@ export class LeagueScene implements UIScene {
 
         ctx.beginPath();
         ctx.roundRect(timerX, timerY, timerWidth, 28, 14);
-        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        ctx.fillStyle = ColorTokens.background.overlay;
         ctx.fill();
-        ctx.strokeStyle = 'rgba(255,255,255,0.1)';
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = ColorTokens.border.default;
+        ctx.lineWidth = LayoutConstants.Lines.Thin;
         ctx.stroke();
 
-        ctx.fillStyle = '#FFFFFF';
+        ctx.fillStyle = ColorTokens.text.primary;
         ctx.font = `600 14px ${LayoutConstants.Fonts.Family.Body}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -466,8 +466,8 @@ export class LeagueScene implements UIScene {
         drawPanel(ctx, rect);
 
         // Title
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = `700 24px ${LayoutConstants.Fonts.Family.Heading}`;
+        ctx.fillStyle = ColorTokens.text.primary;
+        ctx.font = `${LayoutConstants.Fonts.Weight.Bold} ${LayoutConstants.Fonts.Size.XLarge}px ${LayoutConstants.Fonts.Family.Heading}`;
         ctx.textAlign = 'left';
         ctx.fillText('Standings', rect.x + 30, rect.y + 40 - this.scrollOffset);
 
@@ -497,17 +497,17 @@ export class LeagueScene implements UIScene {
 
                         // Row Background
                         if (entry.isUser) {
-                            ctx.fillStyle = 'rgba(255, 215, 0, 0.15)';
+                            ctx.fillStyle = ColorTokens.background.userHighlight;
                             ctx.fillRect(rowX, rowY, rowW, rowH);
                             ctx.fillStyle = ColorTokens.action.warning;
                             ctx.fillRect(rowX, rowY, 4, rowH);
                         } else if (index % 2 === 0) {
-                            ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
+                            ctx.fillStyle = ColorTokens.background.rowAlt;
                             ctx.fillRect(rowX, rowY, rowW, rowH);
                         }
 
                         // Rank
-                        const rankColor = entry.rank <= 3 ? ColorTokens.action.warning : '#FFFFFF';
+                        const rankColor = entry.rank <= 3 ? ColorTokens.action.warning : ColorTokens.text.primary;
                         ctx.fillStyle = rankColor;
                         ctx.font = `700 18px ${LayoutConstants.Fonts.Family.Heading}`;
                         ctx.textAlign = 'center';
@@ -528,7 +528,7 @@ export class LeagueScene implements UIScene {
                             ctx.drawImage(avatarImg, avatarX, avatarY, avatarSize, avatarSize);
                         } else {
                             AssetLoader.loadImage(entry.avatar);
-                            ctx.fillStyle = '#444';
+                            ctx.fillStyle = ColorTokens.metallic.dark;
                             ctx.fillRect(avatarX, avatarY, avatarSize, avatarSize);
                         }
                         ctx.restore();
@@ -536,12 +536,12 @@ export class LeagueScene implements UIScene {
                         // Avatar Border
                         ctx.beginPath();
                         ctx.arc(avatarX + avatarSize / 2, avatarY + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
-                        ctx.strokeStyle = entry.isUser ? ColorTokens.action.warning : 'rgba(255,255,255,0.2)';
-                        ctx.lineWidth = 2;
+                        ctx.strokeStyle = entry.isUser ? ColorTokens.action.warning : ColorTokens.border.subtle;
+                        ctx.lineWidth = LayoutConstants.Lines.Normal;
                         ctx.stroke();
 
                         // Name
-                        ctx.fillStyle = entry.isUser ? '#FFFFFF' : ColorTokens.text.primary;
+                        ctx.fillStyle = ColorTokens.text.primary;
                         ctx.font = `600 16px ${LayoutConstants.Fonts.Family.Body}`;
                         ctx.textAlign = 'left';
                         ctx.fillText(entry.name, avatarX + avatarSize + 16, rowY + rowH / 2 + 1);
@@ -553,7 +553,7 @@ export class LeagueScene implements UIScene {
                         ctx.fillText(entry.score.toLocaleString(), rowX + rowW - 20, rowY + rowH / 2 + 1);
 
                         // Separator
-                        ctx.fillStyle = 'rgba(255,255,255,0.05)';
+                        ctx.fillStyle = ColorTokens.border.default;
                         ctx.fillRect(rowX + 10, rowY + rowH - 1, rowW - 20, 1);
                     }
                     rowY += rowH;
@@ -605,12 +605,12 @@ export class LeagueScene implements UIScene {
 
                         // Shadow for sticky header
                         if (headerY === rect.y) {
-                            ctx.fillStyle = 'rgba(0,0,0,0.3)';
+                            ctx.fillStyle = ColorTokens.background.overlay;
                             ctx.fillRect(rect.x + 12, headerY + sectionHeaderH, rect.width - 24, 4);
                         }
 
                         // Header Text
-                        ctx.fillStyle = '#0b101c';
+                        ctx.fillStyle = ColorTokens.background.primary;
                         ctx.font = `800 16px ${LayoutConstants.Fonts.Family.Heading}`;
                         ctx.textAlign = 'left';
                         ctx.textBaseline = 'middle';

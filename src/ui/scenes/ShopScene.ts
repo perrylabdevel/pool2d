@@ -458,7 +458,7 @@ export class ShopScene implements UIScene {
 
         // Rarity badge glow
         ctx.shadowColor = rarityColor;
-        ctx.shadowBlur = 12;
+        ctx.shadowBlur = LayoutConstants.Shadows.Glow.blur;
         ctx.strokeStyle = rarityColor;
         ctx.lineWidth = 2;
         ctx.stroke();
@@ -466,9 +466,9 @@ export class ShopScene implements UIScene {
         ctx.shadowColor = 'transparent';
 
         // Rarity text
-        ctx.fillStyle = '#FFFFFF';
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-        ctx.shadowBlur = 4;
+        ctx.fillStyle = ColorTokens.text.primary;
+        ctx.shadowColor = ColorTokens.effects.shadowText;
+        ctx.shadowBlur = LayoutConstants.Shadows.Text.blur;
         ctx.fillText(chip.rarity, rarityX + rarityWidth / 2, rarityY + rarityHeight / 2);
         ctx.shadowBlur = 0;
         ctx.shadowColor = 'transparent';
@@ -496,11 +496,11 @@ export class ShopScene implements UIScene {
         }
 
         // Name with strong shadow
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
-        ctx.shadowBlur = 8;
-        ctx.shadowOffsetX = 2;
-        ctx.shadowOffsetY = 2;
-        ctx.fillStyle = '#FFFFFF';
+        ctx.shadowColor = ColorTokens.effects.shadowText;
+        ctx.shadowBlur = LayoutConstants.Shadows.Small.blur;
+        ctx.shadowOffsetX = LayoutConstants.Shadows.Text.offsetX;
+        ctx.shadowOffsetY = LayoutConstants.Shadows.Text.offsetY;
+        ctx.fillStyle = ColorTokens.text.primary;
         ctx.fillText(nameText, innerX + 20, textStartY);
         ctx.shadowBlur = 0;
         ctx.shadowOffsetX = 0;
@@ -517,7 +517,7 @@ export class ShopScene implements UIScene {
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
         ctx.shadowColor = ColorTokens.effects.shadowText;
-        ctx.shadowBlur = 6;
+        ctx.shadowBlur = LayoutConstants.Shadows.Text.blur + 2;
 
         // Word wrap the description
         const maxDescWidth = innerWidth - 40;
@@ -783,7 +783,7 @@ export class ShopScene implements UIScene {
 
         // Cue tip with glow
         ctx.shadowColor = cue.tipColor;
-        ctx.shadowBlur = 15;
+        ctx.shadowBlur = LayoutConstants.Shadows.Medium.blur - 5;
         ctx.fillStyle = cue.tipColor;
         ctx.beginPath();
         ctx.arc(cueStartX, cueStartY, cueThickness * 0.7, 0, Math.PI * 2);
@@ -793,7 +793,7 @@ export class ShopScene implements UIScene {
         const bandX = cueStartX + cueLength * 0.65;
         const bandY = cueStartY - cueLength * 0.3 * 0.65;
         ctx.shadowColor = cue.accent;
-        ctx.shadowBlur = 10;
+        ctx.shadowBlur = LayoutConstants.Shadows.Small.blur + 2;
         ctx.strokeStyle = cue.accent;
         ctx.lineWidth = 4;
         ctx.beginPath();
@@ -823,7 +823,7 @@ export class ShopScene implements UIScene {
 
         // Rarity badge glow
         ctx.shadowColor = rarityColor;
-        ctx.shadowBlur = 12;
+        ctx.shadowBlur = LayoutConstants.Shadows.Glow.blur;
         ctx.strokeStyle = rarityColor;
         ctx.lineWidth = 2;
         ctx.stroke();
@@ -882,7 +882,7 @@ export class ShopScene implements UIScene {
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
         ctx.shadowColor = ColorTokens.effects.shadowText;
-        ctx.shadowBlur = 6;
+        ctx.shadowBlur = LayoutConstants.Shadows.Text.blur + 2;
 
         // Word wrap the description
         const maxDescWidth = innerWidth - 40;
@@ -921,7 +921,7 @@ export class ShopScene implements UIScene {
 
         // Inner border (decorative line inside the frame)
         drawRoundedRect(ctx, innerX, innerY, innerWidth, innerHeight, innerRadius);
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+        ctx.strokeStyle = ColorTokens.border.darkStrong;
         ctx.lineWidth = borderWidth;
         ctx.stroke();
 
@@ -941,17 +941,17 @@ export class ShopScene implements UIScene {
             innerX,
             innerY + innerHeight / 4
         );
-        highlightGradient.addColorStop(0, 'rgba(255, 255, 255, 0.2)');
-        highlightGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        highlightGradient.addColorStop(0, ColorTokens.border.subtle);
+        highlightGradient.addColorStop(1, ColorTokens.effects.gloss.none);
         ctx.strokeStyle = highlightGradient;
-        ctx.lineWidth = 1;
+        ctx.lineWidth = LayoutConstants.Lines.Thin;
         ctx.stroke();
 
         // Corner decorations (small accent lines at corners)
-        const cornerSize = Math.min(20, innerWidth * 0.05);
+        const cornerSize = Math.min(LayoutConstants.Cards.CornerAccentSize, innerWidth * 0.05);
         const cornerInset = frameWidth + bevelWidth + 2;
-        ctx.strokeStyle = 'rgba(255, 215, 0, 0.6)'; // Gold accents
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = ColorTokens.card.cornerAccent;
+        ctx.lineWidth = LayoutConstants.Lines.Normal;
 
         // Top-left corner
         ctx.beginPath();

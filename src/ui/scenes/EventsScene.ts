@@ -207,37 +207,37 @@ export class EventsScene implements UIScene {
         const isDisabled = !!card.comingSoon;
         const { x, y, width, height } = rect;
         const radius = LayoutConstants.Radii.Large;
-        const frameWidth = 6; // Outer decorative frame
-        const bevelWidth = 3; // Middle bevel layer
-        const borderWidth = 2; // Inner border
+        const frameWidth = LayoutConstants.Cards.FrameWidth;
+        const bevelWidth = LayoutConstants.Cards.BevelWidth;
+        const borderWidth = LayoutConstants.Cards.BorderWidth;
 
         ctx.save();
 
         // Enhanced drop shadow
         if (isHovered && !isDisabled) {
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
-            ctx.shadowBlur = 28;
-            ctx.shadowOffsetY = 14;
+            ctx.shadowColor = ColorTokens.effects.shadowHeavy;
+            ctx.shadowBlur = LayoutConstants.Shadows.Large.blur;
+            ctx.shadowOffsetY = LayoutConstants.Shadows.Large.offsetY;
         } else {
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
-            ctx.shadowBlur = 20;
-            ctx.shadowOffsetY = 10;
+            ctx.shadowColor = ColorTokens.effects.shadowLight;
+            ctx.shadowBlur = LayoutConstants.Shadows.Medium.blur;
+            ctx.shadowOffsetY = LayoutConstants.Shadows.Medium.offsetY;
         }
 
         // Outer Frame - Metallic/Wood-grain effect
         drawRoundedRect(ctx, x, y, width, height, radius);
         const frameGradient = ctx.createLinearGradient(x, y, x, y + height);
-        frameGradient.addColorStop(0, '#8B7355'); // Lighter wood/bronze
-        frameGradient.addColorStop(0.5, '#6B5745'); // Mid wood/bronze
-        frameGradient.addColorStop(1, '#4B3725'); // Darker wood/bronze
+        frameGradient.addColorStop(0, ColorTokens.card.frame.light);
+        frameGradient.addColorStop(0.5, ColorTokens.card.frame.mid);
+        frameGradient.addColorStop(1, ColorTokens.card.frame.dark);
         ctx.fillStyle = frameGradient;
         ctx.fill();
 
         // Add metallic shine to frame
         const shineGradient = ctx.createLinearGradient(x, y, x + width / 3, y);
-        shineGradient.addColorStop(0, 'rgba(255, 255, 255, 0.4)');
-        shineGradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.1)');
-        shineGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        shineGradient.addColorStop(0, ColorTokens.effects.gloss.start);
+        shineGradient.addColorStop(0.5, ColorTokens.effects.gloss.mid);
+        shineGradient.addColorStop(1, ColorTokens.effects.gloss.none);
         ctx.fillStyle = shineGradient;
         ctx.fill();
 
@@ -255,16 +255,16 @@ export class EventsScene implements UIScene {
 
         drawRoundedRect(ctx, bevelX, bevelY, bevelFullWidth, bevelFullHeight, bevelRadius);
         const bevelGradient = ctx.createLinearGradient(bevelX, bevelY, bevelX, bevelY + bevelFullHeight);
-        bevelGradient.addColorStop(0, '#3a3a3a'); // Dark top for inset look
-        bevelGradient.addColorStop(0.5, '#2a2a2a'); // Mid
-        bevelGradient.addColorStop(1, '#4a4a4a'); // Lighter bottom
+        bevelGradient.addColorStop(0, ColorTokens.card.bevel.top);
+        bevelGradient.addColorStop(0.5, ColorTokens.card.bevel.mid);
+        bevelGradient.addColorStop(1, ColorTokens.card.bevel.bottom);
         ctx.fillStyle = bevelGradient;
         ctx.fill();
 
         // Bevel highlight (top edge)
         drawRoundedRect(ctx, bevelX, bevelY, bevelFullWidth, bevelFullHeight, bevelRadius);
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = ColorTokens.border.emphasis;
+        ctx.lineWidth = LayoutConstants.Lines.Thin;
         ctx.stroke();
 
         // Inner content area (inset from bevel)
@@ -322,16 +322,16 @@ export class EventsScene implements UIScene {
 
         // Large title at bottom with dramatic styling
         const titleFontSize = Math.min(48, innerWidth * 0.18);
-        ctx.font = `900 ${titleFontSize}px "Rajdhani", "Impact", sans-serif`;
+        ctx.font = `900 ${titleFontSize}px ${LayoutConstants.Fonts.Family.Game}, "Impact", sans-serif`;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'bottom';
 
         // Title with strong shadow for readability
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
-        ctx.shadowBlur = 12;
-        ctx.shadowOffsetX = 2;
-        ctx.shadowOffsetY = 2;
-        ctx.fillStyle = '#FFFFFF';
+        ctx.shadowColor = ColorTokens.effects.shadowText;
+        ctx.shadowBlur = LayoutConstants.Shadows.Glow.blur;
+        ctx.shadowOffsetX = LayoutConstants.Shadows.Text.offsetX;
+        ctx.shadowOffsetY = LayoutConstants.Shadows.Text.offsetY;
+        ctx.fillStyle = ColorTokens.text.primary;
         ctx.fillText(card.title.toUpperCase(), textStartX, innerY + innerHeight - 70);
         ctx.shadowBlur = 0;
         ctx.shadowOffsetX = 0;
@@ -346,12 +346,12 @@ export class EventsScene implements UIScene {
 
         // Subtitle with color accent
         const subtitleFontSize = Math.min(18, innerWidth * 0.065);
-        ctx.font = `700 ${subtitleFontSize}px "Rajdhani", sans-serif`;
+        ctx.font = `${LayoutConstants.Fonts.Weight.Bold} ${subtitleFontSize}px ${LayoutConstants.Fonts.Family.Game}`;
         ctx.fillStyle = card.color;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'bottom';
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-        ctx.shadowBlur = 6;
+        ctx.shadowColor = ColorTokens.effects.shadowText;
+        ctx.shadowBlur = LayoutConstants.Shadows.Small.blur / 2;
         ctx.fillText(card.subtitle.toUpperCase(), textStartX, innerY + innerHeight - 42);
         ctx.shadowBlur = 0;
         ctx.shadowColor = 'transparent';
@@ -365,29 +365,29 @@ export class EventsScene implements UIScene {
         drawRoundedRect(ctx, btnX, btnY, btnWidth, btnHeight, LayoutConstants.Radii.Medium);
 
         if (isDisabled) {
-            ctx.fillStyle = 'rgba(255,255,255,0.08)';
+            ctx.fillStyle = ColorTokens.background.overlay;
         } else if (isHovered) {
             const btnGradient = ctx.createLinearGradient(btnX, btnY, btnX, btnY + btnHeight);
             btnGradient.addColorStop(0, card.color);
             btnGradient.addColorStop(1, adjustBrightness(card.color, -30));
             ctx.fillStyle = btnGradient;
         } else {
-            ctx.fillStyle = 'rgba(255,255,255,0.15)';
+            ctx.fillStyle = ColorTokens.border.emphasis;
         }
         ctx.fill();
 
         // Button border
-        ctx.strokeStyle = isHovered && !isDisabled ? card.color : 'rgba(255,255,255,0.3)';
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = isHovered && !isDisabled ? card.color : ColorTokens.effects.shine;
+        ctx.lineWidth = LayoutConstants.Lines.Normal;
         ctx.stroke();
 
         // Button text
-        ctx.fillStyle = isDisabled ? 'rgba(255,255,255,0.5)' : isHovered ? '#FFF' : '#FFF';
+        ctx.fillStyle = isDisabled ? ColorTokens.text.muted : ColorTokens.text.primary;
         ctx.font = `bold ${LayoutConstants.Fonts.Size.Small}px ${LayoutConstants.Fonts.Family.Default}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-        ctx.shadowBlur = 4;
+        ctx.shadowColor = ColorTokens.effects.shadow;
+        ctx.shadowBlur = LayoutConstants.Shadows.Text.blur;
         ctx.fillText(isDisabled ? 'LOCKED' : 'PLAY', btnX + btnWidth / 2, btnY + btnHeight / 2);
         ctx.shadowBlur = 0;
         ctx.shadowColor = 'transparent';
@@ -421,7 +421,7 @@ export class EventsScene implements UIScene {
 
         // Inner border (decorative line inside the frame)
         drawRoundedRect(ctx, innerX, innerY, innerWidth, innerHeight, innerRadius);
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+        ctx.strokeStyle = ColorTokens.border.darkStrong;
         ctx.lineWidth = borderWidth;
         ctx.stroke();
 
@@ -441,17 +441,17 @@ export class EventsScene implements UIScene {
             innerX,
             innerY + innerHeight / 4
         );
-        highlightGradient.addColorStop(0, 'rgba(255, 255, 255, 0.2)');
-        highlightGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        highlightGradient.addColorStop(0, ColorTokens.border.subtle);
+        highlightGradient.addColorStop(1, ColorTokens.effects.gloss.none);
         ctx.strokeStyle = highlightGradient;
-        ctx.lineWidth = 1;
+        ctx.lineWidth = LayoutConstants.Lines.Thin;
         ctx.stroke();
 
         // Corner decorations (small accent lines at corners)
-        const cornerSize = Math.min(20, innerWidth * 0.05);
+        const cornerSize = Math.min(LayoutConstants.Cards.CornerAccentSize, innerWidth * 0.05);
         const cornerInset = frameWidth + bevelWidth + 2;
-        ctx.strokeStyle = 'rgba(255, 215, 0, 0.6)'; // Gold accents
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = ColorTokens.card.cornerAccent;
+        ctx.lineWidth = LayoutConstants.Lines.Normal;
 
         // Top-left corner
         ctx.beginPath();
@@ -487,7 +487,7 @@ export class EventsScene implements UIScene {
             ctx.strokeStyle = card.color;
             ctx.lineWidth = 4;
             ctx.shadowColor = `${card.color}99`; // Add alpha to card color
-            ctx.shadowBlur = 20;
+            ctx.shadowBlur = LayoutConstants.Shadows.Medium.blur;
             ctx.stroke();
             ctx.shadowBlur = 0;
             ctx.shadowColor = 'transparent';

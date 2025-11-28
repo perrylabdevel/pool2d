@@ -2,6 +2,7 @@ import { UIScene } from '../SceneController';
 import { uiStateMachine, UIState } from '../UIStateMachine';
 import { drawGlossyButton, drawPanel, Rect, UIColors } from '../components/UIComponents';
 import { ColorTokens, SemanticColors } from '../theme/ColorTokens';
+import { LayoutConstants } from '../theme/LayoutConstants';
 
 type ConfirmButton = {
     id: 'confirm' | 'cancel';
@@ -134,14 +135,14 @@ export class ConfirmScene implements UIScene {
 
         // Title
         ctx.fillStyle = ColorTokens.text.primary;
-        ctx.font = 'bold 24px Arial';
+        ctx.font = `bold ${LayoutConstants.Fonts.Size.XLarge}px ${LayoutConstants.Fonts.Family.Default}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(this.title, width / 2, panelY + 50);
 
         // Message
         ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'; // Slightly transparent white for subtitle
-        ctx.font = '16px Arial';
+        ctx.font = `${LayoutConstants.Fonts.Size.Medium}px ${LayoutConstants.Fonts.Family.Default}`;
         ctx.fillText(this.message, width / 2, panelY + 85);
 
         // Buttons

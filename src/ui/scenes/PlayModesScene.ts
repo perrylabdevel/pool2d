@@ -366,9 +366,9 @@ export class PlayModesScene implements UIScene {
 
             // Add subtle felt-like texture overlay
             ctx.save();
-            ctx.globalAlpha = 0.08;
+            ctx.globalAlpha = LayoutConstants.Opacity.DiagonalStripe;
             for (let i = 0; i < innerHeight; i += 6) {
-                ctx.strokeStyle = i % 12 === 0 ? '#fff' : '#000';
+                ctx.strokeStyle = i % 12 === 0 ? ColorTokens.text.primary : ColorTokens.text.dark;
                 ctx.lineWidth = 1;
                 ctx.beginPath();
                 ctx.moveTo(innerX, innerY + i);
@@ -381,8 +381,8 @@ export class PlayModesScene implements UIScene {
         // Dark gradient overlay for text readability
         const overlayGradient = ctx.createLinearGradient(innerX, innerY, innerX, innerY + innerHeight);
         overlayGradient.addColorStop(0, 'rgba(0, 0, 0, 0.1)');
-        overlayGradient.addColorStop(0.4, 'rgba(0, 0, 0, 0.3)');
-        overlayGradient.addColorStop(1, 'rgba(0, 0, 0, 0.85)');
+        overlayGradient.addColorStop(0.4, ColorTokens.background.overlay);
+        overlayGradient.addColorStop(1, ColorTokens.background.overlayHeavy);
         ctx.fillStyle = overlayGradient;
         ctx.fillRect(innerX, innerY, innerWidth, innerHeight);
 
@@ -409,7 +409,7 @@ export class PlayModesScene implements UIScene {
 
             // Badge glow
             ctx.shadowColor = ColorTokens.action.success;
-            ctx.shadowBlur = 12;
+            ctx.shadowBlur = LayoutConstants.Shadows.Glow.blur;
             ctx.strokeStyle = ColorTokens.action.success;
             ctx.lineWidth = 2;
             ctx.stroke();
@@ -430,7 +430,7 @@ export class PlayModesScene implements UIScene {
             // Coin price badge in top right
             const coinRadius = Math.min(12, innerHeight * 0.04);
             const priceFontSize = Math.min(16, innerHeight * 0.05);
-            ctx.font = `700 ${priceFontSize}px "Rajdhani", sans-serif`;
+            ctx.font = `${LayoutConstants.Fonts.Weight.Bold} ${priceFontSize}px ${LayoutConstants.Fonts.Family.Game}`;
             const priceText = card.price.toString();
             const priceTextWidth = ctx.measureText(priceText).width;
             const priceBadgeWidth = priceTextWidth + coinRadius * 3 + 16;
@@ -440,8 +440,8 @@ export class PlayModesScene implements UIScene {
             // Badge background
             drawRoundedRect(ctx, priceBadgeX, priceBadgeY, priceBadgeWidth, priceHeight, priceHeight / 2);
             const badgeGrad = ctx.createLinearGradient(priceBadgeX, priceBadgeY, priceBadgeX, priceBadgeY + priceHeight);
-            badgeGrad.addColorStop(0, 'rgba(255, 215, 0, 0.3)');
-            badgeGrad.addColorStop(1, 'rgba(184, 134, 11, 0.5)');
+            badgeGrad.addColorStop(0, ColorTokens.background.goldHighlight);
+            badgeGrad.addColorStop(1, ColorTokens.background.goldDark);
             ctx.fillStyle = badgeGrad;
             ctx.fill();
 
@@ -454,9 +454,9 @@ export class PlayModesScene implements UIScene {
             const coinX = priceBadgeX + coinRadius + 8;
             const coinY = priceBadgeY + priceHeight / 2;
             const coinGradient = ctx.createRadialGradient(coinX, coinY, 0, coinX, coinY, coinRadius);
-            coinGradient.addColorStop(0, '#FFE66D');
+            coinGradient.addColorStop(0, ColorTokens.coin.lightGold);
             coinGradient.addColorStop(0.6, ColorTokens.currency.coins);
-            coinGradient.addColorStop(1, '#B8860B');
+            coinGradient.addColorStop(1, ColorTokens.coin.darkGold);
 
             ctx.beginPath();
             ctx.arc(coinX, coinY, coinRadius, 0, Math.PI * 2);
@@ -465,7 +465,7 @@ export class PlayModesScene implements UIScene {
 
             // Coin border
             ctx.strokeStyle = ColorTokens.effects.gloss.start;
-            ctx.lineWidth = 1.5;
+            ctx.lineWidth = LayoutConstants.Lines.Normal;
             ctx.stroke();
 
             // Price text
@@ -486,7 +486,7 @@ export class PlayModesScene implements UIScene {
 
         // Large title at bottom with dramatic styling
         const titleFontSize = Math.min(40, innerWidth * 0.18);
-        ctx.font = `900 ${titleFontSize}px "Rajdhani", "Impact", sans-serif`;
+        ctx.font = `900 ${titleFontSize}px ${LayoutConstants.Fonts.Family.Game}, "Impact", sans-serif`;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'bottom';
 
@@ -529,17 +529,17 @@ export class PlayModesScene implements UIScene {
             innerX,
             innerY + innerHeight / 4
         );
-        highlightGradient.addColorStop(0, 'rgba(255, 255, 255, 0.2)');
-        highlightGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        highlightGradient.addColorStop(0, ColorTokens.border.subtle);
+        highlightGradient.addColorStop(1, ColorTokens.effects.gloss.none);
         ctx.strokeStyle = highlightGradient;
         ctx.lineWidth = 1;
         ctx.stroke();
 
         // Corner decorations (small accent lines at corners)
-        const cornerSize = Math.min(20, innerWidth * 0.08);
+        const cornerSize = Math.min(LayoutConstants.Cards.CornerAccentSize, innerWidth * 0.08);
         const cornerInset = frameWidth + bevelWidth + 2;
-        ctx.strokeStyle = 'rgba(255, 215, 0, 0.6)'; // Gold accents
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = ColorTokens.card.cornerAccent;
+        ctx.lineWidth = LayoutConstants.Lines.Normal;
 
         // Top-left corner
         ctx.beginPath();
@@ -572,10 +572,10 @@ export class PlayModesScene implements UIScene {
         // Hover glow effect (outer glow)
         if (isHovered) {
             drawRoundedRect(ctx, x - 2, y - 2, width + 4, height + 4, radius + 2);
-            ctx.strokeStyle = '#00B4FF';
-            ctx.lineWidth = 4;
-            ctx.shadowColor = 'rgba(0, 180, 255, 0.6)';
-            ctx.shadowBlur = 20;
+            ctx.strokeStyle = ColorTokens.ui.teal;
+            ctx.lineWidth = LayoutConstants.Lines.Heavy;
+            ctx.shadowColor = ColorTokens.effects.glowTeal;
+            ctx.shadowBlur = LayoutConstants.Shadows.Medium.blur;
             ctx.stroke();
             ctx.shadowBlur = 0;
             ctx.shadowColor = 'transparent';

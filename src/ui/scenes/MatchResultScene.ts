@@ -148,7 +148,7 @@ export class MatchResultScene implements UIScene {
         drawSceneBackground(ctx, width, height, this.resultData?.isWin ? 'green' : 'red');
 
         // Dim overlay
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+        ctx.fillStyle = ColorTokens.background.overlay;
         ctx.fillRect(0, 0, width, height);
 
         const progress = this.easeOutBack(this.animationProgress);
@@ -166,20 +166,20 @@ export class MatchResultScene implements UIScene {
         ctx.translate(-centerX, -(cardY + cardHeight / 2));
 
         // Card shadow
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-        ctx.shadowBlur = 30;
+        ctx.shadowColor = ColorTokens.effects.shadow;
+        ctx.shadowBlur = LayoutConstants.Shadows.Large.blur + 2;
         ctx.shadowOffsetY = 10;
 
-        drawRoundedRect(ctx, cardX, cardY, cardWidth, cardHeight, 20);
-        ctx.fillStyle = 'rgba(20, 25, 35, 0.95)';
+        drawRoundedRect(ctx, cardX, cardY, cardWidth, cardHeight, LayoutConstants.Radii.XLarge);
+        ctx.fillStyle = ColorTokens.background.panel;
         ctx.fill();
 
         ctx.shadowBlur = 0;
         ctx.shadowOffsetY = 0;
 
         // Border glow
-        ctx.strokeStyle = this.resultData?.isWin ? '#00FF88' : '#FF4444';
-        ctx.lineWidth = 3;
+        ctx.strokeStyle = this.resultData?.isWin ? ColorTokens.action.success : ColorTokens.action.danger;
+        ctx.lineWidth = LayoutConstants.Lines.Thick;
         ctx.stroke();
 
         ctx.restore();
@@ -211,14 +211,14 @@ export class MatchResultScene implements UIScene {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.font = `bold 42px ${LayoutConstants.Fonts.Family.Heading}`;
-        ctx.fillStyle = data.isWin ? '#00FF88' : '#FF4444';
+        ctx.fillStyle = data.isWin ? ColorTokens.action.success : ColorTokens.action.danger;
         ctx.fillText(data.isWin ? 'VICTORY!' : 'DEFEAT', centerX, y);
 
         y += 50;
 
         // Opponent name
-        ctx.font = `18px ${LayoutConstants.Fonts.Family.Body}`;
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.font = `${LayoutConstants.Fonts.Size.Large}px ${LayoutConstants.Fonts.Family.Body}`;
+        ctx.fillStyle = ColorTokens.text.muted;
         ctx.fillText(`vs ${data.opponentName}`, centerX, y);
 
         y += 50;
@@ -231,13 +231,13 @@ export class MatchResultScene implements UIScene {
         // Trophies
         this.renderStat(ctx, statsStartX, statsY, '🏆', 
             data.trophyChange >= 0 ? `+${data.trophyChange}` : `${data.trophyChange}`,
-            data.trophyChange >= 0 ? '#FFD700' : '#FF4444'
+            data.trophyChange >= 0 ? ColorTokens.brand.primary : ColorTokens.action.danger
         );
 
         // Coins
         this.renderStat(ctx, statsStartX + statWidth * 2, statsY, '💰',
             data.earnings > 0 ? `+${data.earnings.toLocaleString()}` : '0',
-            data.earnings > 0 ? '#00FF88' : '#888888'
+            data.earnings > 0 ? ColorTokens.action.success : ColorTokens.metallic.mid
         );
 
         y += 80;
@@ -252,7 +252,7 @@ export class MatchResultScene implements UIScene {
         ctx.textAlign = 'center';
         
         // Icon
-        ctx.font = '32px sans-serif';
+        ctx.font = `${LayoutConstants.Fonts.Size.XXLarge}px ${LayoutConstants.Fonts.Family.Body}`;
         ctx.fillText(icon, x, y);
 
         // Value
@@ -272,7 +272,7 @@ export class MatchResultScene implements UIScene {
         ctx.globalAlpha = progress;
 
         // Chest label
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.fillStyle = ColorTokens.text.muted;
         ctx.font = `14px ${LayoutConstants.Fonts.Family.Body}`;
         ctx.textAlign = 'center';
         ctx.fillText('CHEST EARNED', centerX, y);
@@ -290,7 +290,7 @@ export class MatchResultScene implements UIScene {
 
         // Add glow
         ctx.shadowColor = ColorTokens.action.warning;
-        ctx.shadowBlur = 15;
+        ctx.shadowBlur = LayoutConstants.Shadows.Medium.blur - 5;
 
         ChestRenderer.drawChest(ctx, chestX, chestY, chestSize, rendererType);
 
@@ -313,21 +313,21 @@ export class MatchResultScene implements UIScene {
             
             if (btn.primary) {
                 const grad = ctx.createLinearGradient(btn.x, btn.y, btn.x, btn.y + btn.height);
-                grad.addColorStop(0, isHovered ? '#00FF88' : '#00CC66');
+                grad.addColorStop(0, isHovered ? ColorTokens.action.success : '#00CC66');
                 grad.addColorStop(1, isHovered ? '#00CC66' : '#009944');
                 ctx.fillStyle = grad;
             } else {
-                ctx.fillStyle = isHovered ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.1)';
+                ctx.fillStyle = isHovered ? ColorTokens.border.subtle : ColorTokens.border.default;
             }
             ctx.fill();
 
             // Border
-            ctx.strokeStyle = btn.primary ? '#00FF88' : 'rgba(255, 255, 255, 0.3)';
-            ctx.lineWidth = 2;
+            ctx.strokeStyle = btn.primary ? ColorTokens.action.success : ColorTokens.effects.shine;
+            ctx.lineWidth = LayoutConstants.Lines.Normal;
             ctx.stroke();
 
             // Label
-            ctx.fillStyle = btn.primary ? '#000000' : '#FFFFFF';
+            ctx.fillStyle = btn.primary ? ColorTokens.text.dark : ColorTokens.text.primary;
             ctx.font = `bold 18px ${LayoutConstants.Fonts.Family.Heading}`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';

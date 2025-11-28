@@ -568,38 +568,37 @@ export class SettingsScene implements UIScene {
     private renderBackground(ctx: CanvasRenderingContext2D, width: number, height: number) {
         drawSceneBackground(ctx, width, height, 'blue');
     }
-
     private drawControlBackground(ctx: CanvasRenderingContext2D, rect: Rect) {
         const r = LayoutConstants.Radii.Medium;
 
         // 1. Darker Background (Recessed)
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+        ctx.fillStyle = ColorTokens.background.overlay;
         drawRoundedRect(ctx, rect.x, rect.y, rect.width, rect.height, r);
         ctx.fill();
 
-        // 2. Inner Shadow (Top)
+        // 2. Inset Shadow (Top)
         ctx.save();
         ctx.clip();
         const shadowGrad = ctx.createLinearGradient(rect.x, rect.y, rect.x, rect.y + 15);
-        shadowGrad.addColorStop(0, 'rgba(0, 0, 0, 0.6)');
-        shadowGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        shadowGrad.addColorStop(0, ColorTokens.background.overlayDark);
+        shadowGrad.addColorStop(1, ColorTokens.effects.gloss.none);
         ctx.fillStyle = shadowGrad;
         ctx.fillRect(rect.x, rect.y, rect.width, 15);
         ctx.restore();
 
-        // 3. Bottom Highlight (Reflected Light)
+        // 3. Bottom Highlight (subtle light from below)
         ctx.save();
         ctx.clip();
         const highlightGrad = ctx.createLinearGradient(rect.x, rect.y + rect.height - 10, rect.x, rect.y + rect.height);
-        highlightGrad.addColorStop(0, 'rgba(255, 255, 255, 0)');
-        highlightGrad.addColorStop(1, 'rgba(255, 255, 255, 0.05)');
+        highlightGrad.addColorStop(0, ColorTokens.effects.gloss.none);
+        highlightGrad.addColorStop(1, ColorTokens.effects.gloss.end);
         ctx.fillStyle = highlightGrad;
         ctx.fillRect(rect.x, rect.y + rect.height - 10, rect.width, 10);
         ctx.restore();
 
         // 4. Border (Subtle Metallic)
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = ColorTokens.border.default;
+        ctx.lineWidth = LayoutConstants.Lines.Thin;
         drawRoundedRect(ctx, rect.x, rect.y, rect.width, rect.height, r);
         ctx.stroke();
     }
@@ -614,36 +613,6 @@ export class SettingsScene implements UIScene {
         }
     }
 
-    private renderControls(ctx: CanvasRenderingContext2D) {
-        // Render toggles
-        for (const toggle of this.toggleControls) {
-            // Audio mute toggles are rendered inline with sliders
-            if (this.activeTab === 'audio' && toggle.id.startsWith('mute')) continue;
-            this.renderToggle(ctx, toggle, toggle === this.hoveredToggle);
-        }
-
-        // Render colors
-        for (const color of this.colorControls) {
-            this.renderColor(ctx, color, color === this.hoveredColor);
-        }
-
-        // Render selects
-        for (const select of this.selectControls) {
-            this.renderSelect(ctx, select, select === this.hoveredSelect);
-        }
-
-        // Render sliders
-        for (const slider of this.sliderControls) {
-            const muteToggle = this.muteToggleMap[slider.id];
-            this.renderSlider(ctx, slider, slider === this.hoveredSlider || slider === this.activeSlider, muteToggle);
-        }
-
-        // Render buttons
-        for (const button of this.buttonControls) {
-            drawGlossyButton(ctx, button.rect, button.label, button.color, button === this.hoveredButton);
-        }
-    }
-
     private renderToggle(ctx: CanvasRenderingContext2D, control: ToggleControl, isHovered: boolean) {
         const rect = control.rect;
 
@@ -652,9 +621,9 @@ export class SettingsScene implements UIScene {
 
         if (isHovered) {
             ctx.save();
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+            ctx.fillStyle = ColorTokens.effects.gloss.end;
             ctx.beginPath();
-            ctx.roundRect(rect.x, rect.y, rect.width, rect.height, 8);
+            ctx.roundRect(rect.x, rect.y, rect.width, rect.height, LayoutConstants.Radii.Medium);
             ctx.fill();
             ctx.restore();
         }
@@ -662,11 +631,11 @@ export class SettingsScene implements UIScene {
         // Label (HUD Style)
         ctx.save();
         ctx.fillStyle = ColorTokens.text.primary;
-        ctx.font = 'bold 16px Arial';
+        ctx.font = `bold ${LayoutConstants.Fonts.Size.Medium}px ${LayoutConstants.Fonts.Family.Default}`;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-        ctx.shadowBlur = 4;
+        ctx.shadowColor = ColorTokens.effects.shadowText;
+        ctx.shadowBlur = LayoutConstants.Shadows.Text.blur;
         ctx.fillText(control.label.toUpperCase(), rect.x + 20, rect.y + rect.height / 2);
         ctx.restore();
 
@@ -700,7 +669,7 @@ export class SettingsScene implements UIScene {
 
         // Knob Shadow
         ctx.save();
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+        ctx.shadowColor = ColorTokens.effects.shadowLight;
         ctx.shadowBlur = 3;
         ctx.shadowOffsetY = 1;
 
@@ -708,6 +677,189 @@ export class SettingsScene implements UIScene {
         ctx.beginPath();
         ctx.roundRect(knobX, knobY, knobWidth, knobHeight, 4);
         ctx.fill();
+        ctx.restore();
+    }
+
+    private renderColor(ctx: CanvasRenderingContext2D, control: ColorControl, isHovered: boolean) {
+        const rect = control.rect;
+
+        // Background
+        this.drawControlBackground(ctx, rect);
+
+        if (isHovered) {
+            ctx.save();
+            ctx.fillStyle = ColorTokens.effects.gloss.end;
+            ctx.beginPath();
+            ctx.roundRect(rect.x, rect.y, rect.width, rect.height, LayoutConstants.Radii.Medium);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        // Label (HUD Style)
+        ctx.save();
+        ctx.fillStyle = ColorTokens.text.primary;
+        ctx.font = `bold ${LayoutConstants.Fonts.Size.Medium}px ${LayoutConstants.Fonts.Family.Default}`;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.shadowColor = ColorTokens.effects.shadowText;
+        ctx.shadowBlur = LayoutConstants.Shadows.Text.blur;
+        ctx.fillText(control.label.toUpperCase(), rect.x + 20, rect.y + rect.height / 2);
+        ctx.restore();
+
+        // Color swatch (Framed & Glossy)
+        const colorRect = control.colorRect;
+        const cr = 6;
+
+        ctx.save();
+
+        // Shadow
+        ctx.shadowColor = ColorTokens.effects.shadow;
+        ctx.shadowBlur = LayoutConstants.Shadows.Text.blur;
+        ctx.shadowOffsetY = LayoutConstants.Shadows.Text.offsetY;
+
+        // Fill
+        ctx.fillStyle = control.value;
+        ctx.beginPath();
+        ctx.roundRect(colorRect.x, colorRect.y, colorRect.width, colorRect.height, cr);
+        ctx.fill();
+
+        // Reset shadow
+        ctx.shadowColor = 'transparent';
+
+        // Gloss
+        ctx.fillStyle = ColorTokens.border.subtle;
+        ctx.beginPath();
+        ctx.roundRect(colorRect.x, colorRect.y, colorRect.width, colorRect.height / 2, cr);
+        ctx.fill();
+
+        // Rim
+        ctx.strokeStyle = isHovered ? ColorTokens.text.primary : ColorTokens.text.muted;
+        ctx.lineWidth = isHovered ? 3 : 2;
+        ctx.beginPath();
+        ctx.roundRect(colorRect.x, colorRect.y, colorRect.width, colorRect.height, cr);
+        ctx.stroke();
+
+        ctx.restore();
+    }
+
+    private renderSelect(ctx: CanvasRenderingContext2D, control: SelectControl, isHovered: boolean) {
+        const rect = control.rect;
+
+        // Background
+        this.drawControlBackground(ctx, rect);
+
+        if (isHovered) {
+            ctx.save();
+            ctx.fillStyle = ColorTokens.effects.gloss.end;
+            ctx.beginPath();
+            ctx.roundRect(rect.x, rect.y, rect.width, rect.height, LayoutConstants.Radii.Medium);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        // Label (HUD Style)
+        ctx.save();
+        ctx.fillStyle = ColorTokens.text.primary;
+        ctx.font = `bold ${LayoutConstants.Fonts.Size.Medium}px ${LayoutConstants.Fonts.Family.Default}`;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.shadowColor = ColorTokens.effects.shadowText;
+        ctx.shadowBlur = LayoutConstants.Shadows.Text.blur;
+        ctx.fillText(control.label.toUpperCase(), rect.x + 20, rect.y + rect.height / 2);
+        ctx.restore();
+
+        // Value as Mini Glossy Button
+        const btnWidth = 140;
+        const btnHeight = 32;
+        const btnX = rect.x + rect.width - btnWidth - 10;
+        const btnY = rect.y + (rect.height - btnHeight) / 2;
+
+        drawGlossyButton(ctx, { x: btnX, y: btnY, width: btnWidth, height: btnHeight }, `${control.value} ▼`, ColorTokens.action.info, isHovered);
+    }
+
+    private renderSlider(ctx: CanvasRenderingContext2D, control: SliderControl, isHovered: boolean, muteToggle?: ToggleControl) {
+        const rect = control.rect;
+        const muteHovered = muteToggle ? muteToggle === this.hoveredToggle : false;
+        const { sliderX, sliderY, sliderWidth, sliderHeight, gap } = this.getSliderLayout(control, !!muteToggle);
+
+        // Background
+        this.drawControlBackground(ctx, rect);
+
+        if (isHovered) {
+            ctx.save();
+            ctx.fillStyle = ColorTokens.effects.gloss.end;
+            ctx.beginPath();
+            ctx.roundRect(rect.x, rect.y, rect.width, rect.height, LayoutConstants.Radii.Medium);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        // Label (HUD Style)
+        ctx.save();
+        ctx.fillStyle = ColorTokens.text.primary;
+        ctx.font = `bold ${LayoutConstants.Fonts.Size.Medium}px ${LayoutConstants.Fonts.Family.Default}`;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.shadowColor = ColorTokens.effects.shadowText;
+        ctx.shadowBlur = LayoutConstants.Shadows.Text.blur;
+        ctx.fillText(control.label.toUpperCase(), rect.x + 20, rect.y + rect.height / 2);
+        ctx.restore();
+
+        // Slider Track
+        ctx.save();
+        ctx.fillStyle = ColorTokens.border.subtle;
+        ctx.beginPath();
+        ctx.roundRect(sliderX, sliderY, sliderWidth, sliderHeight, 3);
+        ctx.fill();
+
+        // Filled portion
+        const percent = (control.value - control.min) / (control.max - control.min);
+        ctx.fillStyle = ColorTokens.action.info;
+        ctx.beginPath();
+        ctx.roundRect(sliderX, sliderY, sliderWidth * percent, sliderHeight, 3);
+        ctx.fill();
+
+        // Knob (Rectangular)
+        const knobWidth = LayoutConstants.Dimensions.SliderKnobSize;
+        const knobHeight = LayoutConstants.Dimensions.SliderKnobSize;
+        const knobX = sliderX + sliderWidth * percent - knobWidth / 2;
+        const knobY = sliderY + sliderHeight / 2 - knobHeight / 2;
+
+        // Knob Shadow
+        ctx.shadowColor = ColorTokens.effects.shadowLight;
+        ctx.shadowBlur = LayoutConstants.Shadows.Text.blur;
+        ctx.shadowOffsetY = LayoutConstants.Shadows.Text.offsetY;
+
+        ctx.fillStyle = ColorTokens.text.primary;
+        ctx.beginPath();
+        ctx.roundRect(knobX, knobY, knobWidth, knobHeight, 4);
+        ctx.fill();
+
+        // Reset shadow
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
+
+        if (isHovered) {
+            ctx.strokeStyle = ColorTokens.action.info;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+        ctx.restore();
+
+        if (muteToggle) {
+            this.renderMuteToggle(ctx, muteToggle, muteHovered);
+        }
+
+        // Value Text
+        ctx.save();
+        ctx.fillStyle = ColorTokens.text.secondary;
+        ctx.font = `${LayoutConstants.Fonts.Size.Small}px ${LayoutConstants.Fonts.Family.Monospace}`;
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        const valueX = muteToggle ? muteToggle.rect.x - gap : sliderX - 10;
+        const renderValue = control.formatValue ? control.formatValue(control.value) : `${Math.round(control.value * 100)}%`;
+        ctx.fillText(renderValue, valueX, rect.y + rect.height / 2);
         ctx.restore();
     }
 
@@ -725,14 +877,14 @@ export class SettingsScene implements UIScene {
 
         // Light frame to sit above the slider track
         ctx.save();
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+        ctx.fillStyle = ColorTokens.background.overlay;
         ctx.beginPath();
-        ctx.roundRect(rect.x, rect.y, rect.width, rect.height, 8);
+        ctx.roundRect(rect.x, rect.y, rect.width, rect.height, LayoutConstants.Radii.Medium);
         ctx.fill();
 
         if (isHovered) {
             ctx.strokeStyle = ColorTokens.action.info;
-            ctx.lineWidth = 1.5;
+            ctx.lineWidth = LayoutConstants.Lines.Normal;
             ctx.stroke();
         }
         ctx.restore();
@@ -767,7 +919,7 @@ export class SettingsScene implements UIScene {
         ctx.scale(scale, scale);
         ctx.fillStyle = iconColor;
         ctx.strokeStyle = iconColor;
-        ctx.lineWidth = 1.6;
+        ctx.lineWidth = LayoutConstants.Lines.Normal;
 
         // Speaker body
         ctx.beginPath();
@@ -823,178 +975,28 @@ export class SettingsScene implements UIScene {
         return { x, y, width: muteSize.width, height: muteSize.height };
     }
 
-    private renderColor(ctx: CanvasRenderingContext2D, control: ColorControl, isHovered: boolean) {
-        const rect = control.rect;
+    private renderControls(ctx: CanvasRenderingContext2D) {
+        // Render toggles
+        for (const toggle of this.toggleControls) {
+            // Audio mute toggles are rendered inline with sliders
+            if (this.activeTab === 'audio' && toggle.id.startsWith('mute')) continue;
+            this.renderToggle(ctx, toggle, toggle === this.hoveredToggle);
+        }
 
-        // Background
-        this.drawControlBackground(ctx, rect);
+        // Render colors
+        for (const color of this.colorControls) {
+            this.renderColor(ctx, color, color === this.hoveredColor);
+        }
 
-        // Label (HUD Style)
-        ctx.save();
-        ctx.fillStyle = ColorTokens.text.primary;
-        ctx.font = 'bold 16px Arial';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'middle';
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-        ctx.shadowBlur = 4;
-        ctx.fillText(control.label.toUpperCase(), rect.x + 20, rect.y + rect.height / 2);
-        ctx.restore();
+        // Render selects
+        for (const select of this.selectControls) {
+            this.renderSelect(ctx, select, select === this.hoveredSelect);
+        }
 
-        // Color swatch (Framed & Glossy)
-        const colorRect = control.colorRect;
-        const cr = 6;
-
-        ctx.save();
-
-        // Shadow
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-        ctx.shadowBlur = 4;
-        ctx.shadowOffsetY = 2;
-
-        // Fill
-        ctx.fillStyle = control.value;
-        ctx.beginPath();
-        ctx.roundRect(colorRect.x, colorRect.y, colorRect.width, colorRect.height, cr);
-        ctx.fill();
-
-        // Reset shadow
-        ctx.shadowColor = 'transparent';
-
-        // Gloss
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-        ctx.beginPath();
-        ctx.roundRect(colorRect.x, colorRect.y, colorRect.width, colorRect.height / 2, cr);
-        ctx.fill();
-
-        // Rim
-        ctx.strokeStyle = isHovered ? '#ffffff' : 'rgba(255, 255, 255, 0.5)';
-        ctx.lineWidth = isHovered ? 3 : 2;
-        ctx.beginPath();
-        ctx.roundRect(colorRect.x, colorRect.y, colorRect.width, colorRect.height, cr);
-        ctx.stroke();
-
-        ctx.restore();
+        // Render sliders
+        for (const slider of this.sliderControls) {
+            const muteToggle = this.toggleControls.find(t => t.id === `mute${slider.id.charAt(0).toUpperCase() + slider.id.slice(1)}`);
+            this.renderSlider(ctx, slider, slider === this.hoveredSlider, muteToggle);
+        }
     }
-
-    private renderSelect(ctx: CanvasRenderingContext2D, control: SelectControl, isHovered: boolean) {
-        const rect = control.rect;
-
-        // Background
-        this.drawControlBackground(ctx, rect);
-
-        if (isHovered) {
-            ctx.save();
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
-            ctx.beginPath();
-            ctx.roundRect(rect.x, rect.y, rect.width, rect.height, 8);
-            ctx.fill();
-            ctx.restore();
-        }
-
-        // Label (HUD Style)
-        ctx.save();
-        ctx.fillStyle = ColorTokens.text.primary;
-        ctx.font = 'bold 16px Arial';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'middle';
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-        ctx.shadowBlur = 4;
-        ctx.fillText(control.label.toUpperCase(), rect.x + 20, rect.y + rect.height / 2);
-        ctx.restore();
-
-        // Value as Mini Glossy Button
-        const btnWidth = 140;
-        const btnHeight = 32;
-        const btnX = rect.x + rect.width - btnWidth - 10;
-        const btnY = rect.y + (rect.height - btnHeight) / 2;
-
-        drawGlossyButton(ctx, { x: btnX, y: btnY, width: btnWidth, height: btnHeight }, `${control.value} ▼`, ColorTokens.action.info, isHovered);
-    }
-
-    private renderSlider(ctx: CanvasRenderingContext2D, control: SliderControl, isHovered: boolean, muteToggle?: ToggleControl) {
-        const rect = control.rect;
-        const muteHovered = muteToggle ? muteToggle === this.hoveredToggle : false;
-        const { sliderX, sliderY, sliderWidth, sliderHeight, gap } = this.getSliderLayout(control, !!muteToggle);
-
-        // Background
-        this.drawControlBackground(ctx, rect);
-
-        if (isHovered) {
-            ctx.save();
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
-            ctx.beginPath();
-            ctx.roundRect(rect.x, rect.y, rect.width, rect.height, 8);
-            ctx.fill();
-            ctx.restore();
-        }
-
-        // Label (HUD Style)
-        ctx.save();
-        ctx.fillStyle = ColorTokens.text.primary;
-        ctx.font = 'bold 16px Arial';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'middle';
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-        ctx.shadowBlur = 4;
-        ctx.fillText(control.label.toUpperCase(), rect.x + 20, rect.y + rect.height / 2);
-        ctx.restore();
-
-        // Slider Track
-        ctx.save();
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-        ctx.beginPath();
-        ctx.roundRect(sliderX, sliderY, sliderWidth, sliderHeight, 3);
-        ctx.fill();
-
-        // Filled portion
-        const percent = (control.value - control.min) / (control.max - control.min);
-        ctx.fillStyle = ColorTokens.action.info;
-        ctx.beginPath();
-        ctx.roundRect(sliderX, sliderY, sliderWidth * percent, sliderHeight, 3);
-        ctx.fill();
-
-        // Knob (Rectangular)
-        const knobWidth = LayoutConstants.Dimensions.SliderKnobSize;
-        const knobHeight = LayoutConstants.Dimensions.SliderKnobSize;
-        const knobX = sliderX + sliderWidth * percent - knobWidth / 2;
-        const knobY = sliderY + sliderHeight / 2 - knobHeight / 2;
-
-        // Knob Shadow
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
-        ctx.shadowBlur = 4;
-        ctx.shadowOffsetY = 2;
-
-        ctx.fillStyle = ColorTokens.text.primary;
-        ctx.beginPath();
-        ctx.roundRect(knobX, knobY, knobWidth, knobHeight, 4);
-        ctx.fill();
-
-        // Reset shadow
-        ctx.shadowColor = 'transparent';
-        ctx.shadowBlur = 0;
-        ctx.shadowOffsetY = 0;
-
-        if (isHovered) {
-            ctx.strokeStyle = ColorTokens.action.info;
-            ctx.lineWidth = 2;
-            ctx.stroke();
-        }
-        ctx.restore();
-
-        if (muteToggle) {
-            this.renderMuteToggle(ctx, muteToggle, muteHovered);
-        }
-
-        // Value Text
-        ctx.save();
-        ctx.fillStyle = ColorTokens.text.secondary;
-        ctx.font = '14px monospace';
-        ctx.textAlign = 'right';
-        ctx.textBaseline = 'middle';
-        const valueX = muteToggle ? muteToggle.rect.x - gap : sliderX - 10;
-        const renderValue = control.formatValue ? control.formatValue(control.value) : `${Math.round(control.value * 100)}%`;
-        ctx.fillText(renderValue, valueX, rect.y + rect.height / 2);
-        ctx.restore();
-    }
-
 }
