@@ -94,15 +94,16 @@ export const AssetRegistry = {
    * League Frames
    */
   frames: {
-    bronze: () => new URL('./img/frames/frame_bronze.png', import.meta.url).href,
-    silver: () => new URL('./img/frames/frame_silver.png', import.meta.url).href,
-    gold: () => new URL('./img/frames/frame_gold.png', import.meta.url).href,
-    platinum: () => new URL('./img/frames/frame_platinum.png', import.meta.url).href,
-    diamond: () => new URL('./img/frames/frame_diamond.png', import.meta.url).href,
-    master: () => new URL('./img/frames/frame_master.png', import.meta.url).href,
-    elite: () => new URL('./img/frames/frame_elite.png', import.meta.url).href,
-    emerald: () => new URL('./img/frames/frame_emerald.png', import.meta.url).href,
-    crystal: () => new URL('./img/frames/frame_crystal.png', import.meta.url).href, // unlabeled blue variant
+    bronze: () => new URL('./img/frames/frame_bronze_new.png', import.meta.url).href,
+    silver: () => new URL('./img/frames/frame_silver_new.png', import.meta.url).href,
+    gold: () => new URL('./img/frames/frame_gold_new.png', import.meta.url).href,
+    platinum: () => new URL('./img/frames/frame_platinum_new.png', import.meta.url).href,
+    diamond: () => new URL('./img/frames/frame_diamond_new.png', import.meta.url).href,
+    master: () => new URL('./img/frames/frame_master_new.png', import.meta.url).href,
+    grandmaster: () => new URL('./img/frames/frame_grandmaster_new.png', import.meta.url).href,
+    elite: () => new URL('./img/frames/frame_elite_new.png', import.meta.url).href,
+    emerald: () => new URL('./img/frames/frame_emerald_new.png', import.meta.url).href,
+    crystal: () => new URL('./img/frames/frame_crystal_new.png', import.meta.url).href,
   },
 
   /**

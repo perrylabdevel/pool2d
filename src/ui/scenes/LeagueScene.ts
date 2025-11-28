@@ -11,6 +11,7 @@ import { UserProfile } from '../../data/models';
 import { AssetRegistry } from '../../assets/AssetRegistry';
 import { AssetLoader } from '../../assets/AssetLoader';
 import { OPPONENTS } from '../../ai/OpponentRegistry';
+import { LeagueService } from '../../game/leagues/LeagueService';
 
 export class LeagueScene implements UIScene {
     private canvas: HTMLCanvasElement | null = null;
@@ -151,22 +152,37 @@ export class LeagueScene implements UIScene {
 
     update(_dt: number): void { }
 
+    private loadedSections: any[] | null = null;
+    private isLoading = false;
+
     render(ctx: CanvasRenderingContext2D): void {
         const width = ctx.canvas.width;
         const height = ctx.canvas.height;
         this.renderBackground(ctx, width, height);
 
-        if (this.layout && this.userProfile) {
-            const sections = this.getLeagueSections();
+        if (this.userProfile && !this.loadedSections && !this.isLoading) {
+            this.isLoading = true;
+            this.getLeagueSections().then(sections => {
+                this.loadedSections = sections;
+                this.isLoading = false;
+
+                // Recalculate max scroll once loaded
+                const sectionHeaderH = 48;
+                const rowH = 56;
+                let totalHeight = 40;
+                sections.forEach(section => {
+                    totalHeight += sectionHeaderH + section.standings.length * rowH + 20;
+                });
+                if (this.layout) {
+                    this.maxScroll = Math.max(0, totalHeight - this.layout.standingsRect.height);
+                }
+            });
+        }
+
+        if (this.layout && this.loadedSections) {
+            const sections = this.loadedSections;
             const sectionHeaderH = 48;
             const rowH = 56;
-
-            // Calculate total height for scrolling
-            let totalHeight = 40; // Title space
-            sections.forEach(section => {
-                totalHeight += sectionHeaderH + section.standings.length * rowH + 20;
-            });
-            this.maxScroll = Math.max(0, totalHeight - this.layout.standingsRect.height);
 
             // Determine Active Section for Header
             let activeSection = sections[0];
@@ -194,7 +210,7 @@ export class LeagueScene implements UIScene {
             this.renderStandings(ctx, this.layout.standingsRect, sections);
 
             ctx.restore();
-        } else if (!this.userProfile) {
+        } else {
             // Loading state
             ctx.fillStyle = '#FFFFFF';
             ctx.font = '24px Inter';
@@ -271,16 +287,8 @@ export class LeagueScene implements UIScene {
         const textCenterY = rect.y + rect.height / 2;
 
         // League Name Logic
-        // If it's the user's actual league, show full name (e.g. Bronze I)
-        // If it's another league, show generic name (e.g. Silver League)
-        const userLeagueId = this.userProfile?.leagueId || 'bronze_1';
-        const isUserLeague = userLeagueId.startsWith(section.id);
-
-        let displayName = section.title;
-        if (isUserLeague) {
-            const userLeagueDef = getLeagueById(userLeagueId);
-            if (userLeagueDef) displayName = userLeagueDef.name.toUpperCase();
-        }
+        // Always show generic name (e.g. BRONZE LEAGUE) to avoid confusion
+        const displayName = section.title;
 
         ctx.fillStyle = '#FFFFFF';
         ctx.font = `800 36px ${LayoutConstants.Fonts.Family.Heading}`;
@@ -327,88 +335,96 @@ export class LeagueScene implements UIScene {
         ctx.restore();
     }
 
-    private getLeagueSections() {
-        const baseLeague = (this.userProfile?.leagueId || 'bronze_1').split('_')[0];
-        const bases = ['bronze', 'silver', 'gold', 'platinum', 'diamond', 'master', 'elite', 'emerald', 'crystal'];
-        return bases.map(id => ({
-            id,
-            title: `${id.toUpperCase()} LEAGUE`,
-            colors: this.getLeagueColors(id),
-            standings: this.ensureMockStandings(id, id === baseLeague),
+
+
+    private async getLeagueSections() {
+        const userLeagueId = this.userProfile?.leagueId || 'bronze_1';
+        const userTier = userLeagueId.split('_')[0];
+
+        // Order must match LeagueSystem.ts tiers
+        const bases = ['bronze', 'silver', 'gold', 'platinum', 'diamond', 'master', 'grandmaster', 'elite', 'emerald', 'crystal'];
+
+        const sections = await Promise.all(bases.map(async tier => {
+            // If this is the user's tier, use their specific league ID (e.g. 'bronze_1')
+            // Otherwise, default to the first division of that tier (e.g. 'silver_1')
+            const isUserTier = tier === userTier;
+            const queryId = isUserTier ? userLeagueId : `${tier}_1`;
+
+            return {
+                id: tier,
+                title: `${tier.toUpperCase()} LEAGUE`,
+                colors: this.getLeagueColors(tier),
+                standings: await this.ensureMockStandings(queryId, isUserTier),
+            };
+        }));
+
+        return sections;
+    }
+
+    private async ensureMockStandings(leagueId: string, includeUser: boolean) {
+        // Use cached if available and fresh enough? 
+        // For now, we'll fetch from DB every time to ensure sync, 
+        // but we can cache in memory for this session.
+
+        // Initialize if it's the user's league
+        if (includeUser && this.userProfile) {
+            await LeagueService.initializeLeagueIfNeeded(this.userProfile);
+            // Simulate some progress
+            await LeagueService.simulateAIProgress(leagueId);
+        }
+
+        const standings = await LeagueService.getStandings(leagueId);
+
+        // If empty (e.g. non-user league not initialized), return mock data for display only
+        if (standings.length === 0) {
+            return this.generateVisualMock(leagueId);
+        }
+
+        // Map to format expected by render
+        return standings.map(s => ({
+            rank: s.rank,
+            name: s.playerName,
+            score: s.score,
+            isUser: s.isUser,
+            avatar: this.getAvatarUrl(s.avatarId)
         }));
     }
 
-    private ensureMockStandings(leagueId: string, includeUser: boolean) {
+    // Fallback for leagues the user isn't in, just to show something pretty
+    private generateVisualMock(leagueId: string) {
         if (this.standingsCache[leagueId]) return this.standingsCache[leagueId];
 
-        // Filter opponents by league tier (bronze, silver, gold, etc.)
-        const leagueTier = leagueId.split('_')[0]; // Extract 'bronze' from 'bronze_1'
+        const leagueTier = leagueId.split('_')[0];
         const leagueOpponents = OPPONENTS.filter(opp => opp.leagueId.startsWith(leagueTier));
 
-        // If no opponents in this league, return empty standings
-        if (leagueOpponents.length === 0) {
-            this.standingsCache[leagueId] = [];
-            return this.standingsCache[leagueId];
-        }
+        if (leagueOpponents.length === 0) return [];
 
-        // Build avatar and name arrays from league-specific opponents
-        const avatars = leagueOpponents.map((opp: any) => {
-            const key = opp.avatarId;
-            const registry = AssetRegistry.avatars as any;
-            if (registry[key] && typeof registry[key] === 'function') {
-                return registry[key]();
-            }
-            console.warn(`Missing avatar for ${opp.name} (${key}), using default`);
-            return AssetRegistry.avatars.default();
-        });
-
-        const namePool = leagueOpponents.map((opp: any) => opp.name);
-
-        const seed = leagueId.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0) + 12345;
-        let rng = seed;
-        const next = () => {
-            rng = (rng * 1103515245 + 12345) & 0x7fffffff;
-            return rng / 0x7fffffff;
-        };
-
-        const baseScore = 150000 - ['bronze', 'silver', 'gold', 'platinum', 'diamond', 'master', 'elite', 'emerald', 'crystal', 'ruby', 'legend'].indexOf(leagueId) * 15000;
-        const decayMin = 600;
-        const decayMax = 2400;
-        const standings: Array<{ rank: number; name: string; score: number; isUser: boolean; avatar: string }> = [];
-
-        // Shuffle opponent order using seeded RNG for variety
-        const opponentIndices = Array.from({ length: avatars.length }, (_, i) => i);
-        for (let i = opponentIndices.length - 1; i > 0; i--) {
-            const j = Math.floor(next() * (i + 1));
-            [opponentIndices[i], opponentIndices[j]] = [opponentIndices[j], opponentIndices[i]];
-        }
+        const standings = [];
+        const baseScore = 150000 - ['bronze', 'silver', 'gold', 'platinum', 'diamond', 'master', 'grandmaster', 'elite', 'emerald', 'crystal'].indexOf(leagueTier) * 15000;
 
         let score = baseScore;
-        const userName = (this.userProfile?.name || 'You');
-        const userAvatar = AssetRegistry.avatars.player();
-
-        // Determine user placement (if includeUser)
-        const totalEntries = includeUser ? avatars.length + 1 : avatars.length;
-        const userIndex = includeUser ? Math.min(8 + Math.floor(next() * 6), avatars.length - 1) : -1; // place user in middle range
-
-        for (let i = 0; i < totalEntries; i++) {
-            const isUser = i === userIndex;
-            const oppIdx = isUser ? i : i - (userIndex !== -1 && i > userIndex ? 1 : 0);
-            const name = isUser ? userName : namePool[opponentIndices[oppIdx]];
-            const avatar = isUser ? userAvatar : avatars[opponentIndices[oppIdx]];
+        for (let i = 0; i < 10; i++) {
+            const opp = leagueOpponents[i % leagueOpponents.length];
             standings.push({
                 rank: i + 1,
-                name,
-                score: Math.max(1000, Math.floor(score)),
-                isUser,
-                avatar
+                name: opp.name,
+                score: Math.floor(score),
+                isUser: false,
+                avatar: this.getAvatarUrl(opp.avatarId)
             });
-            const decay = decayMin + (decayMax - decayMin) * next();
-            score = score - decay;
+            score -= Math.random() * 2000;
         }
-
         this.standingsCache[leagueId] = standings;
         return standings;
+    }
+
+    private getAvatarUrl(avatarId: string): string {
+        const key = avatarId.replace(/^avatar_/, '');
+        const registry = AssetRegistry.avatars as any;
+        if (registry[key] && typeof registry[key] === 'function') {
+            return registry[key]();
+        }
+        return AssetRegistry.avatars.default();
     }
 
     private getLeagueColors(leagueId: string): { primary: string; accent: string } {
@@ -416,7 +432,8 @@ export class LeagueScene implements UIScene {
         if (id.includes('crystal')) return { primary: '#a3f0ff', accent: '#e0fbff' };
         if (id.includes('emerald')) return { primary: '#2fa54a', accent: '#7ae28c' };
         if (id.includes('elite')) return { primary: '#f26b1d', accent: '#ffb16c' };
-        if (id.includes('master')) return { primary: '#7f4cc5', accent: '#c3a3f5' };
+        if (id.includes('grandmaster')) return { primary: '#7f4cc5', accent: '#c3a3f5' }; // Purple (Amethyst)
+        if (id.includes('master')) return { primary: '#d32f2f', accent: '#ffcdd2' }; // Red (Ruby)
         if (id.includes('diamond')) return { primary: '#66d4ff', accent: '#b6f2ff' };
         if (id.includes('platinum')) return { primary: '#7ac3ff', accent: '#d7f1ff' };
         if (id.includes('gold')) return { primary: '#d6a014', accent: '#f9e59a' };
@@ -551,28 +568,34 @@ export class LeagueScene implements UIScene {
 
                 // Only draw if within bounds (and visible)
                 if (headerY < rect.y + rect.height) {
-                    // Draw Header
-                    const grad = ctx.createLinearGradient(rect.x, headerY, rect.x + rect.width, headerY + sectionHeaderH);
-                    grad.addColorStop(0, section.colors.primary);
-                    grad.addColorStop(1, section.colors.accent);
+                    // Skip drawing sticky header if it's at the very top (active section)
+                    // because the Main Header Card already shows this info.
+                    if (headerY <= rect.y) {
+                        // Do nothing, let the main header be the only header
+                    } else {
+                        // Draw Header
+                        const grad = ctx.createLinearGradient(rect.x, headerY, rect.x + rect.width, headerY + sectionHeaderH);
+                        grad.addColorStop(0, section.colors.primary);
+                        grad.addColorStop(1, section.colors.accent);
 
-                    ctx.fillStyle = grad;
-                    ctx.beginPath();
-                    ctx.roundRect(rect.x + 12, headerY, rect.width - 24, sectionHeaderH, [8, 8, 0, 0]);
-                    ctx.fill();
+                        ctx.fillStyle = grad;
+                        ctx.beginPath();
+                        ctx.roundRect(rect.x + 12, headerY, rect.width - 24, sectionHeaderH, [8, 8, 0, 0]);
+                        ctx.fill();
 
-                    // Shadow for sticky header
-                    if (headerY === rect.y) {
-                        ctx.fillStyle = 'rgba(0,0,0,0.3)';
-                        ctx.fillRect(rect.x + 12, headerY + sectionHeaderH, rect.width - 24, 4);
+                        // Shadow for sticky header
+                        if (headerY === rect.y) {
+                            ctx.fillStyle = 'rgba(0,0,0,0.3)';
+                            ctx.fillRect(rect.x + 12, headerY + sectionHeaderH, rect.width - 24, 4);
+                        }
+
+                        // Header Text
+                        ctx.fillStyle = '#0b101c';
+                        ctx.font = `800 16px ${LayoutConstants.Fonts.Family.Heading}`;
+                        ctx.textAlign = 'left';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(section.title, rect.x + 30, headerY + sectionHeaderH / 2 + 1);
                     }
-
-                    // Header Text
-                    ctx.fillStyle = '#0b101c';
-                    ctx.font = `800 16px ${LayoutConstants.Fonts.Family.Heading}`;
-                    ctx.textAlign = 'left';
-                    ctx.textBaseline = 'middle';
-                    ctx.fillText(section.title, rect.x + 30, headerY + sectionHeaderH / 2 + 1);
                 }
             }
 

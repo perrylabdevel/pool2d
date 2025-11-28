@@ -208,9 +208,10 @@ body {
 
 .hud-player .avatar {
   position: relative;
-  width: 72px;
-  height: 108px;
-  border-radius: 10px;
+  width: 88px;
+  height: 88px;
+  border-radius: 16px;
+  /* Slightly more rounded for square */
   flex-shrink: 0;
   display: grid;
   place-items: center;
@@ -223,13 +224,14 @@ body {
 
 .hud-player .avatar .avatar-photo {
   position: absolute;
-  inset: 8% 14%;
-  /* Shifted up to show full face */
-  width: 72%;
-  height: 72%;
-  /* Made taller to show mouth */
+  /* Calculated from chroma green area: Top 10%, Left 10.7%, Width 78.5%, Height 74% */
+  top: 10%;
+  left: 10.7%;
+  width: 78.5%;
+  height: 74%;
   object-fit: cover;
-  border-radius: 10px;
+  border-radius: 14px;
+  /* Squircle clip to match the frame */
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 }

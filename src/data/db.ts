@@ -1,11 +1,12 @@
 import Dexie, { Table } from 'dexie';
-import { UserProfile, MatchRecord, InventoryItem, ChestSlotData } from './models';
+import { UserProfile, MatchRecord, InventoryItem, ChestSlotData, LeagueStanding } from './models';
 
 export class PoolDatabase extends Dexie {
     user!: Table<UserProfile>;
     matches!: Table<MatchRecord>;
     inventory!: Table<InventoryItem>;
     chestSlots!: Table<ChestSlotData>;
+    standings!: Table<LeagueStanding>;
 
     constructor() {
         super('Pool2D_DB');
@@ -23,6 +24,15 @@ export class PoolDatabase extends Dexie {
             matches: '++id, timestamp, opponentId, result',
             inventory: '++id, itemId, type, [type+isEquipped]',
             chestSlots: '++id, slotIndex, status'
+        });
+
+        // Version 3: Add league standings
+        this.version(3).stores({
+            user: '++id, name',
+            matches: '++id, timestamp, opponentId, result',
+            inventory: '++id, itemId, type, [type+isEquipped]',
+            chestSlots: '++id, slotIndex, status',
+            standings: '++id, leagueId, playerId, score'
         });
     }
 }

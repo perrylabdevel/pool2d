@@ -83,3 +83,14 @@ export interface ChestSlotData {
     unlockStartTime: number | null;
     unlockEndTime: number | null;
 }
+
+export interface LeagueStanding {
+    id?: number;
+    leagueId: string;
+    playerId: string; // 'user' or AI opponent ID
+    playerName: string;
+    avatarId: string;
+    score: number; // Total earnings this period
+    rank: number;
+    isUser: boolean;
+}

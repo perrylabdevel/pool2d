@@ -257,33 +257,82 @@ export class ProfileScene implements UIScene {
             width: avatarSize,
             height: avatarSize
         };
-        ctx.save();
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
-        ctx.shadowBlur = 8;
-        drawPanel(ctx, avatarRect);
 
-        // Render Avatar
+        // Render Frame Overlay
+        // Use user's actual league frame or default to bronze
+        const leagueId = this.userProfile?.leagueId || 'bronze_1';
+        const frameUrl = this.getFrameForLeague(leagueId);
+        const frameImg = AssetLoader.getCached(frameUrl);
+
+        // Frame dimensions (Square container, but frame image might not be square)
+        // Use object-fit: contain logic
+        let frameW = avatarRect.width;
+        let frameH = avatarRect.height;
+        let frameX = avatarRect.x;
+        let frameY = avatarRect.y;
+
+        if (frameImg && frameImg.complete && frameImg.naturalWidth > 0) {
+            const frameAspect = frameImg.naturalWidth / frameImg.naturalHeight;
+            const maxSize = avatarRect.width; // Assume square container
+
+            if (frameAspect > 1) {
+                // Wider than tall
+                frameW = maxSize;
+                frameH = maxSize / frameAspect;
+            } else {
+                // Taller than wide
+                frameH = maxSize;
+                frameW = maxSize * frameAspect;
+            }
+
+            // Re-center based on new dimensions
+            frameX = avatarRect.x + (avatarRect.width - frameW) / 2;
+            frameY = avatarRect.y + (avatarRect.height - frameH) / 2;
+        }
+
+        // Render Avatar Photo
         const avatarUrl = AssetRegistry.avatars.player();
         const avatarImg = AssetLoader.getCached(avatarUrl);
 
+        // Calculated bounds from chroma green area:
+        // Top: 10%, Left: 10.7%, Width: 78.5%, Height: 74%
+        const photoX = frameX + (frameW * 0.107);
+        const photoY = frameY + (frameH * 0.100);
+        const photoW = frameW * 0.785;
+        const photoH = frameH * 0.740;
+        const radius = frameW * 0.14; // Squircle radius
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.roundRect(photoX, photoY, photoW, photoH, radius);
+        ctx.clip();
+
         if (avatarImg) {
-            ctx.drawImage(avatarImg, avatarRect.x + 4, avatarRect.y + 4, avatarRect.width - 8, avatarRect.height - 8);
+            // Simulate object-fit: cover
+            const imgRatio = avatarImg.naturalWidth / avatarImg.naturalHeight;
+            const targetRatio = photoW / photoH;
+            let sx = 0, sy = 0, sw = avatarImg.naturalWidth, sh = avatarImg.naturalHeight;
+            if (imgRatio > targetRatio) { sw = sh * targetRatio; sx = (avatarImg.naturalWidth - sw) / 2; }
+            else { sh = sw / targetRatio; sy = (avatarImg.naturalHeight - sh) / 2; }
+
+            ctx.drawImage(avatarImg, sx, sy, sw, sh, photoX, photoY, photoW, photoH);
         } else {
             AssetLoader.loadImage(avatarUrl);
-            // Fallback
             ctx.fillStyle = '#333';
-            ctx.fillRect(avatarRect.x + 4, avatarRect.y + 4, avatarRect.width - 8, avatarRect.height - 8);
+            ctx.fillRect(photoX, photoY, photoW, photoH);
             ctx.font = `700 ${LayoutConstants.Fonts.Size.XXLarge}px ${LayoutConstants.Fonts.Family.Heading}`;
             ctx.fillStyle = ColorTokens.text.primary;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText('BR', avatarRect.x + avatarRect.width / 2, avatarRect.y + avatarRect.height / 2);
+            ctx.fillText('BR', photoX + photoW / 2, photoY + photoH / 2);
         }
-
-        ctx.strokeStyle = ColorTokens.action.info;
-        ctx.lineWidth = 2;
-        ctx.strokeRect(avatarRect.x + 4, avatarRect.y + 4, avatarRect.width - 8, avatarRect.height - 8);
         ctx.restore();
+
+        if (frameImg) {
+            ctx.drawImage(frameImg, frameX, frameY, frameW, frameH);
+        } else {
+            AssetLoader.loadImage(frameUrl);
+        }
 
         ctx.save();
         ctx.fillStyle = ColorTokens.text.primary;
@@ -432,5 +481,19 @@ export class ProfileScene implements UIScene {
 
     private clamp(value: number, min: number, max: number) {
         return Math.min(max, Math.max(min, value));
+    }
+
+    private getFrameForLeague(leagueId?: string): string {
+        const id = (leagueId || '').toLowerCase();
+        if (id.includes('diamond')) return AssetRegistry.frames.diamond();
+        if (id.includes('platinum')) return AssetRegistry.frames.platinum();
+        if (id.includes('gold')) return AssetRegistry.frames.gold();
+        if (id.includes('silver')) return AssetRegistry.frames.silver();
+        if (id.includes('grandmaster')) return AssetRegistry.frames.grandmaster();
+        if (id.includes('master')) return AssetRegistry.frames.master();
+        if (id.includes('elite')) return AssetRegistry.frames.elite();
+        if (id.includes('emerald')) return AssetRegistry.frames.emerald();
+        if (id.includes('crystal')) return AssetRegistry.frames.crystal();
+        return AssetRegistry.frames.bronze();
     }
 }

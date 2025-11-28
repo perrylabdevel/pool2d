@@ -388,22 +388,43 @@ export class NavigationBar {
         const avatarImg = AssetLoader.getCached(avatarUrl) || AssetLoader.loadImageSync(avatarUrl);
         const frameImg = AssetLoader.getCached(frameUrl) || AssetLoader.loadImageSync(frameUrl);
 
-        // Frame dimensions (Portrait aspect ratio 72:108 from CSS)
-        const frameAspect = 72 / 108;
-        const frameH = height * 0.95; // Use most of the height
-        const frameW = frameH * frameAspect;
-        const frameX = x + (width - frameW) / 2;
-        const frameY = y + (height - frameH) / 2;
+        // Frame dimensions (Square container, but frame image might not be square)
+        // Use object-fit: contain logic
+        let frameW = height * 0.95;
+        let frameH = height * 0.95;
+        let frameX = x + (width - frameW) / 2;
+        let frameY = y + (height - frameH) / 2;
+
+        if (frameImg && frameImg.complete && frameImg.naturalWidth > 0) {
+            const frameAspect = frameImg.naturalWidth / frameImg.naturalHeight;
+            // Fit within the square box (height * 0.95)
+            const maxSize = height * 0.95;
+
+            if (frameAspect > 1) {
+                // Wider than tall
+                frameW = maxSize;
+                frameH = maxSize / frameAspect;
+            } else {
+                // Taller than wide
+                frameH = maxSize;
+                frameW = maxSize * frameAspect;
+            }
+
+            // Re-center based on new dimensions
+            frameX = x + (width - frameW) / 2;
+            frameY = y + (height - frameH) / 2;
+        }
 
         // Avatar Photo positioning (relative to frame)
-        // Matches CSS: inset: 8% 14%; width: 72%; height: 72%
-        const photoX = frameX + (frameW * 0.14);
-        const photoY = frameY + (frameH * 0.08);
-        const photoW = frameW * 0.72;
-        const photoH = frameH * 0.72;
+        // Calculated from chroma green area:
+        // Top: 10%, Left: 10.7%, Width: 78.5%, Height: 74%
+        const photoX = frameX + (frameW * 0.107);
+        const photoY = frameY + (frameH * 0.100);
+        const photoW = frameW * 0.785;
+        const photoH = frameH * 0.740;
 
-        // Border radius 10px relative to original 108px height
-        const radius = 10 * (frameH / 108);
+        // Border radius relative to size (squircle shape)
+        const radius = frameW * 0.18;
 
         if (avatarImg && avatarImg.complete && avatarImg.naturalWidth > 0) {
             ctx.save();
