@@ -3,6 +3,7 @@ import { db } from '../data/db';
 export interface CurrencyBalances {
     coins: number;
     gold: number;
+    trophies: number;
 }
 
 type Listener = (balances: CurrencyBalances) => void;
@@ -12,7 +13,7 @@ type Listener = (balances: CurrencyBalances) => void;
  * Provides real-time currency updates across all UI scenes.
  */
 class CurrencyStore {
-    private balances: CurrencyBalances = { coins: 0, gold: 0 };
+    private balances: CurrencyBalances = { coins: 0, gold: 0, trophies: 0 };
     private listeners: Listener[] = [];
     private initialized: boolean = false;
 
@@ -25,7 +26,11 @@ class CurrencyStore {
         try {
             const user = await db.user.get(1);
             if (user) {
-                this.balances = { coins: user.coins, gold: user.gold };
+                this.balances = {
+                    coins: user.coins,
+                    gold: user.gold,
+                    trophies: user.trophies || 0
+                };
 
                 // Auto-fix negative balance or force top-up if needed
                 if (this.balances.coins < 0) {
@@ -61,6 +66,12 @@ class CurrencyStore {
 
     addGold(amount: number) {
         this.balances.gold += amount;
+        this.notify();
+        this.syncToDatabase();
+    }
+
+    addTrophies(amount: number) {
+        this.balances.trophies += amount;
         this.notify();
         this.syncToDatabase();
     }
@@ -105,7 +116,8 @@ class CurrencyStore {
         try {
             await db.user.where('id').equals(1).modify({
                 coins: this.balances.coins,
-                gold: this.balances.gold
+                gold: this.balances.gold,
+                trophies: this.balances.trophies
             });
         } catch (e) {
             console.error('Failed to sync currency to DB:', e);

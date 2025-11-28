@@ -159,7 +159,7 @@ export function drawCurrencyPill(
     x: number,
     y: number,
     amount: number,
-    type: 'coins' | 'cash',
+    type: 'coins' | 'cash' | 'trophies',
     options: CurrencyPillOptions = {}
 ) {
     const width = options.width ?? 100;
@@ -171,7 +171,8 @@ export function drawCurrencyPill(
     const plusSpacing = options.plusSpacing ?? 5;
     const theme = options.theme ?? 'default';
 
-    const iconColor = type === 'coins' ? ColorTokens.currency.coins : ColorTokens.currency.cash;
+    const iconColor = type === 'coins' ? ColorTokens.currency.coins :
+        type === 'cash' ? ColorTokens.currency.cash : '#FFD700';
 
     ctx.save();
 
@@ -207,9 +208,11 @@ export function drawCurrencyPill(
 
         if (type === 'coins') {
             drawCoin(ctx, iconX, iconY, iconSize);
-        } else {
+        } else if (type === 'cash') {
             // Use green chip for cash
             drawChip(ctx, iconX, iconY, iconSize, '#1fbf75');
+        } else {
+            drawTrophy(ctx, iconX, iconY, iconSize);
         }
 
         // Text stack
@@ -491,6 +494,58 @@ export function drawCoin(ctx: CanvasRenderingContext2D, x: number, y: number, si
     ctx.ellipse(-radius * 0.3, -radius * 0.3, radius * 0.25, radius * 0.12, Math.PI / 4, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
     ctx.fill();
+
+    ctx.restore();
+}
+
+export function drawTrophy(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
+    const w = size * 0.8;
+    const h = size * 0.8;
+
+    ctx.save();
+    ctx.translate(x, y);
+
+    // Shadow
+    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    ctx.shadowBlur = 4;
+    ctx.shadowOffsetY = 2;
+
+    // Cup Gradient
+    const grad = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
+    grad.addColorStop(0, '#FFD700'); // Gold
+    grad.addColorStop(0.5, '#FFA500'); // Orange
+    grad.addColorStop(1, '#B8860B'); // Dark Gold
+
+    ctx.fillStyle = grad;
+
+    // Draw Cup Shape
+    ctx.beginPath();
+    // Bowl
+    ctx.arc(0, -h * 0.2, w * 0.4, 0, Math.PI, false);
+    // Stem
+    ctx.moveTo(-w * 0.1, h * 0.2);
+    ctx.lineTo(-w * 0.15, h * 0.4);
+    ctx.lineTo(w * 0.15, h * 0.4);
+    ctx.lineTo(w * 0.1, h * 0.2);
+    // Base
+    ctx.moveTo(-w * 0.3, h * 0.4);
+    ctx.lineTo(w * 0.3, h * 0.4);
+    ctx.lineTo(w * 0.35, h * 0.5);
+    ctx.lineTo(-w * 0.35, h * 0.5);
+
+    ctx.fill();
+
+    // Handles
+    ctx.strokeStyle = '#DAA520';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    // Left Handle
+    ctx.moveTo(-w * 0.4, -h * 0.2);
+    ctx.bezierCurveTo(-w * 0.6, -h * 0.2, -w * 0.6, h * 0.1, -w * 0.3, h * 0.1);
+    // Right Handle
+    ctx.moveTo(w * 0.4, -h * 0.2);
+    ctx.bezierCurveTo(w * 0.6, -h * 0.2, w * 0.6, h * 0.1, w * 0.3, h * 0.1);
+    ctx.stroke();
 
     ctx.restore();
 }

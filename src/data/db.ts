@@ -50,6 +50,8 @@ export async function initializeUserIfNeeded() {
             coins: 10000, // Starting coins (Updated to 10k)
             gold: 5,    // Starting gold
             leagueId: 'bronze_1',
+            seasonEndTime: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
+            trophies: 0,
             avatarId: 'player',
             equippedCueId: 'cue_standard',
             equippedTableId: 'table_standard',

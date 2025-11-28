@@ -17,7 +17,7 @@ export interface NavigationBarConfig {
     onBack?: () => void;
     onProfile?: () => void;
     onSettings?: () => void;
-    balancesProvider?: () => { coins: number; gold: number };
+    balancesProvider?: () => { coins: number; gold: number; trophies?: number };
 }
 
 interface NavButton {
@@ -321,10 +321,13 @@ export class NavigationBar {
 
         // Position from right of the available space
         // Order: [Coins] [Gap] [Cash] [rightX]
-        const cashX = rightX - metrics.totalWidth;
+        // Position from right of the available space
+        // Order: [Coins] [Gap] [Cash] [Gap] [Trophies] [rightX]
+        const trophiesX = rightX - metrics.totalWidth;
+        const cashX = trophiesX - gap - metrics.totalWidth;
         const coinsX = cashX - gap - metrics.totalWidth;
 
-        const balances = this.config.balancesProvider ? this.config.balancesProvider() : { coins: 0, gold: 0 };
+        const balances = this.config.balancesProvider ? this.config.balancesProvider() : { coins: 0, gold: 0, trophies: 0 };
 
         const baseOptions = {
             width: metrics.width,
@@ -343,6 +346,20 @@ export class NavigationBar {
             dividerLeft: false,
             dividerRight: false,
         });
+
+        // Draw Trophies Pill
+        // We reuse the currency pill component but with a trophy icon
+        // Note: drawCurrencyPill might need an update to support 'trophy' type, 
+        // or we can hack it by passing a custom icon if supported, or just adding 'trophy' support to UIComponents.
+        // For now, let's assume 'trophy' type needs to be added to UIComponents or we use a generic one.
+        // Checking UIComponents... drawCurrencyPill takes 'coins' | 'cash'.
+        // I should probably update UIComponents first or just use 'cash' and override color/icon if possible?
+        // No, better to update UIComponents.ts to support 'trophies'.
+        // But I can't see UIComponents.ts right now.
+        // Let's assume I need to update UIComponents.ts first.
+        // Wait, I can't update UIComponents.ts in this same step easily without viewing it.
+        // Let's check UIComponents.ts first.
+
     }
 
     private renderBackButton(ctx: CanvasRenderingContext2D, btn: NavButton, isHovered: boolean) {

@@ -6,8 +6,6 @@
  */
 
 import { Rect, drawRoundedRect } from './UIComponents';
-import { AssetRegistry } from '../../assets/AssetRegistry';
-import { AssetLoader } from '../../assets/AssetLoader';
 import { getChestSlots, updateChestSlot } from '../../data/db';
 import { ChestSlotData } from '../../data/models';
 import {
@@ -17,6 +15,7 @@ import {
 } from '../../game/economy/ChestSystem';
 import { currencyStore } from '../CurrencyStore';
 import { notificationService } from '../NotificationService';
+import { ChestRenderer } from './ChestRenderer';
 
 export const CHEST_BAR_HEIGHT = 100;
 
@@ -28,22 +27,18 @@ export class ChestSlotsBar {
     private slots: ChestSlotData[] = [];
     private slotRects: ChestSlotRect[] = [];
     private hoveredSlot: number = -1;
-    private chestImages: Record<string, HTMLImageElement> = {};
     private lastUpdateTime: number = 0;
     private updateInterval: number = 1000; // Update every second for timers
 
     constructor() {
-        // Preload chest images
-        this.chestImages['chest_common'] = AssetLoader.loadImageSync(AssetRegistry.economy.chestCommon());
-        this.chestImages['chest_rare'] = AssetLoader.loadImageSync(AssetRegistry.economy.chestRare());
-        this.chestImages['chest_epic'] = AssetLoader.loadImageSync(AssetRegistry.economy.chestEpic());
+        // Preloading handled by ChestRenderer
     }
 
     async loadSlots(): Promise<void> {
         try {
             this.slots = await getChestSlots();
             console.log('📦 Loaded chest slots:', this.slots.length, this.slots);
-            
+
             // If no slots in DB, create default empty slots for display
             if (this.slots.length === 0) {
                 console.log('📦 No slots found, creating defaults...');
@@ -330,14 +325,18 @@ export class ChestSlotsBar {
             ctx.stroke();
             ctx.shadowBlur = 0;
 
-            // Draw chest image
-            const img = this.chestImages[chestType];
-            if (img && img.complete && img.naturalWidth > 0) {
-                const imgSize = width * 0.7;
-                const imgX = x + (width - imgSize) / 2;
-                const imgY = y + 4;
-                ctx.drawImage(img, imgX, imgY, imgSize, imgSize);
-            }
+            // Draw chest image using ChestRenderer
+            const imgSize = width * 0.7;
+            const imgX = x + (width - imgSize) / 2;
+            const imgY = y + 4;
+
+            // Map ChestType to renderer type
+            let rendererType: 'bronze' | 'gold' | 'platinum' | 'diamond' = 'bronze';
+            if (chestType === ChestType.RARE) rendererType = 'gold';
+            else if (chestType === ChestType.EPIC) rendererType = 'platinum';
+            else if (chestType === ChestType.LEGENDARY) rendererType = 'diamond';
+
+            ChestRenderer.drawChest(ctx, imgX, imgY, imgSize, rendererType);
 
             // Status indicator
             ctx.textAlign = 'center';

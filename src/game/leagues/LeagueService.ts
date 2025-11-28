@@ -2,7 +2,7 @@ import { db } from '../../data/db';
 import { LeagueStanding, UserProfile } from '../../data/models';
 import { OPPONENTS } from '../../ai/OpponentRegistry';
 import { AssetRegistry } from '../../assets/AssetRegistry';
-import { getLeagueById } from './LeagueSystem';
+import { getLeagueById, LEAGUES } from './LeagueSystem';
 
 export class LeagueService {
     private static readonly LEAGUE_SIZE = 20;
@@ -141,6 +141,103 @@ export class LeagueService {
      */
     static async getStandings(leagueId: string): Promise<LeagueStanding[]> {
         return db.standings.where('leagueId').equals(leagueId).sortBy('rank');
+    }
+
+    /**
+     * Checks if the season has ended and processes results.
+     */
+    static async checkSeasonEnd(user: UserProfile): Promise<{
+        ended: boolean;
+        promoted?: boolean;
+        relegated?: boolean;
+        reward?: number;
+        newLeagueId?: string;
+    }> {
+        if (!user.seasonEndTime) {
+            // Fix missing seasonEndTime
+            await db.user.update(1, { seasonEndTime: Date.now() + this.SEASON_LENGTH_MS });
+            return { ended: false };
+        }
+
+        if (Date.now() < user.seasonEndTime) {
+            return { ended: false };
+        }
+
+        console.log('Season ended! Processing results...');
+
+        // 1. Get Final Standings
+        const standings = await this.getStandings(user.leagueId);
+        const userStanding = standings.find(s => s.isUser);
+        const rank = userStanding ? userStanding.rank : 20;
+
+        // 2. Determine Outcome
+        let newLeagueId = user.leagueId;
+        let promoted = false;
+        let relegated = false;
+        let reward = 0;
+
+        const currentLeague = getLeagueById(user.leagueId);
+        if (!currentLeague) return { ended: false }; // Should not happen
+
+        // Promotion: Top 3
+        if (rank <= 3) {
+            const nextLeague = this.getNextLeague(user.leagueId);
+            if (nextLeague) {
+                newLeagueId = nextLeague.id;
+                promoted = true;
+            }
+            // Rewards
+            if (rank === 1) reward = currentLeague.prizePool;
+            else if (rank === 2) reward = Math.floor(currentLeague.prizePool * 0.5);
+            else if (rank === 3) reward = Math.floor(currentLeague.prizePool * 0.25);
+        }
+        // Relegation: Bottom 3 (Rank 18-20)
+        else if (rank >= 18) {
+            const prevLeague = this.getPreviousLeague(user.leagueId);
+            if (prevLeague) {
+                newLeagueId = prevLeague.id;
+                relegated = true;
+            }
+        }
+
+        // 3. Apply Changes
+        await db.transaction('rw', db.user, db.standings, async () => {
+            // Update User
+            await db.user.update(1, {
+                leagueId: newLeagueId,
+                seasonEndTime: Date.now() + this.SEASON_LENGTH_MS,
+                coins: user.coins + reward
+            });
+
+            // Clear Old Standings
+            await db.standings.where('leagueId').equals(user.leagueId).delete();
+        });
+
+        // 4. Initialize New League
+        const updatedUser = await db.user.get(1);
+        if (updatedUser) {
+            await this.initializeLeagueIfNeeded(updatedUser);
+        }
+
+        return {
+            ended: true,
+            promoted,
+            relegated,
+            reward,
+            newLeagueId
+        };
+    }
+
+    private static getNextLeague(currentId: string) {
+        const index = LEAGUES.findIndex(l => l.id === currentId);
+        if (index >= 0 && index < LEAGUES.length - 1) return LEAGUES[index + 1];
+        return null;
+    }
+
+    private static getPreviousLeague(currentId: string) {
+        const index = LEAGUES.findIndex(l => l.id === currentId);
+        if (index > 0) return LEAGUES[index - 1];
+        return null;
     }
 
     // Helper: Fisher-Yates shuffle

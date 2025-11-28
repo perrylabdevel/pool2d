@@ -159,8 +159,8 @@ export class LobbyScene implements UIScene {
             {
                 id: 'play', text: '1 vs 1', subtitle: 'Play Ranked', icon: '🎱', col: 0, row: 0, cols: 2, rows: 2, color: SemanticColors.lobby.cardPlayRanked,
                 action: () => {
-                    // Go to opponent preview before starting match
-                    uiStateMachine.transitionTo(UIState.OPPONENT_PREVIEW);
+                    // Go to club selection before starting match
+                    uiStateMachine.transitionTo(UIState.CLUB_SELECTION);
                 }
             },
             {

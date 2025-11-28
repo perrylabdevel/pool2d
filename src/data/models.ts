@@ -5,7 +5,9 @@ export interface UserProfile {
     xp: number;
     coins: number;
     gold: number;
+    trophies: number;
     leagueId: string; // e.g., 'bronze_1'
+    seasonEndTime?: number;
     avatarId: string;
     equippedCueId: string;
     equippedTableId: string;
@@ -93,4 +95,23 @@ export interface LeagueStanding {
     score: number; // Total earnings this period
     rank: number;
     isUser: boolean;
+}
+
+export interface ClubDef {
+    id: string;
+    name: string;
+    description: string;
+    entryFee: number;
+    minLevel: number;
+    minTrophies: number;
+    difficulty: number; // 1-10
+    tableId: string; // e.g., 'standard', 'lux', 'neon'
+}
+
+export interface ChestDef {
+    id: string;
+    type: 'bronze' | 'gold' | 'platinum' | 'diamond';
+    minCoins: number;
+    maxCoins: number;
+    unlockTimeMs: number;
 }

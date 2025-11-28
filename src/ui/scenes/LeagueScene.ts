@@ -368,7 +368,27 @@ export class LeagueScene implements UIScene {
 
         // Initialize if it's the user's league
         if (includeUser && this.userProfile) {
-            await LeagueService.initializeLeagueIfNeeded(this.userProfile);
+            // Check for season end first
+            const result = await LeagueService.checkSeasonEnd(this.userProfile);
+
+            if (result.ended) {
+                // Reload profile to get new league info
+                this.userProfile = await db.user.get(1);
+
+                // Show simple alert for now (can be upgraded to a nice modal later)
+                let message = "Season Ended!\n\n";
+                if (result.promoted) message += "Congratulations! You have been PROMOTED! 🏆\n";
+                else if (result.relegated) message += "You have been relegated. Better luck next time.\n";
+                else message += "You remain in the current league.\n";
+
+                if (result.reward && result.reward > 0) {
+                    message += `\nReward: ${result.reward.toLocaleString()} Coins`;
+                }
+
+                alert(message);
+            }
+
+            await LeagueService.initializeLeagueIfNeeded(this.userProfile!);
             // Simulate some progress
             await LeagueService.simulateAIProgress(leagueId);
         }

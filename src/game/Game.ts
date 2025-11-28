@@ -700,6 +700,27 @@ export class Game {
     this.hud.panelManager.restoreLastPanel();
   }
 
+  public startMatch(clubId: string) {
+    console.log(`Starting match for club: ${clubId}`);
+    this.mode = GameMode.EIGHT_BALL;
+
+    // Map club difficulty to AI difficulty
+    // This is a simplified mapping for now
+    // In a real implementation, we'd look up the club def and get specific AI settings
+    if (this.ai) {
+      // Default to medium
+      let difficulty = 'MEDIUM';
+      if (clubId.includes('basement')) difficulty = 'EASY';
+      else if (clubId.includes('shark')) difficulty = 'HARD';
+      else if (clubId.includes('legend')) difficulty = 'EXPERT';
+
+      const opponentId = this.mapDifficultyToOpponentId(difficulty as any);
+      this.ai.setOpponent(opponentId);
+    }
+
+    this.restart();
+  }
+
   initializeGame() {
     try {
       this.world.balls = [];

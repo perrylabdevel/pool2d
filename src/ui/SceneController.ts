@@ -15,6 +15,8 @@ import { MatchResultScene } from './scenes/MatchResultScene';
 import { OpponentPreviewScene } from './scenes/OpponentPreviewScene';
 import { uiSoundService } from './UISoundService';
 
+import { ClubSelectionScene } from './scenes/ClubSelectionScene';
+
 export interface UIScene {
     mount(): void;
     unmount(): void;
@@ -62,6 +64,7 @@ export class SceneController {
         this.registerScene(UIState.IN_GAME_MENU, new InGameMenuScene());
         this.registerScene(UIState.MATCH_RESULT, new MatchResultScene());
         this.registerScene(UIState.OPPONENT_PREVIEW, new OpponentPreviewScene());
+        this.registerScene(UIState.CLUB_SELECTION, new ClubSelectionScene());
 
         // Start the render loop
         this.loop = this.loop.bind(this);

@@ -114,6 +114,13 @@ export const AssetRegistry = {
     chestRare: () => new URL('./img/economy/chest_rare.png', import.meta.url).href,
     chestEpic: () => new URL('./img/economy/chest_epic.png', import.meta.url).href,
   },
+
+  /**
+   * Chest Assets
+   */
+  chests: {
+    spriteSheet: () => new URL('./chests/chests_sprite_sheet.png', import.meta.url).href,
+  },
 } as const;
 
 /**
