@@ -199,7 +199,7 @@ export class ClubSelectionScene implements UIScene {
                         // Refund if game didn't start
                         currencyStore.addCoins(club.entryFee);
                     }
-                    uiStateMachine.transitionTo(UIState.IN_GAME);
+                    uiStateMachine.transitionTo(UIState.MATCHMAKING);
                 }
             });
             uiStateMachine.transitionTo(UIState.CONFIRM);
@@ -280,7 +280,6 @@ export class ClubSelectionScene implements UIScene {
                 const radius = 16;
                 const frameWidth = 8;
                 const bevelWidth = 4;
-                const borderWidth = 2;
 
                 ctx.save();
 

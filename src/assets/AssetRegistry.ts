@@ -120,6 +120,10 @@ export const AssetRegistry = {
    */
   chests: {
     spriteSheet: () => new URL('./chests/chests_sprite_sheet.png', import.meta.url).href,
+    bronze: () => new URL('./chests/chest_bronze.png', import.meta.url).href,
+    gold: () => new URL('./chests/chest_gold.png', import.meta.url).href,
+    platinum: () => new URL('./chests/chest_platinum.png', import.meta.url).href,
+    diamond: () => new URL('./chests/chest_diamond.png', import.meta.url).href,
   },
 } as const;
 

@@ -86,18 +86,13 @@ export class OpponentPreviewScene implements UIScene {
             this.prizePool = league.prizePool;
         }
 
-        // Get a random opponent from the user's league
-        this.selectRandomOpponent();
-    }
-
-    private selectRandomOpponent() {
-        const leagueOpponents = getOpponentsByLeague(this.userLeagueId);
-        if (leagueOpponents.length > 0) {
-            const randomIndex = Math.floor(Math.random() * leagueOpponents.length);
-            this.selectedOpponent = leagueOpponents[randomIndex];
+        // Get game instance and AI opponent
+        const game = (window as any).poolGame;
+        if (game && game.ai) {
+            this.selectedOpponent = game.ai.getOpponentDef();
         } else {
-            // Fallback to first opponent
-            this.selectedOpponent = OPPONENTS[0];
+            // Fallback
+            this.selectRandomOpponent();
         }
 
         // Load opponent avatar
@@ -151,16 +146,10 @@ export class OpponentPreviewScene implements UIScene {
 
         this.buttons = [
             {
-                id: 'change',
-                label: 'Change Opponent',
-                color: ColorTokens.action.info,
-                rect: { x: centerX - buttonWidth - gap / 2, y: buttonY, width: buttonWidth, height: buttonHeight }
-            },
-            {
                 id: 'play',
-                label: `PLAY (${this.entryFee} coins)`,
+                label: 'START MATCH',
                 color: ColorTokens.action.success,
-                rect: { x: centerX + gap / 2, y: buttonY, width: buttonWidth, height: buttonHeight }
+                rect: { x: centerX - buttonWidth / 2, y: buttonY, width: buttonWidth, height: buttonHeight }
             }
         ];
     }
@@ -198,36 +187,8 @@ export class OpponentPreviewScene implements UIScene {
 
         if (!this.hoveredButton) return;
 
-        if (this.hoveredButton.id === 'change') {
-            // Pick a different opponent
-            this.selectRandomOpponent();
-        } else if (this.hoveredButton.id === 'play') {
-            // Check if user can afford entry fee
-            const balances = currencyStore.getBalances();
-            if (balances.coins < this.entryFee) {
-                // Not enough coins
-                const { notificationService } = await import('../NotificationService');
-                notificationService.show('Not enough coins!', 'warning', 2000);
-                return;
-            }
-
-            // Deduct entry fee
-            currencyStore.addCoins(-this.entryFee);
-            await db.user.where('id').equals(1).modify(user => {
-                user.coins -= this.entryFee;
-            });
-
-            // Store selected opponent for game
-            if (this.selectedOpponent) {
-                (window as any).__selectedOpponentId = this.selectedOpponent.id;
-            }
-
-            // Start game
-            const game = (window as any).poolGame as Game;
-            if (game) {
-                game.mode = GameMode.EIGHT_BALL;
-                game.restart();
-            }
+        if (this.hoveredButton.id === 'play') {
+            // Game is already set up by ClubSelectionScene, just transition
             uiStateMachine.transitionTo(UIState.IN_GAME);
         }
     };

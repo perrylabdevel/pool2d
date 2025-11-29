@@ -17,7 +17,7 @@ import { currencyStore } from '../CurrencyStore';
 import { notificationService } from '../NotificationService';
 import { ChestRenderer } from './ChestRenderer';
 
-export const CHEST_BAR_HEIGHT = 100;
+export const CHEST_BAR_HEIGHT = 108;
 
 interface ChestSlotRect extends Rect {
     slotIndex: number;
@@ -86,20 +86,23 @@ export class ChestSlotsBar {
     }
 
     setupLayout(canvasWidth: number, canvasHeight: number): void {
-        const slotSize = 80;
+        // Chests are approx 1.8:1 ratio. 
+        // Width is 130. Height needs to accommodate the chest + timer ribbon.
+        const slotWidth = 95;
+        const slotHeight = 88; // Increased from 75 to fit ribbon
         const gap = 12;
-        const totalWidth = slotSize * 4 + gap * 3;
+        const totalWidth = slotWidth * 4 + gap * 3;
         const startX = (canvasWidth - totalWidth) / 2;
-        const y = canvasHeight - CHEST_BAR_HEIGHT + 10;
+        const y = canvasHeight - CHEST_BAR_HEIGHT + (CHEST_BAR_HEIGHT - slotHeight) / 2;
 
         this.slotRects = [];
         for (let i = 0; i < 4; i++) {
             this.slotRects.push({
                 slotIndex: i,
-                x: startX + i * (slotSize + gap),
+                x: startX + i * (slotWidth + gap),
                 y: y,
-                width: slotSize,
-                height: slotSize
+                width: slotWidth,
+                height: slotHeight
             });
         }
     }
@@ -326,9 +329,12 @@ export class ChestSlotsBar {
             ctx.shadowBlur = 0;
 
             // Draw chest image using ChestRenderer
-            const imgSize = width * 0.7;
-            const imgX = x + (width - imgSize) / 2;
-            const imgY = y + 4;
+            // Image is 294x262, so aspect ratio is approx 1.12:1
+            const imgWidth = width * 0.85;
+            const imgHeight = imgWidth / 1.12;
+            const imgX = x + (width - imgWidth) / 2;
+            // Shift up slightly to leave room for timer ribbon at bottom
+            const imgY = y + (height - imgHeight) / 2 - 5;
 
             // Map ChestType to renderer type
             let rendererType: 'bronze' | 'gold' | 'platinum' | 'diamond' = 'bronze';
@@ -336,7 +342,7 @@ export class ChestSlotsBar {
             else if (chestType === ChestType.EPIC) rendererType = 'platinum';
             else if (chestType === ChestType.LEGENDARY) rendererType = 'diamond';
 
-            ChestRenderer.drawChest(ctx, imgX, imgY, imgSize, rendererType);
+            ChestRenderer.drawChest(ctx, imgX, imgY, imgWidth, imgHeight, rendererType);
 
             // Status indicator
             ctx.textAlign = 'center';

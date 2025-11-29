@@ -229,7 +229,7 @@ export class MatchResultScene implements UIScene {
         const statsStartX = centerX - statWidth;
 
         // Trophies
-        this.renderStat(ctx, statsStartX, statsY, '🏆', 
+        this.renderStat(ctx, statsStartX, statsY, '🏆',
             data.trophyChange >= 0 ? `+${data.trophyChange}` : `${data.trophyChange}`,
             data.trophyChange >= 0 ? ColorTokens.brand.primary : ColorTokens.action.danger
         );
@@ -250,7 +250,7 @@ export class MatchResultScene implements UIScene {
 
     private renderStat(ctx: CanvasRenderingContext2D, x: number, y: number, icon: string, value: string, color: string) {
         ctx.textAlign = 'center';
-        
+
         // Icon
         ctx.font = `${LayoutConstants.Fonts.Size.XXLarge}px ${LayoutConstants.Fonts.Family.Body}`;
         ctx.fillText(icon, x, y);
@@ -278,8 +278,10 @@ export class MatchResultScene implements UIScene {
         ctx.fillText('CHEST EARNED', centerX, y);
 
         // Chest image using ChestRenderer
-        const chestSize = 70;
-        const chestX = centerX - chestSize / 2;
+        // Image is 294x262, so aspect ratio is approx 1.12:1
+        const chestWidth = 100;
+        const chestHeight = chestWidth / 1.12;
+        const chestX = centerX - chestWidth / 2;
         const chestY = y + 10;
 
         // Map ChestType to renderer type
@@ -292,7 +294,7 @@ export class MatchResultScene implements UIScene {
         ctx.shadowColor = ColorTokens.action.warning;
         ctx.shadowBlur = LayoutConstants.Shadows.Medium.blur - 5;
 
-        ChestRenderer.drawChest(ctx, chestX, chestY, chestSize, rendererType);
+        ChestRenderer.drawChest(ctx, chestX, chestY, chestWidth, chestHeight, rendererType);
 
         ctx.shadowBlur = 0;
 
@@ -307,10 +309,10 @@ export class MatchResultScene implements UIScene {
     private renderButtons(ctx: CanvasRenderingContext2D) {
         for (const btn of this.buttons) {
             const isHovered = this.hoveredButton === btn;
-            
+
             // Button background
             drawRoundedRect(ctx, btn.x, btn.y, btn.width, btn.height, 25);
-            
+
             if (btn.primary) {
                 const grad = ctx.createLinearGradient(btn.x, btn.y, btn.x, btn.y + btn.height);
                 grad.addColorStop(0, isHovered ? ColorTokens.action.success : '#00CC66');
