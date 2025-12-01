@@ -34,7 +34,7 @@ export class SettingsIO {
       game: this.settingsManager.getGameSettings(),
       colors: this.settingsManager.getUIColors(),
       geometry: this.settingsManager.getGeometrySettings(),
-      geometry: this.settingsManager.getGeometrySettings(),
+
       render: this.settingsManager.getRenderSettings(),
       debug: this.settingsManager.getDebugSettings(),
     };

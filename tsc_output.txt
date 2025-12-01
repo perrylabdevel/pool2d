@@ -1,0 +1,78 @@
+src/game/Game.ts(43,1): error TS6133: 'getOpponentsByLeague' is declared but its value is never read.
+src/game/leagues/LeagueService.ts(4,1): error TS6133: 'AssetRegistry' is declared but its value is never read.
+src/game/PlaybackController.ts(94,13): error TS6133: 'updateWorldState' is declared but its value is never read.
+src/geometry/Geometry.ts(513,5): error TS6133: 'JAW_X_INNER' is declared but its value is never read.
+src/geometry/Geometry.ts(517,5): error TS6133: 'sideInner' is declared but its value is never read.
+src/geometry/Geometry.ts(518,5): error TS6133: 'cornerStraight' is declared but its value is never read.
+src/geometry/Geometry.ts(526,5): error TS6133: 'Y_N_INNER' is declared but its value is never read.
+src/geometry/Geometry.ts(527,5): error TS6133: 'Y_S_INNER' is declared but its value is never read.
+src/geometry/Geometry.ts(531,5): error TS6133: 'curveBlend' is declared but its value is never read.
+src/geometry/GeometryConversion.ts(165,9): error TS6133: 'mouthHalf' is declared but its value is never read.
+src/geometry/Placement.ts(4,15): error TS6196: 'Ball' is declared but never used.
+src/geometry/Placement.ts(77,13): error TS6133: 'sMid' is declared but its value is never read.
+src/render/components/BallRenderer.ts(520,43): error TS2345: Argument of type 'number | null' is not assignable to parameter of type 'number'.
+  Type 'null' is not assignable to type 'number'.
+src/render/components/BallRenderer.ts(706,18): error TS6133: 'enabled' is declared but its value is never read.
+src/render/components/CueRenderer.ts(75,15): error TS6133: 'cueStart' is declared but its value is never read.
+src/render/components/CueRenderer.ts(703,61): error TS6133: 'cueBallPos' is declared but its value is never read.
+src/render/components/CueRenderer.ts(787,61): error TS6133: 'p' is declared but its value is never read.
+src/render/components/CueRenderer.ts(881,61): error TS6133: 'p' is declared but its value is never read.
+src/render/components/TableRenderer.ts(28,13): error TS6133: 'tableHighlightMesh' is declared but its value is never read.
+src/render/components/TableRenderer.ts(29,13): error TS6133: 'tableShadowMesh' is declared but its value is never read.
+src/render/components/TableRenderer.ts(40,13): error TS6133: 'frameClipInfo' is declared but its value is never read.
+src/render/components/TableRenderer.ts(43,13): error TS6133: 'playBounds' is declared but its value is never read.
+src/render/components/TableRenderer.ts(53,13): error TS6133: 'pocketShadowTexture' is declared but its value is never read.
+src/render/components/TableRenderer.ts(55,13): error TS6133: 'pocketCapMaterial' is declared but its value is never read.
+src/render/components/TableRenderer.ts(92,13): error TS6133: 'stencilAppliedOnce' is declared but its value is never read.
+src/render/components/TableRenderer.ts(1820,62): error TS2304: Cannot find name 'wallBaseFallback'.
+src/render/components/TableRenderer.ts(1820,80): error TS2304: Cannot find name 'wallDebugColor'.
+src/render/components/TableRenderer.ts(1821,68): error TS2304: Cannot find name 'floorBaseFallback'.
+src/render/components/TableRenderer.ts(1821,87): error TS2304: Cannot find name 'wallDebugColor'.
+src/render/components/TableRenderer.ts(1828,74): error TS2304: Cannot find name 'capBaseFallback'.
+src/render/components/TableRenderer.ts(1833,75): error TS2304: Cannot find name 'capBaseFallback'.
+src/render/components/TableRenderer.ts(1836,37): error TS2304: Cannot find name 'capDebugColor'.
+src/render/Renderer.ts(14,8): error TS6133: 'AxisAlignment' is declared but its value is never read.
+src/render/Renderer.ts(15,8): error TS6133: 'AxisColorPalette' is declared but its value is never read.
+src/render/Renderer.ts(250,9): error TS2451: Cannot redeclare block-scoped variable 't'.
+src/render/Renderer.ts(259,11): error TS2451: Cannot redeclare block-scoped variable 't'.
+src/render/Renderer.ts(259,27): error TS2552: Cannot find name 'candidates'. Did you mean 'tCandidates'?
+src/render/Renderer.ts(261,28): error TS18047: 't' is possibly 'null'.
+src/render/Renderer.ts(262,28): error TS18047: 't' is possibly 'null'.
+src/render/Renderer.ts(264,14): error TS2322: Type 'number | null' is not assignable to type 'number'.
+  Type 'null' is not assignable to type 'number'.
+src/render/Renderer.ts(1198,11): error TS6133: 'degrees' is declared but its value is never read.
+src/render/Renderer.ts(1309,11): error TS6133: 'shrink' is declared but its value is never read.
+src/render/Renderer.ts(1317,11): error TS6133: 'dropDepth' is declared but its value is never read.
+src/render/Renderer3D.ts(7,10): error TS6133: 'getTableGeometry' is declared but its value is never read.
+src/render/Renderer3D.ts(23,7): error TS6133: 'SIDE_POCKET_VISUAL_INSET' is declared but its value is never read.
+src/render/Renderer3D.ts(24,7): error TS6133: 'EMPTY_CHIP_BORDER' is declared but its value is never read.
+src/render/Renderer3D.ts(738,7): error TS1117: An object literal cannot have multiple properties with the same name.
+src/ui/components/SceneBackground.ts(1,1): error TS6133: 'ColorTokens' is declared but its value is never read.
+src/ui/components/UIComponents.ts(334,10): error TS6133: 'mixColor' is declared but its value is never read.
+src/ui/controls/FormBuilder.ts(13,11): error TS6133: 'container' is declared but its value is never read.
+src/ui/ModernGeometryPanel.ts(16,3): error TS6133: 'getTemplateDescription' is declared but its value is never read.
+src/ui/PlaybackPanel.ts(19,15): error TS6133: 'settingsManager' is declared but its value is never read.
+src/ui/scenes/InGameMenuScene.ts(6,28): error TS6133: 'drawRoundedRect' is declared but its value is never read.
+src/ui/scenes/OpponentPreviewScene.ts(15,1): error TS6192: All imports in import declaration are unused.
+src/ui/scenes/OpponentPreviewScene.ts(19,1): error TS6192: All imports in import declaration are unused.
+src/ui/scenes/OpponentPreviewScene.ts(20,1): error TS6133: 'currencyStore' is declared but its value is never read.
+src/ui/scenes/OpponentPreviewScene.ts(95,18): error TS2551: Property 'selectRandomOpponent' does not exist on type 'OpponentPreviewScene'. Did you mean 'selectedOpponent'?
+src/ui/scenes/OpponentPreviewScene.ts(143,15): error TS6133: 'gap' is declared but its value is never read.
+src/ui/scenes/PlayModesScene.ts(2,19): error TS6133: 'sceneController' is declared but its value is never read.
+src/ui/scenes/PlayModesScene.ts(2,36): error TS6133: 'TransitionType' is declared but its value is never read.
+src/ui/scenes/PlayModesScene.ts(5,5): error TS6133: 'drawGlossyButton' is declared but its value is never read.
+src/ui/scenes/PlayModesScene.ts(6,5): error TS6133: 'drawPanel' is declared but its value is never read.
+src/ui/scenes/PlayModesScene.ts(7,5): error TS6133: 'drawCurrencyPill' is declared but its value is never read.
+src/ui/scenes/PlayModesScene.ts(9,5): error TS6133: 'UIColors' is declared but its value is never read.
+src/ui/scenes/PlayModesScene.ts(241,12): error TS6133: 'dt' is declared but its value is never read.
+src/ui/scenes/PlayModesScene.ts(252,39): error TS6133: 'index' is declared but its value is never read.
+src/ui/scenes/PlayModesScene.ts(507,15): error TS6133: 'underlineY' is declared but its value is never read.
+src/ui/scenes/ShopScene.ts(105,15): error TS6133: 'height' is declared but its value is never read.
+src/ui/SettingsIO.ts(7,1): error TS6133: 'CONFIG' is declared but its value is never read.
+src/ui/SettingsManager.ts(662,11): error TS2740: Type '{ canvasScale: number; ballScale: number; ambientIntensity: number; directionalIntensity: number; accentIntensity: number; railHighlightIntensity: number; railShadowIntensity: number; ... 38 more ...; orderUI: number; }' is missing the following properties from type 'RenderSettings': HUD_BALL_CHIP_SIZE_PX, CUE_LENGTH_IN, CUE_VISUAL_PADDING_IN, MIN_WORLD_PADDING_IN, and 2 more.
+src/ui/SettingsManager.ts(924,7): error TS2740: Type '{ canvasScale: number; ballScale: number; ambientIntensity: number; directionalIntensity: number; accentIntensity: number; railHighlightIntensity: number; railShadowIntensity: number; ... 38 more ...; orderUI: number; }' is missing the following properties from type 'RenderSettings': HUD_BALL_CHIP_SIZE_PX, CUE_LENGTH_IN, CUE_VISUAL_PADDING_IN, MIN_WORLD_PADDING_IN, and 2 more.
+src/ui/SettingsPanel.ts(220,17): error TS2345: Argument of type '(SliderBindConfig<PhysicsSettings> | SliderBindConfig<RenderSettings>)[]' is not assignable to parameter of type 'SliderBindConfig<PhysicsSettings>[]'.
+  Type 'SliderBindConfig<PhysicsSettings> | SliderBindConfig<RenderSettings>' is not assignable to type 'SliderBindConfig<PhysicsSettings>'.
+    Type 'SliderBindConfig<RenderSettings>' is not assignable to type 'SliderBindConfig<PhysicsSettings>'.
+      Type 'PhysicsSettings' is missing the following properties from type 'RenderSettings': canvasScale, ballScale, ambientIntensity, directionalIntensity, and 48 more.
+src/ui/SettingsPanel.ts(246,5): error TS2322: Type 'number' is not assignable to type 'never'.

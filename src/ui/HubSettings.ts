@@ -1,5 +1,6 @@
 import { modalService } from './ModalService';
 import { SettingsManager } from './SettingsManager';
+import { uiStateMachine, UIState } from './UIStateMachine';
 
 export class HubSettings {
   private settingsManager: SettingsManager;
@@ -83,6 +84,33 @@ export class HubSettings {
   renderCustomizationSettings() {
     const div = document.createElement('div');
     div.style.padding = '8px 0';
+
+    // Open full customization scene button
+    const openFullBtn = document.createElement('button');
+    openFullBtn.textContent = '🎨 Open Table Themes';
+    openFullBtn.style.width = '100%';
+    openFullBtn.style.padding = '14px';
+    openFullBtn.style.marginBottom = '16px';
+    openFullBtn.style.background = 'linear-gradient(135deg, #2ecc71, #27ae60)';
+    openFullBtn.style.border = 'none';
+    openFullBtn.style.borderRadius = '8px';
+    openFullBtn.style.color = '#fff';
+    openFullBtn.style.fontSize = '15px';
+    openFullBtn.style.fontWeight = '600';
+    openFullBtn.style.cursor = 'pointer';
+    openFullBtn.onclick = () => {
+      modalService.close();
+      uiStateMachine.transitionTo(UIState.CUSTOMIZATION);
+    };
+    div.appendChild(openFullBtn);
+
+    // Quick color pickers
+    const quickLabel = document.createElement('div');
+    quickLabel.textContent = 'Quick Colors';
+    quickLabel.style.fontSize = '12px';
+    quickLabel.style.color = 'rgba(255,255,255,0.5)';
+    quickLabel.style.marginBottom = '8px';
+    div.appendChild(quickLabel);
 
     const colors = this.settingsManager.getUIColors();
 

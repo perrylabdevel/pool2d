@@ -1,11 +1,12 @@
 import { UIScene, sceneController } from '../SceneController';
+import { Focusable } from '../input/FocusManager';
 import { uiStateMachine, UIState } from '../UIStateMachine';
 import {
     Rect,
     drawRoundedRect
 } from '../components/UIComponents';
 import { ColorTokens, SemanticColors } from '../theme/ColorTokens';
-import { LayoutConstants } from '../theme/LayoutConstants';
+import { LayoutConstants, getDeviceType } from '../theme/LayoutConstants';
 import { NavigationBar } from '../components/NavigationBar';
 import { ChestSlotsBar, CHEST_BAR_HEIGHT } from '../components/ChestSlotsBar';
 import { Game, GameMode } from '../../game/Game';
@@ -17,8 +18,7 @@ import { AssetLoader } from '../../assets/AssetLoader';
 
 type ButtonVariant = 'nav';
 
-interface LobbyButton {
-    id: string;
+interface LobbyButton extends Focusable {
     text: string;
     subtitle?: string;
     icon?: string;
@@ -84,13 +84,13 @@ export class LobbyScene implements UIScene {
         this.canvas.addEventListener('click', this.onClick);
         window.addEventListener('resize', this.onResize);
 
-        // ESC key to return to game
-        this.keyHandler = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') {
-                uiStateMachine.transitionTo(UIState.IN_GAME);
-            }
-        };
-        window.addEventListener('keydown', this.keyHandler);
+        // ESC key handled globally by SceneController now
+        // this.keyHandler = (e: KeyboardEvent) => {
+        //     if (e.key === 'Escape') {
+        //         uiStateMachine.transitionTo(UIState.IN_GAME);
+        //     }
+        // };
+        // window.addEventListener('keydown', this.keyHandler);
 
         // Fix initial layout after canvas is properly sized
         // This ensures correct dimensions when lobby loads on startup
@@ -109,7 +109,7 @@ export class LobbyScene implements UIScene {
         this.canvas.style.cursor = 'default';
 
         if (this.keyHandler) {
-            window.removeEventListener('keydown', this.keyHandler);
+            // window.removeEventListener('keydown', this.keyHandler);
             this.keyHandler = null;
         }
         this.cardImages = {};
@@ -121,6 +121,7 @@ export class LobbyScene implements UIScene {
     };
 
     private setupLayout(width: number, height: number) {
+        sceneController.focusManager.clear();
         this.buttons = [];
 
         // Setup navigation bar
@@ -130,20 +131,167 @@ export class LobbyScene implements UIScene {
         // Setup chest slots bar at the bottom
         this.chestSlotsBar.setupLayout(width, height);
 
-        // Miniclip-style grid layout with weighted columns for landscape/portrait cards
-        const padding = 24;
-        const gap = 16;
-        const topSpacing = navHeight + 20; // Space for navigation bar + margin
+        // Detect device type for responsive layout
+        const deviceType = getDeviceType(width);
+        const isMobile = deviceType === 'mobile';
+        const isTablet = deviceType === 'tablet';
+
+        // Responsive padding and gap
+        const padding = isMobile ? 12 : (isTablet ? 16 : 24);
+        const gap = isMobile ? 10 : (isTablet ? 12 : 16);
+        const topSpacing = navHeight + (isMobile ? 10 : 20);
+
+        // Calculate available height for cards
+        const chestBarHeight = isMobile ? 60 : CHEST_BAR_HEIGHT;
+        const availableHeight = height - topSpacing - padding * 2 - chestBarHeight;
+
+        // Define cards with their actions (layout computed below based on device)
+        const cardDefs = [
+            {
+                id: 'play', text: '1 vs 1', subtitle: 'Play Ranked', icon: '🎱', color: SemanticColors.lobby.cardPlayRanked,
+                action: () => uiStateMachine.transitionTo(UIState.CLUB_SELECTION),
+                priority: 1
+            },
+            {
+                id: 'practice', text: 'Practice', subtitle: 'Solo', icon: '🎯', color: SemanticColors.lobby.cardPractice,
+                action: () => {
+                    const game = (window as any).poolGame;
+                    if (game) { game.mode = GameMode.PRACTICE; game.restart(); }
+                    uiStateMachine.transitionTo(UIState.IN_GAME);
+                },
+                priority: 2
+            },
+            {
+                id: 'arcade', text: 'Arcade', subtitle: 'Game Modes', icon: '⚡', color: SemanticColors.lobby.cardArcade,
+                action: () => uiStateMachine.transitionTo(UIState.PLAY_MODES),
+                priority: 3
+            },
+            {
+                id: 'shop', text: 'Shop', subtitle: 'Cues & Items', icon: '🎨', color: SemanticColors.lobby.cardShop,
+                action: () => uiStateMachine.transitionTo(UIState.SHOP),
+                priority: 4
+            },
+            {
+                id: 'events', text: 'Events', subtitle: 'Win Big!', icon: '🏆', color: SemanticColors.lobby.cardEvents,
+                action: () => uiStateMachine.transitionTo(UIState.EVENTS),
+                priority: 5
+            },
+            {
+                id: 'league', text: 'Leagues', subtitle: 'Climb the Ranks', icon: '🏆', color: SemanticColors.lobby.cardMiniGames,
+                action: () => uiStateMachine.transitionTo(UIState.LEAGUE),
+                priority: 6
+            }
+        ];
+
+        if (isMobile) {
+            // Mobile: 2-column grid layout
+            this.setupMobileLayout(width, height, padding, gap, topSpacing, availableHeight, cardDefs);
+        } else if (isTablet) {
+            // Tablet: 2-column with featured card
+            this.setupTabletLayout(width, height, padding, gap, topSpacing, availableHeight, cardDefs);
+        } else {
+            // Desktop: Original 3-column Miniclip-style layout
+            this.setupDesktopLayout(width, height, padding, gap, topSpacing, availableHeight, cardDefs);
+        }
+    }
+
+    private setupMobileLayout(width: number, _height: number, padding: number, gap: number, topSpacing: number, availableHeight: number, cardDefs: Array<{ id: string; text: string; subtitle: string; icon: string; color: string; action: () => void }>) {
+        const contentWidth = width - padding * 2;
+        const startX = padding;
+
+        // 2-column grid with featured Play card spanning full width
+        const colWidth = (contentWidth - gap) / 2;
+        const playCardHeight = Math.min(availableHeight * 0.25, 120);
+        const remainingHeight = availableHeight - playCardHeight - gap;
+        const rowCount = Math.ceil((cardDefs.length - 1) / 2); // -1 for play card
+        const rowHeight = Math.min((remainingHeight - gap * (rowCount - 1)) / rowCount, 90);
+
+        cardDefs.forEach((card, index) => {
+            if (card.id === 'play') {
+                // Play card: full width, first position
+                this.buttons.push({
+                    id: card.id,
+                    text: card.text,
+                    subtitle: card.subtitle,
+                    icon: card.icon,
+                    rect: { x: startX, y: topSpacing, width: contentWidth, height: playCardHeight },
+                    color: card.color,
+                    action: card.action,
+                    variant: 'nav'
+                });
+            } else {
+                // Other cards: 2-column grid below play card
+                const adjustedIndex = index - 1; // Skip play card
+                const col = adjustedIndex % 2;
+                const row = Math.floor(adjustedIndex / 2);
+                const cardX = startX + col * (colWidth + gap);
+                const cardY = topSpacing + playCardHeight + gap + row * (rowHeight + gap);
+
+                this.buttons.push({
+                    id: card.id,
+                    text: card.text,
+                    subtitle: card.subtitle,
+                    icon: card.icon,
+                    rect: { x: cardX, y: cardY, width: colWidth, height: rowHeight },
+                    color: card.color,
+                    action: card.action,
+                    variant: 'nav'
+                });
+            }
+        });
+    }
+
+    private setupTabletLayout(width: number, _height: number, padding: number, gap: number, topSpacing: number, availableHeight: number, cardDefs: Array<{ id: string; text: string; subtitle: string; icon: string; color: string; action: () => void }>) {
+        const contentWidth = Math.min(800, width - padding * 2);
+        const startX = (width - contentWidth) / 2;
+
+        // 2-column layout with featured Play card
+        const colWidth = (contentWidth - gap) / 2;
+
+        // Row heights: featured row is taller
+        const featuredRowHeight = availableHeight * 0.4;
+        const regularRowHeight = (availableHeight - featuredRowHeight - gap * 2) / 2;
+
+        // Play card takes left side of first row (large)
+        // Practice and Arcade take right side stacked
+        // Bottom row: Shop, Events, League in 3 columns
+
+        const layouts = [
+            { id: 'play', x: startX, y: topSpacing, w: colWidth, h: featuredRowHeight },
+            { id: 'practice', x: startX + colWidth + gap, y: topSpacing, w: colWidth, h: featuredRowHeight / 2 - gap / 2 },
+            { id: 'arcade', x: startX + colWidth + gap, y: topSpacing + featuredRowHeight / 2 + gap / 2, w: colWidth, h: featuredRowHeight / 2 - gap / 2 },
+            { id: 'shop', x: startX, y: topSpacing + featuredRowHeight + gap, w: contentWidth / 3 - gap * 2 / 3, h: regularRowHeight },
+            { id: 'events', x: startX + contentWidth / 3 + gap / 3, y: topSpacing + featuredRowHeight + gap, w: contentWidth / 3 - gap * 2 / 3, h: regularRowHeight },
+            { id: 'league', x: startX + contentWidth * 2 / 3 + gap * 2 / 3, y: topSpacing + featuredRowHeight + gap, w: contentWidth / 3 - gap * 2 / 3, h: regularRowHeight },
+        ];
+
+        cardDefs.forEach(card => {
+            const layout = layouts.find(l => l.id === card.id);
+            if (layout) {
+                this.buttons.push({
+                    id: card.id,
+                    text: card.text,
+                    subtitle: card.subtitle,
+                    icon: card.icon,
+                    rect: { x: layout.x, y: layout.y, width: layout.w, height: layout.h },
+                    color: card.color,
+                    action: card.action,
+                    variant: 'nav'
+                });
+            }
+        });
+    }
+
+    private setupDesktopLayout(width: number, _height: number, padding: number, gap: number, topSpacing: number, availableHeight: number, cardDefs: Array<{ id: string; text: string; subtitle: string; icon: string; color: string; action: () => void }>) {
+        // Original Miniclip-style grid layout with weighted columns
         const contentWidth = Math.min(1000, width - padding * 2);
         const startX = (width - contentWidth) / 2;
 
         // Use weighted column widths
-        // Landscape cards (365x200) need more width than portrait cards (365x400)
-        // Weights: landscape=2.5, portrait=1.5 (approximating their aspect ratios)
         const landscapeWeight = 2.5;
         const portraitWeight = 1.5;
-        const totalWeight = landscapeWeight * 2 + portraitWeight; // 2 landscape cols + 1 portrait col
-        const totalGapWidth = gap * 2; // 2 gaps between 3 columns
+        const totalWeight = landscapeWeight * 2 + portraitWeight;
+        const totalGapWidth = gap * 2;
         const availableWidth = contentWidth - totalGapWidth;
 
         const landscapeWidth = (availableWidth * landscapeWeight) / totalWeight;
@@ -154,100 +302,88 @@ export class LobbyScene implements UIScene {
         const col1X = col0X + landscapeWidth + gap;
         const col2X = col1X + landscapeWidth + gap;
 
-        // Define cards with grid positions (Miniclip style - different sizes)
-        const cards = [
-            // Row 1: Large featured "Play" card (2x2) + Practice (1x1)
-            {
-                id: 'play', text: '1 vs 1', subtitle: 'Play Ranked', icon: '🎱', col: 0, row: 0, cols: 2, rows: 2, color: SemanticColors.lobby.cardPlayRanked,
-                action: () => {
-                    // Go to club selection before starting match
-                    uiStateMachine.transitionTo(UIState.CLUB_SELECTION);
-                }
-            },
-            {
-                id: 'practice', text: 'Practice', subtitle: 'Solo', icon: '🎯', col: 2, row: 0, cols: 1, rows: 1, color: SemanticColors.lobby.cardPractice,
-                action: () => {
-                    const game = (window as any).poolGame;
-                    if (game) { game.mode = GameMode.PRACTICE; game.restart(); }
-                    uiStateMachine.transitionTo(UIState.IN_GAME);
-                }
-            },
-            // Row 2: Arcade (continues from Play's 2nd row)
-            {
-                id: 'arcade', text: 'Arcade', subtitle: 'Game Modes', icon: '⚡', col: 2, row: 1, cols: 1, rows: 1, color: SemanticColors.lobby.cardArcade,
-                action: () => uiStateMachine.transitionTo(UIState.PLAY_MODES)
-            },
-            // Row 3: Shop + Profile + Mini
-            {
-                id: 'shop', text: 'Shop', subtitle: 'Cues & Items', icon: '🎨', col: 0, row: 2, cols: 1, rows: 1, color: SemanticColors.lobby.cardShop,
-                action: () => uiStateMachine.transitionTo(UIState.SHOP)
-            },
-            {
-                id: 'events', text: 'Events', subtitle: 'Win Big!', icon: '🏆', col: 1, row: 2, cols: 1, rows: 1, color: SemanticColors.lobby.cardEvents,
-                action: () => uiStateMachine.transitionTo(UIState.EVENTS)
-            },
-            {
-                id: 'league', text: 'Leagues', subtitle: 'Climb the Ranks', icon: '🏆', col: 2, row: 2, cols: 1, rows: 1, color: SemanticColors.lobby.cardMiniGames,
-                action: () => uiStateMachine.transitionTo(UIState.LEAGUE)
-            }
+        // Grid position mapping
+        const gridPositions = [
+            { id: 'play', col: 0, row: 0, cols: 2, rows: 2 },
+            { id: 'practice', col: 2, row: 0, cols: 1, rows: 1 },
+            { id: 'arcade', col: 2, row: 1, cols: 1, rows: 1 },
+            { id: 'shop', col: 0, row: 2, cols: 1, rows: 1 },
+            { id: 'events', col: 1, row: 2, cols: 1, rows: 1 },
+            { id: 'league', col: 2, row: 2, cols: 1, rows: 1 },
         ];
 
-        // Calculate available height for cards (reserve space for chest bar at bottom)
-        const availableHeight = height - topSpacing - padding * 2 - CHEST_BAR_HEIGHT;
-
-        // Determine row heights - use simpler fixed approach to ensure everything fits
-        const rowCount = 3; // We have 3 rows total
+        // Row heights
+        const rowCount = 3;
         const totalGaps = gap * (rowCount - 1);
         const availableCardHeight = availableHeight - totalGaps;
-
-        // Allocate row heights: row 0 & 1 share the "play" card space (2/3), row 2 gets 1/3
         const playCardHeight = (availableCardHeight * 2) / 3;
         const bottomRowHeight = (availableCardHeight * 1) / 3;
 
         const rowHeights = [
-            playCardHeight / 2 - gap / 2,  // Row 0
-            playCardHeight / 2 - gap / 2,  // Row 1
-            bottomRowHeight                 // Row 2
+            playCardHeight / 2 - gap / 2,
+            playCardHeight / 2 - gap / 2,
+            bottomRowHeight
         ];
 
-        // Precompute row offsets
+        // Row offsets
         const rowOffsets: number[] = [];
         let accumY = topSpacing;
-        rowHeights.forEach((h, idx) => {
-            rowOffsets[idx] = accumY;
+        rowHeights.forEach((h) => {
+            rowOffsets.push(accumY);
             accumY += h + gap;
         });
 
-        // Create buttons from cards using computed sizes
-        cards.forEach(card => {
-            // Determine X position based on column
+        // Create buttons
+        cardDefs.forEach(card => {
+            const pos = gridPositions.find(p => p.id === card.id);
+            if (!pos) return;
+
             let x: number;
-            if (card.col === 0) x = col0X;
-            else if (card.col === 1) x = col1X;
+            if (pos.col === 0) x = col0X;
+            else if (pos.col === 1) x = col1X;
             else x = col2X;
 
-            const y = rowOffsets[card.row];
+            const y = rowOffsets[pos.row];
 
-            // Determine width based on columns spanned
             let w: number;
-            if (card.cols === 2) {
-                // Spanning 2 landscape columns
+            if (pos.cols === 2) {
                 w = landscapeWidth * 2 + gap;
-            } else if (card.col === 2) {
-                // Portrait column
+            } else if (pos.col === 2) {
                 w = portraitWidth;
             } else {
-                // Single landscape column
                 w = landscapeWidth;
             }
 
-            // Calculate height
-            let h = gap * (card.rows - 1);
-            for (let i = card.row; i < card.row + card.rows; i++) {
+            let h = gap * (pos.rows - 1);
+            for (let i = pos.row; i < pos.row + pos.rows; i++) {
                 h += rowHeights[i];
             }
 
-            this.buttons.push({
+            // Navigation Logic
+            let up, down, left, right;
+            if (card.id === 'play') {
+                right = 'practice';
+                down = 'shop';
+            } else if (card.id === 'practice') {
+                left = 'play';
+                down = 'arcade';
+            } else if (card.id === 'arcade') {
+                left = 'play';
+                up = 'practice';
+                down = 'league';
+            } else if (card.id === 'shop') {
+                up = 'play';
+                right = 'events';
+            } else if (card.id === 'events') {
+                left = 'shop';
+                up = 'play';
+                right = 'league';
+            } else if (card.id === 'league') {
+                left = 'events';
+                up = 'arcade';
+            }
+
+            const btn: LobbyButton = {
                 id: card.id,
                 text: card.text,
                 subtitle: card.subtitle,
@@ -255,9 +391,20 @@ export class LobbyScene implements UIScene {
                 rect: { x, y, width: w, height: h },
                 color: card.color,
                 action: card.action,
-                variant: 'nav'
-            });
+                variant: 'nav',
+                up, down, left, right,
+                onAction: card.action,
+                onFocus: () => { /* Optional: Scroll into view if needed */ }
+            };
+
+            this.buttons.push(btn);
+            sceneController.focusManager.register(btn);
         });
+
+        // Set initial focus if none
+        if (!sceneController.focusManager.getCurrentFocus()) {
+            sceneController.focusManager.focus('play');
+        }
     }
 
     private onMouseMove = (e: MouseEvent) => {
@@ -595,7 +742,8 @@ export class LobbyScene implements UIScene {
         ctx.stroke();
 
         // Hover glow effect (outer glow)
-        if (isHovered) {
+        const isFocused = sceneController.focusManager.getCurrentFocus() === btn.id;
+        if (isHovered || isFocused) {
             drawRoundedRect(ctx, x - 2, y - 2, width + 4, height + 4, radius + 2);
             ctx.strokeStyle = ColorTokens.ui.teal;
             ctx.lineWidth = LayoutConstants.Lines.Heavy;

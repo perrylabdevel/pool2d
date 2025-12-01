@@ -210,3 +210,7 @@ export const RACK_POSITIONS = [
 
 // Cue ball starting position (head spot = West side, center-origin coords)
 export const CUE_BALL_POSITION = { x: -25, y: 0 };
+
+// User profile defaults
+export const DEFAULT_USER_NAME = 'sosumidude';
+export const DEFAULT_OPPONENT_NAME = 'Opponent';

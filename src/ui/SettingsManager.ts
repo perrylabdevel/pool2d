@@ -2,6 +2,10 @@
 import { CONFIG } from '../config';
 import { RenderLayerSettings, defaultRenderLayerSettings } from '../render/RenderLayers';
 import type { ModernPocketGeometry } from '../geometry/ModernGeometry';
+import { TableAppearance, DEFAULT_TABLE_APPEARANCE, TABLE_THEMES } from '../textures/TableAppearance';
+
+export type { TableAppearance };
+export { DEFAULT_TABLE_APPEARANCE, TABLE_THEMES };
 
 export interface GameSettings {
   aimAssist: boolean;
@@ -176,6 +180,22 @@ export interface RenderSettings extends RenderLayerSettings {
   CUE_BALL_MEASLE_COLOR: string;
 }
 
+export interface TextureSettings {
+  // Felt
+  feltNoiseScale: number;
+  feltNoiseIntensity: number;
+  feltWeaveScale: number;
+  feltWeaveIntensity: number;
+  feltColorVariation: number;
+  // Frame
+  frameStyle: 'wood' | 'metal' | 'matte';
+  frameGrainScaleX: number;
+  frameGrainScaleY: number;
+  frameGrainIntensity: number;
+  frameTurbulence: number;
+  frameBaseColorMix: number;
+}
+
 const STORAGE_KEYS = {
   GAME_SETTINGS: 'pool2d_game_settings',
   UI_COLORS: 'pool2d_ui_colors',
@@ -186,9 +206,11 @@ const STORAGE_KEYS = {
   AUDIO_SETTINGS: 'pool2d_audio_settings',
   GAME_STATS: 'pool2d_game_stats',
   DEBUG_SETTINGS: 'pool2d_debug_settings',
+  TEXTURE_SETTINGS: 'pool2d_texture_settings',
+  TABLE_APPEARANCE: 'pool2d_table_appearance',
 };
 
-const DEFAULT_GAME_SETTINGS: GameSettings = {
+export const DEFAULT_GAME_SETTINGS: GameSettings = {
   aimAssist: true,
   call8Ball: false,
   showFPS: true,
@@ -198,7 +220,7 @@ const DEFAULT_GAME_SETTINGS: GameSettings = {
   SHOW_AIM_INFO: CONFIG.SHOW_AIM_INFO ?? true,
 };
 
-const DEFAULT_UI_COLORS: UIColors = {
+export const DEFAULT_UI_COLORS: UIColors = {
   tableColor: '#0a5f0a',
   frameColor: '#3d2413',
   railColor: '#2d1810',
@@ -279,6 +301,22 @@ export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
   muteUISounds: false,
 };
 
+export const DEFAULT_TEXTURE_SETTINGS: TextureSettings = {
+  // Felt
+  feltNoiseScale: 15,
+  feltNoiseIntensity: 15,
+  feltWeaveScale: 2,
+  feltWeaveIntensity: 0.03,
+  feltColorVariation: 0,
+  // Frame
+  frameStyle: 'wood',
+  frameGrainScaleX: 1,
+  frameGrainScaleY: 10,
+  frameGrainIntensity: 40,
+  frameTurbulence: 0.02,
+  frameBaseColorMix: 0.5,
+};
+
 export const DEFAULT_GAME_STATS: GameStats = {
   gamesPlayed: 0,
   wins: 0,
@@ -297,7 +335,9 @@ export class SettingsManager {
   private modernGeometrySettings: ModernPocketGeometry | null;
   private audioSettings: AudioSettings;
   private debugSettings: DebugSettings;
+  private textureSettings: TextureSettings;
   private gameStats: GameStats;
+  private tableAppearance: TableAppearance;
 
   constructor() {
     this.gameSettings = this.loadGameSettings();
@@ -308,7 +348,9 @@ export class SettingsManager {
     this.modernGeometrySettings = this.loadModernGeometrySettings();
     this.audioSettings = this.loadAudioSettings();
     this.debugSettings = this.loadDebugSettings();
+    this.textureSettings = this.loadTextureSettings();
     this.gameStats = this.loadGameStats();
+    this.tableAppearance = this.loadTableAppearance();
 
     // Apply loaded settings
     this.applyPhysicsSettings();
@@ -467,6 +509,44 @@ export class SettingsManager {
     CONFIG.DEBUG_DRAW_VELOCITIES = this.debugSettings.DEBUG_DRAW_VELOCITIES;
     CONFIG.DEBUG_DRAW_AABB = this.debugSettings.DEBUG_DRAW_AABB;
     CONFIG.DEBUG_DRAW_CONTACTS = this.debugSettings.DEBUG_DRAW_CONTACTS;
+    CONFIG.DEBUG_DRAW_CONTACTS = this.debugSettings.DEBUG_DRAW_CONTACTS;
+  }
+
+  // Texture Settings
+  loadTextureSettings(): TextureSettings {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.TEXTURE_SETTINGS);
+      if (stored) {
+        return { ...DEFAULT_TEXTURE_SETTINGS, ...JSON.parse(stored) };
+      }
+    } catch (e) {
+      console.warn('Failed to load texture settings:', e);
+    }
+    return { ...DEFAULT_TEXTURE_SETTINGS };
+  }
+
+  saveTextureSettings(settings: Partial<TextureSettings>) {
+    this.textureSettings = { ...this.textureSettings, ...settings };
+    try {
+      localStorage.setItem(STORAGE_KEYS.TEXTURE_SETTINGS, JSON.stringify(this.textureSettings));
+    } catch (e) {
+      console.warn('Failed to save texture settings:', e);
+    }
+    window.dispatchEvent(new CustomEvent('settings:texture-changed', { detail: { settings: this.getTextureSettings() } }));
+  }
+
+  getTextureSettings(): TextureSettings {
+    return { ...this.textureSettings };
+  }
+
+  resetTextureSettings() {
+    this.textureSettings = { ...DEFAULT_TEXTURE_SETTINGS };
+    try {
+      localStorage.setItem(STORAGE_KEYS.TEXTURE_SETTINGS, JSON.stringify(this.textureSettings));
+    } catch (e) {
+      console.warn('Failed to reset texture settings:', e);
+    }
+    window.dispatchEvent(new CustomEvent('settings:texture-changed', { detail: { settings: this.getTextureSettings() } }));
   }
 
   // Game Stats
@@ -522,6 +602,7 @@ export class SettingsManager {
     try {
       localStorage.setItem(STORAGE_KEYS.UI_COLORS, JSON.stringify(this.uiColors));
       this.applyUIColors();
+      window.dispatchEvent(new CustomEvent('settings:ui-colors-changed', { detail: { settings: this.getUIColors() } }));
     } catch (e) {
       console.warn('Failed to save UI colors:', e);
     }
@@ -536,6 +617,7 @@ export class SettingsManager {
     try {
       localStorage.setItem(STORAGE_KEYS.UI_COLORS, JSON.stringify(this.uiColors));
       this.applyUIColors();
+      window.dispatchEvent(new CustomEvent('settings:ui-colors-changed', { detail: { settings: this.getUIColors() } }));
     } catch (e) {
       console.warn('Failed to reset UI colors:', e);
     }
@@ -979,6 +1061,77 @@ export class SettingsManager {
       this.renderSettings.pocketHighlightIntensity ?? CONFIG.POCKET_HIGHLIGHT_INTENSITY;
     window.dispatchEvent(
       new CustomEvent('settings:render-changed', { detail: { settings: this.renderSettings } })
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Table Appearance (New unified texture system)
+  // ─────────────────────────────────────────────────────────────
+
+  loadTableAppearance(): TableAppearance {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.TABLE_APPEARANCE);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        // Deep merge with defaults to handle missing properties
+        return {
+          felt: { ...DEFAULT_TABLE_APPEARANCE.felt, ...parsed.felt },
+          frame: { ...DEFAULT_TABLE_APPEARANCE.frame, ...parsed.frame },
+          cushion: { ...DEFAULT_TABLE_APPEARANCE.cushion, ...parsed.cushion },
+          pocket: { ...DEFAULT_TABLE_APPEARANCE.pocket, ...parsed.pocket },
+        };
+      }
+    } catch (e) {
+      console.warn('Failed to load table appearance:', e);
+    }
+    return { ...DEFAULT_TABLE_APPEARANCE };
+  }
+
+  saveTableAppearance(appearance: Partial<TableAppearance>): void {
+    // Deep merge
+    this.tableAppearance = {
+      felt: { ...this.tableAppearance.felt, ...appearance.felt },
+      frame: { ...this.tableAppearance.frame, ...appearance.frame },
+      cushion: { ...this.tableAppearance.cushion, ...appearance.cushion },
+      pocket: { ...this.tableAppearance.pocket, ...appearance.pocket },
+    };
+    try {
+      localStorage.setItem(STORAGE_KEYS.TABLE_APPEARANCE, JSON.stringify(this.tableAppearance));
+    } catch (e) {
+      console.warn('Failed to save table appearance:', e);
+    }
+    window.dispatchEvent(
+      new CustomEvent('settings:appearance-changed', { detail: { appearance: this.tableAppearance } })
+    );
+  }
+
+  getTableAppearance(): TableAppearance {
+    return {
+      felt: { ...this.tableAppearance.felt },
+      frame: { ...this.tableAppearance.frame },
+      cushion: { ...this.tableAppearance.cushion },
+      pocket: { ...this.tableAppearance.pocket },
+    };
+  }
+
+  applyTheme(themeKey: string): void {
+    const theme = TABLE_THEMES[themeKey];
+    if (theme) {
+      this.saveTableAppearance(theme.appearance);
+    } else {
+      console.warn(`Unknown theme: ${themeKey}`);
+    }
+  }
+
+  resetTableAppearance(): void {
+    this.tableAppearance = { ...DEFAULT_TABLE_APPEARANCE };
+    try {
+      localStorage.setItem(STORAGE_KEYS.TABLE_APPEARANCE, JSON.stringify(this.tableAppearance));
+    } catch (e) {
+      console.warn('Failed to reset table appearance:', e);
+    }
+    window.dispatchEvent(
+      new CustomEvent('settings:appearance-changed', { detail: { appearance: this.tableAppearance } })
     );
   }
 }

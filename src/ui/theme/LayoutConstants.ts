@@ -11,8 +11,48 @@
  * ```
  */
 
+/**
+ * Responsive breakpoints (max-width values)
+ */
+export const Breakpoints = {
+    /** Mobile phones (portrait) */
+    XS: 480,
+    /** Mobile phones (landscape) / small tablets */
+    SM: 640,
+    /** Tablets (portrait) */
+    MD: 768,
+    /** Tablets (landscape) / small laptops */
+    LG: 1024,
+    /** Desktops */
+    XL: 1280,
+    /** Large desktops */
+    XXL: 1536,
+};
+
+/**
+ * Device type detection helper
+ */
+export function getDeviceType(width: number): 'mobile' | 'tablet' | 'desktop' {
+    if (width <= Breakpoints.SM) return 'mobile';
+    if (width <= Breakpoints.LG) return 'tablet';
+    return 'desktop';
+}
+
+/**
+ * Returns responsive value based on screen width
+ */
+export function responsive<T>(width: number, values: { mobile: T; tablet?: T; desktop: T }): T {
+    const device = getDeviceType(width);
+    if (device === 'mobile') return values.mobile;
+    if (device === 'tablet') return values.tablet ?? values.desktop;
+    return values.desktop;
+}
+
 export const LayoutConstants = {
-    // Spacing & Gaps
+    // Responsive Breakpoints (also exported separately above)
+    Breakpoints,
+
+    // Spacing & Gaps (responsive-aware)
     Spacing: {
         Tiny: 4,
         Small: 8,
@@ -27,9 +67,14 @@ export const LayoutConstants = {
         HorizontalPaddingMin: 40, // Minimum horizontal padding
         ExternalMargin: 40, // Canvas external margin
         InternalPadding: 40, // Canvas internal padding
+        // Mobile-specific overrides
+        MobilePadding: 12,
+        MobileGap: 8,
+        TabletPadding: 16,
+        TabletGap: 12,
     },
 
-    // Dimensions
+    // Dimensions (desktop defaults)
     Dimensions: {
         ButtonHeight: 48,
         ButtonWidthSmall: 120,
@@ -45,6 +90,14 @@ export const LayoutConstants = {
         ToggleSwitchWidth: 60,
         ToggleSwitchHeight: 30,
         AvatarSize: 120,
+        // Mobile overrides
+        MobileButtonHeight: 40,
+        MobileAvatarSize: 48,
+        MobileNavHeight: 56,
+        // Tablet overrides  
+        TabletButtonHeight: 44,
+        TabletAvatarSize: 64,
+        TabletNavHeight: 72,
     },
 
     // Card/Panel Dimensions

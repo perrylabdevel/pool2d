@@ -6,7 +6,6 @@ export interface NotificationOptions {
 }
 
 import { uiSoundService } from './UISoundService';
-import { drawRoundedRect } from './components/UIComponents';
 import { LayoutConstants } from './theme/LayoutConstants';
 
 interface BannerAnimation {
@@ -54,7 +53,9 @@ export class NotificationService {
 
   show(message: string, type: 'info' | 'success' | 'warning' | 'error' | 'epic' = 'info', duration: number = 3000) {
     const size = type === 'epic' || type === 'success' ? 'large' : 'normal';
-    this.queue.push({ message, type, duration, size });
+    // Epic/Success notifications stay longer by default
+    const defaultDuration = (type === 'epic' || type === 'success') ? 4000 : 3000;
+    this.queue.push({ message, type, duration: duration || defaultDuration, size });
     this.processQueue();
   }
 
@@ -70,9 +71,12 @@ export class NotificationService {
 
   private showBanner(options: NotificationOptions) {
     this.currentBanner = options;
-    const enterDuration = LayoutConstants.Animation.Notification.Enter;
+    const enterDuration = LayoutConstants.Animation.Notification.Enter; // e.g. 0.4s
     const activeDuration = options.duration || LayoutConstants.Animation.Notification.Active;
-    const exitDuration = LayoutConstants.Animation.Notification.Exit;
+    const exitDuration = LayoutConstants.Animation.Notification.Exit; // e.g. 0.3s
+
+    // Pause the game
+    window.dispatchEvent(new CustomEvent('game:pause'));
 
     // Play sound
     if (options.type === 'error') {
@@ -129,7 +133,7 @@ export class NotificationService {
       this.animation.progress = Math.min(elapsed / this.animation.duration, 1);
 
       // Update shimmer effect
-      this.shimmerOffset += 0.02;
+      this.shimmerOffset += 0.015;
       if (this.shimmerOffset > 2) this.shimmerOffset = 0;
 
       // Clear canvas
@@ -156,166 +160,87 @@ export class NotificationService {
     if (!this.currentBanner || !this.animation) return;
 
     const ctx = this.ctx;
-    const { message, type = 'info', size = 'normal' } = this.currentBanner;
+    const { message, type = 'info' } = this.currentBanner;
     const { phase, progress } = this.animation;
 
-    // Calculate banner dimensions
-    const isLarge = size === 'large';
-    const bannerWidth = isLarge ? Math.min(800, this.canvas.width * 0.8) : Math.min(600, this.canvas.width * 0.7);
-    const bannerHeight = isLarge ? 120 : 80;
-    const bannerX = (this.canvas.width - bannerWidth) / 2;
-    const topMargin = 20;
+    // Layout configuration
+    // Full width banner style
+    const bannerWidth = this.canvas.width;
+    const bannerHeight = 240; // 3x previous height
+
+    // Target Y position (Vertically centered)
+    const targetY = (this.canvas.height - bannerHeight) / 2;
 
     // Animation transforms
-    let offsetY = 0;
-    let scale = 1;
+    let offsetX = 0;
     let opacity = 1;
 
     if (phase === 'enter') {
-      // Bounce in from top
-      const easeProgress = this.easeOutElastic(progress);
-      offsetY = -150 * (1 - easeProgress);
+      // Slide in from Left (offscreen) to Center (0)
+      const ease = this.easeOutBack(progress);
+      offsetX = -bannerWidth * (1 - ease);
       opacity = progress;
-      scale = 0.8 + 0.2 * easeProgress;
     } else if (phase === 'exit') {
-      // Fade and scale out
-      offsetY = -50 * progress;
-      opacity = 1 - progress;
-      scale = 1 - 0.1 * progress;
+      // Slide out from Center (0) to Left (offscreen)
+      const ease = this.easeInQuad(progress);
+      offsetX = -bannerWidth * ease;
+      opacity = 1 - ease;
     }
 
-    const bannerY = topMargin + offsetY;
+    const bannerX = offsetX;
+    const bannerY = targetY;
 
     ctx.save();
     ctx.globalAlpha = opacity;
 
-    // Apply scale transform
-    ctx.translate(this.canvas.width / 2, bannerY + bannerHeight / 2);
-    ctx.scale(scale, scale);
-    ctx.translate(-this.canvas.width / 2, -(bannerY + bannerHeight / 2));
-
-    this.drawPremiumBanner(bannerX, bannerY, bannerWidth, bannerHeight, message, type, isLarge);
+    this.drawFullWidthBanner(bannerX, bannerY, bannerWidth, bannerHeight, message, type);
 
     ctx.restore();
   }
 
-  private drawPremiumBanner(x: number, y: number, width: number, height: number, message: string, type: string, isLarge: boolean) {
+  private drawFullWidthBanner(x: number, y: number, width: number, height: number, message: string, type: string) {
     const ctx = this.ctx;
-    const radius = 12;
-    const frameWidth = 4;
-    const bevelWidth = 2;
+    const colors = this.getTypeColors(type);
 
     ctx.save();
 
-    // Enhanced drop shadow
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
-    ctx.shadowBlur = 30;
-    ctx.shadowOffsetY = 12;
+    // Background: Horizontal Gradient (Transparent -> Opaque -> Transparent)
+    const bgGradient = ctx.createLinearGradient(0, y, width, y);
+    // 0% transparent
+    bgGradient.addColorStop(0, colors.bg + '00');
+    // 20% opaque
+    bgGradient.addColorStop(0.2, colors.bg + 'CC');
+    // 80% opaque
+    bgGradient.addColorStop(0.8, colors.bg + 'CC');
+    // 100% transparent
+    bgGradient.addColorStop(1, colors.bg + '00');
 
-    // Outer Frame - Metallic/Wood-grain effect
-    drawRoundedRect(ctx, x, y, width, height, radius);
-    const frameGradient = ctx.createLinearGradient(x, y, x, y + height);
-    frameGradient.addColorStop(0, '#8B7355');
-    frameGradient.addColorStop(0.5, '#6B5745');
-    frameGradient.addColorStop(1, '#4B3725');
-    ctx.fillStyle = frameGradient;
-    ctx.fill();
-
-    // Metallic shine
-    const shineGradient = ctx.createLinearGradient(x, y, x + width / 3, y);
-    shineGradient.addColorStop(0, 'rgba(255, 255, 255, 0.4)');
-    shineGradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.1)');
-    shineGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
-    ctx.fillStyle = shineGradient;
-    ctx.fill();
-
-    // Reset shadow
-    ctx.shadowColor = 'transparent';
-    ctx.shadowBlur = 0;
-    ctx.shadowOffsetY = 0;
-
-    // Bevel layer
-    const bevelX = x + frameWidth;
-    const bevelY = y + frameWidth;
-    const bevelFullWidth = width - frameWidth * 2;
-    const bevelFullHeight = height - frameWidth * 2;
-    const bevelRadius = radius - frameWidth;
-
-    drawRoundedRect(ctx, bevelX, bevelY, bevelFullWidth, bevelFullHeight, bevelRadius);
-    const bevelGradient = ctx.createLinearGradient(bevelX, bevelY, bevelX, bevelY + bevelFullHeight);
-    bevelGradient.addColorStop(0, '#3a3a3a');
-    bevelGradient.addColorStop(0.5, '#2a2a2a');
-    bevelGradient.addColorStop(1, '#4a4a4a');
-    ctx.fillStyle = bevelGradient;
-    ctx.fill();
-
-    // Inner content area
-    const innerX = bevelX + bevelWidth;
-    const innerY = bevelY + bevelWidth;
-    const innerWidth = bevelFullWidth - bevelWidth * 2;
-    const innerHeight = bevelFullHeight - bevelWidth * 2;
-    const innerRadius = bevelRadius - bevelWidth;
-
-    // Background with type-specific gradient
-    drawRoundedRect(ctx, innerX, innerY, innerWidth, innerHeight, innerRadius);
-    const bgGradient = ctx.createLinearGradient(innerX, innerY, innerX + innerWidth, innerY);
-
-    const colors = this.getTypeColors(type);
-    bgGradient.addColorStop(0, colors.dark);
-    bgGradient.addColorStop(0.5, colors.mid);
-    bgGradient.addColorStop(1, colors.dark);
     ctx.fillStyle = bgGradient;
-    ctx.fill();
-
-    // Animated shimmer effect
-    const shimmerX = innerX + (innerWidth + 200) * this.shimmerOffset - 200;
-    const shimmerGradient = ctx.createLinearGradient(shimmerX, innerY, shimmerX + 200, innerY);
-    shimmerGradient.addColorStop(0, 'rgba(255, 255, 255, 0)');
-    shimmerGradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.3)');
-    shimmerGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
-    ctx.fillStyle = shimmerGradient;
-    ctx.fill();
+    ctx.fillRect(x, y, width, height);
 
     // Draw icon
-    this.drawIcon(innerX + 30, innerY + innerHeight / 2, type, isLarge ? 36 : 28, colors.accent);
+    const iconSize = 80; // Scaled up
+    // Position icon to the left of center, relative to the banner's current position (x)
+    const centerX = x + width / 2;
+    const contentWidth = 600; // Wider content area
+    const iconX = centerX - contentWidth / 2;
+    const iconY = y + height / 2;
+
+    this.drawIcon(iconX, iconY, type, iconSize, '#FFFFFF');
 
     // Draw message text
-    const textX = innerX + (isLarge ? 80 : 70);
-    const fontSize = isLarge ? 28 : 20;
-    ctx.font = `900 ${fontSize}px "Rajdhani", "Impact", sans-serif`;
+    const fontSize = 48; // Scaled up
+    ctx.font = `bold ${fontSize}px "Rajdhani", "Impact", sans-serif`;
     ctx.fillStyle = '#FFFFFF';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-    ctx.shadowBlur = 8;
-    ctx.shadowOffsetX = 2;
+
+    // Text Shadow
+    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    ctx.shadowBlur = 4;
     ctx.shadowOffsetY = 2;
-    ctx.fillText(message.toUpperCase(), textX, innerY + innerHeight / 2);
 
-    // Reset shadows
-    ctx.shadowBlur = 0;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 0;
-
-    // Corner accents
-    const cornerSize = 16;
-    const cornerInset = frameWidth + bevelWidth + 2;
-    ctx.strokeStyle = colors.accent + '99';
-    ctx.lineWidth = 2;
-
-    // Top-left
-    ctx.beginPath();
-    ctx.moveTo(x + cornerInset + cornerSize, y + cornerInset);
-    ctx.lineTo(x + cornerInset, y + cornerInset);
-    ctx.lineTo(x + cornerInset, y + cornerInset + cornerSize);
-    ctx.stroke();
-
-    // Top-right
-    ctx.beginPath();
-    ctx.moveTo(x + width - cornerInset - cornerSize, y + cornerInset);
-    ctx.lineTo(x + width - cornerInset, y + cornerInset);
-    ctx.lineTo(x + width - cornerInset, y + cornerInset + cornerSize);
-    ctx.stroke();
+    ctx.fillText(message.toUpperCase(), iconX + 100, y + height / 2 + 3);
 
     ctx.restore();
   }
@@ -324,74 +249,59 @@ export class NotificationService {
     const ctx = this.ctx;
     ctx.save();
 
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 15;
+    ctx.shadowColor = 'rgba(0,0,0,0.3)';
+    ctx.shadowBlur = 5;
     ctx.fillStyle = color;
 
-    // Draw custom icons based on type
     if (type === 'success' || type === 'epic') {
-      // Trophy icon
       this.drawTrophy(x, y, size);
     } else if (type === 'error') {
-      // Warning/X icon
       this.drawWarning(x, y, size);
     } else if (type === 'warning') {
-      // Lightning bolt
       this.drawLightning(x, y, size);
     } else {
-      // Info circle
       this.drawInfoCircle(x, y, size);
     }
 
     ctx.restore();
   }
 
+  // Icon drawing helpers (simplified for brevity, reused from before but scaled)
   private drawTrophy(x: number, y: number, size: number) {
     const ctx = this.ctx;
     const scale = size / 32;
-
-    ctx.fillStyle = '#FFD700';
     ctx.beginPath();
-    // Cup body
-    ctx.arc(x, y, 10 * scale, Math.PI, 0);
-    ctx.lineTo(x + 10 * scale, y + 10 * scale);
-    ctx.lineTo(x - 10 * scale, y + 10 * scale);
+    ctx.arc(x, y - 2 * scale, 10 * scale, Math.PI, 0);
+    ctx.lineTo(x + 2 * scale, y + 12 * scale);
+    ctx.lineTo(x - 2 * scale, y + 12 * scale);
     ctx.closePath();
     ctx.fill();
-
-    // Base
-    ctx.fillRect(x - 12 * scale, y + 10 * scale, 24 * scale, 3 * scale);
+    ctx.fillRect(x - 8 * scale, y + 12 * scale, 16 * scale, 3 * scale);
   }
 
   private drawWarning(x: number, y: number, size: number) {
     const ctx = this.ctx;
     const scale = size / 32;
-
-    ctx.fillStyle = '#FF3333';
-    ctx.strokeStyle = '#FF3333';
+    ctx.strokeStyle = ctx.fillStyle;
     ctx.lineWidth = 4 * scale;
-
-    // X shape
     ctx.beginPath();
-    ctx.moveTo(x - 10 * scale, y - 10 * scale);
-    ctx.lineTo(x + 10 * scale, y + 10 * scale);
-    ctx.moveTo(x + 10 * scale, y - 10 * scale);
-    ctx.lineTo(x - 10 * scale, y + 10 * scale);
+    ctx.moveTo(x - 8 * scale, y - 8 * scale);
+    ctx.lineTo(x + 8 * scale, y + 8 * scale);
+    ctx.moveTo(x + 8 * scale, y - 8 * scale);
+    ctx.lineTo(x - 8 * scale, y + 8 * scale);
     ctx.stroke();
   }
 
   private drawLightning(x: number, y: number, size: number) {
     const ctx = this.ctx;
     const scale = size / 32;
-
-    ctx.fillStyle = '#FF8C00';
     ctx.beginPath();
-    ctx.moveTo(x, y - 12 * scale);
-    ctx.lineTo(x - 6 * scale, y);
-    ctx.lineTo(x + 2 * scale, y);
-    ctx.lineTo(x, y + 12 * scale);
-    ctx.lineTo(x + 6 * scale, y);
-    ctx.lineTo(x - 2 * scale, y);
+    ctx.moveTo(x + 2 * scale, y - 10 * scale);
+    ctx.lineTo(x - 6 * scale, y + 2 * scale);
+    ctx.lineTo(x, y + 2 * scale);
+    ctx.lineTo(x - 2 * scale, y + 10 * scale);
+    ctx.lineTo(x + 6 * scale, y - 2 * scale);
+    ctx.lineTo(x, y - 2 * scale);
     ctx.closePath();
     ctx.fill();
   }
@@ -399,37 +309,38 @@ export class NotificationService {
   private drawInfoCircle(x: number, y: number, size: number) {
     const ctx = this.ctx;
     const scale = size / 32;
-
-    ctx.fillStyle = '#00B4FF';
     ctx.beginPath();
-    ctx.arc(x, y, 12 * scale, 0, Math.PI * 2);
+    ctx.arc(x, y, 10 * scale, 0, Math.PI * 2);
     ctx.fill();
-
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = `bold ${20 * scale}px Arial`;
+    ctx.fillStyle = '#0055AA'; // Dark text on light icon
+    ctx.font = `bold ${16 * scale}px Arial`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('i', x, y);
   }
 
-  private getTypeColors(type: string): { dark: string; mid: string; accent: string } {
+  private getTypeColors(type: string): { bg: string } {
     switch (type) {
       case 'success':
-        return { dark: '#1a5c1a', mid: '#2d8b2d', accent: '#4CAF50' };
       case 'epic':
-        return { dark: '#4a2c6b', mid: '#7b3fb2', accent: '#FFD700' };
+      case 'info':
+        return { bg: '#004488' }; // Blue
       case 'error':
-        return { dark: '#5c1a1a', mid: '#8b2d2d', accent: '#FF3333' };
       case 'warning':
-        return { dark: '#5c4a1a', mid: '#8b702d', accent: '#FF8C00' };
+        return { bg: '#880000' }; // Red
       default:
-        return { dark: '#1a3a5c', mid: '#2d5a8b', accent: '#00B4FF' };
+        return { bg: '#004488' }; // Blue
     }
   }
 
-  private easeOutElastic(x: number): number {
-    const c4 = (2 * Math.PI) / 3;
-    return x === 0 ? 0 : x === 1 ? 1 : Math.pow(2, -10 * x) * Math.sin((x * 10 - 0.75) * c4) + 1;
+  private easeOutBack(x: number): number {
+    const c1 = 1.70158;
+    const c3 = c1 + 1;
+    return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
+  }
+
+  private easeInQuad(x: number): number {
+    return x * x;
   }
 
   private dismiss() {
@@ -437,6 +348,9 @@ export class NotificationService {
     this.animation = null;
     this.isShowing = false;
     this.stopAnimation();
+
+    // Resume the game
+    window.dispatchEvent(new CustomEvent('game:resume'));
 
     // Process next in queue with a small delay
     setTimeout(() => {

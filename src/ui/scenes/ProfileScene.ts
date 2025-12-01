@@ -9,6 +9,7 @@ import { db } from '../../data/db';
 import { UserProfile, UserStats } from '../../data/models';
 import { AssetRegistry } from '../../assets/AssetRegistry';
 import { AssetLoader } from '../../assets/AssetLoader';
+import { DEFAULT_USER_NAME } from '../../config';
 
 type ProfileButton = {
     id: 'customize' | 'reset';
@@ -339,7 +340,7 @@ export class ProfileScene implements UIScene {
         ctx.font = `600 ${LayoutConstants.Fonts.Size.Hero}px ${LayoutConstants.Fonts.Family.Display}`;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
-        ctx.fillText(this.userProfile?.name || 'Player', avatarRect.x + avatarRect.width + 24, panelRect.y + 32);
+        ctx.fillText(this.userProfile?.name || DEFAULT_USER_NAME, avatarRect.x + avatarRect.width + 24, panelRect.y + 32);
 
         ctx.font = `${LayoutConstants.Fonts.Size.Medium}px ${LayoutConstants.Fonts.Family.Body}`;
         ctx.fillStyle = ColorTokens.text.secondary;

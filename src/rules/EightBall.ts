@@ -75,7 +75,7 @@ export class EightBallRules {
       this.ballInHandPlacement = 'ANYWHERE';
     }
   }
-  
+
   // Track any rail contact during the active shot
   recordRailContact(ballId?: number) {
     this.railContactThisShot = true;
@@ -83,21 +83,21 @@ export class EightBallRules {
       this.railContactBallIds.add(ballId);
     }
   }
-  
+
   recordBallPocketed(ballId: number) {
     this.ballsPocketed.push(ballId);
   }
-  
+
   recordFirstContact(ballId: number) {
     if (this.firstBallHit === -1) {
       this.firstBallHit = ballId;
     }
   }
-  
+
   setCalledPocket(pocketId: string | null) {
     this.calledPocketId = pocketId;
   }
-  
+
   endShot(balls: Ball[]) {
     // Detect which balls were pocketed during this shot
     const currentlyPocketed = new Set(balls.filter(b => b.pocketed).map(b => b.id));
@@ -151,7 +151,7 @@ export class EightBallRules {
         }
       }
     }
-    
+
     // Handle break
     if (this.gameState === GameState.BREAK) {
       this.handleBreak(
@@ -198,7 +198,7 @@ export class EightBallRules {
       this.handle8BallPocketed(foul, balls);
       return;
     }
-    
+
     // Enforce rail contact rule for normal shots (no pocket)
     if (this.config.requireRailContact && this.ballsPocketed.length === 0 && !foul) {
       if (!this.railContactThisShot) {
@@ -207,11 +207,11 @@ export class EightBallRules {
       }
     }
 
-    // Assign groups if not yet assigned
-    if (this.player1Group === PlayerGroup.NONE && this.ballsPocketed.length > 0) {
+    // Assign groups if not yet assigned, but ONLY if no foul occurred (legal pocketing)
+    if (this.player1Group === PlayerGroup.NONE && this.ballsPocketed.length > 0 && !foul) {
       this.assignGroups();
     }
-    
+
     // Handle foul
     if (foul) {
       this.ballInHandPlacement = 'ANYWHERE';
@@ -222,20 +222,20 @@ export class EightBallRules {
       this.switchPlayer();
       return;
     }
-    
+
     // Check if player pocketed their own ball
     const currentGroup = this.getCurrentPlayerGroup();
     const pocketedOwnBall = this.ballsPocketed.some((id) => {
       if (currentGroup === PlayerGroup.NONE) return true;
       return this.isCorrectGroup(id, currentGroup);
     });
-    
+
     // Continue turn if pocketed own ball, otherwise switch
     if (!pocketedOwnBall || this.ballsPocketed.length === 0) {
       this.switchPlayer();
     }
   }
-  
+
   handleBreak(
     foul: boolean,
     foulMessage: string,
@@ -325,7 +325,7 @@ export class EightBallRules {
       this.switchPlayer();
     }
   }
-  
+
   handle8BallPocketed(foul: boolean, balls: Ball[]) {
     // Check if player has cleared their group
     const hasCleared = this.hasPlayerClearedGroup(this.currentPlayer, balls);
@@ -348,11 +348,11 @@ export class EightBallRules {
       }
     }
   }
-  
+
   assignGroups() {
     // Assign based on first ball pocketed
     const firstPocketed = this.ballsPocketed[0];
-    
+
     if (BALLS_SOLID.includes(firstPocketed)) {
       if (this.currentPlayer === 1) {
         this.player1Group = PlayerGroup.SOLIDS;
@@ -369,18 +369,21 @@ export class EightBallRules {
         this.player1Group = PlayerGroup.SOLIDS;
         this.player2Group = PlayerGroup.STRIPES;
       }
+    } else {
+      // Neither solid nor stripe (e.g. cue ball or 8-ball)
+      return;
     }
-    
+
     if (this.onGroupAssigned) {
       this.onGroupAssigned(1, this.player1Group);
       this.onGroupAssigned(2, this.player2Group);
     }
   }
-  
+
   getCurrentPlayerGroup(): PlayerGroup {
     return this.currentPlayer === 1 ? this.player1Group : this.player2Group;
   }
-  
+
   isCorrectGroup(ballId: number, group: PlayerGroup): boolean {
     if (group === PlayerGroup.SOLIDS) {
       return BALLS_SOLID.includes(ballId);
@@ -389,7 +392,7 @@ export class EightBallRules {
     }
     return false;
   }
-  
+
   hasPlayerClearedGroup(player: number, balls: Ball[]): boolean {
     // Check if all balls of player's group are pocketed
     const group = player === 1 ? this.player1Group : this.player2Group;
@@ -404,14 +407,14 @@ export class EightBallRules {
       return ball ? ball.pocketed : false;
     });
   }
-  
+
   switchPlayer() {
     this.currentPlayer = this.currentPlayer === 1 ? 2 : 1;
     if (this.onTurnChange) {
       this.onTurnChange(this.currentPlayer);
     }
   }
-  
+
   canShoot(): boolean {
     return this.gameState !== GameState.GAME_OVER;
   }

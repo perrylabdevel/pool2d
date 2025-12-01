@@ -4,14 +4,29 @@ import { ColorTokens } from '../theme/ColorTokens';
 import { LayoutConstants } from '../theme/LayoutConstants';
 import { drawGlossyButton, drawRoundedRect, Rect } from '../components/UIComponents';
 import { SettingsManager } from '../SettingsManager';
+import { TableAppearance, TABLE_THEMES } from '../../textures/TableAppearance';
 import { NavigationBar } from '../components/NavigationBar';
 import { drawSceneBackground } from '../components/SceneBackground';
 
-type SettingsTab = 'gameplay' | 'colors' | 'audio';
+type TabId = 'gameplay' | 'colors' | 'audio' | 'table';
+type SubTabId = 'themes' | 'felt' | 'frame' | 'cushion' | 'pocket' | 'lighting';
 
 interface TabButton {
-    id: SettingsTab;
+    id: TabId;
     text: string;
+    rect: Rect;
+}
+
+interface SubTabButton {
+    id: SubTabId;
+    text: string;
+    rect: Rect;
+}
+
+interface ThemeCard {
+    id: string;
+    name: string;
+    appearance: TableAppearance;
     rect: Rect;
 }
 
@@ -60,24 +75,28 @@ export class SettingsScene implements UIScene {
     private canvas: HTMLCanvasElement | null = null;
     private settingsManager: SettingsManager;
 
-    private activeTab: SettingsTab = 'gameplay';
+    private activeTab: TabId = 'gameplay';
+    private activeSubTab: SubTabId = 'themes';
     private tabButtons: TabButton[] = [];
-    private hoveredTab: TabButton | null = null;
-
+    private subTabButtons: SubTabButton[] = [];
     private toggleControls: ToggleControl[] = [];
+    private sliderControls: SliderControl[] = [];
     private colorControls: ColorControl[] = [];
     private selectControls: SelectControl[] = [];
-    private sliderControls: SliderControl[] = [];
     private buttonControls: ButtonControl[] = [];
-    private muteToggleMap: Record<string, ToggleControl | undefined> = {};
+    private themeCards: ThemeCard[] = [];
 
+    private hoveredTab: TabButton | null = null;
+    private hoveredSubTab: SubTabButton | null = null;
     private hoveredToggle: ToggleControl | null = null;
+    private hoveredSlider: SliderControl | null = null;
     private hoveredColor: ColorControl | null = null;
     private hoveredSelect: SelectControl | null = null;
-    private hoveredSlider: SliderControl | null = null;
     private hoveredButton: ButtonControl | null = null;
-    private activeSlider: SliderControl | null = null;
+    private hoveredTheme: ThemeCard | null = null;
 
+    private activeSlider: SliderControl | null = null;
+    private muteToggleMap: Record<string, ToggleControl> = {};
     private keyHandler: ((e: KeyboardEvent) => void) | null = null;
     private navigationBar: NavigationBar;
 
@@ -140,14 +159,15 @@ export class SettingsScene implements UIScene {
         // Tab buttons
         const tabWidth = LayoutConstants.Dimensions.ButtonWidthMedium;
         const tabGap = LayoutConstants.Spacing.GapSmall;
-        const totalTabWidth = tabWidth * 3 + tabGap * 2;
+        const totalTabWidth = tabWidth * 4 + tabGap * 3;
         const tabStartX = (width - totalTabWidth) / 2;
         const tabY = navHeight + 20;
 
         this.tabButtons = [
             { id: 'gameplay', text: 'Gameplay', rect: { x: tabStartX, y: tabY, width: tabWidth, height: tabHeight } },
             { id: 'colors', text: 'Colors', rect: { x: tabStartX + tabWidth + tabGap, y: tabY, width: tabWidth, height: tabHeight } },
-            { id: 'audio', text: 'Audio', rect: { x: tabStartX + (tabWidth + tabGap) * 2, y: tabY, width: tabWidth, height: tabHeight } }
+            { id: 'audio', text: 'Audio', rect: { x: tabStartX + (tabWidth + tabGap) * 2, y: tabY, width: tabWidth, height: tabHeight } },
+            { id: 'table', text: 'Table', rect: { x: tabStartX + (tabWidth + tabGap) * 3, y: tabY, width: tabWidth, height: tabHeight } }
         ];
 
         // Content area
@@ -252,6 +272,82 @@ export class SettingsScene implements UIScene {
             makeMuteToggle('music', 'muteMusic', audioSettings.muteMusic || false);
             makeMuteToggle('uiSounds', 'muteUISounds', audioSettings.muteUISounds || false);
             makeMuteToggle('background', 'muteBackground', audioSettings.muteBackground || false);
+        } else if (this.activeTab === 'table') {
+            // Setup Sub-tabs
+            const subTabs: SubTabId[] = ['themes', 'felt', 'frame', 'cushion', 'pocket'];
+            const subTabWidth = 80;
+            const subTabHeight = 30;
+            const subTabGap = 5;
+            const totalSubTabW = subTabs.length * subTabWidth + (subTabs.length - 1) * subTabGap;
+            const subTabStartX = (width - totalSubTabW) / 2;
+            const subTabY = startY + 10;
+
+            const subTabLabels: Record<SubTabId, string> = {
+                themes: 'Themes', felt: 'Felt', frame: 'Frame', cushion: 'Cushion', pocket: 'Pocket', lighting: 'Lighting'
+            };
+
+            this.subTabButtons = subTabs.map((id, i) => ({
+                id,
+                text: subTabLabels[id],
+                rect: { x: subTabStartX + i * (subTabWidth + subTabGap), y: subTabY, width: subTabWidth, height: subTabHeight }
+            }));
+
+            let y = subTabY + subTabHeight + 20;
+            const appearance = this.settingsManager.getTableAppearance();
+            const renderSettings = this.settingsManager.getRenderSettings();
+
+            if (this.activeSubTab === 'themes') {
+                const cardW = 140, cardH = 90, cardGap = 14;
+                const cols = Math.max(1, Math.floor((width - 60) / (cardW + cardGap)));
+                const entries = Object.entries(TABLE_THEMES);
+                this.themeCards = entries.map(([id, theme], i) => {
+                    const row = Math.floor(i / cols), col = i % cols;
+                    const rowW = Math.min(cols, entries.length - row * cols) * (cardW + cardGap) - cardGap;
+                    const rowStartX = (width - rowW) / 2;
+                    return {
+                        id, name: theme.name, appearance: theme.appearance,
+                        rect: { x: rowStartX + col * (cardW + cardGap), y: y + row * (cardH + cardGap), width: cardW, height: cardH }
+                    };
+                });
+            } else if (this.activeSubTab === 'felt') {
+                const colorSize = 36;
+                this.colorControls.push({ id: 'feltColor', label: 'Color', value: appearance.felt.color, rect: { x: startX, y, width: controlWidth, height: controlHeight }, colorRect: { x: startX + controlWidth - colorSize - 12, y: y + 7, width: colorSize, height: colorSize } });
+                y += controlHeight + gap;
+                this.selectControls.push({ id: 'feltPattern', label: 'Pattern', value: appearance.felt.pattern, options: ['solid', 'weave', 'worn'], rect: { x: startX, y, width: controlWidth, height: controlHeight } });
+                y += controlHeight + gap;
+                this.sliderControls.push({ id: 'feltRoughness', label: 'Roughness', value: appearance.felt.roughness, min: 0, max: 1, step: 0.05, rect: { x: startX, y, width: controlWidth, height: controlHeight }, formatValue: v => `${Math.round(v * 100)}%` });
+                y += controlHeight + gap;
+                this.sliderControls.push({ id: 'feltTileScale', label: 'Texture Scale', value: appearance.felt.tileScale, min: 1, max: 8, step: 1, rect: { x: startX, y, width: controlWidth, height: controlHeight }, formatValue: v => `${v}x` });
+            } else if (this.activeSubTab === 'frame') {
+                const colorSize = 36;
+                this.colorControls.push({ id: 'frameColor', label: 'Color', value: appearance.frame.color, rect: { x: startX, y, width: controlWidth, height: controlHeight }, colorRect: { x: startX + controlWidth - colorSize - 12, y: y + 7, width: colorSize, height: colorSize } });
+                y += controlHeight + gap;
+                this.selectControls.push({ id: 'frameMaterial', label: 'Material', value: appearance.frame.material, options: ['oak', 'mahogany', 'ebony', 'walnut', 'metal', 'marble'], rect: { x: startX, y, width: controlWidth, height: controlHeight } });
+                y += controlHeight + gap;
+                this.sliderControls.push({ id: 'frameGrainAngle', label: 'Grain Angle', value: appearance.frame.grainAngle, min: 0, max: 90, step: 5, rect: { x: startX, y, width: controlWidth, height: controlHeight }, formatValue: v => `${v}°` });
+                y += controlHeight + gap;
+                this.sliderControls.push({ id: 'frameGlossiness', label: 'Glossiness', value: appearance.frame.glossiness, min: 0, max: 1, step: 0.05, rect: { x: startX, y, width: controlWidth, height: controlHeight }, formatValue: v => `${Math.round(v * 100)}%` });
+                y += controlHeight + gap;
+                this.sliderControls.push({ id: 'railShadowIntensity', label: 'Rail Shadow', value: renderSettings.railShadowIntensity, min: 0, max: 1, step: 0.05, rect: { x: startX, y, width: controlWidth, height: controlHeight } });
+                y += controlHeight + gap;
+                this.sliderControls.push({ id: 'railHighlightIntensity', label: 'Rail Highlight', value: renderSettings.railHighlightIntensity, min: 0, max: 1, step: 0.05, rect: { x: startX, y, width: controlWidth, height: controlHeight } });
+            } else if (this.activeSubTab === 'cushion') {
+                const colorSize = 36;
+                this.colorControls.push({ id: 'cushionColor', label: 'Color', value: appearance.cushion.color, rect: { x: startX, y, width: controlWidth, height: controlHeight }, colorRect: { x: startX + controlWidth - colorSize - 12, y: y + 7, width: colorSize, height: colorSize } });
+                y += controlHeight + gap;
+                this.sliderControls.push({ id: 'cushionGlossiness', label: 'Glossiness', value: appearance.cushion.glossiness, min: 0, max: 1, step: 0.05, rect: { x: startX, y, width: controlWidth, height: controlHeight }, formatValue: v => `${Math.round(v * 100)}%` });
+            } else if (this.activeSubTab === 'pocket') {
+                const colorSize = 36;
+                this.colorControls.push({ id: 'pocketColor', label: 'Color', value: appearance.pocket.color, rect: { x: startX, y, width: controlWidth, height: controlHeight }, colorRect: { x: startX + controlWidth - colorSize - 12, y: y + 7, width: colorSize, height: colorSize } });
+                y += controlHeight + gap;
+                this.colorControls.push({ id: 'pocketRimColor', label: 'Rim Color', value: appearance.pocket.rimColor, rect: { x: startX, y, width: controlWidth, height: controlHeight }, colorRect: { x: startX + controlWidth - colorSize - 12, y: y + 7, width: colorSize, height: colorSize } });
+                y += controlHeight + gap;
+                this.selectControls.push({ id: 'pocketStyle', label: 'Style', value: appearance.pocket.style, options: ['leather', 'chrome', 'brass'], rect: { x: startX, y, width: controlWidth, height: controlHeight } });
+                y += controlHeight + gap;
+                this.sliderControls.push({ id: 'pocketShadowIntensity', label: 'Pocket Shadow', value: renderSettings.pocketShadowIntensity, min: 0, max: 1, step: 0.05, rect: { x: startX, y, width: controlWidth, height: controlHeight } });
+                y += controlHeight + gap;
+                this.sliderControls.push({ id: 'pocketHighlightIntensity', label: 'Pocket Highlight', value: renderSettings.pocketHighlightIntensity, min: 0, max: 1, step: 0.05, rect: { x: startX, y, width: controlWidth, height: controlHeight } });
+            }
         }
 
         // Add Reset Button to all tabs
@@ -296,19 +392,30 @@ export class SettingsScene implements UIScene {
         // Check navigation bar first
         if (this.navigationBar.handleMouseMove(x, y)) {
             this.hoveredTab = null;
+            this.hoveredSubTab = null;
             this.hoveredToggle = null;
+            this.hoveredSlider = null;
             this.hoveredColor = null;
             this.hoveredSelect = null;
-            this.hoveredSlider = null;
             this.hoveredButton = null;
+            this.hoveredTheme = null;
             this.canvas.style.cursor = this.navigationBar.getCursor();
             return;
         }
 
         let cursor = 'default';
 
-        // Check tabs
+        // Reset all hovered states
         this.hoveredTab = null;
+        this.hoveredSubTab = null;
+        this.hoveredToggle = null;
+        this.hoveredSlider = null;
+        this.hoveredColor = null;
+        this.hoveredSelect = null;
+        this.hoveredButton = null;
+        this.hoveredTheme = null;
+
+        // Check tabs
         for (const tab of this.tabButtons) {
             if (this.isInside(x, y, tab.rect)) {
                 this.hoveredTab = tab;
@@ -317,55 +424,76 @@ export class SettingsScene implements UIScene {
             }
         }
 
-        // Check controls
-        this.hoveredToggle = null;
-        this.hoveredColor = null;
-        this.hoveredSelect = null;
-        this.hoveredSlider = null;
-        this.hoveredButton = null;
-
-        if (!this.hoveredTab) {
-            for (const toggle of this.toggleControls) {
-                if (this.isInside(x, y, toggle.rect)) {
-                    this.hoveredToggle = toggle;
+        if (!this.hoveredTab && this.activeTab === 'table') {
+            for (const subTab of this.subTabButtons) {
+                if (this.isInside(x, y, subTab.rect)) {
+                    this.hoveredSubTab = subTab;
                     cursor = 'pointer';
                     break;
                 }
             }
+        }
 
-            for (const color of this.colorControls) {
-                if (this.isInside(x, y, color.colorRect)) {
-                    this.hoveredColor = color;
-                    cursor = 'pointer';
-                    break;
+        if (!this.hoveredTab && !this.hoveredSubTab) {
+            if (this.activeTab === 'table' && this.activeSubTab === 'themes') {
+                for (const card of this.themeCards) {
+                    if (this.isInside(x, y, card.rect)) {
+                        this.hoveredTheme = card;
+                        cursor = 'pointer';
+                        break;
+                    }
                 }
             }
 
-            for (const select of this.selectControls) {
-                if (this.isInside(x, y, select.rect)) {
-                    this.hoveredSelect = select;
-                    cursor = 'pointer';
-                    break;
+            // Check controls
+            if (!this.hoveredTheme) {
+                for (const toggle of this.toggleControls) {
+                    if (this.isInside(x, y, toggle.rect)) {
+                        this.hoveredToggle = toggle;
+                        cursor = 'pointer';
+                        break;
+                    }
                 }
             }
-
-            for (const slider of this.sliderControls) {
-                const muteToggle = this.muteToggleMap[slider.id];
-                if (muteToggle && this.isInside(x, y, muteToggle.rect)) {
-                    continue;
-                }
-                if (this.isInside(x, y, slider.rect)) {
-                    this.hoveredSlider = slider;
-                    cursor = 'pointer';
-                    break;
+            // ... rest of controls
+            if (!this.hoveredToggle && !this.hoveredTheme) {
+                for (const slider of this.sliderControls) {
+                    const muteToggle = this.muteToggleMap[slider.id];
+                    if (muteToggle && this.isInside(x, y, muteToggle.rect)) {
+                        continue;
+                    }
+                    if (this.isInside(x, y, slider.rect)) {
+                        this.hoveredSlider = slider;
+                        cursor = 'pointer';
+                        break;
+                    }
                 }
             }
-
-            for (const button of this.buttonControls) {
-                if (this.isInside(x, y, button.rect)) {
-                    this.hoveredButton = button;
-                    cursor = 'pointer';
-                    break;
+            if (!this.hoveredToggle && !this.hoveredSlider && !this.hoveredTheme) {
+                for (const color of this.colorControls) {
+                    if (this.isInside(x, y, color.colorRect)) {
+                        this.hoveredColor = color;
+                        cursor = 'pointer';
+                        break;
+                    }
+                }
+            }
+            if (!this.hoveredToggle && !this.hoveredSlider && !this.hoveredColor && !this.hoveredTheme) {
+                for (const select of this.selectControls) {
+                    if (this.isInside(x, y, select.rect)) {
+                        this.hoveredSelect = select;
+                        cursor = 'pointer';
+                        break;
+                    }
+                }
+            }
+            if (!this.hoveredToggle && !this.hoveredSlider && !this.hoveredColor && !this.hoveredSelect && !this.hoveredTheme) {
+                for (const button of this.buttonControls) {
+                    if (this.isInside(x, y, button.rect)) {
+                        this.hoveredButton = button;
+                        cursor = 'pointer';
+                        break;
+                    }
                 }
             }
         }
@@ -399,17 +527,37 @@ export class SettingsScene implements UIScene {
 
         if (this.hoveredTab) {
             this.activeTab = this.hoveredTab.id;
+            // Reset sub-tab when switching main tabs if needed, or keep state
             this.setupControls(this.canvas!.width, this.tabButtons[0].rect.y + this.tabButtons[0].rect.height + 20);
             return;
         }
 
+        if (this.activeTab === 'table') {
+            if (this.hoveredSubTab) {
+                this.activeSubTab = this.hoveredSubTab.id;
+                this.setupControls(this.canvas!.width, this.tabButtons[0].rect.y + this.tabButtons[0].rect.height + 20);
+                return;
+            }
+            if (this.activeSubTab === 'themes' && this.hoveredTheme) {
+                try {
+                    this.settingsManager.applyTheme(this.hoveredTheme.id);
+                    // Refresh controls to reflect new theme
+                    this.setupControls(this.canvas!.width, this.tabButtons[0].rect.y + this.tabButtons[0].rect.height + 20);
+                } catch (err) { console.error(err); }
+                return;
+            }
+        }
+
         if (this.hoveredToggle) {
-            this.handleToggle(this.hoveredToggle);
+            const control = this.hoveredToggle;
+            this.handleToggle(control);
             return;
         }
 
-        if (this.hoveredColor) {
-            this.handleColorPick(this.hoveredColor);
+        if (this.hoveredButton) {
+            if (this.hoveredButton.id === 'reset') {
+                this.handleReset();
+            }
             return;
         }
 
@@ -418,8 +566,36 @@ export class SettingsScene implements UIScene {
             return;
         }
 
-        if (this.hoveredButton && this.hoveredButton.id === 'reset') {
-            this.handleReset();
+        if (this.hoveredColor) {
+            const control = this.hoveredColor;
+            const input = document.createElement('input');
+            input.type = 'color';
+            input.value = control.value;
+            input.style.position = 'absolute';
+            input.style.opacity = '0';
+            document.body.appendChild(input);
+
+            input.addEventListener('input', () => {
+                control.value = input.value;
+                if (this.activeTab === 'colors') {
+                    const update: any = {};
+                    update[control.id] = input.value;
+                    this.settingsManager.saveUIColors(update);
+                } else if (this.activeTab === 'table') {
+                    const appearance = this.settingsManager.getTableAppearance();
+                    if (control.id === 'feltColor') this.settingsManager.saveTableAppearance({ felt: { ...appearance.felt, color: input.value } });
+                    else if (control.id === 'frameColor') this.settingsManager.saveTableAppearance({ frame: { ...appearance.frame, color: input.value } });
+                    else if (control.id === 'cushionColor') this.settingsManager.saveTableAppearance({ cushion: { ...appearance.cushion, color: input.value } });
+                    else if (control.id === 'pocketColor') this.settingsManager.saveTableAppearance({ pocket: { ...appearance.pocket, color: input.value } });
+                    else if (control.id === 'pocketRimColor') this.settingsManager.saveTableAppearance({ pocket: { ...appearance.pocket, rimColor: input.value } });
+                }
+            });
+
+            input.addEventListener('change', () => {
+                document.body.removeChild(input);
+            });
+
+            input.click();
         }
     };
 
@@ -451,29 +627,7 @@ export class SettingsScene implements UIScene {
         }
     }
 
-    private handleColorPick(control: ColorControl) {
-        // Create a hidden color input
-        const input = document.createElement('input');
-        input.type = 'color';
-        input.value = control.value;
-        input.style.position = 'absolute';
-        input.style.opacity = '0';
-        input.style.pointerEvents = 'none';
-        document.body.appendChild(input);
 
-        input.addEventListener('change', () => {
-            const newColor = input.value;
-            control.value = newColor;
-
-            const update: any = {};
-            update[control.id] = newColor;
-            this.settingsManager.saveUIColors(update);
-
-            document.body.removeChild(input);
-        });
-
-        input.click();
-    }
 
     private handleSelectClick(control: SelectControl) {
         // Cycle through options
@@ -484,6 +638,15 @@ export class SettingsScene implements UIScene {
         if (control.id === 'aiDifficulty') {
             this.settingsManager.saveGameSettings({ aiDifficulty: control.value as any });
             window.dispatchEvent(new CustomEvent('game:ai-difficulty-changed', { detail: { value: control.value } }));
+        } else if (this.activeTab === 'table') {
+            const appearance = this.settingsManager.getTableAppearance();
+            if (control.id === 'feltPattern') {
+                this.settingsManager.saveTableAppearance({ felt: { ...appearance.felt, pattern: control.value as any } });
+            } else if (control.id === 'frameMaterial') {
+                this.settingsManager.saveTableAppearance({ frame: { ...appearance.frame, material: control.value as any } });
+            } else if (control.id === 'pocketStyle') {
+                this.settingsManager.saveTableAppearance({ pocket: { ...appearance.pocket, style: control.value as any } });
+            }
         }
     }
 
@@ -517,6 +680,28 @@ export class SettingsScene implements UIScene {
                 if (control.id === 'ballScale') update.ballScale = newValue;
                 if (control.id === 'tableScale') update.canvasScale = newValue;
                 this.settingsManager.saveRenderSettings(update);
+            }
+        } else if (this.activeTab === 'table') {
+            if (['railShadowIntensity', 'railHighlightIntensity', 'pocketShadowIntensity', 'pocketHighlightIntensity'].includes(control.id)) {
+                const update: any = {};
+                update[control.id] = newValue;
+                this.settingsManager.saveRenderSettings(update);
+            } else {
+                // Table Appearance Updates
+                const appearance = this.settingsManager.getTableAppearance();
+                if (control.id.startsWith('felt')) {
+                    const key = control.id.replace('felt', '');
+                    const prop = key.charAt(0).toLowerCase() + key.slice(1);
+                    this.settingsManager.saveTableAppearance({ felt: { ...appearance.felt, [prop]: newValue } });
+                } else if (control.id.startsWith('frame')) {
+                    const key = control.id.replace('frame', '');
+                    const prop = key.charAt(0).toLowerCase() + key.slice(1);
+                    this.settingsManager.saveTableAppearance({ frame: { ...appearance.frame, [prop]: newValue } });
+                } else if (control.id.startsWith('cushion')) {
+                    const key = control.id.replace('cushion', '');
+                    const prop = key.charAt(0).toLowerCase() + key.slice(1);
+                    this.settingsManager.saveTableAppearance({ cushion: { ...appearance.cushion, [prop]: newValue } });
+                }
             }
         }
     }
@@ -561,10 +746,69 @@ export class SettingsScene implements UIScene {
 
         this.renderBackground(ctx, width, height);
         this.renderTabs(ctx);
-        this.renderControls(ctx);
+
+        if (this.activeTab === 'table') {
+            this.renderSubTabs(ctx);
+            if (this.activeSubTab === 'themes') {
+                this.renderThemes(ctx);
+            } else {
+                this.renderControls(ctx);
+            }
+        } else {
+            this.renderControls(ctx);
+        }
         this.navigationBar.render(ctx, width);
     }
 
+    private renderSubTabs(ctx: CanvasRenderingContext2D) {
+        for (const tab of this.subTabButtons) {
+            const isActive = tab.id === this.activeSubTab;
+            const isHovered = tab === this.hoveredSubTab;
+            const color = isActive ? ColorTokens.action.info : ColorTokens.ui.gray;
+            drawGlossyButton(ctx, tab.rect, tab.text, color, isHovered);
+        }
+    }
+
+    private isThemeSelected(app: TableAppearance): boolean {
+        const cur = this.settingsManager.getTableAppearance();
+        return cur.felt.color === app.felt.color && cur.frame.color === app.frame.color;
+    }
+
+    private renderThemes(ctx: CanvasRenderingContext2D) {
+        for (const card of this.themeCards) {
+            const hovered = card === this.hoveredTheme;
+            const selected = this.isThemeSelected(card.appearance);
+
+            ctx.fillStyle = selected ? 'rgba(46,204,113,0.2)' : hovered ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.4)';
+            drawRoundedRect(ctx, card.rect.x, card.rect.y, card.rect.width, card.rect.height, 10);
+            ctx.fill();
+
+            ctx.strokeStyle = selected ? ColorTokens.action.success : 'rgba(255,255,255,0.15)';
+            ctx.lineWidth = selected ? 2 : 1;
+            drawRoundedRect(ctx, card.rect.x, card.rect.y, card.rect.width, card.rect.height, 10);
+            ctx.stroke();
+
+            // Mini table preview
+            const px = card.rect.x + 10, py = card.rect.y + 8, pw = card.rect.width - 20, ph = 36;
+            ctx.fillStyle = card.appearance.frame.color;
+            drawRoundedRect(ctx, px, py, pw, ph, 4);
+            ctx.fill();
+            ctx.fillStyle = card.appearance.felt.color;
+            drawRoundedRect(ctx, px + 5, py + 5, pw - 10, ph - 10, 2);
+            ctx.fill();
+
+            ctx.font = `600 12px ${LayoutConstants.Fonts.Family.Default}`;
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#fff';
+            ctx.fillText(card.name, card.rect.x + card.rect.width / 2, card.rect.y + 62);
+
+            if (selected) {
+                ctx.fillStyle = ColorTokens.action.success;
+                ctx.font = `bold 14px ${LayoutConstants.Fonts.Family.Default}`;
+                ctx.fillText('✓', card.rect.x + card.rect.width - 14, card.rect.y + 16);
+            }
+        }
+    }
     private renderBackground(ctx: CanvasRenderingContext2D, width: number, height: number) {
         drawSceneBackground(ctx, width, height, 'blue');
     }
@@ -995,8 +1239,20 @@ export class SettingsScene implements UIScene {
 
         // Render sliders
         for (const slider of this.sliderControls) {
-            const muteToggle = this.toggleControls.find(t => t.id === `mute${slider.id.charAt(0).toUpperCase() + slider.id.slice(1)}`);
+            const muteToggle = this.muteToggleMap[slider.id];
             this.renderSlider(ctx, slider, slider === this.hoveredSlider, muteToggle);
         }
+
+        // Render buttons
+        for (const button of this.buttonControls) {
+            this.renderButton(ctx, button, button === this.hoveredButton);
+        }
+    }
+
+    private renderButton(ctx: CanvasRenderingContext2D, button: ButtonControl, isHovered: boolean) {
+        const rect = button.rect;
+
+        // Use drawGlossyButton for consistent styling
+        drawGlossyButton(ctx, rect, button.label, button.color, isHovered);
     }
 }

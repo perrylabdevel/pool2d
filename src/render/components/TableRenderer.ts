@@ -1,9 +1,14 @@
 import * as THREE from 'three';
+import { TextureGenerator } from '../TextureGenerator';
+import { SettingsManager } from '../../ui/SettingsManager';
 import { CONFIG } from '../../config';
 import { getTableGeometry, computePlayBoundaryPoints, computeBoundaryBounds, type Vec2, type BoundaryBounds, type PocketDef } from '../../geometry/Geometry';
 import { Rail } from '../../physics/Shapes';
 import { RenderLayerSettings, RenderLayerOrderKey, RenderLayerBooleanKey } from '../RenderLayers';
-import { parseHexColor, lightenColor, mixColors, toRgba, darkenColor } from '../RenderUtils';
+import { parseHexColor, lightenColor, mixColors, toRgba } from '../RenderUtils';
+// Legacy imports removed - now using TableTextureManager
+import { TableTextureManager } from '../../textures/TableTextureManager';
+import type { TableAppearance } from '../../textures/TableAppearance';
 
 type FrameClipInfo = { outerX: number; outerY: number; radius: number };
 
@@ -53,6 +58,15 @@ export class TableRenderer {
     private pocketGradientTexture: THREE.CanvasTexture | null = null;
     private pocketCapMaterial: THREE.MeshBasicMaterial | null = null;
     private pocketSideMaterial: THREE.MeshBasicMaterial | null = null;
+    private feltMaterial: THREE.MeshStandardMaterial | null = null;
+    private frameMaterial: THREE.MeshStandardMaterial | null = null;
+    private feltTexture: THREE.CanvasTexture | null = null;
+    private frameTexture: THREE.CanvasTexture | null = null;
+    
+    // Texture Manager (new unified system)
+    private textureManager: TableTextureManager;
+
+    // Settings
 
     // Settings
     private railShadowSpread = 1.0;
@@ -86,12 +100,27 @@ export class TableRenderer {
     private debugMode: boolean = false;
 
     constructor(
-        scene: THREE.Scene,
+        private scene: THREE.Scene,
+        private layerVisibility: Record<RenderLayerBooleanKey, boolean>,
         private layerOrder: Record<RenderLayerOrderKey, number>,
-        private layerVisibility: Record<RenderLayerBooleanKey, boolean>
+        private settingsManager: SettingsManager
     ) {
-        this.scene = scene;
+        // Initialize texture manager with saved appearance
+        const appearance = settingsManager.getTableAppearance();
+        this.textureManager = new TableTextureManager(appearance);
+        
+        this.initializeTable();
         this.refreshDerivedGeometry();
+        
+        // Listen for appearance changes
+        window.addEventListener('settings:appearance-changed', (e: Event) => {
+            try {
+                const event = e as CustomEvent<{ appearance: TableAppearance }>;
+                this.applyAppearance(event.detail.appearance);
+            } catch (err) {
+                console.error('Error applying appearance change:', err);
+            }
+        });
     }
 
     refreshDerivedGeometry(): void {
@@ -106,8 +135,18 @@ export class TableRenderer {
 
         // Felt surface following cushion outline
         const feltGeometry = new THREE.ShapeGeometry(playShape);
-        const feltMaterial = new THREE.MeshStandardMaterial({
-            color: new THREE.Color(CONFIG.TABLE_COLOR),
+        
+        // Generate proper world-aligned UVs for consistent tiling
+        this.applyWorldAlignedUVs(feltGeometry, this.playBounds);
+
+        // Generate textures from appearance settings
+        const textures = this.textureManager.generateTextures();
+        this.feltTexture = textures.felt;
+
+        const appearance = this.settingsManager.getTableAppearance();
+        this.feltMaterial = new THREE.MeshStandardMaterial({
+            color: new THREE.Color(appearance.felt.color),
+            map: this.layerVisibility.showTextures ? this.feltTexture : null,
             roughness: 0.8,
             metalness: 0.1,
             side: THREE.DoubleSide,
@@ -116,7 +155,7 @@ export class TableRenderer {
             stencilRef: 1,
             stencilZPass: THREE.ReplaceStencilOp,
         });
-        this.tableMesh = new THREE.Mesh(feltGeometry, feltMaterial);
+        this.tableMesh = new THREE.Mesh(feltGeometry, this.feltMaterial);
         this.tableMesh.receiveShadow = true;
         this.tableMesh.visible = this.layerVisibility.showTable;
         this.tableMesh.renderOrder = this.layerOrder.orderTable;
@@ -157,10 +196,18 @@ export class TableRenderer {
             this.frameMesh = null;
         }
 
-        const material = new THREE.MeshStandardMaterial({
-            color: new THREE.Color(CONFIG.FRAME_COLOR),
-            roughness: 0.6,
-            metalness: 0.2,
+        // Get frame texture from texture manager
+        const textures = this.textureManager.generateTextures();
+        this.frameTexture = textures.frame;
+        
+        const appearance = this.settingsManager.getTableAppearance();
+        const glossiness = appearance.frame.glossiness;
+
+        this.frameMaterial = new THREE.MeshStandardMaterial({
+            color: new THREE.Color(appearance.frame.color),
+            map: this.layerVisibility.showTextures ? this.frameTexture : null,
+            roughness: 1.0 - glossiness * 0.6, // Convert glossiness to roughness
+            metalness: appearance.frame.material === 'metal' ? 0.8 : 0.2,
         });
 
         const group = new THREE.Group();
@@ -188,7 +235,7 @@ export class TableRenderer {
         const frameGeometry = new THREE.ExtrudeGeometry(frameShape, extrudeSettings);
         frameGeometry.translate(0, 0, -depth / 2);
 
-        const frameBody = new THREE.Mesh(frameGeometry, material.clone());
+        const frameBody = new THREE.Mesh(frameGeometry, this.frameMaterial.clone());
         frameBody.name = 'frame-body';
         group.add(frameBody);
 
@@ -2297,5 +2344,125 @@ export class TableRenderer {
             this.scene.add(gradientMesh);
             this.pocketGradientMeshes.push(gradientMesh);
         });
+    }
+    /**
+     * Legacy method for backward compatibility.
+     * Delegates to the new appearance system.
+     */
+    regenerateTextures() {
+        console.log('♻️ Regenerating textures (using new appearance system)...');
+        const appearance = this.settingsManager.getTableAppearance();
+        this.applyAppearance(appearance);
+    }
+
+    setTexturesEnabled(enabled: boolean) {
+        this.layerVisibility.showTextures = enabled;
+
+        if (this.feltMaterial) {
+            this.feltMaterial.map = enabled ? this.feltTexture : null;
+            this.feltMaterial.needsUpdate = true;
+        }
+
+        if (this.frameMaterial) {
+            this.frameMaterial.map = enabled ? this.frameTexture : null;
+            this.frameMaterial.needsUpdate = true;
+        }
+
+        if (this.frameMesh) {
+            this.frameMesh.traverse((obj) => {
+                if ((obj as THREE.Mesh).isMesh && obj.name === 'frame-body') {
+                    const mesh = obj as THREE.Mesh;
+                    const mat = mesh.material as THREE.MeshStandardMaterial;
+                    mat.map = enabled ? this.frameTexture : null;
+                    mat.needsUpdate = true;
+                }
+            });
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // New Texture System Methods
+    // ─────────────────────────────────────────────────────────────
+
+    /**
+     * Apply world-aligned UVs to a geometry so textures tile uniformly
+     * regardless of mesh shape or position.
+     */
+    private applyWorldAlignedUVs(geometry: THREE.BufferGeometry, bounds: BoundaryBounds): void {
+        const positions = geometry.attributes.position;
+        const uvs = new Float32Array(positions.count * 2);
+        
+        const width = bounds.maxX - bounds.minX;
+        const height = bounds.maxY - bounds.minY;
+        
+        for (let i = 0; i < positions.count; i++) {
+            const x = positions.getX(i);
+            const y = positions.getY(i);
+            
+            // Normalize to 0-1 based on world bounds
+            uvs[i * 2] = (x - bounds.minX) / width;
+            uvs[i * 2 + 1] = (y - bounds.minY) / height;
+        }
+        
+        geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+    }
+
+    /**
+     * Apply new appearance settings - regenerates textures and updates materials
+     */
+    applyAppearance(appearance: TableAppearance): void {
+        console.log('🎨 Applying table appearance:', appearance);
+        
+        // Update texture manager and regenerate
+        this.textureManager.setAppearance(appearance);
+        const textures = this.textureManager.generateTextures();
+        
+        // Update felt
+        this.feltTexture?.dispose();
+        this.feltTexture = textures.felt;
+        
+        if (this.feltMaterial) {
+            this.feltMaterial.color.set(appearance.felt.color);
+            this.feltMaterial.map = this.layerVisibility.showTextures ? this.feltTexture : null;
+            this.feltMaterial.needsUpdate = true;
+        }
+        
+        // Update frame
+        this.frameTexture?.dispose();
+        this.frameTexture = textures.frame;
+        
+        if (this.frameMaterial) {
+            this.frameMaterial.color.set(appearance.frame.color);
+            this.frameMaterial.map = this.layerVisibility.showTextures ? this.frameTexture : null;
+            this.frameMaterial.needsUpdate = true;
+        }
+        
+        // Update frame mesh materials
+        if (this.frameMesh) {
+            this.frameMesh.traverse((obj) => {
+                if ((obj as THREE.Mesh).isMesh && obj.name === 'frame-body') {
+                    const mat = (obj as THREE.Mesh).material as THREE.MeshStandardMaterial;
+                    mat.color.set(appearance.frame.color);
+                    mat.map = this.layerVisibility.showTextures ? this.frameTexture : null;
+                    mat.needsUpdate = true;
+                }
+            });
+        }
+        
+        // Update corner fill color (cushion controls this)
+        CONFIG.RAIL_FILL_COLOR = appearance.cushion.color;
+        this.updateRailFillMaterialColor();
+        
+        // Update pocket colors
+        this.pocketBottomColor.set(appearance.pocket.color);
+        this.pocketBottomMeshes.forEach(mesh => {
+            const mat = mesh.material as THREE.MeshBasicMaterial;
+            mat.color.set(appearance.pocket.color);
+            mat.needsUpdate = true;
+        });
+        
+        // Sync with CONFIG for other systems
+        CONFIG.TABLE_COLOR = appearance.felt.color;
+        CONFIG.FRAME_COLOR = appearance.frame.color;
     }
 }

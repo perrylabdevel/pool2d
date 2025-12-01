@@ -201,9 +201,15 @@ export function drawCurrencyPill(
         ctx.strokeStyle = ColorTokens.border.default;
         ctx.stroke();
 
-        // Icon
-        const iconSize = height * 1.2; // Slightly larger than height for "pop"
-        const iconX = x + 10; // Left aligned icon
+        // Clip to pill bounds to prevent icon bleeding
+        ctx.save();
+        drawRoundedRect(ctx, x, y, width, height, pillRadius);
+        ctx.clip();
+
+        // Icon - sized to fit within pill, positioned with proper padding
+        const iconSize = height * 0.85; // Slightly smaller than height to fit
+        const iconPadding = 6;
+        const iconX = x + iconPadding + iconSize / 2; // Center of icon
         const iconY = y + height / 2;
 
         if (type === 'coins') {
@@ -215,8 +221,10 @@ export function drawCurrencyPill(
             drawTrophy(ctx, iconX, iconY, iconSize);
         }
 
+        ctx.restore(); // Remove clipping
+
         // Text stack
-        const textAreaStart = iconX + iconSize / 2 + 12;
+        const textAreaStart = x + iconPadding + iconSize + 8;
         const valueFontSize = Math.max(20, height * 0.6);
         // const label = type === 'coins' ? 'COINS' : 'CASH';
 
@@ -287,6 +295,17 @@ export function drawCurrencyPill(
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('+', plusCenterX, plusCenterY + 1);
+    }
+
+    // Draw dividers if requested
+    const dividerPadding = 8;
+    if (options.dividerLeft) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.fillRect(x - 5, y + dividerPadding, 1, height - dividerPadding * 2);
+    }
+    if (options.dividerRight) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.fillRect(x + width + 4, y + dividerPadding, 1, height - dividerPadding * 2);
     }
 
     ctx.restore();

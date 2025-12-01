@@ -20,6 +20,7 @@ const LAYER_CHECKBOX_MAP: Record<string, RenderLayerBooleanKey> = {
   'layer-ui': 'showUIOverlay',
   'layer-measure': 'showMeasurementOverlay',
   'layer-reference': 'showReferenceOverlay',
+  'layer-textures': 'showTextures',
 };
 
 export class RenderLayerPanel {
@@ -69,7 +70,16 @@ export class RenderLayerPanel {
 
     const syncBtn = document.getElementById('render-layer-sync');
     if (syncBtn) {
-      syncBtn.addEventListener('click', () => this.syncFromRenderer());
+      syncBtn.addEventListener('click', () => {
+        this.syncFromRenderer();
+      });
+    }
+
+    const regenBtn = document.getElementById('render-layer-regenerate-textures');
+    if (regenBtn) {
+      regenBtn.addEventListener('click', () => {
+        this.renderer.tableRenderer.regenerateTextures();
+      });
     }
 
     Object.entries(LAYER_CHECKBOX_MAP).forEach(([id, key]) => {
@@ -254,7 +264,7 @@ export class RenderLayerPanel {
       | 'grooveInnerBase' | 'grooveInnerDepthScale' | 'grooveThicknessFactor' | 'grooveOpacityBase' | 'grooveOpacityDepthScale' | 'grooveRimThicknessFactor' | 'grooveRimOuterOpacity' | 'grooveRimInnerOpacity';
 
     const updateLightingSetting = (key: LightingKey, value: number, apply: (v: number) => void) => {
-      (this.settings as Record<string, number>)[key] = value;
+      (this.settings as any)[key] = value;
       this.settingsManager.saveRenderSettings({ [key]: value } as Partial<RenderSettings>);
       apply(value);
     };

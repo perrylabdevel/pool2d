@@ -1,4 +1,4 @@
-// HUD and UI management
+// HUD and UI management - Updated for Texture System
 import { SettingsManager } from './SettingsManager';
 import { panelManager } from './panels/panelRegistry';
 import type { PanelRegistrationOptions } from './panels/PanelManager';
@@ -8,6 +8,7 @@ import { notificationService } from './NotificationService';
 import { uiStateMachine, UIState } from './UIStateMachine';
 import { sceneController } from './SceneController';
 import { AssetRegistry } from '../assets/AssetRegistry';
+import { TextureEditor } from '../textures/ui/TextureEditor';
 
 export class HUD {
   fpsElement: HTMLElement | null;
@@ -105,6 +106,30 @@ export class HUD {
     }
 
     this.wirePanelLauncher();
+
+    // Initialize Texture Editor
+    const textureEditor = new TextureEditor((config) => {
+      const game = (window as any).poolGame;
+      if (game && game.renderer) {
+        game.renderer.applyTexture(config.type as any, config);
+      }
+    });
+
+    // Wire up Texture Studio button (hijack existing one or add new one)
+    // The existing button has data-panel-id="texture-panel"
+    // We can intercept the click or just add a listener to it
+    const textureBtn = document.querySelector('button[data-panel-id="texture-panel"]');
+    if (textureBtn) {
+      // Clone and replace to remove existing listeners (hacky but effective to detach panel logic)
+      const newBtn = textureBtn.cloneNode(true);
+      textureBtn.parentNode?.replaceChild(newBtn, textureBtn);
+
+      newBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        textureEditor.show();
+      });
+    }
   }
 
   loadSettings() {
@@ -127,13 +152,13 @@ export class HUD {
     if (this.modeElement) this.modeElement.textContent = mode;
   }
 
-  setTurn(player: number, isAI: boolean = false) {
+  setTurn(player: number, isAI: boolean = false, suppressNotification: boolean = false) {
     if (this.turnElement) {
       if (isAI) {
         this.turnElement.textContent = `AI's Turn`;
         this.turnElement.classList.remove('ai-thinking');
       } else {
-        this.turnElement.textContent = player === 1 ? `Your Turn` : `Player ${player}'s Turn`;
+        this.turnElement.textContent = player === 1 ? `Your Turn` : `Opponent's Turn`;
         this.turnElement.classList.remove('ai-thinking');
       }
     }
@@ -141,6 +166,11 @@ export class HUD {
     if (player === 1) {
       this.player1Panel?.classList.add('active');
       this.player2Panel?.classList.remove('active');
+
+      // Show "Your Turn" notification only if we are actually in the game
+      if (!isAI && !suppressNotification && uiStateMachine.state === UIState.IN_GAME) {
+        notificationService.show('YOUR TURN', 'info', 2000);
+      }
     } else {
       this.player1Panel?.classList.remove('active');
       this.player2Panel?.classList.add('active');

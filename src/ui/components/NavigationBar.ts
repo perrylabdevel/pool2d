@@ -1,5 +1,5 @@
 import { ColorTokens } from '../theme/ColorTokens';
-import { LayoutConstants } from '../theme/LayoutConstants';
+import { LayoutConstants, getDeviceType } from '../theme/LayoutConstants';
 import { drawCurrencyPill, Rect } from './UIComponents';
 import { uiStateMachine, UIState } from '../UIStateMachine';
 import { currencyStore } from '../CurrencyStore';
@@ -35,6 +35,7 @@ export class NavigationBar {
     private profileAvatarUrl: string | null = null;
     private profileFrameUrl: string | null = null;
     private profileLoadStarted = false;
+    private deviceType: 'mobile' | 'tablet' | 'desktop' = 'desktop';
 
     constructor(config: NavigationBarConfig) {
         this.config = {
@@ -56,17 +57,27 @@ export class NavigationBar {
     }
 
     getHeight(): number {
+        // Return responsive height based on device type
+        if (this.deviceType === 'mobile') {
+            return 60;
+        } else if (this.deviceType === 'tablet') {
+            return 80;
+        }
         return this.height;
     }
 
     setupLayout(width: number) {
         this.buttons = [];
+        this.deviceType = getDeviceType(width);
+        
+        const isMobile = this.deviceType === 'mobile';
+        const isTablet = this.deviceType === 'tablet';
+        
         const horizontalPadding = 0;
-        const buttonHeight = this.height;
-        const backWidth = 132; // 25% smaller than original 176
-        const pillMetrics = this.getCurrencyPillMetrics(buttonHeight);
-        const settingsWidth = Math.max(96, buttonHeight * 0.6);
-        const profileSize = buttonHeight;
+        const buttonHeight = this.getHeight();
+        const backWidth = isMobile ? 80 : (isTablet ? 100 : 132);
+        const settingsWidth = isMobile ? 48 : (isTablet ? 64 : Math.max(96, buttonHeight * 0.6));
+        const profileSize = isMobile ? 52 : (isTablet ? 72 : buttonHeight);
 
         // Back button (left)
         if (this.config.showBack) {
@@ -291,41 +302,41 @@ export class NavigationBar {
         ctx.textBaseline = 'middle';
         ctx.fillText('⚙', x + width / 2, y + height / 2 + 2);
 
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
-        ctx.fillRect(x, y + 6, 1, height - 12);
-        ctx.fillRect(x + width - 1, y + 6, 1, height - 12);
+        // Divider on right side (between settings and profile)
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.fillRect(x + width - 1, y + 12, 1, height - 24);
         ctx.restore();
     }
 
     private renderCurrencies(ctx: CanvasRenderingContext2D, width: number) {
-        const metrics = this.getCurrencyPillMetrics(this.height);
-        const currencyY = (this.height - metrics.height) / 2;
-        const gap = 24;
+        const navHeight = this.getHeight();
+        const isTablet = this.deviceType === 'tablet';
+        const metrics = this.getCurrencyPillMetrics(navHeight);
+        const currencyY = (navHeight - metrics.height) / 2;
+        const pillGap = isTablet ? 6 : 10; // Tight gap between pills
 
-        // Calculate starting position from right, matching setupLayout logic
-        let rightX = width; // - horizontalPadding (0)
-        const buttonHeight = this.height;
-
+        // Calculate position: pills should hug the left side of settings button
+        // Find where settings button starts (from right edge)
+        let settingsLeftEdge = width;
+        
         if (this.config.showProfile) {
-            const profileSize = buttonHeight;
-            rightX -= profileSize;
+            const profileSize = isTablet ? 72 : navHeight;
+            settingsLeftEdge -= profileSize;
         }
 
         if (this.config.showSettings) {
-            const settingsWidth = Math.max(96, buttonHeight * 0.6);
-            rightX -= settingsWidth;
+            const settingsWidth = isTablet ? 64 : Math.max(96, navHeight * 0.6);
+            settingsLeftEdge -= settingsWidth;
         }
 
-        // Apply some padding from the buttons
-        rightX -= 24;
-
-        // Position from right of the available space
-        // Order: [Coins] [Gap] [Cash] [rightX]
-        // Position from right of the available space
-        // Order: [Coins] [Gap] [Cash] [Gap] [Trophies] [rightX]
-        const trophiesX = rightX - metrics.totalWidth;
-        const cashX = trophiesX - gap - metrics.totalWidth;
-        const coinsX = cashX - gap - metrics.totalWidth;
+        // Small padding between pills and settings button
+        const paddingFromSettings = 10;
+        
+        // Position pills from right to left, hugging settings
+        // Order from left to right: [Coins] [Cash] [Trophies] [Settings] [Profile]
+        const trophiesX = settingsLeftEdge - paddingFromSettings - metrics.totalWidth;
+        const cashX = trophiesX - pillGap - metrics.totalWidth;
+        const coinsX = cashX - pillGap - metrics.totalWidth;
 
         const balances = this.config.balancesProvider ? this.config.balancesProvider() : { coins: 0, gold: 0, trophies: 0 };
 
@@ -339,27 +350,30 @@ export class NavigationBar {
         drawCurrencyPill(ctx, coinsX, currencyY, balances.coins, 'coins', {
             ...baseOptions,
             dividerLeft: false,
-            dividerRight: false,
+            dividerRight: true, // divider after coins
         });
         drawCurrencyPill(ctx, cashX, currencyY, balances.gold, 'cash', {
             ...baseOptions,
             dividerLeft: false,
+            dividerRight: true, // divider after cash
+        });
+        drawCurrencyPill(ctx, trophiesX, currencyY, balances.trophies ?? 0, 'trophies', {
+            ...baseOptions,
+            dividerLeft: false,
             dividerRight: false,
         });
-
-        // Draw Trophies Pill
-        // We reuse the currency pill component but with a trophy icon
-        // Note: drawCurrencyPill might need an update to support 'trophy' type, 
-        // or we can hack it by passing a custom icon if supported, or just adding 'trophy' support to UIComponents.
-        // For now, let's assume 'trophy' type needs to be added to UIComponents or we use a generic one.
-        // Checking UIComponents... drawCurrencyPill takes 'coins' | 'cash'.
-        // I should probably update UIComponents first or just use 'cash' and override color/icon if possible?
-        // No, better to update UIComponents.ts to support 'trophies'.
-        // But I can't see UIComponents.ts right now.
-        // Let's assume I need to update UIComponents.ts first.
-        // Wait, I can't update UIComponents.ts in this same step easily without viewing it.
-        // Let's check UIComponents.ts first.
-
+        
+        // Draw divider between trophies and settings
+        const dividerX = settingsLeftEdge;
+        this.drawVerticalDivider(ctx, dividerX, navHeight);
+    }
+    
+    private drawVerticalDivider(ctx: CanvasRenderingContext2D, x: number, height: number) {
+        const padding = 12;
+        ctx.save();
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.fillRect(x, padding, 1, height - padding * 2);
+        ctx.restore();
     }
 
     private renderBackButton(ctx: CanvasRenderingContext2D, btn: NavButton, isHovered: boolean) {
@@ -490,9 +504,13 @@ export class NavigationBar {
         ctx.restore();
     }
 
-    private getCurrencyPillMetrics(buttonHeight: number) {
-        const height = 42;
-        const width = 150;
+    private getCurrencyPillMetrics(navHeight: number) {
+        // Scale pill size based on nav height
+        const isMobile = navHeight <= 60;
+        const isTablet = navHeight <= 80 && !isMobile;
+        
+        const height = isMobile ? 32 : (isTablet ? 36 : 42);
+        const width = isMobile ? 100 : (isTablet ? 120 : 150);
         const plusButtonSpace = 0; // removed plus button
         return { height, width, totalWidth: width + plusButtonSpace };
     }

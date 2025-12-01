@@ -6,7 +6,7 @@ import { Renderer3D } from '../render/Renderer3D';
 import { InputManager } from '../input/Input';
 import { DebugDraw } from '../debug/DebugDraw';
 import { HUD } from '../ui/HUD';
-import { CONFIG, CUE_BALL_POSITION, RACK_POSITIONS, BALL_8, BALL_CUE } from '../config';
+import { CONFIG, CUE_BALL_POSITION, RACK_POSITIONS, BALL_8, BALL_CUE, DEFAULT_USER_NAME, DEFAULT_OPPONENT_NAME } from '../config';
 import { getTableGeometry } from '../geometry/Geometry';
 import { clampBallInHand } from '../geometry/Placement';
 import { EightBallRules, GameState as RulesGameState, type BallInHandPlacement } from '../rules/EightBall';
@@ -15,9 +15,7 @@ import { physicsRecorder } from '../debug/PhysicsRecorder';
 import { Predictor } from '../physics/Prediction';
 import { shotCapture } from '../debug/ShotCapture';
 import { SettingsPanel } from '../ui/SettingsPanel';
-import { GeometryPanel } from '../ui/GeometryPanel';
 import { ModernGeometryPanel } from '../ui/ModernGeometryPanel';
-import { RenderLayerPanel } from '../ui/RenderLayerPanel';
 import { AudioPanel } from '../ui/AudioPanel';
 import { HelpPanel } from '../ui/HelpPanel';
 import { scenarioManager } from '../debug/ScenarioManager';
@@ -40,6 +38,7 @@ import { MatchRecord } from '../data/models';
 import { getChestForLeague, CHEST_DEFINITIONS } from './economy/ChestSystem';
 import { getClampedTrophyChange, getLeagueForTrophies } from './economy/TrophySystem';
 import { getClubById } from './clubs/ClubRegistry';
+import { getOpponentsByLeague } from '../ai/OpponentRegistry';
 import { AssetRegistry } from '../assets/AssetRegistry';
 
 export enum GameMode {
@@ -82,9 +81,7 @@ export class Game {
   hud: HUD;
   debug: DebugDraw;
   settings: SettingsPanel;
-  geometryPanel: GeometryPanel;
   modernGeometryPanel: ModernGeometryPanel;
-  renderLayersPanel: RenderLayerPanel;
   audioPanel: AudioPanel;
   helpPanel: HelpPanel;
   rules: EightBallRules;
@@ -153,20 +150,21 @@ export class Game {
   // Ball dragging (practice mode only)
   isDraggingBall: boolean = false;
 
+  get settingsManager() {
+    return this.hud.settingsManager;
+  }
+
   constructor(gameCanvas: HTMLCanvasElement, debugCanvas: HTMLCanvasElement) {
     // Create HUD first - it initializes SettingsManager which loads and applies saved CONFIG values
     this.hud = new HUD();
 
-    // Now create physics world - it will read the correct CONFIG values
     this.world = new PhysicsWorld();
     this.world.onBallPocketed = (details) => this.handleBallPocketed(details);
-    this.renderer = new Renderer3D(gameCanvas);
+    this.renderer = new Renderer3D(gameCanvas, this.hud.settingsManager);
     this.input = new InputManager(gameCanvas);
     this.debug = new DebugDraw(debugCanvas);
     this.settings = new SettingsPanel(this.hud.settingsManager);
-    this.geometryPanel = new GeometryPanel(this.hud.settingsManager, () => this.restart());
     this.modernGeometryPanel = new ModernGeometryPanel(this.hud.settingsManager, () => this.restart());
-    this.renderLayersPanel = new RenderLayerPanel(this.hud.settingsManager, this.renderer);
     this.audioPanel = new AudioPanel(this.hud.settingsManager);
     this.helpPanel = new HelpPanel();
     this.rules = new EightBallRules(RULES_PRESETS[this.currentRuleset]);
@@ -403,7 +401,8 @@ export class Game {
     };
 
     this.rules.onGameOver = (winner) => {
-      this.hud.showFoul(`Player ${winner} wins!`);
+      const winnerName = this.players?.find(p => p.id === winner)?.name || `Player ${winner}`;
+      this.hud.showFoul(`${winnerName} wins!`);
     };
   }
 
@@ -546,14 +545,7 @@ export class Game {
         console.log('🎱 Ruleset: PRACTICE (very relaxed, for learning)');
         this.restart();
       }
-      if (e.key === 'm' || e.key === 'M') {
-        const next = !this.renderer.showMeasurementOverlay;
-        this.renderLayersPanel.setMeasurementOverlayVisible(next);
-      }
-      if ((e.key === 'o' || e.key === 'O') && e.shiftKey) {
-        e.preventDefault();
-        this.renderLayersPanel.toggleReferenceOverlay();
-      }
+
       if (e.key === 'b' || e.key === 'B') {
         // Toggle ball-in-hand overlay (enables debug overlay if needed)
         const next = !this.debug.isBallInHandOverlayEnabled();
@@ -681,18 +673,11 @@ export class Game {
       hotkeys: ['s'],
       persistState: true,
     });
-    this.hud.registerPanel('geometry-panel', this.geometryPanel.getController(), {
-      hotkeys: ['j'],
-      persistState: true,
-    });
     this.hud.registerPanel('modern-geometry-panel', this.modernGeometryPanel.getController(), {
       hotkeys: ['g'],
       persistState: true,
     });
-    this.hud.registerPanel('render-layer-panel', this.renderLayersPanel.getController(), {
-      hotkeys: ['l'],
-      persistState: true,
-    });
+
     this.hud.registerPanel('audio-panel', this.audioPanel.getController(), {
       hotkeys: ['u'],
       persistState: true,
@@ -833,16 +818,17 @@ export class Game {
       if (this.mode === GameMode.PRACTICE) {
         this.hud.setMode('Practice Mode');
         this.hud.hideTurnIndicator();
-        this.hud.setTurn(1, false);
+        this.hud.setTurn(1, false, true); // Suppress notification on init
         this.hud.setPlayer2Visible(false);
 
-        // Set default player visuals, then load from DB
+        // Set default player name and visuals, then load from DB
+        this.hud.setPlayerName(1, DEFAULT_USER_NAME);
         this.hud.setPlayerVisuals(1, this.getAvatarUrl(), this.getFrameForLeague());
 
         // Load user profile visuals async and update when ready
         db.user.get(1).then((user) => {
           if (!user) return;
-          this.hud.setPlayerName(1, user.name || 'Player');
+          this.hud.setPlayerName(1, user.name || DEFAULT_USER_NAME);
           this.hud.setPlayerVisuals(1, this.getAvatarUrl(user.avatarId), this.getFrameForLeague(user.leagueId));
         }).catch((err) => {
           console.warn('Failed to load user profile for practice mode visuals', err);
@@ -879,8 +865,8 @@ export class Game {
 
   initializePlayers() {
     // Create human player and AI opponent
-    const humanPlayer = new Player(1, 'Player', PlayerType.HUMAN);
-    const aiPlayer = new Player(2, 'AI', PlayerType.AI);
+    const humanPlayer = new Player(1, DEFAULT_USER_NAME, PlayerType.HUMAN);
+    const aiPlayer = new Player(2, DEFAULT_OPPONENT_NAME, PlayerType.AI);
 
     this.players = [humanPlayer, aiPlayer];
     this.currentPlayerIndex = 0; // Human starts
@@ -927,6 +913,9 @@ export class Game {
 
     // Set up rules callbacks
     this.rules.onGroupAssigned = (playerId: number, group: number) => {
+      // Ignore NONE (0)
+      if (group === 0) return;
+
       const player = this.players.find(p => p.id === playerId);
       if (player) {
         const ballGroup = group === 1 ? BallGroup.SOLIDS : BallGroup.STRIPES;
@@ -935,9 +924,10 @@ export class Game {
         console.log('[8-Ball] Player', playerId, 'assigned', setName);
 
         // Show notification to user
+        const playerName = this.players?.find(p => p.id === playerId)?.name || `Player ${playerId}`;
         const message = playerId === 1
           ? `${setName.toUpperCase()} ARE YOURS!`
-          : `Player ${playerId} has ${setName}`;
+          : `${playerName} has ${setName}`;
         this.hud.showFoul(message);
 
         // Update HUD ball chips to reflect assigned groups
@@ -980,30 +970,30 @@ export class Game {
 
         try {
           await db.matches.add(record);
-          
+
           // Get current user for trophy calculation
           const currentUser = await db.user.get(1);
           const currentTrophies = currentUser?.trophies || 0;
-          
+
           // Calculate trophy change based on club and result
           trophyChange = getClampedTrophyChange(
             this.currentClubId || 'club_basement',
             isWin,
             currentTrophies
           );
-          
+
           // Update user stats and trophies
           await db.user.where('id').equals(1).modify(user => {
             user.stats.gamesPlayed++;
             user.stats.totalEarnings += record.earnings;
-            
+
             // Update trophies
             user.trophies = Math.max(0, (user.trophies || 0) + trophyChange);
-            
+
             // Update league based on new trophy count
             const newLeague = getLeagueForTrophies(user.trophies);
             user.leagueId = newLeague.id;
-            
+
             if (isWin) {
               user.stats.wins++;
               user.stats.winStreak++;
@@ -1025,8 +1015,8 @@ export class Game {
           const user = await db.user.get(1);
           if (user) {
             const { currencyStore } = await import('../ui/CurrencyStore');
-            currencyStore.setBalances({ 
-              coins: user.coins, 
+            currencyStore.setBalances({
+              coins: user.coins,
               gold: user.gold,
               trophies: user.trophies || 0
             });
@@ -1059,7 +1049,8 @@ export class Game {
       } else if (winner === 1) {
         winnerMessage = 'VICTORY! You cleared the table!';
       } else {
-        winnerMessage = `Player ${winner} wins the match!`;
+        const winnerName = winningPlayer?.name || `Player ${winner}`;
+        winnerMessage = `${winnerName} wins the match!`;
       }
 
       console.log('[8-Ball] Winner message:', winnerMessage);
@@ -2066,6 +2057,27 @@ export class Game {
     this.debug.draw(this.world);
 
     this.fpsFrames++;
+  }
+
+  /**
+   * Check if a game is currently in progress and should warn before leaving
+   */
+  isInProgress(): boolean {
+    // Practice mode doesn't need warning
+    if (this.mode === GameMode.PRACTICE) return false;
+
+    // If game is over, no warning needed
+    if (this.stateMachine && this.stateMachine.state === GameState.GAME_OVER) return false;
+
+    // If we haven't started the rack (break shot not taken), maybe safe?
+    // But usually once we enter the game scene in 8-ball, we are "in game".
+    // Let's be strict: if we are in 8-Ball mode and not Game Over, we are in progress.
+    if (this.mode === GameMode.EIGHT_BALL) return true;
+
+    // Arcade modes
+    if (this.arcadeMode && !this.arcadeMode.isComplete) return true;
+
+    return false;
   }
 
   start() {

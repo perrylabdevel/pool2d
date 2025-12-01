@@ -1,1005 +1,134 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>RailRush - Tournament Grade Billiards</title>
-    <link rel="stylesheet" href="/styles/design-tokens.css" />
-    <link rel="stylesheet" href="/styles/main.css" />
-    <link rel="stylesheet" href="/styles/notifications.css" />
-  </head>
-  <body>
-    <div id="loading-screen">
-      <div class="loading-content">
-        <img src="/src/assets/img/logo.png" alt="RailRush" class="loading-logo" />
-        <div class="loading-spinner"></div>
-        <p id="loading-text">Loading ball models...</p>
-      </div>
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RailRush - Tournament Grade Billiards</title>
+  <link rel="stylesheet" href="/styles/design-tokens.css" />
+  <link rel="stylesheet" href="/styles/main.css" />
+  <link rel="stylesheet" href="/styles/notifications.css" />
+  <link rel="stylesheet" href="/styles/texture-editor.css" />
+</head>
+
+<body>
+  <div id="loading-screen">
+    <div class="loading-content">
+      <img src="/src/assets/img/logo.png" alt="RailRush" class="loading-logo" />
+      <div class="loading-spinner"></div>
+      <p id="loading-text">Loading ball models...</p>
     </div>
-    <div id="app">
-      <div id="workspace">
-        <aside id="dock-left">
-          <nav id="panel-launcher" class="panel-launcher" aria-label="Tool Panels">
-            <button
-              class="panel-launcher-btn"
-              data-panel-id="game-settings"
-              title="Game &amp; UI Settings (O)"
-            >
-              <span class="panel-launcher-icon">⚙</span>
-              <span class="panel-launcher-label">Game</span>
-              <span class="panel-launcher-shortcut">O</span>
-            </button>
-            <button
-              class="panel-launcher-btn"
-              data-panel-id="physics-settings"
-              title="Physics &amp; Aim Assist (S)"
-            >
-              <span class="panel-launcher-icon">⚗</span>
-              <span class="panel-launcher-label">Physics</span>
-              <span class="panel-launcher-shortcut">S</span>
-            </button>
-            <button
-              class="panel-launcher-btn"
-              data-panel-id="modern-geometry-panel"
-              title="Pocket Geometry (G)"
-            >
-              <span class="panel-launcher-icon">📐</span>
-              <span class="panel-launcher-label">Geometry</span>
-              <span class="panel-launcher-shortcut">G</span>
-            </button>
-            <button
-              class="panel-launcher-btn"
-              data-panel-id="render-layer-panel"
-              title="Render Layers (L)"
-            >
-              <span class="panel-launcher-icon">👁</span>
-              <span class="panel-launcher-label">Layers</span>
-              <span class="panel-launcher-shortcut">L</span>
-            </button>
-            <button
-              class="panel-launcher-btn"
-              data-panel-id="audio-panel"
-              title="Audio Mixer (U)"
-            >
-              <span class="panel-launcher-icon">🔊</span>
-              <span class="panel-launcher-label">Audio</span>
-              <span class="panel-launcher-shortcut">U</span>
-            </button>
-            <!-- Action: Capture Shot moved from top bar -->
-            <button
-              id="capture-shot-btn"
-              class="panel-launcher-btn"
-              title="Capture Shot"
-              aria-label="Capture Shot"
-            >
-              <span class="panel-launcher-icon">📸</span>
-              <span class="panel-launcher-label">Shot</span>
-            </button>
-          </nav>
-        </aside>
+  </div>
+  <div id="app">
+    <div id="workspace">
+      <aside id="dock-left">
+        <nav id="panel-launcher" class="panel-launcher" aria-label="Tool Panels">
+          <button class="panel-launcher-btn" data-panel-id="game-settings" title="Game &amp; UI Settings (O)">
+            <span class="panel-launcher-icon">⚙</span>
+            <span class="panel-launcher-label">Game</span>
+            <span class="panel-launcher-shortcut">O</span>
+          </button>
+          <button class="panel-launcher-btn" data-panel-id="physics-settings" title="Physics &amp; Aim Assist (S)">
+            <span class="panel-launcher-icon">⚗</span>
+            <span class="panel-launcher-label">Physics</span>
+            <span class="panel-launcher-shortcut">S</span>
+          </button>
+          <button class="panel-launcher-btn" data-panel-id="modern-geometry-panel" title="Pocket Geometry (G)">
+            <span class="panel-launcher-icon">📐</span>
+            <span class="panel-launcher-label">Geometry</span>
+            <span class="panel-launcher-shortcut">G</span>
+          </button>
+          <button class="panel-launcher-btn" data-panel-id="render-layer-panel" title="Render Layers (L)">
+            <span class="panel-launcher-icon">👁</span>
+            <span class="panel-launcher-label">Layers</span>
+            <span class="panel-launcher-shortcut">L</span>
+          </button>
+          <button class="panel-launcher-btn" data-panel-id="texture-panel" title="Texture Editor">
+            <span class="panel-launcher-icon">🎨</span>
+            <span class="panel-launcher-label">Textures</span>
+          </button>
+          <button class="panel-launcher-btn" data-panel-id="audio-panel" title="Audio Mixer (U)">
+            <span class="panel-launcher-icon">🔊</span>
+            <span class="panel-launcher-label">Audio</span>
+            <span class="panel-launcher-shortcut">U</span>
+          </button>
+          <!-- Action: Capture Shot moved from top bar -->
+          <button id="capture-shot-btn" class="panel-launcher-btn" title="Capture Shot" aria-label="Capture Shot">
+            <span class="panel-launcher-icon">📸</span>
+            <span class="panel-launcher-label">Shot</span>
+          </button>
+        </nav>
+      </aside>
 
-        <main id="workspace-main">
-          <div id="hud">
-            <header class="hud-header" aria-label="Game Header">
-              <!-- Left Player -->
-              <div id="player1-info" class="hud-player" role="region" aria-label="Player 1 Information">
-                <div class="avatar" aria-hidden="true"></div>
-                <div class="meta">
-                  <div class="name" id="p1-name">Player 1</div>
-                  <div class="balls-remaining" aria-label="P1 balls potted"></div>
-                </div>
+      <main id="workspace-main">
+        <div id="hud">
+          <header class="hud-header" aria-label="Game Header">
+            <!-- Left Player -->
+            <div id="player1-info" class="hud-player" role="region" aria-label="Player 1 Information">
+              <div class="avatar" aria-hidden="true"></div>
+              <div class="meta">
+                <div class="name" id="p1-name">sosumidude</div>
+                <div class="balls-remaining" aria-label="P1 balls potted"></div>
               </div>
-
-              <!-- Menu Button (Center) -->
-              <button id="hud-menu-btn" class="icon-btn" aria-label="Open Menu" style="border-radius: 50%; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center;">
-                <span style="font-size: 24px;">☰</span>
-              </button>
-
-              <!-- Right Player -->
-              <div id="player2-info" class="hud-player right" role="region" aria-label="Player 2 Information">
-                <div class="avatar" aria-hidden="true"></div>
-                <div class="meta">
-                  <div class="name" id="p2-name">CPU</div>
-                  <div class="balls-remaining" aria-label="P2 balls potted"></div>
-                </div>
-              </div>
-            </header>
-
-            <!-- Optional: keep mode/turn indicators offscreen but present for now -->
-            <div class="hud-meta">
-              <div id="mode-indicator" class="hud-mode"></div>
-              <div id="turn-indicator" class="hud-turn"></div>
             </div>
 
-            <div id="stats">
-              <span id="fps">FPS: 0</span>
-              <span id="ups">UPS: 0</span>
+            <!-- Menu Button (Center) -->
+            <button id="hud-menu-btn" class="icon-btn" aria-label="Open Menu"
+              style="border-radius: 50%; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center;">
+              <span style="font-size: 24px;">☰</span>
+            </button>
+
+            <!-- Right Player -->
+            <div id="player2-info" class="hud-player right" role="region" aria-label="Player 2 Information">
+              <div class="avatar" aria-hidden="true"></div>
+              <div class="meta">
+                <div class="name" id="p2-name">Opponent</div>
+                <div class="balls-remaining" aria-label="P2 balls potted"></div>
+              </div>
             </div>
+          </header>
+
+          <!-- Optional: keep mode/turn indicators offscreen but present for now -->
+          <div class="hud-meta">
+            <div id="mode-indicator" class="hud-mode"></div>
+            <div id="turn-indicator" class="hud-turn"></div>
           </div>
 
-          <!-- Full-screen UI scene canvas (lobby, menus, etc.) - positioned at workspace level -->
-          <canvas id="ui-stage"></canvas>
-
-          <div id="canvas-stage">
-            <div id="canvas-container">
-              <div id="foul-banner" class="hidden"></div>
-              <canvas id="game-canvas"></canvas>
-              <canvas id="ui-canvas"></canvas>
-              <canvas id="debug-canvas"></canvas>
-              <img
-                id="reference-overlay"
-                src="/images/reference.png"
-                alt="Reference table overlay"
-                class="overlay-hidden"
-              />
-            </div>
+          <div id="stats">
+            <span id="fps">FPS: 0</span>
+            <span id="ups">UPS: 0</span>
           </div>
-        </main>
+        </div>
 
-        <aside id="dock-right">
-          <div id="panel-dock" aria-live="polite">
-            <div id="geometry-panel" class="panel-dock-card hidden">
-              <div class="panel-header">
-                <h3>📐 Pocket Geometry</h3>
-              </div>
-              <div class="panel-content">
-                <div class="settings-group">
-                  <h4 class="settings-group-title">📍 Side Pockets</h4>
-                  <div class="slider-group">
-                    <label for="live-side-radius">
-                      Jaw Radius: <span id="live-side-radius-val">4.0</span>
-                    </label>
-                    <input type="range" id="live-side-radius" min="1" max="8" step="0.1" value="4" />
-                  </div>
+        <!-- Full-screen UI scene canvas (lobby, menus, etc.) - positioned at workspace level -->
+        <canvas id="ui-stage"></canvas>
 
-                  <div class="slider-group">
-                    <label for="live-side-steepness">
-                      Jaw Steepness: <span id="live-side-steepness-val">2.0</span>
-                    </label>
-                    <input
-                      type="range"
-                      id="live-side-steepness"
-                      min="0.5"
-                      max="6"
-                      step="0.1"
-                      value="2"
-                    />
-                  </div>
-
-                  <div class="slider-group">
-                    <label for="live-side-offset">
-                      Pocket Offset: <span id="live-side-offset-val">0.25</span>
-                    </label>
-                    <input
-                      type="range"
-                      id="live-side-offset"
-                      min="0"
-                      max="1.5"
-                      step="0.05"
-                      value="0.25"
-                    />
-                  </div>
-
-                  <div class="slider-group">
-                    <label for="live-side-straight">
-                      Straight Y: <span id="live-side-straight-val">23.5</span>
-                    </label>
-                    <input
-                      type="range"
-                      id="live-side-straight"
-                      min="22"
-                      max="25"
-                      step="0.05"
-                      value="23.5"
-                    />
-                  </div>
-
-                  <div class="slider-group">
-                    <label for="live-side-inner">
-                      Inner Y (Throat): <span id="live-side-inner-val">24.6</span>
-                    </label>
-                    <input
-                      type="range"
-                      id="live-side-inner"
-                      min="23"
-                      max="26"
-                      step="0.05"
-                      value="24.6"
-                    />
-                  </div>
-
-                  <div class="slider-group input-group">
-                    <label for="live-side-jaw-outer">
-                      Jaw Outer X: <span id="live-side-jaw-outer-val">Auto</span>
-                    </label>
-                    <div class="input-row">
-                      <input
-                        type="range"
-                        id="live-side-jaw-outer"
-                        min="1"
-                        max="48"
-                        step="0.05"
-                        value="6"
-                      />
-                      <button
-                        id="live-side-jaw-outer-auto"
-                        class="panel-mini-btn"
-                        data-no-drag="true"
-                      >
-                        Auto
-                      </button>
-                    </div>
-                  </div>
-
-                  <div class="slider-group input-group">
-                    <label for="live-side-jaw-inner">
-                      Jaw Inner X: <span id="live-side-jaw-inner-val">Auto</span>
-                    </label>
-                    <div class="input-row">
-                      <input
-                        type="range"
-                        id="live-side-jaw-inner"
-                        min="0.5"
-                        max="30"
-                        step="0.05"
-                        value="4"
-                      />
-                      <button
-                        id="live-side-jaw-inner-auto"
-                        class="panel-mini-btn"
-                        data-no-drag="true"
-                      >
-                        Auto
-                      </button>
-                    </div>
-                  </div>
-
-                  <div class="slider-group input-group">
-                    <label for="live-side-throat-width">
-                      Throat Width: <span id="live-side-throat-width-val">Auto</span>
-                    </label>
-                    <div class="input-row">
-                      <input
-                        type="range"
-                        id="live-side-throat-width"
-                        min="1"
-                        max="30"
-                        step="0.05"
-                        value="3"
-                        data-default="3"
-                      />
-                      <button
-                        id="live-side-throat-width-auto"
-                        class="panel-mini-btn"
-                        data-no-drag="true"
-                      >
-                        Auto
-                      </button>
-                    </div>
-                  </div>
-
-                  <div class="slider-group">
-                    <label for="live-side-pocket-capture">
-                      Capture Radius: <span id="live-side-pocket-capture-val">2.50</span>
-                    </label>
-                    <input
-                      type="range"
-                      id="live-side-pocket-capture"
-                      min="1.5"
-                      max="4.0"
-                      step="0.05"
-                      value="2.5"
-                    />
-                  </div>
-
-                  <div class="slider-group">
-                    <label for="live-side-pocket-visual">
-                      Visual Radius: <span id="live-side-pocket-visual-val">2.50</span>
-                    </label>
-                    <input
-                      type="range"
-                      id="live-side-pocket-visual"
-                      min="1.5"
-                      max="4.0"
-                      step="0.05"
-                      value="2.5"
-                    />
-                  </div>
-
-                  <div class="slider-group">
-                    <label for="live-side-cut-angle">
-                      Cut Angle: <span id="live-side-cut-angle-val">0.0</span>&deg;
-                    </label>
-                    <input
-                      type="range"
-                      id="live-side-cut-angle"
-                      min="-30"
-                      max="30"
-                      step="0.5"
-                      value="0"
-                    />
-                  </div>
-                </div>
-
-                <div class="settings-group">
-                  <h4 class="settings-group-title">📐 Corner Pockets</h4>
-                  <div class="slider-group">
-                    <label for="live-corner-offset">
-                      Pocket Offset: <span id="live-corner-offset-val">0.00</span>
-                    </label>
-                    <input
-                      type="range"
-                      id="live-corner-offset"
-                      min="-1.5"
-                      max="1.5"
-                      step="0.05"
-                      value="0.00"
-                    />
-                  </div>
-                  <div class="slider-group">
-                    <label for="live-corner-frame">
-                      Frame Offset: <span id="live-corner-frame-val">4.0</span>
-                    </label>
-                    <input type="range" id="live-corner-frame" min="2" max="6" step="0.1" value="4" />
-                  </div>
-
-                  <div class="slider-group">
-                    <label for="live-corner-radius">
-                      Jaw Radius: <span id="live-corner-radius-val">4.0</span>
-                    </label>
-                    <input
-                      type="range"
-                      id="live-corner-radius"
-                      min="1"
-                      max="12"
-                      step="0.1"
-                      value="4"
-                    />
-                  </div>
-
-                  <div class="slider-group">
-                    <label for="live-corner-straight">
-                      Straight X: <span id="live-corner-straight-val">48.5</span>
-                    </label>
-                    <input
-                      type="range"
-                      id="live-corner-straight"
-                      min="46"
-                      max="50"
-                      step="0.05"
-                      value="48.5"
-                    />
-                  </div>
-
-                  <div class="slider-group">
-                    <label for="live-corner-target">
-                      Target Y: <span id="live-corner-target-val">21.0</span>
-                    </label>
-                    <input
-                      type="range"
-                      id="live-corner-target"
-                      min="18"
-                      max="24"
-                      step="0.05"
-                      value="21"
-                    />
-                  </div>
-
-                  <div class="slider-group input-group">
-                    <label for="live-corner-jaw-x">
-                      Jaw X: <span id="live-corner-jaw-x-val">Auto</span>
-                    </label>
-                    <div class="input-row">
-                      <input
-                        type="range"
-                        id="live-corner-jaw-x"
-                        min="30"
-                        max="50"
-                        step="0.05"
-                        value="46"
-                      />
-                      <button id="live-corner-jaw-x-auto" class="panel-mini-btn" data-no-drag="true">
-                        Auto
-                      </button>
-                    </div>
-                  </div>
-
-                  <div class="slider-group input-group">
-                    <label for="live-corner-jaw-y">
-                      Jaw Y: <span id="live-corner-jaw-y-val">Auto</span>
-                    </label>
-                    <div class="input-row">
-                      <input
-                        type="range"
-                        id="live-corner-jaw-y"
-                        min="10"
-                        max="25"
-                        step="0.05"
-                        value="21"
-                      />
-                      <button id="live-corner-jaw-y-auto" class="panel-mini-btn" data-no-drag="true">
-                        Auto
-                      </button>
-                    </div>
-                  </div>
-
-                  <div class="slider-group input-group">
-                    <label for="live-corner-throat-width">
-                      Throat Width: <span id="live-corner-throat-width-val">Auto</span>
-                    </label>
-                    <div class="input-row">
-                      <input
-                        type="range"
-                        id="live-corner-throat-width"
-                        min="2"
-                        max="50"
-                        step="0.05"
-                        value="3.5"
-                        data-default="3.5"
-                      />
-                      <button
-                        id="live-corner-throat-width-auto"
-                        class="panel-mini-btn"
-                        data-no-drag="true"
-                      >
-                        Auto
-                      </button>
-                    </div>
-                  </div>
-
-                  <div class="slider-group">
-                    <label for="live-corner-pocket-capture">
-                      Capture Radius:
-                      <span id="live-corner-pocket-capture-val">2.50</span>
-                    </label>
-                    <input
-                      type="range"
-                      id="live-corner-pocket-capture"
-                      min="1.5"
-                      max="4.0"
-                      step="0.05"
-                      value="2.5"
-                    />
-                  </div>
-
-                  <div class="slider-group">
-                    <label for="live-corner-pocket-visual">
-                      Visual Radius:
-                      <span id="live-corner-pocket-visual-val">2.50</span>
-                    </label>
-                    <input
-                      type="range"
-                      id="live-corner-pocket-visual"
-                      min="1.5"
-                      max="4.0"
-                      step="0.05"
-                      value="2.5"
-                    />
-                  </div>
-
-                  <div class="slider-group">
-                    <label for="live-corner-cut-angle">
-                      Cut Angle: <span id="live-corner-cut-angle-val">0.0</span>&deg;
-                    </label>
-                    <input
-                      type="range"
-                      id="live-corner-cut-angle"
-                      min="-30"
-                      max="30"
-                      step="0.5"
-                      value="0"
-                    />
-                  </div>
-                </div>
-
-                <div class="settings-group">
-                  <h4 class="settings-group-title">🔧 Frame & Rails</h4>
-                  <div class="slider-group">
-                    <label for="live-frame-width">
-                      Frame Width: <span id="live-frame-width-val">4.0</span>
-                    </label>
-                    <input type="range" id="live-frame-width" min="2" max="8" step="0.1" value="4" />
-                  </div>
-
-                  <div class="slider-group">
-                    <label for="live-frame-corner-radius">
-                      Frame Corner Radius: <span id="live-frame-corner-radius-val">0.0</span>
-                    </label>
-                    <input
-                      type="range"
-                      id="live-frame-corner-radius"
-                      min="0"
-                      max="4"
-                      step="0.1"
-                      value="0"
-                    />
-                  </div>
-
-                  <div class="slider-group">
-                    <label for="live-rail-thickness-inner">
-                      Rail Thickness (Inner): <span id="live-rail-thickness-inner-val">0.2</span>
-                    </label>
-                    <input
-                      type="range"
-                      id="live-rail-thickness-inner"
-                      min="0.05"
-                      max="1"
-                      step="0.01"
-                      value="0.2"
-                    />
-                  </div>
-
-                  <div class="slider-group">
-                    <label for="live-rail-thickness-outer">
-                      Rail Thickness (Outer): <span id="live-rail-thickness-outer-val">0.2</span>
-                    </label>
-                    <input
-                      type="range"
-                      id="live-rail-thickness-outer"
-                      min="0.05"
-                      max="1"
-                      step="0.01"
-                      value="0.2"
-                    />
-                  </div>
-                </div>
-
-                <div class="settings-group">
-                  <h4 class="settings-group-title">⚙️ Global Settings</h4>
-                  <div class="slider-group">
-                    <label for="live-pocket-shelf-depth">
-                      Pocket Shelf Depth: <span id="live-pocket-shelf-depth-val">1.50</span>
-                    </label>
-                    <input
-                      type="range"
-                      id="live-pocket-shelf-depth"
-                      min="0"
-                      max="3"
-                      step="0.05"
-                      value="1.5"
-                    />
-                  </div>
-
-                  <div class="slider-group">
-                    <label for="live-jaw-curve-blend">
-                      Jaw Curve Blend: <span id="live-jaw-curve-blend-val">0.00</span>
-                    </label>
-                    <input
-                      type="range"
-                      id="live-jaw-curve-blend"
-                      min="0"
-                      max="1"
-                      step="0.05"
-                      value="0"
-                    />
-                  </div>
-                </div>
-
-                <div class="panel-actions">
-                  <button id="geometry-reset-btn" class="panel-btn">Reset Defaults</button>
-                </div>
-                <p class="panel-hint">💡 Changes apply instantly</p>
-              </div>
-            </div>
-
-            <div id="render-layer-panel" class="panel-dock-card hidden">
-              <div class="panel-header">
-                <h3>🧱 Render Layers</h3>
-              </div>
-              <div class="panel-content">
-                <div class="settings-group">
-                  <h4 class="settings-group-title">Visibility</h4>
-                  <div class="panel-toggle-list">
-                    <label class="panel-toggle-row" for="layer-table">
-                      <input id="layer-table" type="checkbox" checked />
-                      <span>Table</span>
-                    </label>
-                    <label class="panel-toggle-row" for="layer-frame">
-                      <input id="layer-frame" type="checkbox" checked />
-                      <span>Frame</span>
-                    </label>
-                    <label class="panel-toggle-row" for="layer-rails">
-                      <input id="layer-rails" type="checkbox" checked />
-                      <span>Rails</span>
-                    </label>
-                    <label class="panel-toggle-row" for="layer-pockets">
-                      <input id="layer-pockets" type="checkbox" checked />
-                      <span>Pockets</span>
-                    </label>
-                    <label class="panel-toggle-row" for="layer-caps">
-                      <input id="layer-caps" type="checkbox" checked />
-                      <span>Caps</span>
-                    </label>
-                    <label class="panel-toggle-row" for="layer-balls">
-                      <input id="layer-balls" type="checkbox" checked />
-                      <span>Balls</span>
-                    </label>
-                    <label class="panel-toggle-row" for="layer-ui">
-                      <input id="layer-ui" type="checkbox" checked />
-                      <span>UI Overlay</span>
-                    </label>
-                    <label class="panel-toggle-row" for="layer-measure">
-                      <input id="layer-measure" type="checkbox" />
-                      <span>Measurement Overlay</span>
-                    </label>
-                    <label class="panel-toggle-row" for="layer-reference">
-                      <input id="layer-reference" type="checkbox" />
-                      <span>Reference Overlay</span>
-                    </label>
-                  </div>
-                </div>
-
-                <div class="settings-group">
-                  <h4 class="settings-group-title">Render Order</h4>
-                  <div class="panel-order-list">
-                    <label class="panel-order-row" for="order-table">
-                      <span>Table</span>
-                      <input
-                        id="order-table"
-                        type="number"
-                        value="0"
-                        step="1"
-                        min="-1000"
-                        max="2000"
-                      />
-                    </label>
-                    <label class="panel-order-row" for="order-frame">
-                      <span>Frame</span>
-                      <input
-                        id="order-frame"
-                        type="number"
-                        value="1"
-                        step="1"
-                        min="-1000"
-                        max="2000"
-                      />
-                    </label>
-                    <label class="panel-order-row" for="order-rails">
-                      <span>Rails</span>
-                      <input
-                        id="order-rails"
-                        type="number"
-                        value="2"
-                        step="1"
-                        min="-1000"
-                        max="2000"
-                      />
-                    </label>
-                    <label class="panel-order-row" for="order-pockets">
-                      <span>Pockets</span>
-                      <input
-                        id="order-pockets"
-                        type="number"
-                        value="3"
-                        step="1"
-                        min="-1000"
-                        max="2000"
-                      />
-                    </label>
-                    <label class="panel-order-row" for="order-caps">
-                      <span>Caps</span>
-                      <input
-                        id="order-caps"
-                        type="number"
-                        value="4"
-                        step="1"
-                        min="-1000"
-                        max="2000"
-                      />
-                    </label>
-                    <label class="panel-order-row" for="order-balls">
-                      <span>Balls</span>
-                      <input
-                        id="order-balls"
-                        type="number"
-                        value="5"
-                        step="1"
-                        min="-1000"
-                        max="2000"
-                      />
-                    </label>
-                    <label class="panel-order-row" for="order-ui">
-                      <span>UI Overlay</span>
-                      <input
-                        id="order-ui"
-                        type="number"
-                        value="6"
-                        step="1"
-                        min="-1000"
-                        max="2000"
-                      />
-                    </label>
-                  </div>
-                </div>
-
-                <div class="settings-group">
-                  <h4 class="settings-group-title">💡 Lighting</h4>
-                  <div class="slider-group">
-                    <label class="slider-label" for="lighting-ambient">
-                      <span class="slider-title">Ambient Light</span>
-                      <span class="slider-value" id="lighting-ambient-value">1.10</span>
-                    </label>
-                    <input
-                      type="range"
-                      id="lighting-ambient"
-                      min="0"
-                      max="3"
-                      step="0.05"
-                      value="1.1"
-                    />
-                  </div>
-                  <div class="slider-group">
-                    <label class="slider-label" for="lighting-directional">
-                      <span class="slider-title">Key Light</span>
-                      <span class="slider-value" id="lighting-directional-value">1.60</span>
-                    </label>
-                    <input
-                      type="range"
-                      id="lighting-directional"
-                      min="0"
-                      max="3"
-                      step="0.05"
-                      value="1.6"
-                    />
-                  </div>
-                  <div class="slider-group">
-                    <label class="slider-label" for="lighting-accent">
-                      <span class="slider-title">Accent Spot</span>
-                      <span class="slider-value" id="lighting-accent-value">0.50</span>
-                    </label>
-                    <input
-                      type="range"
-                      id="lighting-accent"
-                      min="0"
-                      max="3"
-                      step="0.05"
-                      value="0.5"
-                    />
-                  </div>
-                  <div class="slider-group">
-                    <label class="slider-label" for="lighting-rail-highlight">
-                      <span class="slider-title">Rail Highlight</span>
-                      <span class="slider-value" id="lighting-rail-highlight-value">0.90</span>
-                    </label>
-                    <input
-                      type="range"
-                      id="lighting-rail-highlight"
-                      min="0"
-                      max="1.5"
-                      step="0.05"
-                      value="0.9"
-                    />
-                  </div>
-                  <div class="slider-group">
-                    <label class="slider-label" for="lighting-pocket-highlight">
-                      <span class="slider-title">Pocket Highlight</span>
-                      <span class="slider-value" id="lighting-pocket-highlight-value">0.55</span>
-                    </label>
-                    <input
-                      type="range"
-                      id="lighting-pocket-highlight"
-                      min="0"
-                      max="1.5"
-                      step="0.05"
-                      value="0.55"
-                    />
-                  </div>
-                  <div class="slider-group">
-                    <label class="slider-label" for="lighting-pocket-shadow">
-                      <span class="slider-title">Pocket Shadow</span>
-                      <span class="slider-value" id="lighting-pocket-shadow-value">0.45</span>
-                    </label>
-                    <input
-                      type="range"
-                      id="lighting-pocket-shadow"
-                      min="0"
-                      max="1.5"
-                      step="0.05"
-                      value="0.45"
-                    />
-                  </div>
-                  <h4 class="settings-group-title">🕳 Pocket Groove</h4>
-                  <div class="slider-group">
-                    <label class="slider-label" for="groove-inner-base">
-                      <span class="slider-title">Inner Radius Base</span>
-                      <span class="slider-value" id="groove-inner-base-value">0.18</span>
-                    </label>
-                    <input type="range" id="groove-inner-base" min="0.05" max="0.5" step="0.01" value="0.18" />
-                  </div>
-                  <div class="slider-group">
-                    <label class="slider-label" for="groove-color">
-                      <span class="slider-title">Groove Color</span>
-                    </label>
-                    <input type="color" id="groove-color" value="#000000" style="height: 28px; width: 48px; padding: 0; border: none; background: transparent;" />
-                  </div>
-                  <div class="slider-group">
-                    <label class="slider-label" for="groove-rim-color">
-                      <span class="slider-title">Rim Color</span>
-                    </label>
-                    <input type="color" id="groove-rim-color" value="#ffffff" style="height: 28px; width: 48px; padding: 0; border: none; background: transparent;" />
-                  </div>
-                  <h4 class="settings-group-title">🎨 Pocket Shades</h4>
-                  <div class="slider-group">
-                    <label class="slider-label" for="pocket-bottom-color">
-                      <span class="slider-title">Bottom Fill</span>
-                    </label>
-                    <input type="color" id="pocket-bottom-color" value="#000000" style="height: 28px; width: 48px; padding: 0; border: none; background: transparent;" />
-                  </div>
-                  <div class="slider-group">
-                    <label class="slider-label" for="pocket-gradient-center">
-                      <span class="slider-title">Gradient Center</span>
-                    </label>
-                    <input type="color" id="pocket-gradient-center" value="#050505" style="height: 28px; width: 48px; padding: 0; border: none; background: transparent;" />
-                  </div>
-                  <div class="slider-group">
-                    <label class="slider-label" for="pocket-gradient-edge">
-                      <span class="slider-title">Gradient Edge</span>
-                    </label>
-                    <input type="color" id="pocket-gradient-edge" value="#5a5a5a" style="height: 28px; width: 48px; padding: 0; border: none; background: transparent;" />
-                  </div>
-                  <div class="slider-group">
-                    <label class="slider-label" for="pocket-gradient-strength">
-                      <span class="slider-title">Gradient Strength</span>
-                      <span class="slider-value" id="pocket-gradient-strength-value">1.00</span>
-                    </label>
-                    <input type="range" id="pocket-gradient-strength" min="0" max="1" step="0.01" value="1.00" />
-                  </div>
-                  <div class="slider-group">
-                    <label class="slider-label" for="pocket-wall-color">
-                      <span class="slider-title">Wall Color</span>
-                    </label>
-                    <input type="color" id="pocket-wall-color" value="#0a0a0a" style="height: 28px; width: 48px; padding: 0; border: none; background: transparent;" />
-                  </div>
-                  <div class="slider-group">
-                    <label class="slider-label" for="groove-inner-depth">
-                      <span class="slider-title">Inner Radius Depth Scale</span>
-                      <span class="slider-value" id="groove-inner-depth-value">0.22</span>
-                    </label>
-                    <input type="range" id="groove-inner-depth" min="0.0" max="0.6" step="0.01" value="0.22" />
-                  </div>
-                  <div class="slider-group">
-                    <label class="slider-label" for="groove-thickness">
-                      <span class="slider-title">Groove Thickness</span>
-                      <span class="slider-value" id="groove-thickness-value">0.08</span>
-                    </label>
-                    <input type="range" id="groove-thickness" min="0.01" max="0.2" step="0.005" value="0.08" />
-                  </div>
-                  <div class="slider-group">
-                    <label class="slider-label" for="groove-opacity-base">
-                      <span class="slider-title">Groove Opacity Base</span>
-                      <span class="slider-value" id="groove-opacity-base-value">0.18</span>
-                    </label>
-                    <input type="range" id="groove-opacity-base" min="0.0" max="1.0" step="0.02" value="0.18" />
-                  </div>
-                  <div class="slider-group">
-                    <label class="slider-label" for="groove-opacity-depth">
-                      <span class="slider-title">Groove Opacity Depth</span>
-                      <span class="slider-value" id="groove-opacity-depth-value">0.36</span>
-                    </label>
-                    <input type="range" id="groove-opacity-depth" min="0.0" max="1.0" step="0.02" value="0.36" />
-                  </div>
-                  <div class="slider-group">
-                    <label class="slider-label" for="groove-rim-thickness">
-                      <span class="slider-title">Rim Thickness</span>
-                      <span class="slider-value" id="groove-rim-thickness-value">0.02</span>
-                    </label>
-                    <input type="range" id="groove-rim-thickness" min="0.005" max="0.08" step="0.005" value="0.02" />
-                  </div>
-                  <div class="slider-group">
-                    <label class="slider-label" for="groove-rim-outer-opacity">
-                      <span class="slider-title">Rim Outer Opacity</span>
-                      <span class="slider-value" id="groove-rim-outer-opacity-value">0.10</span>
-                    </label>
-                    <input type="range" id="groove-rim-outer-opacity" min="0.0" max="0.5" step="0.02" value="0.10" />
-                  </div>
-                  <div class="slider-group">
-                    <label class="slider-label" for="groove-rim-inner-opacity">
-                      <span class="slider-title">Rim Inner Opacity</span>
-                      <span class="slider-value" id="groove-rim-inner-opacity-value">0.08</span>
-                    </label>
-                    <input type="range" id="groove-rim-inner-opacity" min="0.0" max="0.5" step="0.02" value="0.08" />
-                  </div>
-                  <div class="slider-group">
-                    <label class="slider-label" for="lighting-rail-shadow">
-                      <span class="slider-title">Rail Shadow</span>
-                      <span class="slider-value" id="lighting-rail-shadow-value">0.25</span>
-                    </label>
-                    <input
-                      type="range"
-                      id="lighting-rail-shadow"
-                      min="0"
-                      max="1.5"
-                      step="0.05"
-                      value="0.25"
-                    />
-                  </div>
-                  <div class="slider-group">
-                    <label class="slider-label" for="lighting-rail-shadow-base">
-                      <span class="slider-title">Rail Shadow Near-Edge Darkness</span>
-                      <span class="slider-value" id="lighting-rail-shadow-base-value">170</span>
-                    </label>
-                    <input
-                      type="range"
-                      id="lighting-rail-shadow-base"
-                      min="100"
-                      max="240"
-                      step="1"
-                      value="170"
-                    />
-                  </div>
-                  <div class="slider-group">
-                    <label class="slider-label" for="lighting-rail-shadow-spread">
-                      <span class="slider-title">Rail Shadow Spread</span>
-                      <span class="slider-value" id="lighting-rail-shadow-spread-value">1.00</span>
-                    </label>
-                    <input
-                      type="range"
-                      id="lighting-rail-shadow-spread"
-                      min="0.5"
-                      max="10"
-                      step="0.1"
-                      value="1.00"
-                    />
-                  </div>
-                  <div class="slider-group">
-                    <label class="slider-label" for="lighting-rail-shadow-softness">
-                      <span class="slider-title">Rail Shadow Softness</span>
-                      <span class="slider-value" id="lighting-rail-shadow-softness-value">1.80</span>
-                    </label>
-                    <input
-                      type="range"
-                      id="lighting-rail-shadow-softness"
-                      min="0.5"
-                      max="3.0"
-                      step="0.05"
-                      value="1.80"
-                    />
-                  </div>
-                  <div class="slider-group">
-                    <label class="slider-label" for="lighting-rail-highlight-spread">
-                      <span class="slider-title">Rail Highlight Spread</span>
-                      <span class="slider-value" id="lighting-rail-highlight-spread-value">1.00</span>
-                    </label>
-                    <input
-                      type="range"
-                      id="lighting-rail-highlight-spread"
-                      min="0.5"
-                      max="3.0"
-                      step="0.05"
-                      value="1.00"
-                    />
-                  </div>
-                  <div class="slider-group">
-                    <label class="slider-label" for="lighting-rail-highlight-color">
-                      <span class="slider-title">Rail Highlight Color</span>
-                    </label>
-                    <input
-                      type="color"
-                      id="lighting-rail-highlight-color"
-                      value="#ffffff"
-                      style="height: 28px; width: 48px; padding: 0; border: none; background: transparent;"
-                    />
-                  </div>
-                </div>
-
-                <div class="panel-actions">
-                  <button id="render-layer-reset" class="panel-btn">Reset Defaults</button>
-                  <button id="render-layer-sync" class="panel-btn">Sync From Scene</button>
-                </div>
-              </div>
-            </div>
+        <div id="canvas-stage">
+          <div id="canvas-container">
+            <div id="foul-banner" class="hidden"></div>
+            <canvas id="game-canvas"></canvas>
+            <canvas id="ui-canvas"></canvas>
+            <canvas id="debug-canvas"></canvas>
+            <img id="reference-overlay" src="/images/reference.png" alt="Reference table overlay"
+              class="overlay-hidden" />
           </div>
-        </aside>
-      </div>
-      <!-- Dock toggle button - bottom right -->
-      <button
-        id="panel-launcher-toggle"
-        class="panel-launcher-toggle"
-        aria-label="Toggle Panels"
-      >
-        <span class="panel-launcher-icon">☰</span>
-      </button>
+        </div>
+      </main>
+
+      <aside id="dock-right">
+        <div id="panel-dock" aria-live="polite">
+
+
+
+        </div>
+      </aside>
     </div>
-    <script type="module" src="/src/main.ts"></script>
-  </body>
+    <!-- Dock toggle button - bottom right -->
+    <button id="panel-launcher-toggle" class="panel-launcher-toggle" aria-label="Toggle Panels">
+      <span class="panel-launcher-icon">☰</span>
+    </button>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+
 </html>

@@ -17,6 +17,8 @@ import {
 import { BaseRenderer } from './BaseRenderer';
 import { ColorTokens } from '../ui/theme/ColorTokens';
 import { LayoutConstants } from '../ui/theme/LayoutConstants';
+import { TextureCache } from '../textures/TextureCache';
+import { TextureConfig, TEXTURE_PRESETS } from '../textures/TextureConfig';
 
 import { PredictionResult } from '../physics/Prediction';
 import type { MicroDialRenderState, PocketAnimationEvent } from './ControlTypes';
@@ -47,28 +49,63 @@ export class Renderer extends BaseRenderer {
   private pocketIconCache: Map<string, IconCacheEntry> = new Map();
   private shakeState: { start: number; duration: number; strength: number; seed: number } | null = null;
 
+  private feltTexture: HTMLCanvasElement | null = null;
+  private railTexture: HTMLCanvasElement | null = null;
+
   constructor(canvas: HTMLCanvasElement) {
     super(canvas, CONFIG.CANVAS_SCALE);
     this.ctx = canvas.getContext('2d')!;
+    this.loadDefaultTextures();
   }
-  
+
+  private loadDefaultTextures(): void {
+    // Load from localStorage or use defaults
+    const feltConfig = this.loadTextureConfig('felt') || TEXTURE_PRESETS.felt_green_classic;
+    const railConfig = this.loadTextureConfig('rail') || TEXTURE_PRESETS.rail_oak;
+
+    this.feltTexture = TextureCache.get(feltConfig);
+    this.railTexture = TextureCache.get(railConfig);
+  }
+
+  applyTexture(type: 'felt' | 'rail', config: TextureConfig): void {
+    TextureCache.clear(); // Clear cache to force regeneration
+
+    if (type === 'felt') {
+      this.feltTexture = TextureCache.get(config);
+    } else if (type === 'rail') {
+      this.railTexture = TextureCache.get(config);
+    }
+
+    // Save to localStorage
+    this.saveTextureConfig(type, config);
+  }
+
+  private saveTextureConfig(type: string, config: TextureConfig): void {
+    localStorage.setItem(`texture_${type}`, JSON.stringify(config));
+  }
+
+  private loadTextureConfig(type: string): TextureConfig | null {
+    const json = localStorage.getItem(`texture_${type}`);
+    return json ? JSON.parse(json) : null;
+  }
+
   resize() {
     const container = this.canvas.parentElement!;
     const containerWidth = container.clientWidth;
     const containerHeight = container.clientHeight;
-    
+
     // External margin around canvas
     const externalMargin = LayoutConstants.Spacing.ExternalMargin;
-    
+
     // Internal padding within canvas (around table)
     // Ensure cue stick is fully visible when the cue ball is near rails
     const cueReach = (CONFIG.BALL_RADIUS + 25) + (CONFIG.CUE_VISUAL_PADDING_IN ?? 0);
     const internalPadding = Math.max(LayoutConstants.Spacing.InternalPadding, cueReach);
-    
+
     // Calculate available space for canvas after external margins
     const availableWidth = containerWidth - externalMargin * 2;
     const availableHeight = containerHeight - externalMargin * 2;
-    
+
     const scaleMultiplier = CONFIG.CANVAS_SCALE_MULTIPLIER ?? 1;
     const adjustedWidth = availableWidth / Math.max(0.01, scaleMultiplier);
     const adjustedHeight = availableHeight / Math.max(0.01, scaleMultiplier);
@@ -76,16 +113,16 @@ export class Renderer extends BaseRenderer {
     const scaleY = (adjustedHeight - internalPadding * 2) / CONFIG.TABLE_HEIGHT;
     const baseScale = Math.min(scaleX, scaleY);
     this.scale = baseScale * scaleMultiplier;
-    
+
     // Set canvas size (table + internal padding only)
     this.canvas.width = CONFIG.TABLE_WIDTH * this.scale + internalPadding * 2;
     this.canvas.height = CONFIG.TABLE_HEIGHT * this.scale + internalPadding * 2;
-    
+
     // Set canvas display size
     this.canvas.style.width = `${this.canvas.width}px`;
     this.canvas.style.height = `${this.canvas.height}px`;
   }
-  
+
   clear() {
     this.ctx.fillStyle = ColorTokens.background.canvas;
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
@@ -96,19 +133,19 @@ export class Renderer extends BaseRenderer {
     this.clear();
 
     this.ctx.save();
-    
+
     // Set up world->canvas transform
     // World: origin at table center, +X=right, +Y=up
     // Canvas: origin at top-left, +X=right, +Y=down
     const canvasCenterX = this.canvas.width / 2;
     const canvasCenterY = this.canvas.height / 2;
-    
+
     this.ctx.translate(canvasCenterX, canvasCenterY);
     this.ctx.scale(this.scale, -this.scale); // Negative Y to flip vertical axis
 
     const shakeOffset = this.computeShakeOffset();
     this.applyShakeTransform(shakeOffset.x, shakeOffset.y);
-    
+
     // Draw in correct order: bottom to top
     const tableGeom = getTableGeometry();
 
@@ -125,7 +162,7 @@ export class Renderer extends BaseRenderer {
     this.processPocketAnimationQueue();
     this.drawPocketAnimations();
   }
-  
+
   drawPlayingSurface() {
     const boundary = this.playBoundaryPoints;
     if (boundary.length < 3) return;
@@ -138,12 +175,22 @@ export class Renderer extends BaseRenderer {
     this.ctx.save();
     this.beginBoundaryPath(boundary);
     this.ctx.clip();
-    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.02)';
-    const geom = getTableGeometry();
-    for (let i = 0; i < 120; i++) {
-      const x = (Math.random() - 0.5) * geom.playWidthIn;
-      const y = (Math.random() - 0.5) * geom.playHeightIn;
-      this.ctx.fillRect(x, y, 0.4, 0.4);
+
+    if (this.feltTexture) {
+      const pattern = this.ctx.createPattern(this.feltTexture, 'repeat');
+      if (pattern) {
+        this.ctx.fillStyle = pattern;
+        this.ctx.fill();
+      }
+    } else {
+      // Fallback to simple noise
+      this.ctx.fillStyle = 'rgba(0, 0, 0, 0.02)';
+      const geom = getTableGeometry();
+      for (let i = 0; i < 120; i++) {
+        const x = (Math.random() - 0.5) * geom.playWidthIn;
+        const y = (Math.random() - 0.5) * geom.playHeightIn;
+        this.ctx.fillRect(x, y, 0.4, 0.4);
+      }
     }
     this.ctx.restore();
   }
@@ -169,7 +216,17 @@ export class Renderer extends BaseRenderer {
     const { minX, maxX, minY, maxY } = this.playBounds;
     const padding = 0.5;
     // Use frame color so any overlap with frame remains visually consistent
-    this.ctx.fillStyle = CONFIG.FRAME_COLOR ?? '#3d2413';
+    if (this.railTexture) {
+      const pattern = this.ctx.createPattern(this.railTexture, 'repeat');
+      if (pattern) {
+        this.ctx.fillStyle = pattern;
+      } else {
+        this.ctx.fillStyle = CONFIG.FRAME_COLOR ?? '#3d2413';
+      }
+    } else {
+      this.ctx.fillStyle = CONFIG.FRAME_COLOR ?? '#3d2413';
+    }
+
     this.ctx.fillRect(
       minX - padding,
       minY - padding,
@@ -191,7 +248,18 @@ export class Renderer extends BaseRenderer {
       0,
       Math.min(frameOutline.cornerRadius, outerX, outerY)
     );
-    this.ctx.fillStyle = CONFIG.FRAME_COLOR ?? '#3d2413';
+
+    if (this.railTexture) {
+      const pattern = this.ctx.createPattern(this.railTexture, 'repeat');
+      if (pattern) {
+        this.ctx.fillStyle = pattern;
+      } else {
+        this.ctx.fillStyle = CONFIG.FRAME_COLOR ?? '#3d2413';
+      }
+    } else {
+      this.ctx.fillStyle = CONFIG.FRAME_COLOR ?? '#3d2413';
+    }
+
     this.ctx.beginPath();
     this.traceRoundedRectPath(this.ctx, outerX, outerY, cornerRadius);
     this.ctx.rect(-innerX, -innerY, innerX * 2, innerY * 2);
@@ -247,21 +315,22 @@ export class Renderer extends BaseRenderer {
       (-b + sqrt) / (2 * a),
     ];
 
-    let t: number | null = null;
+    let bestT: number | null = null;
     for (const candidate of tCandidates) {
       if (candidate > 1e-4 && candidate <= 1.5) {
-        if (t == null || candidate < t) {
-          t = candidate;
+        if (bestT == null || candidate < bestT) {
+          bestT = candidate;
         }
       }
     }
 
-    const t = Math.min(...candidates);
+    if (bestT === null) return null;
+
     const point = {
-      x: start.x + dir.x * t,
-      y: start.y + dir.y * t,
+      x: start.x + dir.x * bestT,
+      y: start.y + dir.y * bestT,
     };
-    return { t, point };
+    return { t: bestT, point };
   }
 
   private beginBoundaryPath(points: Vec2[], close: boolean = true) {
@@ -275,7 +344,7 @@ export class Renderer extends BaseRenderer {
       this.ctx.closePath();
     }
   }
-  
+
   drawPocket(pocket: PocketDef) {
     const radius = pocket.visualRadius ?? pocket.radius;
     const angleRad = (pocket.cutAngleDeg ?? 0) * (Math.PI / 180);
@@ -359,11 +428,11 @@ export class Renderer extends BaseRenderer {
 
     this.ctx.restore();
   }
-  
+
   drawPockets(pockets: PocketDef[]) {
     pockets.forEach((pocket) => this.drawPocket(pocket));
   }
-  
+
   drawRails(rails: Rail[]) {
     this.frameClipInfo = null;
     this.debugRailSegments = [];
@@ -373,7 +442,7 @@ export class Renderer extends BaseRenderer {
     this.ctx.restore();
     this.frameClipInfo = null;
   }
-  
+
   drawBalls(balls: Ball[], alpha: number) {
     balls.forEach((ball) => {
       if (!ball.pocketed) {
@@ -381,7 +450,7 @@ export class Renderer extends BaseRenderer {
       }
     });
   }
-  
+
   drawRail(rail: Rail) {
     // Draw simple cushion with consistent thickness
     const width = CONFIG.RAIL_THICKNESS_INNER + CONFIG.RAIL_THICKNESS_OUTER;
@@ -602,16 +671,16 @@ export class Renderer extends BaseRenderer {
     this.ctx.arc(x - ball.radius * 0.3, y - ball.radius * 0.3, ball.radius * 0.3, 0, Math.PI * 2);
     this.ctx.fill();
   }
-  
+
   drawCueAndPowerBar(ball: Ball, angle: number, power: number, showGhost: boolean, showPowerBar: boolean, isAimMode: boolean, prediction?: PredictionResult, microDialState?: MicroDialRenderState) {
     this.ctx.save();
-    
+
     // Use same transform as main render
     const canvasCenterX = this.canvas.width / 2;
     const canvasCenterY = this.canvas.height / 2;
     this.ctx.translate(canvasCenterX, canvasCenterY);
     this.ctx.scale(this.scale, -this.scale); // Y-up for world coords
-    
+
     const x = ball.x;
     const y = ball.y;
     const dx = Math.cos(angle);
@@ -627,7 +696,7 @@ export class Renderer extends BaseRenderer {
         y: prediction.contactPoint.y + prediction.contactNormal.y * objectBallRadius
       };
     }
-    
+
     // Cue stick (behind the ball, opposite to shot direction)
     const cueStart = ball.radius + 1;
     const cueLength = CONFIG.CUE_LENGTH_IN ?? 58;
@@ -646,7 +715,7 @@ export class Renderer extends BaseRenderer {
     this.ctx.moveTo(clampedNear.x, clampedNear.y);
     this.ctx.lineTo(clampedFar.x, clampedFar.y);
     this.ctx.stroke();
-    
+
     // Aim line - always stop at contact point (where cue ball surface touches)
     const aimStart = { x, y };
     let aimRawEnd = { x: x + dx * CONFIG.AIM_LINE_LENGTH, y: y + dy * CONFIG.AIM_LINE_LENGTH };
@@ -666,12 +735,12 @@ export class Renderer extends BaseRenderer {
     this.ctx.lineTo(aimEnd.x, aimEnd.y);
     this.ctx.stroke();
     this.ctx.setLineDash([]);
-    
+
     // Ghost ball at predicted contact point
     if (showGhost && prediction && prediction.type === 'ball' && ghostCenter) {
       const ghostX = ghostCenter.x;
       const ghostY = ghostCenter.y;
-      
+
       // Draw semi-transparent ghost ball
       this.ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
       this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
@@ -680,10 +749,10 @@ export class Renderer extends BaseRenderer {
       this.ctx.arc(ghostX, ghostY, ball.radius, 0, Math.PI * 2);
       this.ctx.fill();
       this.ctx.stroke();
-      
+
       // Line to ghost ball removed - trajectory arrows show direction instead
     }
-    
+
     // Power bar (vertical bar to the right of the table)
     if (showPowerBar) {
       this.drawPowerBar(power, isAimMode, microDialState);
@@ -696,18 +765,18 @@ export class Renderer extends BaseRenderer {
       this.drawAimInfo(ball, angle, power, prediction);
     }
   }
-  
+
   drawTrajectoryLines(prediction: PredictionResult, cueBallPos: { x: number; y: number }, shotDirection: { x: number; y: number }, predictor: any) {
     if (prediction.type === 'none') return;
-    
+
     this.ctx.save();
-    
+
     // Use same transform as main render
     const canvasCenterX = this.canvas.width / 2;
     const canvasCenterY = this.canvas.height / 2;
     this.ctx.translate(canvasCenterX, canvasCenterY);
     this.ctx.scale(this.scale, -this.scale); // Y-up for world coords
-    
+
     // Get trajectory predictions
     const trajectories = predictor.predictTrajectories(
       prediction,
@@ -715,7 +784,7 @@ export class Renderer extends BaseRenderer {
       shotDirection,
       15 // Line length in inches
     );
-    
+
     const strokeWidth = 1 / this.scale;
     const dashLength = 6 / this.scale;
     const arrowLength = 8 / this.scale;
@@ -794,7 +863,7 @@ export class Renderer extends BaseRenderer {
         }
       }
     }
-    
+
     // Draw cue ball trajectory (white dashed line with arrowhead)
     // Direction: from contact point toward where cue ball will deflect
     if (trajectories.cueBallPath) {
@@ -813,7 +882,7 @@ export class Renderer extends BaseRenderer {
         }
       }
     }
-    
+
     this.ctx.restore();
   }
 
@@ -829,21 +898,21 @@ export class Renderer extends BaseRenderer {
     predictor: any
   ) {
     if (prediction.type === 'none') return;
-    
+
     this.ctx.save();
-    
+
     const canvasCenterX = this.canvas.width / 2;
     const canvasCenterY = this.canvas.height / 2;
     this.ctx.translate(canvasCenterX, canvasCenterY);
     this.ctx.scale(this.scale, -this.scale);
-    
+
     const trajectories = predictor.predictTrajectories(
       prediction,
       cueBallPos,
       shotDirection,
       50
     );
-    
+
     const strokeWidth = 3 / this.scale;
     const glowWidth = 7 / this.scale;
     const arrowLength = 12 / this.scale;
@@ -858,16 +927,16 @@ export class Renderer extends BaseRenderer {
         y: prediction.contactPoint.y + prediction.contactNormal.y * objectBallRadius
       };
     }
-    
+
     const drawSolidLineWithGlow = (start: Vec2, end: Vec2, glowColor: string, lineColor: string) => {
       const clampedEnd = this.clampSegmentToPlayArea(start, end);
       if (!clampedEnd) return { drew: false, end, dirX: 0, dirY: 0 };
-      
+
       const dirX = clampedEnd.x - start.x;
       const dirY = clampedEnd.y - start.y;
       const length = Math.sqrt(dirX * dirX + dirY * dirY);
       if (length <= 0.0001) return { drew: false, end: clampedEnd, dirX: 0, dirY: 0 };
-      
+
       this.ctx.strokeStyle = glowColor;
       this.ctx.lineWidth = glowWidth;
       this.ctx.lineCap = 'round';
@@ -875,7 +944,7 @@ export class Renderer extends BaseRenderer {
       this.ctx.moveTo(start.x, start.y);
       this.ctx.lineTo(clampedEnd.x, clampedEnd.y);
       this.ctx.stroke();
-      
+
       this.ctx.strokeStyle = lineColor;
       this.ctx.lineWidth = strokeWidth;
       this.ctx.lineCap = 'round';
@@ -883,14 +952,14 @@ export class Renderer extends BaseRenderer {
       this.ctx.moveTo(start.x, start.y);
       this.ctx.lineTo(clampedEnd.x, clampedEnd.y);
       this.ctx.stroke();
-      
+
       return { drew: true, end: clampedEnd, dirX, dirY };
     };
-    
+
     const drawArrowWithGlow = (end: Vec2, dirX: number, dirY: number, glowColor: string, fillColor: string) => {
       const length = Math.sqrt(dirX * dirX + dirY * dirY);
       if (length <= arrowLength * 1.5) return;
-      
+
       const normX = dirX / length;
       const normY = dirY / length;
       const baseX = end.x - normX * arrowLength;
@@ -899,7 +968,7 @@ export class Renderer extends BaseRenderer {
       const leftY = baseY + normX * (arrowLength * 0.5);
       const rightX = baseX - (-normY) * (arrowLength * 0.5);
       const rightY = baseY - normX * (arrowLength * 0.5);
-      
+
       this.ctx.fillStyle = glowColor;
       this.ctx.beginPath();
       this.ctx.moveTo(end.x, end.y);
@@ -907,7 +976,7 @@ export class Renderer extends BaseRenderer {
       this.ctx.lineTo(rightX - normX * 2 / this.scale, rightY - normY * 2 / this.scale);
       this.ctx.closePath();
       this.ctx.fill();
-      
+
       this.ctx.fillStyle = fillColor;
       this.ctx.beginPath();
       this.ctx.moveTo(end.x, end.y);
@@ -916,7 +985,7 @@ export class Renderer extends BaseRenderer {
       this.ctx.closePath();
       this.ctx.fill();
     };
-    
+
     if (trajectories.objectBallPath) {
       const dirX = trajectories.objectBallPath.end.x - trajectories.objectBallPath.start.x;
       const dirY = trajectories.objectBallPath.end.y - trajectories.objectBallPath.start.y;
@@ -934,7 +1003,7 @@ export class Renderer extends BaseRenderer {
         }
       }
     }
-    
+
     if (trajectories.cueBallPath) {
       const dirX = trajectories.cueBallPath.end.x - trajectories.cueBallPath.start.x;
       const dirY = trajectories.cueBallPath.end.y - trajectories.cueBallPath.start.y;
@@ -950,7 +1019,7 @@ export class Renderer extends BaseRenderer {
         }
       }
     }
-    
+
     this.ctx.restore();
   }
 
@@ -1017,9 +1086,9 @@ export class Renderer extends BaseRenderer {
     }
     return closestPoint;
   }
-  
 
-  
+
+
   drawPowerBar(power: number, isAimMode: boolean, microDialState?: MicroDialRenderState) {
     this.ctx.restore(); // Exit game space
     this.ctx.save();
@@ -1028,32 +1097,32 @@ export class Renderer extends BaseRenderer {
     const barWidth = 30;
     const barHeight = 200;
     const { x: barX, y: barY } = this.getSideBarPosition('right', barWidth, barHeight);
-    
+
     // Background
     this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
     this.ctx.fillRect(barX, barY, barWidth, barHeight);
-    
+
     // Border - change color based on mode
     this.ctx.strokeStyle = isAimMode ? '#888888' : '#ffffff';
     this.ctx.lineWidth = isAimMode ? 1 : 3;
     this.ctx.strokeRect(barX, barY, barWidth, barHeight);
-    
+
     // Power fill (from top, down = more power)
     const powerPercent = power / CONFIG.CUE_POWER_MAX;
     const fillHeight = barHeight * powerPercent;
-    
+
     // Gradient from green at top to yellow to red at bottom
     const gradient = this.ctx.createLinearGradient(barX, barY, barX, barY + barHeight);
     gradient.addColorStop(0, '#00ff00');
     gradient.addColorStop(0.5, '#ffff00');
     gradient.addColorStop(1, '#ff0000');
-    
+
     this.ctx.fillStyle = gradient;
     this.ctx.fillRect(barX, barY, barWidth, fillHeight);
-    
+
     // Micro aim dial on the opposite side
     this.drawMicroAimDial(microDialState);
-    
+
     // Re-enter game space for subsequent drawing
     this.ctx.restore();
     this.ctx.save();
@@ -1061,7 +1130,7 @@ export class Renderer extends BaseRenderer {
     this.ctx.translate(padding, padding);
     this.ctx.scale(this.scale, this.scale);
   }
-  
+
   drawAimInfo(ball: Ball, angle: number, power: number, prediction?: PredictionResult) {
     // Draw in screen space (no transform)
     this.ctx.save();

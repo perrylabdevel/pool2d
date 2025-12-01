@@ -4,6 +4,8 @@
 > **ALL AI AGENTS MUST READ THIS FILE BEFORE STARTING ANY TASK.**
 > This file serves as the single source of truth for the project's context, current state, and active goals.
 > **Update this file** when you complete a major task or change the project state.
+>
+> 📋 **For full deliverables & status, see [`PROJECT_STATUS.md`](./PROJECT_STATUS.md)**
 
 ## Project Context: RailRush
 **RailRush** is a tournament-grade billiards game built with **TypeScript, Vite, and WebGL/Three.js**.
@@ -25,6 +27,7 @@ The project is undergoing a major UI overhaul to match a "Miniclip 8 Ball Pool" 
 
 ## Active Todo List
 ### High Priority
+- [x] **Responsive Design**: Optimized for mobile, tablet, and desktop layouts.
 - [ ] **Navigation**: Add focus management + keyboard navigation to all canvas scenes.
 - [ ] **Multiplayer**: Implement matchmaking/lobby system.
 - [ ] **Visuals**: Implement hero effects and animations for scene transitions.

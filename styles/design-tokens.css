@@ -1,4 +1,35 @@
 :root {
+  /* --- Responsive Breakpoints --- */
+  /* These match LayoutConstants.Breakpoints */
+  --breakpoint-xs: 480px;
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+  --breakpoint-xxl: 1536px;
+
+  /* --- Responsive Spacing (defaults = desktop) --- */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-xxl: 48px;
+  --gap-sm: 10px;
+  --gap-md: 20px;
+  --gap-lg: 30px;
+  --padding-screen: 24px;
+
+  /* --- Responsive Dimensions (defaults = desktop) --- */
+  --nav-height: 104px;
+  --avatar-size: 88px;
+  --avatar-size-small: 64px;
+  --button-height: 48px;
+  --icon-size: 24px;
+  --ball-chip-size: 32px;
+  --card-gap: 16px;
+  --card-radius: 12px;
+
   /* --- Color Palette: Miniclip / Arcade Style --- */
 
   /* Brand Colors */
@@ -37,11 +68,103 @@
   /* Condensed heading font stack */
   --font-heading: 'Impact', 'Arial Black', 'Helvetica Inserat', 'Bitstream Vera Sans Bold', sans-serif;
   --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-size-xs: 10px;
+  --font-size-sm: 14px;
+  --font-size-md: 16px;
+  --font-size-lg: 18px;
+  --font-size-xl: 24px;
+  --font-size-xxl: 32px;
+  --font-size-hero: 40px;
 
   /* --- Motion --- */
   --motion-fast: 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   --motion-normal: 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   --motion-bounce: 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* === TABLET BREAKPOINT (max-width: 1024px) === */
+@media (max-width: 1024px) {
+  :root {
+    --spacing-lg: 20px;
+    --spacing-xl: 28px;
+    --spacing-xxl: 40px;
+    --gap-md: 16px;
+    --gap-lg: 24px;
+    --padding-screen: 16px;
+
+    --nav-height: 80px;
+    --avatar-size: 64px;
+    --avatar-size-small: 48px;
+    --button-height: 44px;
+    --ball-chip-size: 28px;
+    --card-gap: 12px;
+
+    --font-size-xl: 22px;
+    --font-size-xxl: 28px;
+    --font-size-hero: 32px;
+  }
+}
+
+/* === MOBILE BREAKPOINT (max-width: 768px) === */
+@media (max-width: 768px) {
+  :root {
+    --spacing-md: 12px;
+    --spacing-lg: 16px;
+    --spacing-xl: 24px;
+    --spacing-xxl: 32px;
+    --gap-sm: 8px;
+    --gap-md: 12px;
+    --gap-lg: 16px;
+    --padding-screen: 12px;
+
+    --nav-height: 60px;
+    --avatar-size: 48px;
+    --avatar-size-small: 36px;
+    --button-height: 40px;
+    --icon-size: 20px;
+    --ball-chip-size: 24px;
+    --card-gap: 10px;
+    --card-radius: 10px;
+
+    --font-size-sm: 12px;
+    --font-size-md: 14px;
+    --font-size-lg: 16px;
+    --font-size-xl: 18px;
+    --font-size-xxl: 22px;
+    --font-size-hero: 26px;
+  }
+}
+
+/* === SMALL MOBILE BREAKPOINT (max-width: 480px) === */
+@media (max-width: 480px) {
+  :root {
+    --spacing-sm: 6px;
+    --spacing-md: 10px;
+    --spacing-lg: 12px;
+    --spacing-xl: 18px;
+    --spacing-xxl: 24px;
+    --gap-sm: 6px;
+    --gap-md: 10px;
+    --gap-lg: 14px;
+    --padding-screen: 8px;
+
+    --nav-height: 52px;
+    --avatar-size: 40px;
+    --avatar-size-small: 32px;
+    --button-height: 36px;
+    --icon-size: 18px;
+    --ball-chip-size: 20px;
+    --card-gap: 8px;
+    --card-radius: 8px;
+
+    --font-size-xs: 9px;
+    --font-size-sm: 11px;
+    --font-size-md: 13px;
+    --font-size-lg: 14px;
+    --font-size-xl: 16px;
+    --font-size-xxl: 20px;
+    --font-size-hero: 22px;
+  }
 }
 
 /* --- Utility Classes --- */

@@ -30,6 +30,11 @@ async function main() {
   const game = new Game(gameCanvas, debugCanvas);
   (window as any).poolGame = game;
 
+  // Initialize RemoteBridge for DevTools
+  import('./debug/RemoteBridge').then(({ RemoteBridge }) => {
+    new RemoteBridge(game.settingsManager, game.renderer);
+  });
+
   // Transition to lobby immediately so it's ready when loading completes
   // The loading screen will remain visible until game assets finish loading
   uiStateMachine.transitionTo(UIState.LOBBY);
@@ -37,6 +42,15 @@ async function main() {
   game.start();
 
   console.log('Pool 2D initialized');
+
+  // Prevent accidental tab close/reload during gameplay
+  window.onbeforeunload = (e) => {
+    if (game && game.isInProgress()) {
+      e.preventDefault();
+      e.returnValue = ''; // Standard for Chrome
+      return ''; // Standard for other browsers
+    }
+  };
 }
 
 // Start when DOM is ready

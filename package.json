@@ -13,7 +13,8 @@
   "dependencies": {
     "dexie": "^4.2.1",
     "three": "^0.160.1",
-    "three-stdlib": "^2.36.0"
+    "three-stdlib": "^2.36.0",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "@types/three": "^0.160.0",

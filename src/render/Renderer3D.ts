@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config';
 import { Ball, Rail } from '../physics/Shapes';
 import { PhysicsWorld } from '../physics/Physics';
-import { getTableGeometry, type PocketDef } from '../geometry/Geometry';
+import { type PocketDef } from '../geometry/Geometry';
 import { PredictionResult, ShotPreviewPaths } from '../physics/Prediction';
 
 import {
@@ -13,6 +13,7 @@ import {
   RenderLayerBooleanKey,
   RenderLayerOrderKey,
 } from './RenderLayers';
+import { SettingsManager, TextureSettings } from '../ui/SettingsManager';
 import { BaseRenderer } from './BaseRenderer';
 import type { MicroDialRenderState, PocketAnimationEvent } from './ControlTypes';
 import { TableRenderer } from './components/TableRenderer';
@@ -20,8 +21,7 @@ import { BallRenderer } from './components/BallRenderer';
 import { CueRenderer } from './components/CueRenderer';
 import { FXRenderer } from './components/FXRenderer';
 
-const SIDE_POCKET_VISUAL_INSET = 3.5; // Keep side pocket visuals just inside the cushion edge
-const EMPTY_CHIP_BORDER = 'rgba(255, 255, 255, 0.15)';
+
 
 export class Renderer3D extends BaseRenderer {
   clear(): void {
@@ -57,6 +57,7 @@ export class Renderer3D extends BaseRenderer {
     showUIOverlay: defaultRenderLayerSettings.showUIOverlay,
     showMeasurementOverlay: defaultRenderLayerSettings.showMeasurementOverlay,
     showReferenceOverlay: defaultRenderLayerSettings.showReferenceOverlay,
+    showTextures: defaultRenderLayerSettings.showTextures,
   };
   private layerOrder: Record<RenderLayerOrderKey, number> = {
     orderTable: defaultRenderLayerSettings.orderTable,
@@ -92,7 +93,7 @@ export class Renderer3D extends BaseRenderer {
   directionalLight: THREE.DirectionalLight;
   fillLight: THREE.HemisphereLight;
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, private settingsManager: SettingsManager) {
     super(canvas, CONFIG.CANVAS_SCALE);
 
     // Get UI canvas for 2D overlays
@@ -141,7 +142,7 @@ export class Renderer3D extends BaseRenderer {
     this.renderer.setClearColor(0x000000, 0); // Transparent background
 
     // Initialize Components
-    this.tableRenderer = new TableRenderer(this.scene, this.layerOrder, this.layerVisibility);
+    this.tableRenderer = new TableRenderer(this.scene, this.layerOrder, this.layerVisibility, this.settingsManager);
     this.ballRenderer = new BallRenderer(this.scene, this.layerOrder, this.layerVisibility);
     this.cueRenderer = new CueRenderer(
       this.uiCtx,
@@ -220,6 +221,8 @@ export class Renderer3D extends BaseRenderer {
         }
       });
 
+      this.tableRenderer.regenerateTextures();
+
       // Update corner rectangle fill color
       // this.tableRenderer.updateRailFillMaterialColor(); // Accessing private method?
       // I need to expose updateRailFillMaterialColor in TableRenderer or make it public.
@@ -261,6 +264,16 @@ export class Renderer3D extends BaseRenderer {
         this.setRailHighlightColor((settings as any).railHighlightColor);
       }
     });
+
+    window.addEventListener('settings:texture-changed', (event) => {
+      // Texture settings are already saved by SettingsManager, we just need to regenerate
+      // The event detail contains the new settings if we needed them, but TableRenderer reads from SettingsManager
+      this.tableRenderer.regenerateTextures();
+    });
+  }
+
+  applyTexture(type: 'felt' | 'rail', config: any) {
+    this.tableRenderer.applyTexture(type, config);
   }
 
   clearTableAndRails() {
@@ -597,7 +610,9 @@ export class Renderer3D extends BaseRenderer {
     this.ballRenderer.setLayerVisibility('showBalls', settings.showBalls);
     this.setLayerVisibility('showUIOverlay', settings.showUIOverlay);
     this.setLayerVisibility('showMeasurementOverlay', settings.showMeasurementOverlay);
+    this.setLayerVisibility('showMeasurementOverlay', settings.showMeasurementOverlay);
     this.setLayerVisibility('showReferenceOverlay', settings.showReferenceOverlay);
+    this.setLayerVisibility('showTextures', settings.showTextures);
   }
 
   private applyRenderOrder(settings: RenderLayerSettings) {
@@ -667,7 +682,11 @@ export class Renderer3D extends BaseRenderer {
         this.toggleMeasurementOverlay(visible);
         break;
       case 'showReferenceOverlay':
+      case 'showReferenceOverlay':
         this.setReferenceOverlayVisible(visible);
+        break;
+      case 'showTextures':
+        this.tableRenderer.setTexturesEnabled(visible);
         break;
       default:
         break;
@@ -727,6 +746,7 @@ export class Renderer3D extends BaseRenderer {
       showUIOverlay: this.layerVisibility.showUIOverlay,
       showMeasurementOverlay: this.layerVisibility.showMeasurementOverlay,
       showReferenceOverlay: this.layerVisibility.showReferenceOverlay,
+      showTextures: this.layerVisibility.showTextures,
       orderTable: this.layerOrder.orderTable,
       orderFrame: this.layerOrder.orderFrame,
       orderRails: this.layerOrder.orderRails,

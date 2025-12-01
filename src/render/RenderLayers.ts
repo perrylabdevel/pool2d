@@ -8,6 +8,7 @@ export const RENDER_LAYER_BOOLEAN_KEYS = [
   'showUIOverlay',
   'showMeasurementOverlay',
   'showReferenceOverlay',
+  'showTextures',
 ] as const;
 
 export const RENDER_LAYER_ORDER_KEYS = [
@@ -33,6 +34,7 @@ export interface RenderLayerSettings {
   showUIOverlay: boolean;
   showMeasurementOverlay: boolean;
   showReferenceOverlay: boolean;
+  showTextures: boolean;
   orderTable: number;
   orderFrame: number;
   orderRails: number;
@@ -52,6 +54,7 @@ export const defaultRenderLayerSettings: RenderLayerSettings = {
   showUIOverlay: true,
   showMeasurementOverlay: false,
   showReferenceOverlay: false,
+  showTextures: true,
   orderTable: 0,
   orderFrame: 5,
   orderRails: 10,

@@ -1280,3 +1280,356 @@ button:active {
 #hud-menu-btn {
   pointer-events: auto;
 }
+
+/* ==========================================================================
+   RESPONSIVE STYLES
+   ========================================================================== */
+
+/* --- Mobile-first utility classes --- */
+.hide-on-mobile {
+  display: block;
+}
+
+.show-on-mobile {
+  display: none;
+}
+
+/* === TABLET STYLES (max-width: 1024px) === */
+@media (max-width: 1024px) {
+  /* Hide left dock (legacy debug panels) on tablet */
+  #dock-left {
+    display: none !important;
+  }
+
+  #dock-right {
+    display: none !important;
+  }
+
+  /* Full width workspace on tablet */
+  #workspace {
+    grid-template-columns: 1fr;
+    grid-template-areas: 'workspace-main';
+  }
+
+  /* HUD adjustments */
+  .hud-header {
+    padding: 10px 16px;
+    gap: 16px;
+  }
+
+  .hud-player {
+    min-width: 180px;
+    padding: 6px 12px;
+  }
+
+  .hud-player .avatar {
+    width: 64px;
+    height: 64px;
+    border-radius: 12px;
+  }
+
+  .hud-player .name {
+    font-size: 15px;
+  }
+
+  .hud-player .balls-remaining {
+    gap: 4px;
+    height: 24px;
+  }
+
+  .ball-chip {
+    width: var(--ball-chip-size, 28px);
+    height: var(--ball-chip-size, 28px);
+  }
+
+  #hud-menu-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+  }
+
+  /* Canvas stage adjustments */
+  #canvas-stage {
+    padding: 0 16px 16px;
+  }
+
+  #canvas-container {
+    border-radius: 14px;
+  }
+
+  /* Loading screen */
+  .loading-content h1 {
+    font-size: 48px;
+  }
+
+  .loading-logo {
+    max-width: 240px;
+  }
+}
+
+/* === MOBILE STYLES (max-width: 768px) === */
+@media (max-width: 768px) {
+  .hide-on-mobile {
+    display: none !important;
+  }
+
+  .show-on-mobile {
+    display: block !important;
+  }
+
+  /* HUD Header - Compact mobile layout */
+  .hud-header {
+    padding: 8px 12px;
+    gap: 8px;
+    flex-wrap: nowrap;
+  }
+
+  .hud-player {
+    min-width: auto;
+    flex: 1;
+    max-width: 45%;
+    padding: 4px 8px;
+    gap: 8px;
+  }
+
+  .hud-player .avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+  }
+
+  .hud-player .meta {
+    gap: 2px;
+    overflow: hidden;
+  }
+
+  .hud-player .name {
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  .hud-player .balls-remaining {
+    gap: 3px;
+    height: 20px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .hud-player .balls-remaining::-webkit-scrollbar {
+    display: none;
+  }
+
+  .ball-chip {
+    width: var(--ball-chip-size, 24px);
+    height: var(--ball-chip-size, 24px);
+    flex-shrink: 0;
+    border-width: 1px;
+  }
+
+  #hud-menu-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    flex-shrink: 0;
+  }
+
+  #hud-menu-btn span {
+    font-size: 20px !important;
+  }
+
+  /* Full bleed canvas on mobile */
+  #canvas-stage {
+    padding: 0 8px 8px;
+  }
+
+  #canvas-container {
+    border-radius: 10px;
+  }
+
+  /* Offset for HUD */
+  #workspace-main.workspace-hud-offset {
+    padding-top: 72px;
+  }
+
+  /* Loading screen mobile */
+  .loading-content h1 {
+    font-size: 36px;
+    letter-spacing: 1px;
+  }
+
+  .loading-logo {
+    max-width: 180px;
+  }
+
+  .loading-spinner {
+    width: 48px;
+    height: 48px;
+  }
+
+  #loading-text {
+    font-size: 12px;
+  }
+
+  /* Foul banner mobile */
+  #foul-banner {
+    padding: 12px 20px;
+    font-size: 14px;
+    border-radius: 10px;
+  }
+
+  /* Stats display */
+  #stats {
+    gap: 10px;
+    font-size: 10px;
+  }
+}
+
+/* === SMALL MOBILE STYLES (max-width: 480px) === */
+@media (max-width: 480px) {
+  /* Ultra-compact HUD */
+  .hud-header {
+    padding: 6px 8px;
+    gap: 6px;
+  }
+
+  .hud-player {
+    padding: 3px 6px;
+    gap: 6px;
+  }
+
+  .hud-player .avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+  }
+
+  .hud-player .name {
+    font-size: 11px;
+  }
+
+  .hud-player .balls-remaining {
+    gap: 2px;
+    height: 18px;
+  }
+
+  .ball-chip {
+    width: var(--ball-chip-size, 20px);
+    height: var(--ball-chip-size, 20px);
+  }
+
+  #hud-menu-btn {
+    width: 36px;
+    height: 36px;
+  }
+
+  #hud-menu-btn span {
+    font-size: 18px !important;
+  }
+
+  /* Canvas */
+  #canvas-stage {
+    padding: 0 4px 4px;
+  }
+
+  #canvas-container {
+    border-radius: 8px;
+  }
+
+  /* Offset for HUD */
+  #workspace-main.workspace-hud-offset {
+    padding-top: 60px;
+  }
+
+  /* Loading screen */
+  .loading-content h1 {
+    font-size: 28px;
+  }
+
+  .loading-logo {
+    max-width: 140px;
+  }
+
+  .loading-spinner {
+    width: 40px;
+    height: 40px;
+    border-width: 3px;
+  }
+}
+
+/* === LANDSCAPE MOBILE STYLES === */
+@media (max-height: 480px) and (orientation: landscape) {
+  /* Minimal HUD in landscape mobile */
+  .hud-header {
+    padding: 4px 12px;
+  }
+
+  .hud-player .avatar {
+    width: 36px;
+    height: 36px;
+  }
+
+  .hud-player .name {
+    font-size: 11px;
+  }
+
+  .hud-player .balls-remaining {
+    height: 16px;
+    gap: 2px;
+  }
+
+  .ball-chip {
+    width: 18px;
+    height: 18px;
+  }
+
+  #hud-menu-btn {
+    width: 32px;
+    height: 32px;
+  }
+
+  /* Minimal canvas padding for max game area */
+  #canvas-stage {
+    padding: 0 4px 4px;
+  }
+
+  #workspace-main.workspace-hud-offset {
+    padding-top: 50px;
+  }
+}
+
+/* === TOUCH DEVICE STYLES === */
+@media (hover: none) and (pointer: coarse) {
+  /* Larger touch targets */
+  .btn-arcade {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .btn-arcade-icon {
+    width: 44px;
+    height: 44px;
+  }
+
+  /* Disable hover effects on touch */
+  .btn-arcade:hover {
+    transform: none;
+  }
+
+  .btn-arcade-primary:hover {
+    transform: none;
+  }
+
+  .btn-arcade-glass:hover {
+    transform: none;
+  }
+
+  /* Active states for touch feedback */
+  .btn-arcade:active {
+    transform: scale(0.95);
+  }
+}

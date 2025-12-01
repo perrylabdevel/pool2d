@@ -10,10 +10,12 @@ import { ProfileScene } from './scenes/ProfileScene';
 import { ConfirmScene } from './scenes/ConfirmScene';
 import { InGameMenuScene } from './scenes/InGameMenuScene';
 import { SettingsScene } from './scenes/SettingsScene';
+import { CustomizationScene } from './scenes/CustomizationScene';
 import { LeagueScene } from './scenes/LeagueScene';
 import { MatchResultScene } from './scenes/MatchResultScene';
 import { OpponentPreviewScene } from './scenes/OpponentPreviewScene';
 import { uiSoundService } from './UISoundService';
+import { FocusManager } from './input/FocusManager';
 
 import { ClubSelectionScene } from './scenes/ClubSelectionScene';
 
@@ -41,6 +43,8 @@ export class SceneController {
     private transitionDuration = 0.3; // seconds
     private transitionType: TransitionType = TransitionType.CROSS_FADE;
 
+    public focusManager: FocusManager;
+
     constructor() {
         // Use dedicated UI stage canvas for scenes so gameplay overlays
         // on the HUD/UI canvas are not affected.
@@ -51,8 +55,52 @@ export class SceneController {
         }
         this.ctx = context;
 
+        this.focusManager = new FocusManager();
+
         this.setupResizeListener();
         this.bindStateChanges();
+
+        // Global Esc handler
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                // If focus manager handles it, let it? 
+                // But FocusManager currently only handles Arrow/Enter.
+                // Let's defer to UIStateMachine's back logic.
+                uiStateMachine.goBack();
+            }
+        });
+
+        // Handle exit confirmation requests
+        window.addEventListener('ui:request-confirm-exit', (e) => {
+            const detail = (e as CustomEvent).detail;
+            const confirmScene = this.getScene(UIState.CONFIRM) as ConfirmScene;
+            if (confirmScene) {
+                confirmScene.configure({
+                    title: 'Forfeit Match?',
+                    message: 'You will lose the match and your entry fee.',
+                    confirmLabel: 'LEAVE',
+                    cancelLabel: 'STAY',
+                    returnState: UIState.IN_GAME, // If cancelled, go back to game (or stay in game)
+                    onConfirm: () => {
+                        // End the game properly?
+                        const game = (window as any).poolGame;
+                        if (game) {
+                            // Maybe trigger forfeit logic?
+                            // For now, just force the transition.
+                            // The game loop will stop updating when scene changes.
+                        }
+
+                        if (detail.onConfirm) {
+                            detail.onConfirm();
+                        }
+                    }
+                });
+                // We use forceTransition internally in UIStateMachine to bypass the guard,
+                // but here we just need to show the confirm scene.
+                // Since we are in IN_GAME, transitionTo(CONFIRM) is allowed by the guard.
+                uiStateMachine.transitionTo(UIState.CONFIRM);
+            }
+        });
 
         // Register Scenes (SettingsScene will be registered later via initializeSettingsScene)
         this.registerScene(UIState.LOBBY, new LobbyScene());
@@ -79,6 +127,7 @@ export class SceneController {
 
     public initializeSettingsScene(settingsManager: any) {
         this.registerScene(UIState.SETTINGS, new SettingsScene(settingsManager));
+        this.registerScene(UIState.CUSTOMIZATION, new CustomizationScene(settingsManager));
     }
 
     public registerScene(state: UIState, scene: UIScene) {
@@ -116,6 +165,7 @@ export class SceneController {
 
         if (immediate) {
             if (this.currentScene) this.currentScene.unmount();
+            this.focusManager.clear();
             this.currentScene = nextScene || null;
             if (this.currentScene) {
                 this.currentScene.mount();
@@ -144,6 +194,7 @@ export class SceneController {
         } else if (!nextScene) {
             // Transition to nothing (e.g. in-game)
             if (this.currentScene) this.currentScene.unmount();
+            this.focusManager.clear();
             this.currentScene = null;
             this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
             this.canvas.style.display = 'none';
@@ -185,6 +236,7 @@ export class SceneController {
                 // Finish transition
                 this.isTransitioning = false;
                 if (this.currentScene) this.currentScene.unmount();
+                // Do NOT clear focus here, as the next scene has already mounted and set up its focus
                 this.currentScene = this.nextScene;
                 this.nextScene = null;
                 if (this.currentScene) {

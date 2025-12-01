@@ -1,5 +1,6 @@
 import Dexie, { Table } from 'dexie';
 import { UserProfile, MatchRecord, InventoryItem, ChestSlotData, LeagueStanding } from './models';
+import { DEFAULT_USER_NAME } from '../config';
 
 export class PoolDatabase extends Dexie {
     user!: Table<UserProfile>;
@@ -44,7 +45,7 @@ export async function initializeUserIfNeeded() {
     const count = await db.user.count();
     if (count === 0) {
         await db.user.add({
-            name: 'sosumidude',
+            name: DEFAULT_USER_NAME,
             level: 1,
             xp: 0,
             coins: 10000, // Starting coins (Updated to 10k)
@@ -66,6 +67,17 @@ export async function initializeUserIfNeeded() {
             }
         });
         console.log('🆕 New user profile created!');
+    } else {
+        // Migrate existing users with old default names to the new default
+        const user = await db.user.get(1);
+        if (user && (user.name === 'Player' || user.name === 'Player 1')) {
+            await db.user.update(1, { name: DEFAULT_USER_NAME });
+            
+            // Also update the cached name in league standings
+            await db.standings.where('playerId').equals('user').modify({ playerName: DEFAULT_USER_NAME });
+            
+            console.log('📝 Updated user name to', DEFAULT_USER_NAME);
+        }
     }
 
     // Initialize chest slots if they don't exist
