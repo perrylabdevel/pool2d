@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/dev-server.js",
+    "dev:vite": "vite --host 0.0.0.0",
+    "dev:relay": "node scripts/relay-server.js",
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
