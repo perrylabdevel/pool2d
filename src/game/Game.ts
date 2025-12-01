@@ -40,6 +40,7 @@ import { getClampedTrophyChange, getLeagueForTrophies } from './economy/TrophySy
 import { getClubById } from './clubs/ClubRegistry';
 import { getOpponentsByLeague } from '../ai/OpponentRegistry';
 import { AssetRegistry } from '../assets/AssetRegistry';
+import { currencyStore } from '../ui/CurrencyStore';
 
 export enum GameMode {
   PRACTICE,
@@ -546,6 +547,12 @@ export class Game {
         this.restart();
       }
 
+      if (e.key === 'm' || e.key === 'M') {
+        currencyStore.addCoins(10000);
+        console.log('💰 Added 10,000 coins!');
+        this.hud.showFoul('💰 Added 10,000 coins!');
+      }
+
       if (e.key === 'b' || e.key === 'B') {
         // Toggle ball-in-hand overlay (enables debug overlay if needed)
         const next = !this.debug.isBallInHandOverlayEnabled();
@@ -735,6 +742,8 @@ export class Game {
         diameter *
         Math.sin(Math.PI / 3) *
         1.02; // Slightly looser rack
+
+      console.log(`[Game] InitializeGame: radius=${currentRadius} diameter=${diameter} spacing=${rowSpacingX} configRadius=${CONFIG.BALL_RADIUS} configScale=${CONFIG.BALL_SCALE}`);
 
       // Build rack of 15 balls
       const rackX = RACK_POSITIONS[0].x;

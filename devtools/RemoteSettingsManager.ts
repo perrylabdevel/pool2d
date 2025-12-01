@@ -9,7 +9,9 @@ import {
     DEFAULT_AUDIO_SETTINGS,
     DEFAULT_GAME_SETTINGS,
     DEFAULT_UI_COLORS,
-    DEFAULT_TABLE_APPEARANCE
+    DEFAULT_TABLE_APPEARANCE,
+    PhysicsSettings,
+    DEFAULT_PHYSICS_SETTINGS
 } from '../src/ui/SettingsManager';
 import { defaultRenderLayerSettings } from '../src/render/RenderLayers';
 import { ModernPocketGeometry } from '../src/geometry/ModernGeometry';
@@ -90,6 +92,7 @@ export class RemoteSettingsManager extends EventTarget {
     private gameSettings: GameSettings = { ...DEFAULT_GAME_SETTINGS };
     private uiColors: UIColors = { ...DEFAULT_UI_COLORS };
     private tableAppearance: TableAppearance = { ...DEFAULT_TABLE_APPEARANCE };
+    private physicsSettings: PhysicsSettings = { ...DEFAULT_PHYSICS_SETTINGS };
 
     constructor() {
         super();
@@ -146,10 +149,12 @@ export class RemoteSettingsManager extends EventTarget {
                 this.gameSettings = message.payload.game;
                 this.uiColors = message.payload.uiColors;
                 this.tableAppearance = message.payload.tableAppearance;
+                this.physicsSettings = message.payload.physics;
                 this.dispatchUpdates();
                 break;
             case 'settings:geometry-changed':
                 this.geometrySettings = { ...this.geometrySettings, ...message.payload };
+                this.dispatchEvent(new Event('state-updated'));
                 break;
             case 'settings:render-changed':
                 this.renderSettings = { ...this.renderSettings, ...message.payload };
@@ -179,6 +184,10 @@ export class RemoteSettingsManager extends EventTarget {
                     cushion: { ...this.tableAppearance.cushion, ...message.payload.cushion },
                     pocket: { ...this.tableAppearance.pocket, ...message.payload.pocket },
                 };
+                this.dispatchEvent(new Event('state-updated'));
+                break;
+            case 'settings:physics-changed':
+                this.physicsSettings = { ...this.physicsSettings, ...message.payload };
                 this.dispatchEvent(new Event('state-updated'));
                 break;
         }
@@ -280,5 +289,18 @@ export class RemoteSettingsManager extends EventTarget {
 
     resetTableAppearance() {
         this.sendMessage({ type: 'command', command: 'resetTableAppearance' });
+    }
+
+    getPhysicsSettings(): PhysicsSettings {
+        return this.physicsSettings;
+    }
+
+    savePhysicsSettings(settings: Partial<PhysicsSettings>) {
+        this.physicsSettings = { ...this.physicsSettings, ...settings };
+        this.sendMessage({ type: 'updatePhysics', payload: settings });
+    }
+
+    resetPhysicsSettings() {
+        this.sendMessage({ type: 'command', command: 'resetPhysics' });
     }
 }

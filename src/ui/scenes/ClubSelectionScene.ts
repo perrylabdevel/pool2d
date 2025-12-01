@@ -102,6 +102,8 @@ export class ClubSelectionScene implements UIScene {
         this.navigationBar.setupLayout(width);
     };
 
+    private hoveredClubIndex: number = -1;
+
     private onMouseMove = (e: MouseEvent) => {
         if (!this.canvas) return;
         const rect = this.canvas.getBoundingClientRect();
@@ -112,11 +114,32 @@ export class ClubSelectionScene implements UIScene {
 
         if (this.navigationBar.handleMouseMove(x, y)) {
             this.canvas.style.cursor = this.navigationBar.getCursor();
+            this.hoveredClubIndex = -1;
             return;
         }
 
-        // Check hover on cards (optional visual feedback)
-        this.canvas.style.cursor = 'default';
+        // Check hover on cards
+        let isHoveringCard = false;
+        this.hoveredClubIndex = -1;
+
+        if (this.layout) {
+            const cardWidth = 300;
+            const cardHeight = 450; // Updated to match render height
+            const gap = 20;
+            const startY = this.layout.listRect.y + (this.layout.listRect.height - cardHeight) / 2;
+
+            CLUBS.forEach((club, index) => {
+                const cardX = gap + index * (cardWidth + gap) - this.scrollOffset;
+
+                if (x >= cardX && x <= cardX + cardWidth &&
+                    y >= startY && y <= startY + cardHeight) {
+                    isHoveringCard = true;
+                    this.hoveredClubIndex = index;
+                }
+            });
+        }
+
+        this.canvas.style.cursor = isHoveringCard ? 'pointer' : 'default';
     };
 
     private onClick = (e: MouseEvent) => {
@@ -134,7 +157,7 @@ export class ClubSelectionScene implements UIScene {
         // Handle Card Clicks
         if (this.layout) {
             const cardWidth = 300;
-            const cardHeight = 400;
+            const cardHeight = 450; // Updated to match render height
             const gap = 20;
             const startY = this.layout.listRect.y + (this.layout.listRect.height - cardHeight) / 2;
 
@@ -275,6 +298,7 @@ export class ClubSelectionScene implements UIScene {
                 const isCoinsLocked = this.userProfile!.coins < club.entryFee;
                 const isTrophiesLocked = (this.userProfile!.trophies || 0) < club.minTrophies;
                 const isLocked = isCoinsLocked || isTrophiesLocked;
+                const isHovered = index === this.hoveredClubIndex;
 
                 // --- Arcade Card Style ---
                 const radius = 16;
@@ -285,8 +309,15 @@ export class ClubSelectionScene implements UIScene {
 
                 // Shadow
                 ctx.shadowColor = ColorTokens.effects.shadow;
-                ctx.shadowBlur = LayoutConstants.Shadows.Medium.blur;
-                ctx.shadowOffsetY = LayoutConstants.Shadows.Medium.offsetY;
+                ctx.shadowBlur = isHovered ? LayoutConstants.Shadows.Large.blur : LayoutConstants.Shadows.Medium.blur;
+                ctx.shadowOffsetY = isHovered ? LayoutConstants.Shadows.Large.offsetY : LayoutConstants.Shadows.Medium.offsetY;
+
+                // Scale up slightly on hover
+                if (isHovered && !isLocked) {
+                    ctx.translate(cardX + cardWidth / 2, startY + cardHeight / 2);
+                    ctx.scale(1.02, 1.02);
+                    ctx.translate(-(cardX + cardWidth / 2), -(startY + cardHeight / 2));
+                }
 
                 // Outer Frame - Metallic/Wood-grain effect
                 // Use darker colors for locked state
@@ -423,7 +454,7 @@ export class ClubSelectionScene implements UIScene {
                 const btnColor = isLocked ? ColorTokens.card.bevel.mid : ColorTokens.action.success;
 
                 // Use drawGlossyButton for consistent look
-                drawGlossyButton(ctx, btnRect, btnLabel, btnColor, false); // No hover state tracked for individual list items yet
+                drawGlossyButton(ctx, btnRect, btnLabel, btnColor, isHovered && !isLocked);
 
 
                 // Corner Decorations (Gold Accents)

@@ -39,6 +39,7 @@ const settingsManager = new RemoteSettingsManager();
 
 import { AudioPanel } from '../src/ui/AudioPanel';
 import { GameSettingsPanel } from '../src/ui/GameSettingsPanel';
+import { PhysicsPanel } from './src/ui/PhysicsPanel';
 
 // Initialize panels
 const mockRenderer = new MockRenderer(); // Define mockRenderer once
@@ -56,6 +57,7 @@ const renderLayerPanel = new RenderLayerPanel(settingsManager as any, mockRender
 
 const audioPanel = new AudioPanel(settingsManager as any);
 const gameSettingsPanel = new GameSettingsPanel(settingsManager as any);
+const physicsPanel = new PhysicsPanel(settingsManager as any);
 
 // Force panels open
 geometryPanel.open();
@@ -63,6 +65,7 @@ modernGeometryPanel.open();
 renderLayerPanel.open();
 audioPanel.getController().open();
 gameSettingsPanel.getController().open();
+physicsPanel.getController().open();
 
 // Handle connection status
 const statusEl = document.getElementById('connection-status');

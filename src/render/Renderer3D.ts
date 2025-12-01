@@ -159,6 +159,11 @@ export class Renderer3D extends BaseRenderer {
       this.referenceOverlay || undefined
     );
 
+    // Initialize ball scale from CONFIG
+    const initialScale = CONFIG.BALL_SCALE ?? 1.0;
+    this.ballScale = initialScale;
+    this.ballRenderer.setBallScale(initialScale);
+
     // Lighting
     this.ambientLight = new THREE.AmbientLight(0xffffff, CONFIG.AMBIENT_INTENSITY ?? 0.85);
     this.scene.add(this.ambientLight);

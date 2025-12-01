@@ -15,7 +15,7 @@ export class GeometryPanel {
   constructor(settingsManager: SettingsManager, onGeometryChange: () => void) {
     this.settingsManager = settingsManager;
     this.onGeometryChange = onGeometryChange;
-    
+
     this.panel = document.getElementById('geometry-panel')!;
     const header = this.panel.querySelector('.panel-header') as HTMLElement | null;
     if (header && !this.panel.closest('#panel-dock')) {
@@ -29,6 +29,17 @@ export class GeometryPanel {
       focusTarget,
     });
     this.panelController.addEventListener('panel:open', () => this.loadCurrentValues());
+
+    // Listen for external updates (e.g. from remote devtools or other sources)
+    window.addEventListener('settings:geometry-changed', () => {
+      this.loadCurrentValues();
+    });
+    // Also listen for state-updated if using RemoteSettingsManager which might dispatch that
+    if (this.settingsManager instanceof EventTarget) {
+      this.settingsManager.addEventListener('state-updated', () => {
+        this.loadCurrentValues();
+      });
+    }
 
     this.setupControls();
     this.loadCurrentValues();

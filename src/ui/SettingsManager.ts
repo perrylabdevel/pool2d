@@ -231,7 +231,7 @@ export const DEFAULT_UI_COLORS: UIColors = {
   cueTipColor: '#4A90E2', // Blue chalk
 };
 
-const DEFAULT_PHYSICS_SETTINGS: PhysicsSettings = {
+export const DEFAULT_PHYSICS_SETTINGS: PhysicsSettings = {
   BALL_RESTITUTION: CONFIG.BALL_RESTITUTION ?? 0.93,
   BALL_BALL_FRICTION: CONFIG.BALL_BALL_FRICTION ?? 0.05,
   CUSHION_RESTITUTION: CONFIG.CUSHION_RESTITUTION ?? 0.88,
@@ -740,62 +740,7 @@ export class SettingsManager {
     return { ...defaults };
   }
 
-  loadRenderSettings(): RenderSettings {
-    const defaults: RenderSettings = {
-      ...defaultRenderLayerSettings,
-      canvasScale: CONFIG.CANVAS_SCALE_MULTIPLIER ?? 1,
-      ballScale: CONFIG.BALL_SCALE ?? 1,
-      ambientIntensity: CONFIG.AMBIENT_INTENSITY ?? 1.1,
-      directionalIntensity: CONFIG.DIRECTIONAL_INTENSITY ?? 1.6,
-      accentIntensity: CONFIG.ACCENT_INTENSITY ?? 0.5,
-      railHighlightIntensity: CONFIG.RAIL_HIGHLIGHT_INTENSITY ?? 0.6,
-      railShadowIntensity: CONFIG.RAIL_SHADOW_INTENSITY ?? 0.25,
-      railShadowSpread: 1.0,
-      railShadowSoftness: 1.8,
-      railShadowBaseGray: 170,
-      railHighlightColor: '#ffffff',
-      railHighlightSpread: 1.0,
-      pocketShadowIntensity: CONFIG.POCKET_SHADOW_INTENSITY ?? 0.45,
-      pocketHighlightIntensity: CONFIG.POCKET_HIGHLIGHT_INTENSITY ?? 0.55,
-      // Groove defaults match current visuals
-      grooveInnerBase: 0.18,
-      grooveInnerDepthScale: 0.22,
-      grooveThicknessFactor: 0.08,
-      grooveOpacityBase: 0.18,
-      grooveOpacityDepthScale: 0.36,
-      grooveRimThicknessFactor: 0.02,
-      grooveRimOuterOpacity: 0.10,
-      grooveRimInnerOpacity: 0.08,
-      grooveColor: '#000000',
-      rimColor: '#ffffff',
-      pocketBottomColor: '#000000',
-      pocketGradientCenterColor: '#000000',
-      pocketGradientEdgeColor: '#141414',
-      pocketWallColor: '#0a0a0a',
-      pocketGradientStrength: 1.0,
-    };
-    try {
-      const stored = localStorage.getItem(STORAGE_KEYS.RENDER_SETTINGS);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed.ballVisualScale !== undefined && parsed.ballScale === undefined) {
-          parsed.ballScale = parsed.ballVisualScale;
-          delete parsed.ballVisualScale;
-        }
-        parsed.ambientIntensity = parsed.ambientIntensity ?? defaults.ambientIntensity;
-        parsed.directionalIntensity = parsed.directionalIntensity ?? defaults.directionalIntensity;
-        parsed.accentIntensity = parsed.accentIntensity ?? defaults.accentIntensity;
-        parsed.railHighlightIntensity = parsed.railHighlightIntensity ?? defaults.railHighlightIntensity;
-        parsed.pocketShadowIntensity = parsed.pocketShadowIntensity ?? defaults.pocketShadowIntensity;
-        parsed.pocketHighlightIntensity =
-          parsed.pocketHighlightIntensity ?? defaults.pocketHighlightIntensity;
-        return { ...defaults, ...parsed };
-      }
-    } catch (e) {
-      console.warn('Failed to load render settings:', e);
-    }
-    return { ...defaults };
-  }
+
 
   saveGeometrySettings(settings: Partial<GeometrySettings>) {
     this.geometrySettings = { ...this.geometrySettings, ...settings };
@@ -823,6 +768,63 @@ export class SettingsManager {
 
   getRenderSettings(): RenderSettings {
     return { ...this.renderSettings };
+  }
+
+  private loadRenderSettings(): RenderSettings {
+    const defaults: RenderSettings = {
+      ...defaultRenderLayerSettings,
+      canvasScale: 1,
+      ballScale: 1,
+      ambientIntensity: CONFIG.AMBIENT_INTENSITY ?? 1.1,
+      directionalIntensity: CONFIG.DIRECTIONAL_INTENSITY ?? 1.6,
+      accentIntensity: CONFIG.ACCENT_INTENSITY ?? 0.5,
+      railHighlightIntensity: CONFIG.RAIL_HIGHLIGHT_INTENSITY ?? 0.6,
+      railShadowIntensity: CONFIG.RAIL_SHADOW_INTENSITY ?? 0.25,
+      railShadowSpread: 1.0,
+      railShadowSoftness: 1.8,
+      railShadowBaseGray: 170,
+      railHighlightColor: '#ffffff',
+      railHighlightSpread: 1.0,
+      pocketShadowIntensity: CONFIG.POCKET_SHADOW_INTENSITY ?? 0.45,
+      pocketHighlightIntensity: CONFIG.POCKET_HIGHLIGHT_INTENSITY ?? 0.55,
+      grooveInnerBase: 0.18,
+      grooveInnerDepthScale: 0.22,
+      grooveThicknessFactor: 0.08,
+      grooveOpacityBase: 0.18,
+      grooveOpacityDepthScale: 0.36,
+      grooveRimThicknessFactor: 0.02,
+      grooveRimOuterOpacity: 0.10,
+      grooveRimInnerOpacity: 0.08,
+      grooveColor: '#000000',
+      rimColor: '#ffffff',
+      pocketBottomColor: '#000000',
+      pocketGradientCenterColor: '#000000',
+      pocketGradientEdgeColor: '#141414',
+      pocketWallColor: '#0a0a0a',
+      pocketGradientStrength: 1.0,
+      HUD_BALL_CHIP_SIZE_PX: CONFIG.HUD_BALL_CHIP_SIZE_PX ?? 42,
+      CUE_LENGTH_IN: CONFIG.CUE_LENGTH_IN ?? 58,
+      CUE_VISUAL_PADDING_IN: CONFIG.CUE_VISUAL_PADDING_IN ?? 20,
+      MIN_WORLD_PADDING_IN: CONFIG.MIN_WORLD_PADDING_IN ?? 6,
+      CUE_BALL_MEASLE_RADIUS_RATIO: CONFIG.CUE_BALL_MEASLE_RADIUS_RATIO ?? 0.12,
+      CUE_BALL_MEASLE_COLOR: CONFIG.CUE_BALL_MEASLE_COLOR ?? '#c62828',
+    };
+
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.RENDER_SETTINGS);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        console.log('[SettingsManager] Loaded Render Settings from Storage:', parsed);
+        if (parsed.ballVisualScale !== undefined && parsed.ballScale === undefined) {
+          parsed.ballScale = parsed.ballVisualScale;
+          delete parsed.ballVisualScale;
+        }
+        return { ...defaults, ...parsed };
+      }
+    } catch (e) {
+      console.warn('Failed to load render settings:', e);
+    }
+    return defaults;
   }
 
   private loadModernGeometrySettings(): ModernPocketGeometry | null {
@@ -1003,38 +1005,7 @@ export class SettingsManager {
       this.modernGeometrySettings = null;
       this.debugSettings = { ...DEFAULT_DEBUG_SETTINGS };
       this.gameStats = { ...DEFAULT_GAME_STATS };
-      this.renderSettings = {
-        ...defaultRenderLayerSettings,
-        canvasScale: 1,
-        ballScale: 1,
-        ambientIntensity: CONFIG.AMBIENT_INTENSITY ?? 1.1,
-        directionalIntensity: CONFIG.DIRECTIONAL_INTENSITY ?? 1.6,
-        accentIntensity: CONFIG.ACCENT_INTENSITY ?? 0.5,
-        railHighlightIntensity: CONFIG.RAIL_HIGHLIGHT_INTENSITY ?? 0.6,
-        railShadowIntensity: CONFIG.RAIL_SHADOW_INTENSITY ?? 0.25,
-        railShadowSpread: 1.0,
-        railShadowSoftness: 1.8,
-        railShadowBaseGray: 170,
-        railHighlightColor: '#ffffff',
-        railHighlightSpread: 1.0,
-        pocketShadowIntensity: CONFIG.POCKET_SHADOW_INTENSITY ?? 0.45,
-        pocketHighlightIntensity: CONFIG.POCKET_HIGHLIGHT_INTENSITY ?? 0.55,
-        grooveInnerBase: 0.18,
-        grooveInnerDepthScale: 0.22,
-        grooveThicknessFactor: 0.08,
-        grooveOpacityBase: 0.18,
-        grooveOpacityDepthScale: 0.36,
-        grooveRimThicknessFactor: 0.02,
-        grooveRimOuterOpacity: 0.10,
-        grooveRimInnerOpacity: 0.08,
-        grooveColor: '#000000',
-        rimColor: '#ffffff',
-        pocketBottomColor: '#000000',
-        pocketGradientCenterColor: '#000000',
-        pocketGradientEdgeColor: '#141414',
-        pocketWallColor: '#0a0a0a',
-        pocketGradientStrength: 1.0,
-      };
+      this.renderSettings = this.loadRenderSettings();
 
       this.applyPhysicsSettings();
       this.applyUIColors();
@@ -1059,6 +1030,7 @@ export class SettingsManager {
       this.renderSettings.pocketShadowIntensity ?? CONFIG.POCKET_SHADOW_INTENSITY;
     CONFIG.POCKET_HIGHLIGHT_INTENSITY =
       this.renderSettings.pocketHighlightIntensity ?? CONFIG.POCKET_HIGHLIGHT_INTENSITY;
+    console.log(`[SettingsManager] Applied Render Settings: scale=${scale} radius=${CONFIG.BALL_RADIUS} base=${CONFIG.BALL_BASE_RADIUS}`);
     window.dispatchEvent(
       new CustomEvent('settings:render-changed', { detail: { settings: this.renderSettings } })
     );

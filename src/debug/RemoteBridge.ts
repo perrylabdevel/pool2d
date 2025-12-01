@@ -91,10 +91,15 @@ export class RemoteBridge {
             });
         });
 
-        window.addEventListener('settings:appearance-changed', () => {
+        this.sendMessage({
+            type: 'settings:appearance-changed',
+            payload: this.settingsManager.getTableAppearance()
+        });
+
+        window.addEventListener('settings:physics-changed', () => {
             this.sendMessage({
-                type: 'settings:appearance-changed',
-                payload: this.settingsManager.getTableAppearance()
+                type: 'settings:physics-changed',
+                payload: this.settingsManager.getPhysicsSettings()
             });
         });
     }
@@ -109,7 +114,8 @@ export class RemoteBridge {
                 audio: this.settingsManager.getAudioSettings(),
                 game: this.settingsManager.getGameSettings(),
                 uiColors: this.settingsManager.getUIColors(),
-                tableAppearance: this.settingsManager.getTableAppearance()
+                tableAppearance: this.settingsManager.getTableAppearance(),
+                physics: this.settingsManager.getPhysicsSettings()
             }
         });
     }
@@ -147,6 +153,10 @@ export class RemoteBridge {
                 console.log('[RemoteBridge] Received table appearance update', message.payload);
                 this.settingsManager.saveTableAppearance(message.payload);
                 break;
+            case 'updatePhysics':
+                console.log('[RemoteBridge] Received physics update', message.payload);
+                this.settingsManager.savePhysicsSettings(message.payload);
+                break;
             case 'command':
                 this.handleCommand(message.command, message.payload);
                 break;
@@ -170,6 +180,9 @@ export class RemoteBridge {
                 break;
             case 'resetTableAppearance':
                 this.settingsManager.resetTableAppearance();
+                break;
+            case 'resetPhysics':
+                this.settingsManager.resetPhysicsSettings();
                 break;
             case 'regenerateTextures':
                 if (this.renderer && this.renderer.tableRenderer) {
