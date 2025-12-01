@@ -100,8 +100,8 @@ export class Predictor {
 
     // Use a representative default power (80% of max) if not specified or if 0
     // This better matches typical shot power, improving prediction accuracy
-    const effectivePower = (power && power > CONFIG.CUE_POWER_MIN) 
-      ? power 
+    const effectivePower = (power && power > CONFIG.CUE_POWER_MIN)
+      ? power
       : CONFIG.CUE_POWER_MAX * 0.8;
     const speed = effectivePower * CONFIG.CUE_POWER_MULTIPLIER;
 
@@ -232,130 +232,130 @@ export class Predictor {
             let t = (toPointX * segDX + toPointY * segDY) / segLenSq;
             t = Math.max(0, Math.min(1, t));
 
-              const closestX = rail.x1 + segDX * t;
-              const closestY = rail.y1 + segDY * t;
+            const closestX = rail.x1 + segDX * t;
+            const closestY = rail.y1 + segDY * t;
 
-              const distX = previewCue.x - closestX;
-              const distY = previewCue.y - closestY;
-              const dist = Math.hypot(distX, distY);
+            const distX = previewCue.x - closestX;
+            const distY = previewCue.y - closestY;
+            const dist = Math.hypot(distX, distY);
 
-              if (dist <= cueRadius + tolerance) {
-                const normalX = dist > 1e-5 ? distX / dist : rail.nx;
-                const normalY = dist > 1e-5 ? distY / dist : rail.ny;
+            if (dist <= cueRadius + tolerance) {
+              const normalX = dist > 1e-5 ? distX / dist : rail.nx;
+              const normalY = dist > 1e-5 ? distY / dist : rail.ny;
+              const contactPoint = {
+                x: previewCue.x - normalX * cueRadius,
+                y: previewCue.y - normalY * cueRadius,
+              };
+
+              const originalRail = world.rails.find((r) => r === rail) ?? rail;
+
+              firstContact = {
+                type: 'rail',
+                contactPoint,
+                contactNormal: { x: normalX, y: normalY },
+                hitRail: originalRail,
+                distance: cueDistance,
+              };
+              firstContactSource = 'analytic';
+              break;
+            }
+          }
+
+          if (!firstContact) {
+            for (const ball of previewWorld.balls) {
+              if (ball.id === previewCue.id || ball.pocketed) continue;
+
+              const dx = ball.x - previewCue.x;
+              const dy = ball.y - previewCue.y;
+              const dist = Math.hypot(dx, dy);
+              const combinedRadius = ball.radius + cueRadius;
+
+              if (dist <= combinedRadius + tolerance && dist > 1e-5) {
+                let contactT = 1;
+                const ballPrev = preStepBallPositions.get(ball.id);
+                if (ballPrev) {
+                  const relPrevX = ballPrev.x - cuePrevX;
+                  const relPrevY = ballPrev.y - cuePrevY;
+                  const relCurrX = ball.x - previewCue.x;
+                  const relCurrY = ball.y - previewCue.y;
+                  const dvX = relCurrX - relPrevX;
+                  const dvY = relCurrY - relPrevY;
+                  const a = dvX * dvX + dvY * dvY;
+                  const b = 2 * (relPrevX * dvX + relPrevY * dvY);
+                  const c = relPrevX * relPrevX + relPrevY * relPrevY - combinedRadius * combinedRadius;
+                  const discriminant = b * b - 4 * a * c;
+                  if (a > 1e-8 && discriminant >= 0) {
+                    const sqrtDisc = Math.sqrt(discriminant);
+                    const t1 = (-b - sqrtDisc) / (2 * a);
+                    const t2 = (-b + sqrtDisc) / (2 * a);
+                    let bestT = Number.POSITIVE_INFINITY;
+                    [t1, t2].forEach((candidate) => {
+                      if (candidate >= 0 && candidate <= 1 && candidate < bestT) {
+                        bestT = candidate;
+                      }
+                    });
+                    if (Number.isFinite(bestT)) {
+                      contactT = bestT;
+                    }
+                  }
+                }
+                contactT = Math.max(0, Math.min(1, contactT));
+
+                const cueCenterAtContact = {
+                  x: cuePrevX + cueStepDX * contactT,
+                  y: cuePrevY + cueStepDY * contactT,
+                };
+                const ballCenterAtContact = (() => {
+                  const prev = preStepBallPositions.get(ball.id);
+                  if (!prev) {
+                    return { x: ball.x, y: ball.y };
+                  }
+                  return {
+                    x: prev.x + (ball.x - prev.x) * contactT,
+                    y: prev.y + (ball.y - prev.y) * contactT,
+                  };
+                })();
+
+                let relX = ballCenterAtContact.x - cueCenterAtContact.x;
+                let relY = ballCenterAtContact.y - cueCenterAtContact.y;
+                let relLen = Math.hypot(relX, relY);
+                if (relLen < 1e-6) {
+                  relX = dx;
+                  relY = dy;
+                  relLen = dist;
+                }
+                const nx = relX / relLen;
+                const ny = relY / relLen;
+
                 const contactPoint = {
-                  x: previewCue.x - normalX * cueRadius,
-                  y: previewCue.y - normalY * cueRadius,
+                  x: cueCenterAtContact.x + nx * cueRadius,
+                  y: cueCenterAtContact.y + ny * cueRadius,
                 };
 
-                const originalRail = world.rails.find((r) => r === rail) ?? rail;
+                const originalBall = world.getBallById(ball.id) ?? undefined;
 
                 firstContact = {
-                  type: 'rail',
+                  type: 'ball',
                   contactPoint,
-                  contactNormal: { x: normalX, y: normalY },
-                  hitRail: originalRail,
-                  distance: cueDistance,
+                  contactNormal: { x: nx, y: ny },
+                  hitBall: originalBall,
+                  distance: cueDistanceBeforeStep + cueStepDistance * contactT,
                 };
                 firstContactSource = 'analytic';
                 break;
               }
             }
-
-            if (!firstContact) {
-              for (const ball of previewWorld.balls) {
-                if (ball.id === previewCue.id || ball.pocketed) continue;
-
-                const dx = ball.x - previewCue.x;
-                const dy = ball.y - previewCue.y;
-                const dist = Math.hypot(dx, dy);
-                const combinedRadius = ball.radius + cueRadius;
-
-                if (dist <= combinedRadius + tolerance && dist > 1e-5) {
-                  let contactT = 1;
-                  const ballPrev = preStepBallPositions.get(ball.id);
-                  if (ballPrev) {
-                    const relPrevX = ballPrev.x - cuePrevX;
-                    const relPrevY = ballPrev.y - cuePrevY;
-                    const relCurrX = ball.x - previewCue.x;
-                    const relCurrY = ball.y - previewCue.y;
-                    const dvX = relCurrX - relPrevX;
-                    const dvY = relCurrY - relPrevY;
-                    const a = dvX * dvX + dvY * dvY;
-                    const b = 2 * (relPrevX * dvX + relPrevY * dvY);
-                    const c = relPrevX * relPrevX + relPrevY * relPrevY - combinedRadius * combinedRadius;
-                    const discriminant = b * b - 4 * a * c;
-                    if (a > 1e-8 && discriminant >= 0) {
-                      const sqrtDisc = Math.sqrt(discriminant);
-                      const t1 = (-b - sqrtDisc) / (2 * a);
-                      const t2 = (-b + sqrtDisc) / (2 * a);
-                      let bestT = Number.POSITIVE_INFINITY;
-                      [t1, t2].forEach((candidate) => {
-                        if (candidate >= 0 && candidate <= 1 && candidate < bestT) {
-                          bestT = candidate;
-                        }
-                      });
-                      if (Number.isFinite(bestT)) {
-                        contactT = bestT;
-                      }
-                    }
-                  }
-                  contactT = Math.max(0, Math.min(1, contactT));
-
-                  const cueCenterAtContact = {
-                    x: cuePrevX + cueStepDX * contactT,
-                    y: cuePrevY + cueStepDY * contactT,
-                  };
-                  const ballCenterAtContact = (() => {
-                    const prev = preStepBallPositions.get(ball.id);
-                    if (!prev) {
-                      return { x: ball.x, y: ball.y };
-                    }
-                    return {
-                      x: prev.x + (ball.x - prev.x) * contactT,
-                      y: prev.y + (ball.y - prev.y) * contactT,
-                    };
-                  })();
-
-                  let relX = ballCenterAtContact.x - cueCenterAtContact.x;
-                  let relY = ballCenterAtContact.y - cueCenterAtContact.y;
-                  let relLen = Math.hypot(relX, relY);
-                  if (relLen < 1e-6) {
-                    relX = dx;
-                    relY = dy;
-                    relLen = dist;
-                  }
-                  const nx = relX / relLen;
-                  const ny = relY / relLen;
-
-                  const contactPoint = {
-                    x: cueCenterAtContact.x + nx * cueRadius,
-                    y: cueCenterAtContact.y + ny * cueRadius,
-                  };
-
-                  const originalBall = world.getBallById(ball.id) ?? undefined;
-
-                  firstContact = {
-                    type: 'ball',
-                    contactPoint,
-                    contactNormal: { x: nx, y: ny },
-                    hitBall: originalBall,
-                    distance: cueDistanceBeforeStep + cueStepDistance * contactT,
-                  };
-                  firstContactSource = 'analytic';
-                  break;
-                }
-              }
-            }
           }
         }
       }
+    }
 
-      const cueSleeping = previewCue.sleeping || previewCue.getSpeed() < CONFIG.VELOCITY_EPSILON;
-      const anyActive = Array.from(objectPaths.values()).some((path) => path.length > 0);
+    const cueSleeping = previewCue.sleeping || previewCue.getSpeed() < CONFIG.VELOCITY_EPSILON;
+    const anyActive = Array.from(objectPaths.values()).some((path) => path.length > 0);
 
-      if (cueSleeping && !anyActive) {
-        terminateEarly = true;
-      }
+    if (cueSleeping && !anyActive) {
+      terminateEarly = true;
+    }
 
     enableCollisionCapture(false);
 
@@ -416,7 +416,7 @@ export class Predictor {
     // Treat it as a ray hitting a circle with combined radius
     const cueBallRadius = CONFIG.BALL_RADIUS;
     const combinedRadius = ball.radius + cueBallRadius;
-    
+
     // Vector from ray origin to circle center
     const toCenter = {
       x: ball.x - origin.x,
@@ -462,10 +462,10 @@ export class Predictor {
     const dx_centers = ball.x - cueBallCenterAtContact.x;
     const dy_centers = ball.y - cueBallCenterAtContact.y;
     const dist_centers = Math.sqrt(dx_centers * dx_centers + dy_centers * dy_centers);
-    
+
     const nx = dx_centers / dist_centers;
     const ny = dy_centers / dist_centers;
-    
+
     const contactPoint = {
       x: cueBallCenterAtContact.x + nx * cueBallRadius,
       y: cueBallCenterAtContact.y + ny * cueBallRadius,
@@ -563,22 +563,22 @@ export class Predictor {
       const ballMass = 1.0;
       const invMass = 1.0 / ballMass;
       const totalInvMass = invMass + invMass;
-      
+
       // Assume object ball is stationary (relative velocity = cue ball velocity)
       // Shot direction is normalized, so we need to use a representative velocity magnitude
       const vMag = 100; // Representative velocity for direction calculation
       const cueBallVx = shotDirection.x * vMag;
       const cueBallVy = shotDirection.y * vMag;
-      
+
       // Relative velocity (cue ball - object ball, where object ball is at rest)
       const dvx = 0 - cueBallVx; // ballB.vx - ballA.vx
       const dvy = 0 - cueBallVy;
       const vRel = dvx * nx + dvy * ny;
-      
+
       // Normal impulse
       const e = CONFIG.BALL_RESTITUTION;
       const j = -(1 + e) * vRel / totalInvMass;
-      
+
       // Apply normal impulse first
       const jx = j * nx;
       const jy = j * ny;
@@ -586,7 +586,7 @@ export class Predictor {
       const cueBallVyAfterNormal = cueBallVy - jy * invMass;
       const objBallVxAfterNormal = 0 + jx * invMass;
       const objBallVyAfterNormal = 0 + jy * invMass;
-      
+
       // Friction impulse - calculate from post-normal-impulse velocities
       const tx = -ny;
       const ty = nx;
@@ -597,16 +597,16 @@ export class Predictor {
       const ballBallFriction = CONFIG.BALL_BALL_FRICTION;
       const maxFriction = Math.abs(j) * ballBallFriction;
       const jtClamped = Math.max(-maxFriction, Math.min(maxFriction, jt));
-      
+
       // Apply friction impulse
       const jtx = jtClamped * tx;
       const jty = jtClamped * ty;
-      
+
       const cueBallVxAfter = cueBallVxAfterNormal - jtx * invMass;
       const cueBallVyAfter = cueBallVyAfterNormal - jty * invMass;
-      
+
       const cueBallSpeed = Math.sqrt(cueBallVxAfter * cueBallVxAfter + cueBallVyAfter * cueBallVyAfter);
-      
+
       let cueDirNormX = 0;
       let cueDirNormY = 0;
       if (cueBallSpeed > 0.01) {
@@ -658,14 +658,14 @@ export class Predictor {
             }
           }
         }
-      } catch {}
+      } catch { }
 
       const objPathStart = { x: result.hitBall.x, y: result.hitBall.y };
       const objPathEnd = {
         x: result.hitBall.x + nx * lineLength,
         y: result.hitBall.y + ny * lineLength,
       };
-      
+
       // If cue ball immediately reaches a rail, apply rail response model to direction (restitution + sliding)
       try {
         if (cueBallSpeed > 0.01) {
@@ -717,7 +717,7 @@ export class Predictor {
             }
           }
         }
-      } catch {}
+      } catch { }
 
       return {
         objectBallPath: {
@@ -735,17 +735,71 @@ export class Predictor {
     }
 
     if (result.type === 'rail') {
-      // Reflect shot direction around rail normal
-      const dot = shotDirection.x * result.contactNormal.x + shotDirection.y * result.contactNormal.y;
-      const reflectX = shotDirection.x - 2 * dot * result.contactNormal.x;
-      const reflectY = shotDirection.y - 2 * dot * result.contactNormal.y;
+      // Physics-based reflection (matches Collision.ts resolveBallRail)
+      const nx = result.contactNormal.x;
+      const ny = result.contactNormal.y;
+
+      // Decompose shot direction into normal and tangential components
+      // shotDirection is normalized, but we treat it as a velocity vector for the model
+      const vn = shotDirection.x * nx + shotDirection.y * ny;
+      const tx = -ny;
+      const ty = nx;
+      const vt = shotDirection.x * tx + shotDirection.y * ty;
+
+      // 1. Restitution (Bounce)
+      // Apply grazing logic from Collision.ts
+      const approachRatio = Math.abs(vn); // Since magnitude is 1.0
+      const eBase = CONFIG.CUSHION_RESTITUTION;
+      const grazeZero = 0.015;
+      const grazeFull = 0.12;
+      let restitutionScale: number;
+      if (approachRatio <= grazeZero) {
+        restitutionScale = 0;
+      } else if (approachRatio >= grazeFull) {
+        restitutionScale = 1;
+      } else {
+        const t = (approachRatio - grazeZero) / (grazeFull - grazeZero);
+        restitutionScale = t * t * (3 - 2 * t);
+      }
+      const eEffective = eBase * restitutionScale;
+
+      // New normal velocity (flip and dampen)
+      const vn_new = -vn * eEffective;
+
+      // 2. Friction (Tangential)
+      // Apply cushion friction (0.15)
+      // In Collision.ts: jt = -vt / invMass; maxFriction = jn * 0.15;
+      // Here we simulate the ratio of impulse transfer
+      const cushionFriction = 0.15;
+
+      // Impulse approximation: jn ~ (1+e)*vn
+      // Friction impulse jt is limited by normal impulse jn
+      const jn_mag = (1 + eEffective) * Math.abs(vn);
+      const maxFrictionImpulse = jn_mag * cushionFriction;
+
+      // Tangential change allowed
+      const vt_delta = -vt; // Try to stop it (infinite friction)
+      const vt_delta_clamped = Math.max(-maxFrictionImpulse, Math.min(maxFrictionImpulse, vt_delta));
+
+      const vt_new = vt + vt_delta_clamped;
+
+      // Reconstruct direction
+      let newDirX = vn_new * nx + vt_new * tx;
+      let newDirY = vn_new * ny + vt_new * ty;
+
+      // Normalize
+      const len = Math.hypot(newDirX, newDirY);
+      if (len > 1e-6) {
+        newDirX /= len;
+        newDirY /= len;
+      }
 
       return {
         cueBallPath: {
           start: result.contactPoint,
           end: {
-            x: result.contactPoint.x + reflectX * lineLength,
-            y: result.contactPoint.y + reflectY * lineLength,
+            x: result.contactPoint.x + newDirX * lineLength,
+            y: result.contactPoint.y + newDirY * lineLength,
           },
         },
       };
