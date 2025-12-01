@@ -175,10 +175,10 @@ export class Renderer3D extends BaseRenderer {
     this.directionalLight.shadow.mapSize.height = 2048;
     this.directionalLight.shadow.camera.near = 0.5;
     this.directionalLight.shadow.camera.far = 100;
-    this.directionalLight.shadow.camera.left = -60;
-    this.directionalLight.shadow.camera.right = 60;
-    this.directionalLight.shadow.camera.top = 60;
-    this.directionalLight.shadow.camera.bottom = -60;
+    this.directionalLight.shadow.camera.left = -100;
+    this.directionalLight.shadow.camera.right = 100;
+    this.directionalLight.shadow.camera.top = 100;
+    this.directionalLight.shadow.camera.bottom = -100;
     this.directionalLight.shadow.bias = -0.0001; // Reduce shadow acne
     this.scene.add(this.directionalLight);
     this.directionalLight.target.position.set(0, 0, 0);

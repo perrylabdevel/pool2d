@@ -69,14 +69,16 @@ export class NotificationService {
     this.showBanner(next);
   }
 
+  clear() {
+    this.queue = [];
+    this.dismiss();
+  }
+
   private showBanner(options: NotificationOptions) {
     this.currentBanner = options;
     const enterDuration = LayoutConstants.Animation.Notification.Enter; // e.g. 0.4s
     const activeDuration = options.duration || LayoutConstants.Animation.Notification.Active;
     const exitDuration = LayoutConstants.Animation.Notification.Exit; // e.g. 0.3s
-
-    // Pause the game
-    window.dispatchEvent(new CustomEvent('game:pause'));
 
     // Play sound
     if (options.type === 'error') {
@@ -348,9 +350,6 @@ export class NotificationService {
     this.animation = null;
     this.isShowing = false;
     this.stopAnimation();
-
-    // Resume the game
-    window.dispatchEvent(new CustomEvent('game:resume'));
 
     // Process next in queue with a small delay
     setTimeout(() => {

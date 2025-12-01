@@ -163,7 +163,7 @@ export class GameSettingsPanel {
     });
 
     aiDifficultySelect?.addEventListener('change', (event) => {
-      const value = (event.target as HTMLSelectElement).value as 'EASY'|'MEDIUM'|'HARD'|'EXPERT';
+      const value = (event.target as HTMLSelectElement).value as 'EASY' | 'MEDIUM' | 'HARD' | 'EXPERT';
       this.settingsManager.saveGameSettings({ aiDifficulty: value });
       window.dispatchEvent(new CustomEvent('game:ai-difficulty-changed', { detail: { value } }));
     });
@@ -233,6 +233,10 @@ export class GameSettingsPanel {
       if (success) {
         this.syncFromSettings(); // Refresh UI
       }
+    });
+
+    window.addEventListener('settings:ui-colors-changed', () => {
+      this.syncFromSettings();
     });
   }
 

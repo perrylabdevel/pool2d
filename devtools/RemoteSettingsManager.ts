@@ -174,6 +174,7 @@ export class RemoteSettingsManager extends EventTarget {
                 break;
             case 'settings:ui-colors-changed':
                 this.uiColors = { ...this.uiColors, ...message.payload };
+                window.dispatchEvent(new CustomEvent('settings:ui-colors-changed', { detail: { settings: this.uiColors } }));
                 this.dispatchEvent(new Event('state-updated'));
                 break;
             case 'settings:appearance-changed':

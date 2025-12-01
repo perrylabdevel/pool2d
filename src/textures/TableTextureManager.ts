@@ -159,7 +159,7 @@ export class TableTextureManager {
     _base: { r: number; g: number; b: number },
     roughness: number
   ): void {
-    const noiseIntensity = roughness * 20;
+    const noiseIntensity = roughness * 60;
 
     for (let i = 0; i < data.length; i += 4) {
       const noise = (Math.random() - 0.5) * noiseIntensity;
@@ -175,9 +175,9 @@ export class TableTextureManager {
     _base: { r: number; g: number; b: number },
     roughness: number
   ): void {
-    const noiseIntensity = roughness * 15;
+    const noiseIntensity = roughness * 50;
     const weaveScale = 3;
-    const weaveIntensity = 0.08;
+    const weaveIntensity = 0.12;
 
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
@@ -342,10 +342,10 @@ export class TableTextureManager {
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
     return result
       ? {
-          r: parseInt(result[1], 16),
-          g: parseInt(result[2], 16),
-          b: parseInt(result[3], 16),
-        }
+        r: parseInt(result[1], 16),
+        g: parseInt(result[2], 16),
+        b: parseInt(result[3], 16),
+      }
       : { r: 0, g: 0, b: 0 };
   }
 

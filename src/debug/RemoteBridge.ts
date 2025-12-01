@@ -91,6 +91,13 @@ export class RemoteBridge {
             });
         });
 
+        window.addEventListener('settings:appearance-changed', () => {
+            this.sendMessage({
+                type: 'settings:appearance-changed',
+                payload: this.settingsManager.getTableAppearance()
+            });
+        });
+
         this.sendMessage({
             type: 'settings:appearance-changed',
             payload: this.settingsManager.getTableAppearance()

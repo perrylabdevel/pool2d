@@ -599,10 +599,34 @@ export class SettingsManager {
 
   saveUIColors(colors: Partial<UIColors>) {
     this.uiColors = { ...this.uiColors, ...colors };
+
+    // Sync to TableAppearance
+    let appearanceChanged = false;
+    if (colors.tableColor) {
+      this.tableAppearance.felt.color = colors.tableColor;
+      appearanceChanged = true;
+    }
+    if (colors.frameColor) {
+      this.tableAppearance.frame.color = colors.frameColor;
+      appearanceChanged = true;
+    }
+    if (colors.railFillColor) {
+      this.tableAppearance.cushion.color = colors.railFillColor;
+      appearanceChanged = true;
+    }
+
     try {
       localStorage.setItem(STORAGE_KEYS.UI_COLORS, JSON.stringify(this.uiColors));
       this.applyUIColors();
       window.dispatchEvent(new CustomEvent('settings:ui-colors-changed', { detail: { settings: this.getUIColors() } }));
+
+      if (appearanceChanged) {
+        localStorage.setItem(STORAGE_KEYS.TABLE_APPEARANCE, JSON.stringify(this.tableAppearance));
+        // Dispatch event so DevTools (RemoteBridge) gets the update
+        window.dispatchEvent(
+          new CustomEvent('settings:appearance-changed', { detail: { appearance: this.tableAppearance } })
+        );
+      }
     } catch (e) {
       console.warn('Failed to save UI colors:', e);
     }
@@ -1067,8 +1091,30 @@ export class SettingsManager {
       cushion: { ...this.tableAppearance.cushion, ...appearance.cushion },
       pocket: { ...this.tableAppearance.pocket, ...appearance.pocket },
     };
+
+    // Sync to UIColors
+    let colorsChanged = false;
+    if (appearance.felt?.color) {
+      this.uiColors.tableColor = appearance.felt.color;
+      colorsChanged = true;
+    }
+    if (appearance.frame?.color) {
+      this.uiColors.frameColor = appearance.frame.color;
+      colorsChanged = true;
+    }
+    if (appearance.cushion?.color) {
+      this.uiColors.railFillColor = appearance.cushion.color;
+      colorsChanged = true;
+    }
+
     try {
       localStorage.setItem(STORAGE_KEYS.TABLE_APPEARANCE, JSON.stringify(this.tableAppearance));
+
+      if (colorsChanged) {
+        localStorage.setItem(STORAGE_KEYS.UI_COLORS, JSON.stringify(this.uiColors));
+        this.applyUIColors(); // Updates CONFIG and CSS vars
+        window.dispatchEvent(new CustomEvent('settings:ui-colors-changed', { detail: { settings: this.getUIColors() } }));
+      }
     } catch (e) {
       console.warn('Failed to save table appearance:', e);
     }

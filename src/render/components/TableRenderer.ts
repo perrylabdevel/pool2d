@@ -13,8 +13,6 @@ import type { TableAppearance } from '../../textures/TableAppearance';
 type FrameClipInfo = { outerX: number; outerY: number; radius: number };
 
 export class TableRenderer {
-    private scene: THREE.Scene;
-
     // Mesh references
     tableMesh: THREE.Mesh | null = null;
     frameMesh: THREE.Group | null = null;
@@ -62,7 +60,7 @@ export class TableRenderer {
     private frameMaterial: THREE.MeshStandardMaterial | null = null;
     private feltTexture: THREE.CanvasTexture | null = null;
     private frameTexture: THREE.CanvasTexture | null = null;
-    
+
     // Texture Manager (new unified system)
     private textureManager: TableTextureManager;
 
@@ -108,10 +106,10 @@ export class TableRenderer {
         // Initialize texture manager with saved appearance
         const appearance = settingsManager.getTableAppearance();
         this.textureManager = new TableTextureManager(appearance);
-        
+
         this.initializeTable();
         this.refreshDerivedGeometry();
-        
+
         // Listen for appearance changes
         window.addEventListener('settings:appearance-changed', (e: Event) => {
             try {
@@ -135,9 +133,12 @@ export class TableRenderer {
 
         // Felt surface following cushion outline
         const feltGeometry = new THREE.ShapeGeometry(playShape);
-        
+
         // Generate proper world-aligned UVs for consistent tiling
         this.applyWorldAlignedUVs(feltGeometry, this.playBounds);
+
+        // Force textures enabled
+        this.layerVisibility.showTextures = true;
 
         // Generate textures from appearance settings
         const textures = this.textureManager.generateTextures();
@@ -147,7 +148,7 @@ export class TableRenderer {
         this.feltMaterial = new THREE.MeshStandardMaterial({
             color: new THREE.Color(appearance.felt.color),
             map: this.layerVisibility.showTextures ? this.feltTexture : null,
-            roughness: 0.8,
+            roughness: appearance.felt.roughness,
             metalness: 0.1,
             side: THREE.DoubleSide,
             stencilWrite: true,
@@ -199,7 +200,7 @@ export class TableRenderer {
         // Get frame texture from texture manager
         const textures = this.textureManager.generateTextures();
         this.frameTexture = textures.frame;
-        
+
         const appearance = this.settingsManager.getTableAppearance();
         const glossiness = appearance.frame.glossiness;
 
@@ -421,7 +422,7 @@ export class TableRenderer {
             stencilWrite: true,
             stencilFunc: THREE.NotEqualStencilFunc,
             stencilRef: 2,
-            stencilZPass: THREE.KeepStencilOp,
+            stencilZPass: THREE.ReplaceStencilOp,
         });
 
         const inner = CONFIG.RAIL_THICKNESS_INNER;
@@ -1714,9 +1715,9 @@ export class TableRenderer {
             polygonOffset: true,
             polygonOffsetFactor: -2,
             polygonOffsetUnits: -2,
-            stencilWrite: false,
-            stencilFunc: THREE.NotEqualStencilFunc,  // Only render where stencil != 2
-            stencilRef: 2,
+            stencilWrite: true,
+            stencilFunc: THREE.EqualStencilFunc,
+            stencilRef: 1,
         });
         material.userData = material.userData ?? {};
         material.userData.baseOpacity = material.userData.baseOpacity ?? material.opacity;
@@ -1799,17 +1800,19 @@ export class TableRenderer {
             const mat = mesh.material as THREE.Material | THREE.Material[];
             const materials = Array.isArray(mat) ? mat : [mat];
             materials.forEach(m => {
-                m.stencilWrite = true;
-                m.stencilFunc = THREE.EqualStencilFunc;
-                m.stencilRef = 1;
+                if (m.stencilWrite !== true || m.stencilFunc !== THREE.EqualStencilFunc || m.stencilRef !== 1) {
+                    m.stencilWrite = true;
+                    m.stencilFunc = THREE.EqualStencilFunc;
+                    m.stencilRef = 1;
+                    m.needsUpdate = true;
+                }
             });
         };
 
         this.railMeshes.forEach(applyStencil);
-        this.railHighlightMeshes.forEach(applyStencil);
         this.railShadowMeshes.forEach(applyStencil);
         if (this.railShadowRibbonMesh) applyStencil(this.railShadowRibbonMesh);
-        if (this.railHighlightRibbonMesh) applyStencil(this.railHighlightRibbonMesh);
+
 
         this.pocketMeshes.forEach(applyStencil);
         this.pocketShadowMeshes.forEach(applyStencil);
@@ -2391,19 +2394,19 @@ export class TableRenderer {
     private applyWorldAlignedUVs(geometry: THREE.BufferGeometry, bounds: BoundaryBounds): void {
         const positions = geometry.attributes.position;
         const uvs = new Float32Array(positions.count * 2);
-        
+
         const width = bounds.maxX - bounds.minX;
         const height = bounds.maxY - bounds.minY;
-        
+
         for (let i = 0; i < positions.count; i++) {
             const x = positions.getX(i);
             const y = positions.getY(i);
-            
+
             // Normalize to 0-1 based on world bounds
             uvs[i * 2] = (x - bounds.minX) / width;
             uvs[i * 2 + 1] = (y - bounds.minY) / height;
         }
-        
+
         geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
     }
 
@@ -2412,31 +2415,37 @@ export class TableRenderer {
      */
     applyAppearance(appearance: TableAppearance): void {
         console.log('🎨 Applying table appearance:', appearance);
-        
+
+
         // Update texture manager and regenerate
         this.textureManager.setAppearance(appearance);
         const textures = this.textureManager.generateTextures();
-        
+
+        // Ensure textures are enabled when applying appearance
+        this.layerVisibility.showTextures = true;
+
         // Update felt
         this.feltTexture?.dispose();
         this.feltTexture = textures.felt;
-        
+
         if (this.feltMaterial) {
             this.feltMaterial.color.set(appearance.felt.color);
             this.feltMaterial.map = this.layerVisibility.showTextures ? this.feltTexture : null;
+            this.feltMaterial.roughness = appearance.felt.roughness;
             this.feltMaterial.needsUpdate = true;
         }
-        
+
         // Update frame
         this.frameTexture?.dispose();
         this.frameTexture = textures.frame;
-        
+
         if (this.frameMaterial) {
             this.frameMaterial.color.set(appearance.frame.color);
             this.frameMaterial.map = this.layerVisibility.showTextures ? this.frameTexture : null;
+            this.frameMaterial.roughness = 1.0 - appearance.frame.glossiness * 0.6;
             this.frameMaterial.needsUpdate = true;
         }
-        
+
         // Update frame mesh materials
         if (this.frameMesh) {
             this.frameMesh.traverse((obj) => {
@@ -2444,15 +2453,16 @@ export class TableRenderer {
                     const mat = (obj as THREE.Mesh).material as THREE.MeshStandardMaterial;
                     mat.color.set(appearance.frame.color);
                     mat.map = this.layerVisibility.showTextures ? this.frameTexture : null;
+                    mat.roughness = 1.0 - appearance.frame.glossiness * 0.6;
                     mat.needsUpdate = true;
                 }
             });
         }
-        
+
         // Update corner fill color (cushion controls this)
         CONFIG.RAIL_FILL_COLOR = appearance.cushion.color;
         this.updateRailFillMaterialColor();
-        
+
         // Update pocket colors
         this.pocketBottomColor.set(appearance.pocket.color);
         this.pocketBottomMeshes.forEach(mesh => {
@@ -2460,7 +2470,7 @@ export class TableRenderer {
             mat.color.set(appearance.pocket.color);
             mat.needsUpdate = true;
         });
-        
+
         // Sync with CONFIG for other systems
         CONFIG.TABLE_COLOR = appearance.felt.color;
         CONFIG.FRAME_COLOR = appearance.frame.color;

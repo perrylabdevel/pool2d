@@ -24,6 +24,8 @@ export enum TransitionType {
     SLIDE_RIGHT
 }
 
+import { notificationService } from './NotificationService';
+
 type StateChangeListener = (newState: UIState, previousState: UIState, transition: TransitionType) => void;
 
 export class UIStateMachine {
@@ -108,6 +110,9 @@ export class UIStateMachine {
     }
 
     private performTransition(newState: UIState, transition?: TransitionType) {
+        // Clear any pending notifications when changing scenes
+        notificationService.clear();
+
         const previousState = this.currentState;
         this.currentState = newState;
 
