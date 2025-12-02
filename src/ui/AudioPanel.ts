@@ -22,6 +22,18 @@ export class AudioPanel {
     this.setupResetButton();
     this.setupPreviewButtons();
     this.setupMuteButtons();
+
+    // Listen for external audio settings changes (from remote devtools or other sources)
+    window.addEventListener('settings:audio-changed', () => {
+      this.loadSettings();
+    });
+
+    // Also listen for state-updated if using RemoteSettingsManager
+    if (this.settingsManager instanceof EventTarget) {
+      this.settingsManager.addEventListener('state-updated', () => {
+        this.loadSettings();
+      });
+    }
   }
 
   private createPanel(): HTMLElement {

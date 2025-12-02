@@ -1,5 +1,4 @@
 import {
-    SettingsManager,
     GeometrySettings,
     RenderSettings,
     AudioSettings,
@@ -129,16 +128,18 @@ export class RemoteSettingsManager extends EventTarget {
         };
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private sendMessage(message: any) {
         if (this.ws.readyState === WebSocket.OPEN) {
             this.ws.send(JSON.stringify(message));
         }
     }
 
-    sendCommand(command: string, payload?: any) {
+    sendCommand(command: string, payload?: unknown) {
         this.sendMessage({ type: 'command', command, payload });
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private handleMessage(message: any) {
         switch (message.type) {
             case 'state':
@@ -154,6 +155,7 @@ export class RemoteSettingsManager extends EventTarget {
                 break;
             case 'settings:geometry-changed':
                 this.geometrySettings = { ...this.geometrySettings, ...message.payload };
+                window.dispatchEvent(new CustomEvent('settings:geometry-changed', { detail: { settings: this.geometrySettings } }));
                 this.dispatchEvent(new Event('state-updated'));
                 break;
             case 'settings:render-changed':
@@ -166,10 +168,12 @@ export class RemoteSettingsManager extends EventTarget {
                 break;
             case 'settings:audio-changed':
                 this.audioSettings = { ...this.audioSettings, ...message.payload };
+                window.dispatchEvent(new CustomEvent('settings:audio-changed', { detail: { settings: this.audioSettings } }));
                 this.dispatchEvent(new Event('state-updated'));
                 break;
             case 'settings:game-changed':
                 this.gameSettings = { ...this.gameSettings, ...message.payload };
+                window.dispatchEvent(new CustomEvent('settings:game-changed', { detail: { settings: this.gameSettings } }));
                 this.dispatchEvent(new Event('state-updated'));
                 break;
             case 'settings:ui-colors-changed':
@@ -189,15 +193,20 @@ export class RemoteSettingsManager extends EventTarget {
                 break;
             case 'settings:physics-changed':
                 this.physicsSettings = { ...this.physicsSettings, ...message.payload };
+                window.dispatchEvent(new CustomEvent('settings:physics-changed', { detail: { settings: this.physicsSettings } }));
                 this.dispatchEvent(new Event('state-updated'));
                 break;
         }
     }
 
     private dispatchUpdates() {
-        // Hack to force panels to update if they are open
-        // For RenderLayerPanel
+        // Dispatch all window events so panels update when full state arrives
+        window.dispatchEvent(new CustomEvent('settings:geometry-changed', { detail: { settings: this.geometrySettings } }));
         window.dispatchEvent(new CustomEvent('settings:render-changed', { detail: { settings: this.renderSettings } }));
+        window.dispatchEvent(new CustomEvent('settings:audio-changed', { detail: { settings: this.audioSettings } }));
+        window.dispatchEvent(new CustomEvent('settings:game-changed', { detail: { settings: this.gameSettings } }));
+        window.dispatchEvent(new CustomEvent('settings:ui-colors-changed', { detail: { settings: this.uiColors } }));
+        window.dispatchEvent(new CustomEvent('settings:physics-changed', { detail: { settings: this.physicsSettings } }));
         this.dispatchEvent(new Event('state-updated'));
     }
 

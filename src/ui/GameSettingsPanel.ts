@@ -238,6 +238,18 @@ export class GameSettingsPanel {
     window.addEventListener('settings:ui-colors-changed', () => {
       this.syncFromSettings();
     });
+
+    // Listen for game settings changes (from remote devtools or other sources)
+    window.addEventListener('settings:game-changed', () => {
+      this.syncFromSettings();
+    });
+
+    // Also listen for state-updated if using RemoteSettingsManager
+    if (this.settingsManager instanceof EventTarget) {
+      this.settingsManager.addEventListener('state-updated', () => {
+        this.syncFromSettings();
+      });
+    }
   }
 
   private syncFromSettings() {
