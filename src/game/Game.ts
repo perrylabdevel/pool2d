@@ -494,7 +494,6 @@ export class Game {
     });
     window.addEventListener('playback:speed', (e: any) => this.playbackController.setSpeed(e.detail));
     window.addEventListener('playback:load', (e: any) => {
-      console.log('📼 Game received playback:load event', e.detail ? '(has data)' : '(no data)');
       if (e.detail) {
         this.startPlayback(e.detail);
       }
@@ -1976,14 +1975,7 @@ export class Game {
       return;
     }
 
-    console.log('📼 startPlayback called with data:', {
-      shots: data.shots.length,
-      snapshots: data.snapshots?.length,
-      duration: data.duration
-    });
-
     this.mode = GameMode.PLAYBACK;
-    console.log('📼 Mode set to PLAYBACK (' + this.mode + ')');
 
     // Update PlaybackController's world reference to current world
     // (in case world was recreated since controller initialization)

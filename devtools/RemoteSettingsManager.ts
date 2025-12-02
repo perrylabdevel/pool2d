@@ -150,7 +150,6 @@ export class RemoteSettingsManager extends EventTarget {
     }
 
     sendCommand(command: string, payload?: unknown) {
-        console.log('[RemoteSettingsManager] Sending command:', command);
         this.sendMessage({ type: 'command', command, payload });
     }
 
