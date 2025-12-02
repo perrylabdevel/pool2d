@@ -34,7 +34,7 @@ export class RenderLayerPanel {
     private settingsManager: SettingsManager,
     private renderer: Renderer3D
   ) {
-    this.panel = document.getElementById('render-layer-panel')!;
+    this.panel = this.ensurePanelElement();
     const header = this.panel.querySelector('.panel-header') as HTMLElement | null;
     if (header && !this.panel.closest('#panel-dock')) {
       makePanelDraggable(this.panel, header);
@@ -60,6 +60,107 @@ export class RenderLayerPanel {
       this.applyToRenderer(this.settings);
       this.syncUI();
     });
+
+    // Also listen for state-updated if using RemoteSettingsManager (for remote devtools sync)
+    if (this.settingsManager instanceof EventTarget) {
+      this.settingsManager.addEventListener('state-updated', () => {
+        this.settings = this.settingsManager.getRenderSettings();
+        this.applyToRenderer(this.settings);
+        this.syncUI();
+      });
+    }
+  }
+
+  private ensurePanelElement(): HTMLElement {
+    const existing = document.getElementById('render-layer-panel');
+    if (existing) return existing as HTMLElement;
+
+    const panel = document.createElement('div');
+    panel.id = 'render-layer-panel';
+    panel.className = 'panel-dock-card hidden';
+    panel.innerHTML = `
+      <div class="panel-header">
+        <h3>Render Layers</h3>
+      </div>
+      <div class="panel-content">
+        <div class="settings-group">
+          <h4 class="settings-group-title">Visibility</h4>
+          <div class="panel-toggle-list">
+            <label class="panel-toggle-row" for="layer-table"><input id="layer-table" type="checkbox" checked /><span>Table</span></label>
+            <label class="panel-toggle-row" for="layer-frame"><input id="layer-frame" type="checkbox" checked /><span>Frame</span></label>
+            <label class="panel-toggle-row" for="layer-rails"><input id="layer-rails" type="checkbox" checked /><span>Rails</span></label>
+            <label class="panel-toggle-row" for="layer-pockets"><input id="layer-pockets" type="checkbox" checked /><span>Pockets</span></label>
+            <label class="panel-toggle-row" for="layer-caps"><input id="layer-caps" type="checkbox" checked /><span>Caps</span></label>
+            <label class="panel-toggle-row" for="layer-balls"><input id="layer-balls" type="checkbox" checked /><span>Balls</span></label>
+            <label class="panel-toggle-row" for="layer-ui"><input id="layer-ui" type="checkbox" checked /><span>UI Overlay</span></label>
+            <label class="panel-toggle-row" for="layer-measure"><input id="layer-measure" type="checkbox" /><span>Measurement Overlay</span></label>
+            <label class="panel-toggle-row" for="layer-reference"><input id="layer-reference" type="checkbox" /><span>Reference Overlay</span></label>
+            <label class="panel-toggle-row" for="layer-textures"><input id="layer-textures" type="checkbox" checked /><span>Textures</span></label>
+          </div>
+        </div>
+
+        <div class="settings-group">
+          <h4 class="settings-group-title">Render Order</h4>
+          <div class="panel-order-list">
+            <label class="panel-order-row" for="order-table"><span>Table</span><input id="order-table" type="number" value="0" step="1" min="-1000" max="2000" /></label>
+            <label class="panel-order-row" for="order-frame"><span>Frame</span><input id="order-frame" type="number" value="5" step="1" min="-1000" max="2000" /></label>
+            <label class="panel-order-row" for="order-rails"><span>Rails</span><input id="order-rails" type="number" value="10" step="1" min="-1000" max="2000" /></label>
+            <label class="panel-order-row" for="order-pockets"><span>Pockets</span><input id="order-pockets" type="number" value="20" step="1" min="-1000" max="2000" /></label>
+            <label class="panel-order-row" for="order-caps"><span>Caps</span><input id="order-caps" type="number" value="25" step="1" min="-1000" max="2000" /></label>
+            <label class="panel-order-row" for="order-balls"><span>Balls</span><input id="order-balls" type="number" value="30" step="1" min="-1000" max="2000" /></label>
+            <label class="panel-order-row" for="order-ui"><span>UI Overlay</span><input id="order-ui" type="number" value="40" step="1" min="-1000" max="2000" /></label>
+          </div>
+        </div>
+
+        <div class="settings-group">
+          <h4 class="settings-group-title">Lighting</h4>
+          <div class="slider-group"><label class="slider-label" for="lighting-ambient"><span class="slider-title">Ambient Light</span><span class="slider-value" id="lighting-ambient-value">1.10</span></label><input type="range" id="lighting-ambient" min="0" max="3" step="0.05" value="1.1" /></div>
+          <div class="slider-group"><label class="slider-label" for="lighting-directional"><span class="slider-title">Key Light</span><span class="slider-value" id="lighting-directional-value">1.60</span></label><input type="range" id="lighting-directional" min="0" max="3" step="0.05" value="1.6" /></div>
+          <div class="slider-group"><label class="slider-label" for="lighting-accent"><span class="slider-title">Accent Spot</span><span class="slider-value" id="lighting-accent-value">0.50</span></label><input type="range" id="lighting-accent" min="0" max="3" step="0.05" value="0.5" /></div>
+          <div class="slider-group"><label class="slider-label" for="lighting-rail-highlight"><span class="slider-title">Rail Highlight</span><span class="slider-value" id="lighting-rail-highlight-value">0.60</span></label><input type="range" id="lighting-rail-highlight" min="0" max="1.5" step="0.05" value="0.6" /></div>
+          <div class="slider-group"><label class="slider-label" for="lighting-rail-shadow"><span class="slider-title">Rail Shadow</span><span class="slider-value" id="lighting-rail-shadow-value">0.25</span></label><input type="range" id="lighting-rail-shadow" min="0" max="1.5" step="0.05" value="0.25" /></div>
+          <div class="slider-group"><label class="slider-label" for="lighting-rail-shadow-base"><span class="slider-title">Rail Shadow Near-Edge</span><span class="slider-value" id="lighting-rail-shadow-base-value">170</span></label><input type="range" id="lighting-rail-shadow-base" min="100" max="240" step="1" value="170" /></div>
+          <div class="slider-group"><label class="slider-label" for="lighting-rail-shadow-spread"><span class="slider-title">Rail Shadow Spread</span><span class="slider-value" id="lighting-rail-shadow-spread-value">1.00</span></label><input type="range" id="lighting-rail-shadow-spread" min="0.5" max="10" step="0.1" value="1.00" /></div>
+          <div class="slider-group"><label class="slider-label" for="lighting-rail-shadow-softness"><span class="slider-title">Rail Shadow Softness</span><span class="slider-value" id="lighting-rail-shadow-softness-value">1.80</span></label><input type="range" id="lighting-rail-shadow-softness" min="0.5" max="3.0" step="0.05" value="1.80" /></div>
+          <div class="slider-group"><label class="slider-label" for="lighting-rail-highlight-spread"><span class="slider-title">Rail Highlight Spread</span><span class="slider-value" id="lighting-rail-highlight-spread-value">1.00</span></label><input type="range" id="lighting-rail-highlight-spread" min="0.5" max="3.0" step="0.05" value="1.00" /></div>
+          <div class="slider-group"><label class="slider-label" for="lighting-pocket-highlight"><span class="slider-title">Pocket Highlight</span><span class="slider-value" id="lighting-pocket-highlight-value">0.55</span></label><input type="range" id="lighting-pocket-highlight" min="0" max="1.5" step="0.05" value="0.55" /></div>
+          <div class="slider-group"><label class="slider-label" for="lighting-pocket-shadow"><span class="slider-title">Pocket Shadow</span><span class="slider-value" id="lighting-pocket-shadow-value">0.45</span></label><input type="range" id="lighting-pocket-shadow" min="0" max="1.5" step="0.05" value="0.45" /></div>
+        </div>
+
+        <div class="settings-group">
+          <h4 class="settings-group-title">Pocket Groove</h4>
+          <div class="slider-group"><label class="slider-label" for="groove-inner-base"><span class="slider-title">Inner Radius Base</span><span class="slider-value" id="groove-inner-base-value">0.18</span></label><input type="range" id="groove-inner-base" min="0.05" max="0.5" step="0.01" value="0.18" /></div>
+          <div class="slider-group"><label class="slider-label" for="groove-inner-depth"><span class="slider-title">Inner Radius Depth</span><span class="slider-value" id="groove-inner-depth-value">0.22</span></label><input type="range" id="groove-inner-depth" min="0.0" max="0.6" step="0.01" value="0.22" /></div>
+          <div class="slider-group"><label class="slider-label" for="groove-thickness"><span class="slider-title">Groove Thickness</span><span class="slider-value" id="groove-thickness-value">0.08</span></label><input type="range" id="groove-thickness" min="0.01" max="0.2" step="0.005" value="0.08" /></div>
+          <div class="slider-group"><label class="slider-label" for="groove-opacity-base"><span class="slider-title">Groove Opacity Base</span><span class="slider-value" id="groove-opacity-base-value">0.18</span></label><input type="range" id="groove-opacity-base" min="0.0" max="1.0" step="0.02" value="0.18" /></div>
+          <div class="slider-group"><label class="slider-label" for="groove-opacity-depth"><span class="slider-title">Groove Opacity Depth</span><span class="slider-value" id="groove-opacity-depth-value">0.36</span></label><input type="range" id="groove-opacity-depth" min="0.0" max="1.0" step="0.02" value="0.36" /></div>
+          <div class="slider-group"><label class="slider-label" for="groove-rim-thickness"><span class="slider-title">Rim Thickness</span><span class="slider-value" id="groove-rim-thickness-value">0.02</span></label><input type="range" id="groove-rim-thickness" min="0.005" max="0.08" step="0.005" value="0.02" /></div>
+          <div class="slider-group"><label class="slider-label" for="groove-rim-outer-opacity"><span class="slider-title">Rim Outer Opacity</span><span class="slider-value" id="groove-rim-outer-opacity-value">0.10</span></label><input type="range" id="groove-rim-outer-opacity" min="0.0" max="0.5" step="0.02" value="0.10" /></div>
+          <div class="slider-group"><label class="slider-label" for="groove-rim-inner-opacity"><span class="slider-title">Rim Inner Opacity</span><span class="slider-value" id="groove-rim-inner-opacity-value">0.08</span></label><input type="range" id="groove-rim-inner-opacity" min="0.0" max="0.5" step="0.02" value="0.08" /></div>
+        </div>
+
+        <div class="settings-group">
+          <h4 class="settings-group-title">Pocket Shades</h4>
+          <div class="slider-group"><label class="slider-label" for="groove-color"><span class="slider-title">Groove Color</span></label><input type="color" id="groove-color" value="#000000" style="height:28px; width:48px; padding:0; border:none; background:transparent;" /></div>
+          <div class="slider-group"><label class="slider-label" for="groove-rim-color"><span class="slider-title">Rim Color</span></label><input type="color" id="groove-rim-color" value="#ffffff" style="height:28px; width:48px; padding:0; border:none; background:transparent;" /></div>
+          <div class="slider-group"><label class="slider-label" for="pocket-bottom-color"><span class="slider-title">Bottom Fill</span></label><input type="color" id="pocket-bottom-color" value="#000000" style="height:28px; width:48px; padding:0; border:none; background:transparent;" /></div>
+          <div class="slider-group"><label class="slider-label" for="pocket-gradient-center"><span class="slider-title">Gradient Center</span></label><input type="color" id="pocket-gradient-center" value="#000000" style="height:28px; width:48px; padding:0; border:none; background:transparent;" /></div>
+          <div class="slider-group"><label class="slider-label" for="pocket-gradient-edge"><span class="slider-title">Gradient Edge</span></label><input type="color" id="pocket-gradient-edge" value="#141414" style="height:28px; width:48px; padding:0; border:none; background:transparent;" /></div>
+          <div class="slider-group"><label class="slider-label" for="pocket-wall-color"><span class="slider-title">Wall Color</span></label><input type="color" id="pocket-wall-color" value="#0a0a0a" style="height:28px; width:48px; padding:0; border:none; background:transparent;" /></div>
+          <div class="slider-group"><label class="slider-label" for="pocket-gradient-strength"><span class="slider-title">Gradient Strength</span><span class="slider-value" id="pocket-gradient-strength-value">1.00</span></label><input type="range" id="pocket-gradient-strength" min="0" max="1" step="0.01" value="1.00" /></div>
+        </div>
+
+        <div class="panel-actions">
+          <button id="render-layer-reset" class="panel-btn">Reset Defaults</button>
+          <button id="render-layer-regenerate-textures" class="panel-btn">Regenerate Textures</button>
+          <button id="render-layer-sync" class="panel-btn">Sync From Scene</button>
+        </div>
+      </div>
+    `;
+
+    const dock = document.getElementById('panel-dock');
+    (dock ?? document.body).appendChild(panel);
+    return panel;
   }
 
   private bindControls() {

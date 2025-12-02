@@ -23,9 +23,20 @@ export class PhysicsPanel {
       focusTarget,
     });
 
-    // Listen for external updates
+    // Listen for external updates (state-updated from RemoteSettingsManager)
     this.settingsManager.addEventListener('state-updated', () => {
       this.physicsConfig = this.settingsManager.getPhysicsSettings();
+      this.renderConfig = this.settingsManager.getRenderSettings();
+      this.updateUI();
+    });
+
+    // Also listen to window events for bidirectional sync
+    window.addEventListener('settings:physics-changed', () => {
+      this.physicsConfig = this.settingsManager.getPhysicsSettings();
+      this.updateUI();
+    });
+
+    window.addEventListener('settings:render-changed', () => {
       this.renderConfig = this.settingsManager.getRenderSettings();
       this.updateUI();
     });

@@ -13,7 +13,7 @@ import {
   RenderLayerBooleanKey,
   RenderLayerOrderKey,
 } from './RenderLayers';
-import { SettingsManager, TextureSettings } from '../ui/SettingsManager';
+import { SettingsManager, TextureSettings, type RenderSettings } from '../ui/SettingsManager';
 import { BaseRenderer } from './BaseRenderer';
 import type { MicroDialRenderState, PocketAnimationEvent } from './ControlTypes';
 import { TableRenderer } from './components/TableRenderer';
@@ -238,35 +238,10 @@ export class Renderer3D extends BaseRenderer {
     });
 
     window.addEventListener('settings:render-changed', (event) => {
-      const detail = (event as CustomEvent<{ settings?: { ballScale?: number; ambientIntensity?: number; directionalIntensity?: number; accentIntensity?: number; railHighlightIntensity?: number; railShadowIntensity?: number; pocketShadowIntensity?: number; pocketHighlightIntensity?: number; railShadowSpread?: number; railShadowSoftness?: number } }>).detail;
+      const detail = (event as CustomEvent<{ settings?: RenderSettings }>).detail;
       const settings = detail?.settings;
-      const scale = settings?.ballScale ?? CONFIG.BALL_SCALE ?? 1;
-      this.setBallScale(scale);
-      this.setLightingIntensities({
-        ambient: settings?.ambientIntensity ?? CONFIG.AMBIENT_INTENSITY,
-        directional: settings?.directionalIntensity ?? CONFIG.DIRECTIONAL_INTENSITY,
-        accent: settings?.accentIntensity ?? CONFIG.ACCENT_INTENSITY,
-      });
-      this.setHighlightIntensities({
-        rail: settings?.railHighlightIntensity ?? CONFIG.RAIL_HIGHLIGHT_INTENSITY,
-        railShadow: settings?.railShadowIntensity ?? CONFIG.RAIL_SHADOW_INTENSITY,
-        pocketShadow: settings?.pocketShadowIntensity ?? CONFIG.POCKET_SHADOW_INTENSITY,
-        pocketHighlight: settings?.pocketHighlightIntensity ?? CONFIG.POCKET_HIGHLIGHT_INTENSITY,
-      });
-      if (typeof settings?.railShadowSpread === 'number') {
-        this.setRailShadowSpread(settings.railShadowSpread);
-      }
-      if (typeof settings?.railShadowSoftness === 'number') {
-        this.setRailShadowSoftness(settings.railShadowSoftness);
-      }
-      if (typeof (settings as any)?.railShadowBaseGray === 'number') {
-        this.setRailShadowBaseGray((settings as any).railShadowBaseGray);
-      }
-      if (typeof (settings as any)?.railHighlightSpread === 'number') {
-        this.setRailHighlightSpread((settings as any).railHighlightSpread);
-      }
-      if (typeof (settings as any)?.railHighlightColor === 'string') {
-        this.setRailHighlightColor((settings as any).railHighlightColor);
+      if (settings) {
+        this.applyRenderSettingsPayload(settings);
       }
     });
 
@@ -275,6 +250,76 @@ export class Renderer3D extends BaseRenderer {
       // The event detail contains the new settings if we needed them, but TableRenderer reads from SettingsManager
       this.tableRenderer.regenerateTextures();
     });
+
+    // Ensure renderer picks up the current render settings on boot (important for remote devtools)
+    try {
+      const initialRenderSettings = this.settingsManager.getRenderSettings();
+      this.applyRenderSettingsPayload(initialRenderSettings);
+    } catch (err) {
+      console.warn('[Renderer3D] Failed to apply initial render settings', err);
+    }
+  }
+
+  private applyRenderSettingsPayload(settings: RenderSettings) {
+    // Layer visibility and ordering (in case updates come from remote devtools)
+    this.applyRenderLayerSettings(settings as unknown as RenderLayerSettings);
+
+    const scale = settings.ballScale ?? CONFIG.BALL_SCALE ?? 1;
+    this.setBallScale(scale);
+
+    this.setLightingIntensities({
+      ambient: settings.ambientIntensity ?? CONFIG.AMBIENT_INTENSITY,
+      directional: settings.directionalIntensity ?? CONFIG.DIRECTIONAL_INTENSITY,
+      accent: settings.accentIntensity ?? CONFIG.ACCENT_INTENSITY,
+    });
+
+    this.setHighlightIntensities({
+      rail: settings.railHighlightIntensity ?? CONFIG.RAIL_HIGHLIGHT_INTENSITY,
+      railShadow: settings.railShadowIntensity ?? CONFIG.RAIL_SHADOW_INTENSITY,
+      pocketShadow: settings.pocketShadowIntensity ?? CONFIG.POCKET_SHADOW_INTENSITY,
+      pocketHighlight: settings.pocketHighlightIntensity ?? CONFIG.POCKET_HIGHLIGHT_INTENSITY,
+    });
+
+    if (typeof settings.railShadowSpread === 'number') {
+      this.setRailShadowSpread(settings.railShadowSpread);
+    }
+    if (typeof settings.railShadowSoftness === 'number') {
+      this.setRailShadowSoftness(settings.railShadowSoftness);
+    }
+    if (typeof settings.railShadowBaseGray === 'number') {
+      this.setRailShadowBaseGray(settings.railShadowBaseGray);
+    }
+    if (typeof settings.railHighlightSpread === 'number') {
+      this.setRailHighlightSpread(settings.railHighlightSpread);
+    }
+    if (typeof settings.railHighlightColor === 'string') {
+      this.setRailHighlightColor(settings.railHighlightColor);
+    }
+
+    // Pocket visuals
+    this.setPocketGrooveSettings({
+      innerBase: settings.grooveInnerBase,
+      innerDepthScale: settings.grooveInnerDepthScale,
+      thicknessFactor: settings.grooveThicknessFactor,
+      opacityBase: settings.grooveOpacityBase,
+      opacityDepthScale: settings.grooveOpacityDepthScale,
+      rimThicknessFactor: settings.grooveRimThicknessFactor,
+      rimOuterOpacity: settings.grooveRimOuterOpacity,
+      rimInnerOpacity: settings.grooveRimInnerOpacity,
+    });
+
+    this.setPocketShadeColors({
+      grooveColor: settings.grooveColor,
+      rimColor: settings.rimColor,
+      bottomColor: settings.pocketBottomColor,
+      gradientCenter: settings.pocketGradientCenterColor,
+      gradientEdge: settings.pocketGradientEdgeColor,
+      wallColor: settings.pocketWallColor,
+    });
+
+    if (typeof settings.pocketGradientStrength === 'number') {
+      this.setPocketGradientStrength(settings.pocketGradientStrength);
+    }
   }
 
   applyTexture(type: 'felt' | 'rail', config: any) {

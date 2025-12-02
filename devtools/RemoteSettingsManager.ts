@@ -161,9 +161,11 @@ export class RemoteSettingsManager extends EventTarget {
             case 'settings:render-changed':
                 this.renderSettings = { ...this.renderSettings, ...message.payload };
                 window.dispatchEvent(new CustomEvent('settings:render-changed', { detail: { settings: this.renderSettings } }));
+                this.dispatchEvent(new Event('state-updated'));
                 break;
             case 'settings:modern-geometry-changed':
                 this.modernGeometrySettings = message.payload;
+                window.dispatchEvent(new CustomEvent('settings:modern-geometry-changed', { detail: { settings: this.modernGeometrySettings } }));
                 this.dispatchEvent(new Event('state-updated'));
                 break;
             case 'settings:audio-changed':
@@ -203,6 +205,7 @@ export class RemoteSettingsManager extends EventTarget {
         // Dispatch all window events so panels update when full state arrives
         window.dispatchEvent(new CustomEvent('settings:geometry-changed', { detail: { settings: this.geometrySettings } }));
         window.dispatchEvent(new CustomEvent('settings:render-changed', { detail: { settings: this.renderSettings } }));
+        window.dispatchEvent(new CustomEvent('settings:modern-geometry-changed', { detail: { settings: this.modernGeometrySettings } }));
         window.dispatchEvent(new CustomEvent('settings:audio-changed', { detail: { settings: this.audioSettings } }));
         window.dispatchEvent(new CustomEvent('settings:game-changed', { detail: { settings: this.gameSettings } }));
         window.dispatchEvent(new CustomEvent('settings:ui-colors-changed', { detail: { settings: this.uiColors } }));

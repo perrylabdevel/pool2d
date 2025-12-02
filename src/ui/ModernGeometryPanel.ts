@@ -13,7 +13,6 @@ import {
   PocketTemplate,
   GEOMETRY_TEMPLATES,
   getTemplateName,
-  getTemplateDescription,
   GEOMETRY_RANGES,
   validateModernGeometry,
 } from '../geometry/ModernGeometry';
@@ -30,6 +29,7 @@ export class ModernGeometryPanel {
   private onGeometryChange: () => void;
   private currentGeometry: ModernPocketGeometry;
   private livePreviewEnabled: boolean = true;
+  private isSyncing: boolean = false;
 
   constructor(settingsManager: SettingsManager, onGeometryChange: () => void) {
     this.settingsManager = settingsManager;
@@ -49,6 +49,35 @@ export class ModernGeometryPanel {
 
     this.setupControls();
     this.syncToUI();
+
+    // Listen for external updates (e.g. from remote devtools or other sources)
+    window.addEventListener('settings:modern-geometry-changed', () => {
+      this.loadFromSettingsManager();
+    });
+
+    // Also listen for state-updated if using RemoteSettingsManager
+    if (this.settingsManager instanceof EventTarget) {
+      this.settingsManager.addEventListener('state-updated', () => {
+        this.loadFromSettingsManager();
+      });
+    }
+  }
+
+  /** Reload geometry from settings manager (for external sync) */
+  private loadFromSettingsManager() {
+    if (this.isSyncing) return; // Prevent recursive sync
+    const savedModern = this.settingsManager.getModernGeometrySettings();
+    if (savedModern) {
+      this.isSyncing = true;
+      this.currentGeometry = this.normalizeGeometry({
+        template: savedModern.template ?? PocketTemplate.CUSTOM,
+        side: { ...savedModern.side },
+        corner: { ...savedModern.corner },
+        global: savedModern.global ? { ...savedModern.global } : undefined,
+      });
+      this.syncToUI();
+      this.isSyncing = false;
+    }
   }
 
   private loadGeometryFromConfig(): ModernPocketGeometry {
@@ -623,8 +652,8 @@ export class ModernGeometryPanel {
       cornerAngleDisplay.textContent = `Calculated jaw angle: ${cornerJawAngle.toFixed(1)}°`;
     }
 
-    // Apply geometry immediately if live preview is enabled
-    if (this.livePreviewEnabled && validation.valid) {
+    // Apply geometry immediately if live preview is enabled (skip if syncing from external source)
+    if (this.livePreviewEnabled && validation.valid && !this.isSyncing) {
       const legacy = modernToLegacy(this.currentGeometry);
       this.settingsManager.saveGeometrySettings(legacy as Partial<GeometrySettings>);
       this.settingsManager.saveModernGeometrySettings(this.currentGeometry);

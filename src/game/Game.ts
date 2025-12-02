@@ -18,6 +18,7 @@ import { SettingsPanel } from '../ui/SettingsPanel';
 import { ModernGeometryPanel } from '../ui/ModernGeometryPanel';
 import { AudioPanel } from '../ui/AudioPanel';
 import { HelpPanel } from '../ui/HelpPanel';
+import { RenderLayerPanel } from '../ui/RenderLayerPanel';
 import { scenarioManager } from '../debug/ScenarioManager';
 import { Player, PlayerType, BallGroup } from './Player';
 import { GameStateMachine, GameState } from './GameStateMachine';
@@ -83,6 +84,7 @@ export class Game {
   debug: DebugDraw;
   settings: SettingsPanel;
   modernGeometryPanel: ModernGeometryPanel;
+  renderLayerPanel: RenderLayerPanel;
   audioPanel: AudioPanel;
   helpPanel: HelpPanel;
   rules: EightBallRules;
@@ -166,6 +168,7 @@ export class Game {
     this.debug = new DebugDraw(debugCanvas);
     this.settings = new SettingsPanel(this.hud.settingsManager);
     this.modernGeometryPanel = new ModernGeometryPanel(this.hud.settingsManager, () => this.restart());
+    this.renderLayerPanel = new RenderLayerPanel(this.hud.settingsManager, this.renderer);
     this.audioPanel = new AudioPanel(this.hud.settingsManager);
     this.helpPanel = new HelpPanel();
     this.rules = new EightBallRules(RULES_PRESETS[this.currentRuleset]);
@@ -682,6 +685,10 @@ export class Game {
     });
     this.hud.registerPanel('modern-geometry-panel', this.modernGeometryPanel.getController(), {
       hotkeys: ['g'],
+      persistState: true,
+    });
+    this.hud.registerPanel('render-layer-panel', this.renderLayerPanel.getController(), {
+      hotkeys: ['l'],
       persistState: true,
     });
 

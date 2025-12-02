@@ -135,6 +135,8 @@ export class RemoteBridge {
             case 'updateGeometry':
                 console.log('[RemoteBridge] Received geometry update', message.payload);
                 this.settingsManager.saveGeometrySettings(message.payload);
+                // Trigger table rebuild for remote geometry changes
+                window.dispatchEvent(new CustomEvent('settings:geometry-apply'));
                 break;
             case 'updateRender':
                 console.log('[RemoteBridge] Received render update', message.payload);
@@ -143,6 +145,8 @@ export class RemoteBridge {
             case 'updateModernGeometry':
                 console.log('[RemoteBridge] Received modern geometry update', message.payload);
                 this.settingsManager.saveModernGeometrySettings(message.payload);
+                // Trigger table rebuild for remote geometry changes
+                window.dispatchEvent(new CustomEvent('settings:geometry-apply'));
                 break;
             case 'updateAudio':
                 console.log('[RemoteBridge] Received audio update', message.payload);
@@ -175,6 +179,8 @@ export class RemoteBridge {
         switch (command) {
             case 'resetGeometry':
                 this.settingsManager.resetGeometrySettings();
+                // Trigger table rebuild for remote geometry reset
+                window.dispatchEvent(new CustomEvent('settings:geometry-apply'));
                 break;
             case 'resetRender':
                 this.settingsManager.resetRenderSettings();

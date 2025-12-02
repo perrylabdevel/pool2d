@@ -698,6 +698,7 @@ export class SettingsManager {
     } catch (e) {
       console.warn('Failed to save physics settings:', e);
     }
+    window.dispatchEvent(new CustomEvent('settings:physics-changed', { detail: { settings: this.getPhysicsSettings() } }));
   }
 
   getPhysicsSettings(): PhysicsSettings {
@@ -712,6 +713,7 @@ export class SettingsManager {
     } catch (e) {
       console.warn('Failed to reset physics settings:', e);
     }
+    window.dispatchEvent(new CustomEvent('settings:physics-changed', { detail: { settings: this.getPhysicsSettings() } }));
   }
 
   // Geometry Settings
@@ -878,6 +880,7 @@ export class SettingsManager {
     } catch (e) {
       console.warn('Failed to save modern geometry settings:', e);
     }
+    window.dispatchEvent(new CustomEvent('settings:modern-geometry-changed', { detail: { settings: this.modernGeometrySettings } }));
   }
 
   resetGeometrySettings() {
