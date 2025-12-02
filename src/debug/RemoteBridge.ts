@@ -109,6 +109,13 @@ export class RemoteBridge {
                 payload: this.settingsManager.getPhysicsSettings()
             });
         });
+
+        // Listen for match recordings and send to devtools
+        window.addEventListener('match:recorded', (e: any) => {
+            if (e.detail) {
+                this.sendMessage({ type: 'match:recorded', payload: e.detail });
+            }
+        });
     }
 
     private broadcastState() {
@@ -175,33 +182,62 @@ export class RemoteBridge {
     }
 
     private handleCommand(command: string, payload?: any) {
-        console.log('[RemoteBridge] Received command', command, payload);
-        switch (command) {
-            case 'resetGeometry':
-                this.settingsManager.resetGeometrySettings();
-                // Trigger table rebuild for remote geometry reset
-                window.dispatchEvent(new CustomEvent('settings:geometry-apply'));
-                break;
-            case 'resetRender':
-                this.settingsManager.resetRenderSettings();
-                break;
-            case 'resetAudio':
-                this.settingsManager.resetAudioSettings();
-                break;
-            case 'resetUIColors':
-                this.settingsManager.resetUIColors();
-                break;
-            case 'resetTableAppearance':
-                this.settingsManager.resetTableAppearance();
-                break;
-            case 'resetPhysics':
-                this.settingsManager.resetPhysicsSettings();
-                break;
-            case 'regenerateTextures':
-                if (this.renderer && this.renderer.tableRenderer) {
-                    this.renderer.tableRenderer.regenerateTextures();
-                }
-                break;
+        this.isProcessingRemoteCommand = true;
+        try {
+            switch (command) {
+                case 'resetGeometry':
+                    this.settingsManager.resetGeometrySettings();
+                    // Trigger table rebuild for remote geometry reset
+                    window.dispatchEvent(new CustomEvent('settings:geometry-apply'));
+                    break;
+                case 'resetRender':
+                    this.settingsManager.resetRenderSettings();
+                    break;
+                case 'resetAudio':
+                    this.settingsManager.resetAudioSettings();
+                    break;
+                case 'resetUIColors':
+                    this.settingsManager.resetUIColors();
+                    break;
+                case 'resetTableAppearance':
+                    this.settingsManager.resetTableAppearance();
+                    break;
+                case 'resetPhysics':
+                    this.settingsManager.resetPhysicsSettings();
+                    break;
+                case 'regenerateTextures':
+                    if (this.renderer && this.renderer.tableRenderer) {
+                        this.renderer.tableRenderer.regenerateTextures();
+                    }
+                    break;
+                // Playback commands - dispatch to local game
+                case 'playback:play':
+                    window.dispatchEvent(new CustomEvent('playback:play'));
+                    break;
+                case 'playback:pause':
+                    window.dispatchEvent(new CustomEvent('playback:pause'));
+                    break;
+                case 'playback:toggle':
+                    window.dispatchEvent(new CustomEvent('playback:toggle'));
+                    break;
+                case 'playback:seek':
+                    window.dispatchEvent(new CustomEvent('playback:seek', { detail: payload }));
+                    break;
+                case 'playback:nextShot':
+                    window.dispatchEvent(new CustomEvent('playback:nextShot'));
+                    break;
+                case 'playback:prevShot':
+                    window.dispatchEvent(new CustomEvent('playback:prevShot'));
+                    break;
+                case 'playback:speed':
+                    window.dispatchEvent(new CustomEvent('playback:speed', { detail: payload }));
+                    break;
+                case 'playback:load':
+                    window.dispatchEvent(new CustomEvent('playback:load', { detail: payload }));
+                    break;
+            }
+        } finally {
+            this.isProcessingRemoteCommand = false;
         }
     }
 }

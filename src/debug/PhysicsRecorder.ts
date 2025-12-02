@@ -74,6 +74,14 @@ export class PhysicsRecorder {
     this.recording = false;
     console.log('⏹️ Physics recording stopped');
     this.printSummary();
+
+    // Dispatch event with match data for devtools
+    window.dispatchEvent(new CustomEvent('match:recorded', {
+      detail: {
+        timestamp: Date.now(),
+        data: this.getMatchData()
+      }
+    }));
   }
 
   isRecording(): boolean {

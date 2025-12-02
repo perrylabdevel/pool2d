@@ -59,6 +59,10 @@ const audioPanel = new AudioPanel(settingsManager as any);
 const gameSettingsPanel = new GameSettingsPanel(settingsManager as any);
 const physicsPanel = new PhysicsPanel(settingsManager as any);
 
+import { PlaybackPanel } from './src/ui/PlaybackPanel';
+const playbackPanel = new PlaybackPanel(() => { });
+playbackPanel.getController().open();
+
 // Force panels open
 geometryPanel.open();
 modernGeometryPanel.open();

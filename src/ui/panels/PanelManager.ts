@@ -113,6 +113,10 @@ export class PanelManager extends EventTarget {
     return this.panels.has(id);
   }
 
+  isPanelOpen(id: string): boolean {
+    return this.openPanels.has(id);
+  }
+
   openPanel(id: string): void {
     const entry = this.panels.get(id);
     if (!entry) return;

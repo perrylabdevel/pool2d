@@ -2,7 +2,7 @@ import { PhysicsWorld } from '../physics/Physics';
 import { MatchData, PhysicsSnapshot } from '../debug/PhysicsRecorder';
 
 export class PlaybackController {
-    private world: PhysicsWorld;
+    public world: PhysicsWorld;
     private matchData: MatchData | null = null;
 
     // Playback state
@@ -24,24 +24,26 @@ export class PlaybackController {
     }
 
     loadMatch(data: MatchData) {
+        console.log('📼 PlaybackController.loadMatch', { duration: data.duration, snapshots: data.snapshots.length });
         this.matchData = data;
         this.duration = data.duration;
         this.currentTime = 0;
         this.currentShotIndex = -1;
-        this.isPlaying = false;
         this.playbackSpeed = 1.0;
 
         // Reset world to initial state
         this.seek(0);
 
-        console.log('📼 Match loaded:', {
-            duration: this.duration,
-            shots: data.shots.length,
-            events: data.events.length
-        });
+        // Auto-start playback
+        this.isPlaying = true;
+        this.onStateChange?.(true);
+
+        // Notify duration update for UI
+        window.dispatchEvent(new CustomEvent('playback:durationUpdate', { detail: this.duration }));
     }
 
     play() {
+        console.log('📼 PlaybackController.play', { hasData: !!this.matchData });
         if (!this.matchData) return;
         this.isPlaying = true;
         this.onStateChange?.(true);
@@ -146,16 +148,9 @@ export class PlaybackController {
 
     private applyState(snapshot: PhysicsSnapshot) {
         // Sync world balls to snapshot
-        // We might need to create/destroy balls if the count mismatches, 
-        // but usually pool games have fixed ball set. 
-        // For now, assume balls exist or we update their properties.
-
         snapshot.balls.forEach(snapBall => {
             const ball = this.world.getBallById(snapBall.id);
             if (!ball) {
-                // If ball doesn't exist in world but is in snapshot, we might need to spawn it?
-                // For now, let's assume the world is initialized with all balls.
-                // Or we could just skip.
                 return;
             }
 

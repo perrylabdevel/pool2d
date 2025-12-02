@@ -17,6 +17,8 @@ import { ModernPocketGeometry } from '../src/geometry/ModernGeometry';
 
 export class RemoteSettingsManager extends EventTarget {
     private ws!: WebSocket;
+    private isProcessingRemoteCommand: boolean = false;
+    private matchRecordings: Array<{ timestamp: number, data: any }> = [];
     private geometrySettings: GeometrySettings = {
         FRAME_OFFSET_IN: 4.0,
         FRAME_CORNER_RADIUS_IN: 0.0,
@@ -96,6 +98,18 @@ export class RemoteSettingsManager extends EventTarget {
     constructor() {
         super();
         this.connect();
+        this.setupPlaybackListeners();
+    }
+
+    private setupPlaybackListeners() {
+        // Only send commands if not from remote to prevent loops
+        window.addEventListener('playback:play', () => { if (!this.isProcessingRemoteCommand) this.sendCommand('playback:play'); });
+        window.addEventListener('playback:pause', () => { if (!this.isProcessingRemoteCommand) this.sendCommand('playback:pause'); });
+        window.addEventListener('playback:toggle', () => { if (!this.isProcessingRemoteCommand) this.sendCommand('playback:toggle'); });
+        window.addEventListener('playback:seek', (e: any) => { if (!this.isProcessingRemoteCommand) this.sendCommand('playback:seek', e.detail); });
+        window.addEventListener('playback:nextShot', () => { if (!this.isProcessingRemoteCommand) this.sendCommand('playback:nextShot'); });
+        window.addEventListener('playback:prevShot', () => { if (!this.isProcessingRemoteCommand) this.sendCommand('playback:prevShot'); });
+        window.addEventListener('playback:speed', (e: any) => { if (!this.isProcessingRemoteCommand) this.sendCommand('playback:speed', e.detail); });
     }
 
     private connect() {
@@ -136,6 +150,7 @@ export class RemoteSettingsManager extends EventTarget {
     }
 
     sendCommand(command: string, payload?: unknown) {
+        console.log('[RemoteSettingsManager] Sending command:', command);
         this.sendMessage({ type: 'command', command, payload });
     }
 
@@ -198,7 +213,38 @@ export class RemoteSettingsManager extends EventTarget {
                 window.dispatchEvent(new CustomEvent('settings:physics-changed', { detail: { settings: this.physicsSettings } }));
                 this.dispatchEvent(new Event('state-updated'));
                 break;
+            case 'playbackUpdate':
+                window.dispatchEvent(new CustomEvent(`playback:${message.kind}Update`, { detail: message.value }));
+                break;
+            case 'command':
+                // Echo playback commands back to window for UI sync
+                if (message.command.startsWith('playback:')) {
+                    this.isProcessingRemoteCommand = true;
+                    try {
+                        window.dispatchEvent(new CustomEvent(message.command, { detail: message.payload }));
+                    } finally {
+                        this.isProcessingRemoteCommand = false;
+                    }
+                }
+                break;
+            case 'match:recorded':
+                this.matchRecordings.push(message.payload);
+                window.dispatchEvent(new CustomEvent('recording:added', { detail: message.payload }));
+                console.log('📼 Match recording saved:', {
+                    count: this.matchRecordings.length,
+                    duration: message.payload.data.duration
+                });
+                break;
         }
+    }
+
+    getMatchRecordings() {
+        return this.matchRecordings;
+    }
+
+    deleteMatchRecording(timestamp: number) {
+        this.matchRecordings = this.matchRecordings.filter(r => r.timestamp !== timestamp);
+        window.dispatchEvent(new CustomEvent('recording:deleted', { detail: { timestamp } }));
     }
 
     private dispatchUpdates() {

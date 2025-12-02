@@ -39,7 +39,6 @@ import { MatchRecord } from '../data/models';
 import { getChestForLeague, CHEST_DEFINITIONS } from './economy/ChestSystem';
 import { getClampedTrophyChange, getLeagueForTrophies } from './economy/TrophySystem';
 import { getClubById } from './clubs/ClubRegistry';
-import { getOpponentsByLeague } from '../ai/OpponentRegistry';
 import { AssetRegistry } from '../assets/AssetRegistry';
 import { currencyStore } from '../ui/CurrencyStore';
 
@@ -174,7 +173,7 @@ export class Game {
     this.rules = new EightBallRules(RULES_PRESETS[this.currentRuleset]);
     this.predictor = new Predictor();
     this.playbackController = new PlaybackController(this.world);
-    this.playbackPanelUI = new PlaybackPanel(this.hud.settingsManager, this.playbackController, () => {
+    this.playbackPanelUI = new PlaybackPanel(this.playbackController, () => {
       this.stopPlayback();
     });
     this.audio = new AudioManager();
@@ -477,6 +476,30 @@ export class Game {
       this.restart();
     });
 
+    // Remote Playback Commands
+    window.addEventListener('playback:play', () => this.playbackController.play());
+    window.addEventListener('playback:pause', () => this.playbackController.pause());
+    window.addEventListener('playback:toggle', () => this.playbackController.togglePlay());
+    window.addEventListener('playback:seek', (e: any) => {
+      this.playbackController.pause();
+      this.playbackController.seek(e.detail);
+    });
+    window.addEventListener('playback:nextShot', () => {
+      this.playbackController.pause();
+      this.playbackController.nextShot();
+    });
+    window.addEventListener('playback:prevShot', () => {
+      this.playbackController.pause();
+      this.playbackController.prevShot();
+    });
+    window.addEventListener('playback:speed', (e: any) => this.playbackController.setSpeed(e.detail));
+    window.addEventListener('playback:load', (e: any) => {
+      console.log('📼 Game received playback:load event', e.detail ? '(has data)' : '(no data)');
+      if (e.detail) {
+        this.startPlayback(e.detail);
+      }
+    });
+
     window.addEventListener('keydown', (e) => {
       // Require Shift+D to toggle debug mode (prevents accidental triggers)
       if ((e.key === 'd' || e.key === 'D') && e.shiftKey) {
@@ -502,6 +525,40 @@ export class Game {
         // Shift+C: Open Shop (Cues)
         uiStateMachine.transitionTo(UIState.SHOP);
         return;
+      }
+
+      // Playback Controls
+      if (e.key === 'F5') {
+        e.preventDefault();
+        if (physicsRecorder.isRecording()) {
+          physicsRecorder.stop();
+          console.log('📼 Recording stopped. Press F6 to play back.');
+        } else {
+          physicsRecorder.start();
+          console.log('📼 Recording started...');
+        }
+      }
+      if (e.key === 'F6') {
+        e.preventDefault();
+        if (this.mode === GameMode.PLAYBACK) {
+          this.playbackController.togglePlay();
+          // Ensure panel is open
+          if (!this.hud.panelManager.isPanelOpen('playback-panel')) {
+            this.hud.panelManager.openPanel('playback-panel');
+          }
+        } else if (physicsRecorder.getMatchData()?.snapshots?.length > 0) {
+          this.startPlayback(physicsRecorder.getMatchData());
+        } else {
+          console.warn('⚠️ No recording to play. Press F5 to record first.');
+        }
+      }
+      if (e.key === '[') {
+        this.playbackController.pause();
+        this.playbackController.prevShot();
+      }
+      if (e.key === ']') {
+        this.playbackController.pause();
+        this.playbackController.nextShot();
       }
 
       // Existing shortcuts
@@ -636,6 +693,9 @@ export class Game {
 
     // Auto-pause on window blur
     window.addEventListener('blur', () => {
+      // Don't auto-pause in playback mode (allows using devtools)
+      if (this.mode === GameMode.PLAYBACK) return;
+
       if (!this.isPaused) {
         this.pausedByBlur = true;
         window.dispatchEvent(new CustomEvent('game:pause'));
@@ -823,9 +883,6 @@ export class Game {
 
       this.resize();
       this.rules.startGame();
-
-      // Start recording automatically for playback features
-      physicsRecorder.start();
 
       this.currentCalledPocketId = null;
       this.rules.setCalledPocket(null);
@@ -1351,7 +1408,6 @@ export class Game {
 
   update(dt: number) {
     if (this.mode === GameMode.PLAYBACK) {
-      // console.log('📼 Updating playback controller...'); // Commented out to avoid spam, but useful if needed
       this.playbackController.update(dt);
       return;
     }
@@ -1929,6 +1985,10 @@ export class Game {
     this.mode = GameMode.PLAYBACK;
     console.log('📼 Mode set to PLAYBACK (' + this.mode + ')');
 
+    // Update PlaybackController's world reference to current world
+    // (in case world was recreated since controller initialization)
+    this.playbackController.world = this.world;
+
     this.playbackController.loadMatch(data);
     this.playbackController.play();
     this.hud.setMode('Replay');
@@ -1964,7 +2024,9 @@ export class Game {
   }
 
   render() {
-    const alpha = this.accumulator / CONFIG.PHYSICS_DT;
+    // In playback mode, use alpha=1.0 since we're setting exact positions via seek()
+    // In normal mode, use accumulator for physics interpolation
+    const alpha = this.mode === GameMode.PLAYBACK ? 1.0 : this.accumulator / CONFIG.PHYSICS_DT;
 
     this.renderer.render(this.world, alpha);
 
@@ -2110,7 +2172,14 @@ export class Game {
     this.lastTime = now;
 
     if (!this.isPaused) {
-      this.update(dt);
+      if (this.playbackController.isPlaying) {
+        this.playbackController.update(dt);
+      } else {
+        this.update(dt);
+        if (physicsRecorder.isRecording()) {
+          physicsRecorder.recordFrame(this.world);
+        }
+      }
     }
     this.render();
 
@@ -2302,6 +2371,7 @@ export class Game {
         const kitchenLimitedX = this.applyKitchenLimit(clampedX, margin);
         this.cueBall.x = kitchenLimitedX;
         this.cueBall.y = clampedY;
+
         if (CONFIG.DEBUG_BIH_LOG) {
           // eslint-disable-next-line no-console
           console.log('BIH drag start', {
@@ -2316,7 +2386,6 @@ export class Game {
   handleBallDrag(e: MouseEvent) {
     if (!this.isDraggingBall || !this.cueBall) return;
 
-    // Convert screen coords to game coords (same transform as renderer)
     const rect = this.input.canvas.getBoundingClientRect();
     const canvasCenterX = this.renderer.canvas.width / 2;
     const canvasCenterY = this.renderer.canvas.height / 2;
@@ -2368,24 +2437,14 @@ export class Game {
     });
     if (CONFIG.DEBUG_BIH_LOG) {
       // eslint-disable-next-line no-console
-      console.log('BIH drag', {
-        raw: { x: mouseX, y: mouseY },
-        clamped: { x: kitchenLimitedX, y: clampedY },
-        hits: result.hits.length,
-        rtErrorPx: Number(rtErrorPx.toFixed(2)),
-      });
     }
   }
 
-  // Push a ball inside the play area defined by rail segments using inward normals.
-
   handleBallDragEnd(_e: MouseEvent) {
-    if (this.isDraggingBall) {
-      this.isDraggingBall = false;
-      this.input.canvas.style.cursor = 'default';
-      // Re-enable pocketing for cue ball
-      this.world.skipCuePocketCheck = false;
-    }
+    if (!this.isDraggingBall) return;
+    this.isDraggingBall = false;
+    this.input.canvas.style.cursor = 'default';
+    this.world.skipCuePocketCheck = false;
   }
 
   /**
