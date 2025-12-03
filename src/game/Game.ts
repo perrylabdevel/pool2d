@@ -11,7 +11,7 @@ import { getTableGeometry } from '../geometry/Geometry';
 import { clampBallInHand } from '../geometry/Placement';
 import { EightBallRules, GameState as RulesGameState, type BallInHandPlacement } from '../rules/EightBall';
 import { RULES_PRESETS, getRulesDescription } from '../rules/RulesConfig';
-import { physicsRecorder } from '../debug/PhysicsRecorder';
+import { physicsRecorder, type CueState } from '../debug/PhysicsRecorder';
 import { Predictor } from '../physics/Prediction';
 import { shotCapture } from '../debug/ShotCapture';
 import { SettingsPanel } from '../ui/SettingsPanel';
@@ -423,6 +423,12 @@ export class Game {
       },
       { once: true }
     );
+    window.addEventListener('playback:sound', (event) => {
+      const detail = (event as CustomEvent<{ name: string; intensity: number }>).detail;
+      if (detail) {
+        this.audio.playRecordedSound(detail.name, detail.intensity);
+      }
+    });
     window.addEventListener('renderer:resized', (event: Event) => {
       const detail = (event as CustomEvent<{ width: number; height: number; scale: number; offsetX: number; offsetY: number }>).detail;
       if (!detail) return;
@@ -1418,7 +1424,18 @@ export class Game {
     if (!this.isDraggingBall) {
       while (this.accumulator >= CONFIG.PHYSICS_DT) {
         this.world.step(CONFIG.PHYSICS_DT);
-        physicsRecorder.recordFrame(this.world);
+
+        const cueState: CueState = {
+          active: !!(this.canShoot && this.cueBall && !this.cueBall.pocketed && !this.isDraggingBall),
+          x: this.cueBall ? this.cueBall.x : 0,
+          y: this.cueBall ? this.cueBall.y : 0,
+          angle: this.isAimMode && this.cueBall ? this.input.getAimAngle(this.cueBall, this.calculateAimSensitivity()) : this.lockedAngle,
+          power: this.currentPower,
+          isAiming: this.isAimMode,
+          guideLineVisible: this.aimAssist
+        };
+        physicsRecorder.recordFrame(this.world, cueState);
+
         this.accumulator -= CONFIG.PHYSICS_DT;
         this.upsSteps++;
       }
@@ -2028,7 +2045,38 @@ export class Game {
     }
 
     // Draw cue line and power bar if can shoot (hide during ball-in-hand drag only)
-    if (this.mode !== GameMode.PLAYBACK && this.canShoot && this.cueBall && !this.cueBall.pocketed && !this.isDraggingBall) {
+    // Draw cue line and power bar if can shoot (hide during ball-in-hand drag only)
+    if (this.mode === GameMode.PLAYBACK) {
+      const cueState = this.playbackController.getCurrentCueState();
+      if (cueState && cueState.active && this.cueBall) {
+        const angle = cueState.angle;
+        const direction = { x: Math.cos(angle), y: Math.sin(angle) };
+
+        // Re-calculate prediction for visualization
+        const prediction = this.predictor.predictFirstContact(
+          { x: this.cueBall.x, y: this.cueBall.y },
+          direction,
+          this.world,
+          this.cueBall
+        );
+
+        if (cueState.guideLineVisible) {
+          this.renderer.drawSimpleMathTrajectoryLines(prediction, { x: this.cueBall.x, y: this.cueBall.y }, direction, this.predictor);
+        }
+
+        this.renderer.drawCueAndPowerBar(
+          this.cueBall,
+          angle,
+          cueState.power,
+          cueState.guideLineVisible,
+          true,
+          cueState.isAiming,
+          prediction,
+          undefined,
+          alpha
+        );
+      }
+    } else if (this.canShoot && this.cueBall && !this.cueBall.pocketed && !this.isDraggingBall) {
       // Calculate aim sensitivity based on distance to nearest object ball
       const aimSensitivity = this.calculateAimSensitivity();
 

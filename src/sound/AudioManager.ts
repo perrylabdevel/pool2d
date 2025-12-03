@@ -1,4 +1,5 @@
 import { DEFAULT_AUDIO_SETTINGS, type AudioSettings } from '../ui/SettingsManager';
+import { physicsRecorder } from '../debug/PhysicsRecorder';
 
 // Audio file paths - will be loaded dynamically
 const AUDIO_PATHS = {
@@ -369,6 +370,14 @@ export class AudioManager {
   /**
    * Play an audio sample with variations
    */
+  /**
+   * Play a recorded sound by key
+   */
+  public playRecordedSound(key: string, intensity: number) {
+    // Direct access to private playSample
+    this.playSample(key, intensity);
+  }
+
   private playSample(
     sampleSetKey: string,
     intensity: number,
@@ -478,6 +487,11 @@ export class AudioManager {
 
     // Play sound immediately (don't use cached 'now' time as it may be stale)
     source.start();
+
+    // Record sound event for playback
+    if (sampleSetKey !== 'background' && sampleSetKey !== 'music') {
+      physicsRecorder.recordSound(sampleSetKey, intensity);
+    }
 
     // Track active source
     this.activeSources.push(source);

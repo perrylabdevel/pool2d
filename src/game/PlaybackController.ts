@@ -1,5 +1,5 @@
 import { PhysicsWorld } from '../physics/Physics';
-import { MatchData, PhysicsSnapshot } from '../debug/PhysicsRecorder';
+import { MatchData, PhysicsSnapshot, CueState } from '../debug/PhysicsRecorder';
 
 export class PlaybackController {
     public world: PhysicsWorld;
@@ -11,8 +11,12 @@ export class PlaybackController {
     playbackSpeed: number = 1.0;
     duration: number = 0;
 
+    // Visual state
+    public currentCueState: CueState | null = null;
+
     // Navigation state
     currentShotIndex: number = -1;
+    private lastEventTime: number = 0;
 
     // Events
     onTimeUpdate?: (time: number) => void;
@@ -30,6 +34,7 @@ export class PlaybackController {
         this.currentTime = 0;
         this.currentShotIndex = -1;
         this.playbackSpeed = 1.0;
+        this.lastEventTime = 0;
 
         // Reset world to initial state
         this.seek(0);
@@ -47,6 +52,7 @@ export class PlaybackController {
         if (!this.matchData) return;
         this.isPlaying = true;
         this.onStateChange?.(true);
+        this.lastEventTime = this.currentTime;
     }
 
     pause() {
@@ -67,6 +73,7 @@ export class PlaybackController {
         if (!this.isPlaying || !this.matchData) return;
 
         // Advance time
+        const prevTime = this.currentTime;
         const newTime = this.currentTime + dt * this.playbackSpeed;
 
         if (newTime >= this.duration) {
@@ -75,6 +82,10 @@ export class PlaybackController {
             this.seek(this.duration);
         } else {
             this.seek(newTime);
+            // Play sounds only when playing forward normally
+            if (this.playbackSpeed > 0) {
+                this.playSounds(prevTime, newTime);
+            }
         }
     }
 
@@ -84,6 +95,9 @@ export class PlaybackController {
         // Clamp time
         this.currentTime = Math.max(0, Math.min(time, this.duration));
 
+        // Reset event tracking on seek (don't play sounds during scrub)
+        this.lastEventTime = this.currentTime;
+
         // Use global snapshots for interpolation
         if (this.matchData.snapshots && this.matchData.snapshots.length > 0) {
             this.applySnapshotInterpolation(this.matchData.snapshots, this.currentTime);
@@ -91,6 +105,27 @@ export class PlaybackController {
 
         this.updateCurrentShotIndex(this.currentTime);
         this.onTimeUpdate?.(this.currentTime);
+    }
+
+    getCurrentCueState(): CueState | null {
+        return this.currentCueState;
+    }
+
+    private playSounds(startTime: number, endTime: number) {
+        if (!this.matchData) return;
+
+        // Find sound events in the time window
+        const events = this.matchData.events.filter(e =>
+            e.type === 'sound' && e.time > startTime && e.time <= endTime
+        );
+
+        events.forEach(e => {
+            if (e.data && e.data.name) {
+                window.dispatchEvent(new CustomEvent('playback:sound', {
+                    detail: { name: e.data.name, intensity: e.data.intensity }
+                }));
+            }
+        });
     }
 
     private updateWorldState(time: number) {
@@ -125,16 +160,10 @@ export class PlaybackController {
         }
 
         // Now 'high' is the index before 'time', and 'low' is the index after 'time'
-        // snapshots[high] <= time <= snapshots[low]
-        // actually binary search usually leaves low > high. 
-        // The element at 'high' is the largest element <= time.
-        // The element at 'low' is the smallest element > time.
-
         const prev = snapshots[high];
         const next = snapshots[low];
 
         if (!prev || !next) {
-            // Should not happen given boundary checks, but fallback
             this.applyState(prev || next || snapshots[0]);
             return;
         }
@@ -170,6 +199,9 @@ export class PlaybackController {
                 ball.rotW = snapBall.quaternion[3];
             }
         });
+
+        // Apply cue state
+        this.currentCueState = snapshot.cue || null;
     }
 
     private interpolateState(prev: PhysicsSnapshot, next: PhysicsSnapshot, alpha: number) {
@@ -191,17 +223,12 @@ export class PlaybackController {
             ball.vx = prevBall.vx + (nextBall.vx - prevBall.vx) * alpha;
             ball.vy = prevBall.vy + (nextBall.vy - prevBall.vy) * alpha;
 
-            // Discrete states take the 'prev' value until we hit 'next'
-            // Or maybe 'next' if alpha > 0.5? 
-            // Pocketed state should probably stick to prev until the exact moment it changes?
-            // Actually, if it's pocketed in next but not prev, it falls in between.
+            // Discrete states
             ball.pocketed = alpha > 0.9 ? nextBall.pocketed : prevBall.pocketed;
             ball.sleeping = alpha > 0.9 ? nextBall.sleeping : prevBall.sleeping;
 
             // Slerp rotation
             if (prevBall.quaternion && nextBall.quaternion) {
-                // Simple lerp for now, full slerp if needed
-                // (Quaternion lerp needs normalization)
                 const q1 = prevBall.quaternion;
                 const q2 = nextBall.quaternion;
 
@@ -219,6 +246,28 @@ export class PlaybackController {
                 }
             }
         });
+
+        // Interpolate cue state
+        if (prev.cue && next.cue) {
+            // Helper for angle interpolation
+            const lerpAngle = (a: number, b: number, t: number) => {
+                const diff = b - a;
+                const adjusted = diff - Math.PI * 2 * Math.floor((diff + Math.PI) / (Math.PI * 2));
+                return a + adjusted * t;
+            };
+
+            this.currentCueState = {
+                active: prev.cue.active,
+                x: prev.cue.x + (next.cue.x - prev.cue.x) * alpha,
+                y: prev.cue.y + (next.cue.y - prev.cue.y) * alpha,
+                angle: lerpAngle(prev.cue.angle, next.cue.angle, alpha),
+                power: prev.cue.power + (next.cue.power - prev.cue.power) * alpha,
+                isAiming: prev.cue.isAiming,
+                guideLineVisible: prev.cue.guideLineVisible
+            };
+        } else {
+            this.currentCueState = prev.cue || next.cue || null;
+        }
     }
 
     private updateCurrentShotIndex(time: number) {
@@ -245,7 +294,7 @@ export class PlaybackController {
 
         let targetIndex = this.currentShotIndex + 1;
         if (targetIndex >= this.matchData.shots.length) {
-            targetIndex = 0; // Loop to start? Or stop? Let's loop.
+            targetIndex = 0; // Loop to start
         }
 
         const targetShot = this.matchData.shots[targetIndex];

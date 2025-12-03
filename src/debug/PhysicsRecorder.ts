@@ -4,6 +4,16 @@
 import { Ball } from '../physics/Shapes';
 import { PhysicsWorld } from '../physics/Physics';
 
+export interface CueState {
+  active: boolean;
+  x: number;
+  y: number;
+  angle: number;
+  power: number;
+  isAiming: boolean;
+  guideLineVisible: boolean;
+}
+
 export interface PhysicsSnapshot {
   frame: number;
   time: number; // seconds since recording started
@@ -19,12 +29,13 @@ export interface PhysicsSnapshot {
     // Rotation data for visual fidelity
     quaternion: [number, number, number, number];
   }[];
+  cue?: CueState;
 }
 
 export interface PhysicsEvent {
   frame: number;
   time: number;
-  type: 'collision' | 'pocket' | 'shot' | 'marker';
+  type: 'collision' | 'pocket' | 'shot' | 'marker' | 'sound';
   description: string;
   data?: any;
 }
@@ -88,18 +99,18 @@ export class PhysicsRecorder {
     return this.recording;
   }
 
-  recordFrame(world: PhysicsWorld) {
+  recordFrame(world: PhysicsWorld, cueState?: CueState) {
     if (!this.recording) return;
 
     this.frameCount++;
 
     // Record snapshot at intervals
     if (this.frameCount % this.snapshotInterval === 0) {
-      this.recordSnapshot(world);
+      this.recordSnapshot(world, cueState);
     }
   }
 
-  private recordSnapshot(world: PhysicsWorld) {
+  private recordSnapshot(world: PhysicsWorld, cueState?: CueState) {
     const time = (performance.now() - this.startTime) / 1000;
 
     const snapshot: PhysicsSnapshot = {
@@ -120,7 +131,8 @@ export class PhysicsRecorder {
           parseFloat(ball.rotZ.toFixed(4)),
           parseFloat(ball.rotW.toFixed(4))
         ]
-      }))
+      })),
+      cue: cueState
     };
 
     this.snapshots.push(snapshot);
@@ -146,6 +158,10 @@ export class PhysicsRecorder {
     if (this.currentShot) {
       this.currentShot.events.push(event);
     }
+  }
+
+  recordSound(name: string, intensity: number) {
+    this.recordEvent('sound', `Sound: ${name}`, { name, intensity });
   }
 
   recordShot(angle: number, power: number) {
@@ -243,7 +259,7 @@ export class PhysicsRecorder {
     // Events timeline
     md += `## Events Timeline\n\n`;
     this.events.forEach(event => {
-      const icon = { shot: '🎱', collision: '💥', pocket: '⚫', marker: '📍' }[event.type] || '•';
+      const icon = { shot: '🎱', collision: '💥', pocket: '⚫', marker: '📍', sound: '🔊' }[event.type] || '•';
       md += `- **[${event.time}s]** ${icon} ${event.description}\n`;
     });
     md += '\n';
