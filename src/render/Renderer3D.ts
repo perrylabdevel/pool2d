@@ -1,6 +1,7 @@
 // 3D rendering system using Three.js
 import * as THREE from 'three';
 
+
 import { CONFIG } from '../config';
 import { Ball, Rail } from '../physics/Shapes';
 import { PhysicsWorld } from '../physics/Physics';
@@ -13,7 +14,7 @@ import {
   RenderLayerBooleanKey,
   RenderLayerOrderKey,
 } from './RenderLayers';
-import { SettingsManager, TextureSettings, type RenderSettings } from '../ui/SettingsManager';
+import { SettingsManager, type RenderSettings } from '../ui/SettingsManager';
 import { BaseRenderer } from './BaseRenderer';
 import type { MicroDialRenderState, PocketAnimationEvent } from './ControlTypes';
 import { TableRenderer } from './components/TableRenderer';
@@ -45,7 +46,7 @@ export class Renderer3D extends BaseRenderer {
   fxRenderer: FXRenderer;
 
 
-  private accentLight: THREE.SpotLight | null = null;
+  private accentLights: THREE.SpotLight[] = [];
 
   private layerVisibility: Record<RenderLayerBooleanKey, boolean> = {
     showTable: defaultRenderLayerSettings.showTable,
@@ -96,6 +97,8 @@ export class Renderer3D extends BaseRenderer {
   constructor(canvas: HTMLCanvasElement, private settingsManager: SettingsManager) {
     super(canvas, CONFIG.CANVAS_SCALE);
 
+
+
     // Get UI canvas for 2D overlays
     this.uiCanvas = document.getElementById('ui-canvas') as HTMLCanvasElement;
     this.uiCtx = this.uiCanvas.getContext('2d')!;
@@ -124,7 +127,7 @@ export class Renderer3D extends BaseRenderer {
       1000
     );
     // Position camera directly above looking down
-    this.camera.position.set(0, 0, 50);
+    this.camera.position.set(0, 0, 120);
     this.camera.lookAt(0, 0, 0);
 
     // Create WebGL renderer
@@ -142,7 +145,7 @@ export class Renderer3D extends BaseRenderer {
     this.renderer.setClearColor(0x000000, 0); // Transparent background
 
     // Initialize Components
-    this.tableRenderer = new TableRenderer(this.scene, this.layerOrder, this.layerVisibility, this.settingsManager);
+    this.tableRenderer = new TableRenderer(this.scene, this.layerVisibility, this.layerOrder, this.settingsManager);
     this.ballRenderer = new BallRenderer(this.scene, this.layerOrder, this.layerVisibility);
     this.cueRenderer = new CueRenderer(
       this.uiCtx,
@@ -187,14 +190,22 @@ export class Renderer3D extends BaseRenderer {
     this.fillLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.55);
     this.scene.add(this.fillLight);
 
-    this.accentLight = new THREE.SpotLight(0xffffff, CONFIG.ACCENT_INTENSITY ?? 0.24, 160, Math.PI / 5, 0.45, 1.2);
-    this.accentLight.position.set(28, -18, 70);
-    this.accentLight.castShadow = true;
-    this.accentLight.shadow.mapSize.set(1024, 1024);
-    this.accentLight.shadow.bias = -0.0002;
-    this.scene.add(this.accentLight);
-    this.accentLight.target.position.set(0, 0, 0);
-    this.scene.add(this.accentLight.target);
+    // Single Wide SpotLight
+    // User requested "center only, 4x spread"
+    const accentIntensity = (CONFIG.ACCENT_INTENSITY ?? 0.24) * 0.6;
+    const lightPositions = [0]; // Center only
+
+    lightPositions.forEach(x => {
+      // Angle 1.3 (~75 deg) for massive spread
+      // Height 150 for better coverage
+      // Penumbra 1.0 for soft edges
+      const spot = new THREE.SpotLight(0xffffff, accentIntensity, 300, 1.3, 1.0, 0.5);
+      spot.position.set(x, 0, 150);
+      spot.target.position.set(x, 0, 0);
+      this.scene.add(spot);
+      this.scene.add(spot.target);
+      this.accentLights.push(spot);
+    });
 
     // Load FBX ball models (async)
     this.ballRenderer.loadModels();
@@ -245,7 +256,7 @@ export class Renderer3D extends BaseRenderer {
       }
     });
 
-    window.addEventListener('settings:texture-changed', (event) => {
+    window.addEventListener('settings:texture-changed', () => {
       // Texture settings are already saved by SettingsManager, we just need to regenerate
       // The event detail contains the new settings if we needed them, but TableRenderer reads from SettingsManager
       this.tableRenderer.regenerateTextures();
@@ -322,8 +333,9 @@ export class Renderer3D extends BaseRenderer {
     }
   }
 
-  applyTexture(type: 'felt' | 'rail', config: any) {
-    this.tableRenderer.applyTexture(type, config);
+  applyTexture(_type: 'felt' | 'rail', _config: any) {
+    console.warn('Renderer3D.applyTexture is deprecated. Use SettingsManager to update appearance.');
+    // this.tableRenderer.applyTexture(type, config);
   }
 
   clearTableAndRails() {
@@ -503,14 +515,17 @@ export class Renderer3D extends BaseRenderer {
       }
     }
 
-    if (typeof intensities.accent === 'number' && this.accentLight) {
+    if (typeof intensities.accent === 'number') {
       const value = clamp(intensities.accent, 0, 5);
       if (value !== undefined) {
-        this.accentLight.intensity = value;
+        this.accentLights.forEach(light => {
+          light.intensity = value;
+        });
         CONFIG.ACCENT_INTENSITY = value;
       }
     }
   }
+
 
   getLightingIntensities(): {
     ambientIntensity: number;
@@ -520,7 +535,7 @@ export class Renderer3D extends BaseRenderer {
     return {
       ambientIntensity: this.ambientLight?.intensity ?? CONFIG.AMBIENT_INTENSITY ?? 0,
       directionalIntensity: this.directionalLight?.intensity ?? CONFIG.DIRECTIONAL_INTENSITY ?? 0,
-      accentIntensity: this.accentLight?.intensity ?? CONFIG.ACCENT_INTENSITY ?? 0,
+      accentIntensity: this.accentLights.length > 0 ? this.accentLights[0].intensity : (CONFIG.ACCENT_INTENSITY ?? 0),
     };
   }
 
