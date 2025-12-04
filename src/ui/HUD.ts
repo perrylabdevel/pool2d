@@ -9,6 +9,7 @@ import { uiStateMachine, UIState } from './UIStateMachine';
 import { sceneController } from './SceneController';
 import { AssetRegistry } from '../assets/AssetRegistry';
 import { TextureEditor } from '../textures/ui/TextureEditor';
+import { RecordingPanel } from './RecordingPanel';
 
 export class HUD {
   fpsElement: HTMLElement | null;
@@ -21,6 +22,8 @@ export class HUD {
   settingsManager: SettingsManager;
   panelManager = panelManager;
   private gameSettingsPanel: GameSettingsPanel;
+  private recordingPanel: RecordingPanel;
+  playbackOverlay: HTMLElement | null;
 
   showStats: boolean = true;
 
@@ -32,6 +35,12 @@ export class HUD {
     this.player1Panel = document.getElementById('player1-info');
     this.player2Panel = document.getElementById('player2-info');
     this.statsElement = document.getElementById('stats');
+
+    this.playbackOverlay = document.createElement('div');
+    this.playbackOverlay.className = 'playback-overlay';
+    this.playbackOverlay.textContent = 'PLAYBACK MODE';
+    this.playbackOverlay.style.display = 'none';
+    document.body.appendChild(this.playbackOverlay);
 
     this.settingsManager = new SettingsManager();
 
@@ -50,6 +59,16 @@ export class HUD {
       persistState: true,
       hotkeys: ['o', 'O'],
     });
+
+    this.recordingPanel = new RecordingPanel();
+    document.body.appendChild(this.recordingPanel.getElement());
+    this.registerPanel('recording-panel', this.recordingPanel.getController(), {
+      persistState: false,
+      allowMultiple: true, // Keep it visible until the user explicitly closes it
+      group: 'floating',
+      // hotkeys: ['R'], // Shift+R handled by Game.ts
+    });
+
     this.setupControls();
     this.loadSettings();
 
@@ -146,6 +165,12 @@ export class HUD {
 
   updateUPS(ups: number) {
     if (this.upsElement) this.upsElement.textContent = `UPS: ${Math.round(ups)}`;
+  }
+
+  setPlaybackMode(active: boolean) {
+    if (this.playbackOverlay) {
+      this.playbackOverlay.style.display = active ? 'block' : 'none';
+    }
   }
 
   setMode(mode: string) {

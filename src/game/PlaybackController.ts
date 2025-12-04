@@ -22,6 +22,7 @@ export class PlaybackController {
     onTimeUpdate?: (time: number) => void;
     onStateChange?: (isPlaying: boolean) => void;
     onShotChange?: (shotIndex: number) => void;
+    onComplete?: () => void;
 
     constructor(world: PhysicsWorld) {
         this.world = world;
@@ -80,6 +81,8 @@ export class PlaybackController {
             this.currentTime = this.duration;
             this.pause();
             this.seek(this.duration);
+            this.onComplete?.();
+            window.dispatchEvent(new CustomEvent('playback:ended'));
         } else {
             this.seek(newTime);
             // Play sounds only when playing forward normally

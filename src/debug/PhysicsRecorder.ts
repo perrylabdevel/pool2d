@@ -87,10 +87,20 @@ export class PhysicsRecorder {
     this.printSummary();
 
     // Dispatch event with match data for devtools
+    const matchData = this.getMatchData();
+
+    // Persist to localStorage for reliability (in case of page unload/crash)
+    try {
+      localStorage.setItem('latest_recording', JSON.stringify(matchData));
+      console.log('💾 Recording saved to localStorage');
+    } catch (e) {
+      console.warn('⚠️ Failed to save recording to localStorage (quota exceeded?)', e);
+    }
+
     window.dispatchEvent(new CustomEvent('match:recorded', {
       detail: {
         timestamp: Date.now(),
-        data: this.getMatchData()
+        data: matchData
       }
     }));
   }

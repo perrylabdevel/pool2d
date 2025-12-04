@@ -35,36 +35,31 @@ export class PlaybackPanel {
 
   private createPanel(): HTMLElement {
     const panel = document.createElement('div');
-    panel.className = 'ui-panel playback-panel';
-    panel.style.width = '300px';
+    panel.className = 'ui-panel playback-panel landscape';
     panel.innerHTML = `
       <div class="panel-header">
         <span>Playback Control</span>
         <button class="close-btn" id="pb-close-btn">×</button>
       </div>
-      <div class="panel-content">
-        <div class="control-row">
+      <div class="panel-content playback-landscape">
+        <div class="control-row primary-controls">
           <button id="pb-prev-shot">⏮ Shot</button>
           <button id="pb-play-pause">▶</button>
           <button id="pb-next-shot">Shot ⏭</button>
         </div>
         
-        <div class="control-row">
-          <input type="range" id="pb-scrub" min="0" max="100" step="0.1" value="0" style="width: 100%">
-        </div>
-        
-        <div class="control-row info-row">
-          <span id="pb-time">0.00s / 0.00s</span>
-          <span id="pb-shot-idx">Shot: -</span>
+        <div class="scrub-row">
+          <input type="range" id="pb-scrub" min="0" max="100" step="0.1" value="0">
+          <div class="time-meta">
+            <span id="pb-time">0.00s / 0.00s</span>
+            <span id="pb-shot-idx">Shot: -</span>
+          </div>
         </div>
 
-        <div class="control-row">
-          <label>Speed: <span id="pb-speed-val">1.0x</span></label>
+        <div class="speed-row">
+          <label>Speed <span id="pb-speed-val">1.0x</span></label>
           <input type="range" id="pb-speed" min="0.1" max="3.0" step="0.1" value="1.0">
-        </div>
-        
-        <div class="control-row">
-           <button id="pb-export">Export Recording</button>
+          <button id="pb-export">Export</button>
         </div>
       </div>
     `;

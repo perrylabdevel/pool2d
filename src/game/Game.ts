@@ -41,6 +41,7 @@ import { getClampedTrophyChange, getLeagueForTrophies } from './economy/TrophySy
 import { getClubById } from './clubs/ClubRegistry';
 import { AssetRegistry } from '../assets/AssetRegistry';
 import { currencyStore } from '../ui/CurrencyStore';
+import { notificationService } from '../ui/NotificationService';
 
 export enum GameMode {
   PRACTICE,
@@ -176,6 +177,14 @@ export class Game {
     this.playbackPanelUI = new PlaybackPanel(this.playbackController, () => {
       this.stopPlayback();
     });
+    this.playbackController.onStateChange = (isPlaying) => {
+      // Show overlay only while actively playing
+      this.hud.setPlaybackMode(isPlaying);
+    };
+    this.playbackController.onComplete = () => {
+      // Hide overlay at the end of playback but keep panel open until user closes it
+      this.hud.setPlaybackMode(false);
+    };
     this.audio = new AudioManager();
     this.audio.setSettings(this.hud.settingsManager.getAudioSettings());
     window.addEventListener('settings:audio-changed', (event) => {
@@ -423,6 +432,29 @@ export class Game {
       },
       { once: true }
     );
+    // Handle browser unload to save recording
+    window.addEventListener('beforeunload', () => {
+      if (physicsRecorder.isRecording()) {
+        physicsRecorder.stop();
+        console.log('📼 Recording stopped due to page unload.');
+      }
+    });
+
+    // Handle UI state changes (e.g. exiting to lobby)
+    window.addEventListener('ui:state:changed', (event) => {
+      const detail = (event as CustomEvent<{ to: UIState }>).detail;
+      // If leaving game context (IN_GAME or IN_GAME_MENU), stop everything
+      if (detail.to !== UIState.IN_GAME && detail.to !== UIState.IN_GAME_MENU) {
+        if (physicsRecorder.isRecording()) {
+          physicsRecorder.stop();
+          console.log('📼 Recording stopped due to UI navigation.');
+        }
+        if (this.mode === GameMode.PLAYBACK) {
+          this.stopPlayback();
+        }
+      }
+    });
+
     window.addEventListener('playback:sound', (event) => {
       const detail = (event as CustomEvent<{ name: string; intensity: number }>).detail;
       if (detail) {
@@ -500,12 +532,40 @@ export class Game {
     });
     window.addEventListener('playback:speed', (e: any) => this.playbackController.setSpeed(e.detail));
     window.addEventListener('playback:load', (e: any) => {
+      console.log('📼 playback:load event received', e.detail);
       if (e.detail) {
         this.startPlayback(e.detail);
       }
     });
 
+    window.addEventListener('recording:play-last', () => {
+      console.log('📼 recording:play-last event received');
+      try {
+        const saved = localStorage.getItem('latest_recording');
+        if (saved) {
+          const data = JSON.parse(saved);
+          this.startPlayback(data);
+          console.log('📼 Playing last recording from localStorage');
+        } else {
+          console.warn('⚠️ No saved recording found in localStorage');
+          notificationService.show('No saved recording found', 'error');
+        }
+      } catch (e) {
+        console.error('Failed to load recording', e);
+        notificationService.show('Failed to load recording', 'error');
+      }
+    });
+
     window.addEventListener('keydown', (e) => {
+      // Shift+R: Toggle Recording Panel
+      if ((e.key === 'r' || e.key === 'R') && e.shiftKey) {
+        const toggled = this.hud.panelManager.togglePanel('recording-panel');
+        if (!toggled) {
+          this.hud.panelManager.openPanel('recording-panel');
+        }
+        return;
+      }
+
       // Require Shift+D to toggle debug mode (prevents accidental triggers)
       if ((e.key === 'd' || e.key === 'D') && e.shiftKey) {
         this.debug.toggle();
@@ -730,6 +790,8 @@ export class Game {
 
   private registerPanels() {
     // Debug hotkey for playback
+    // Debug hotkey for playback - REMOVED (handled by main keydown listener)
+    /*
     window.addEventListener('keydown', (e) => {
       if (e.shiftKey && (e.key === 'R' || e.key === 'r')) {
         console.log('📼 Starting playback from recorder...');
@@ -737,6 +799,7 @@ export class Game {
         this.startPlayback(data);
       }
     });
+    */
 
 
 
@@ -1024,6 +1087,12 @@ export class Game {
         this.stateMachine.transitionTo(GameState.GAME_OVER);
       }
 
+      // Stop recording if active
+      if (physicsRecorder.isRecording()) {
+        physicsRecorder.stop();
+        console.log('📼 Recording stopped due to Game Over.');
+      }
+
       // Check if winner is AI or human player
       const winningPlayer = this.players.find(p => p.id === winner);
       const humanPlayer = this.players.find(p => !p.isAI());
@@ -1221,6 +1290,12 @@ export class Game {
   }
 
   restart() {
+    // Stop recording if active so we don't lose the data
+    if (physicsRecorder.isRecording()) {
+      physicsRecorder.stop();
+      console.log('📼 Recording stopped due to restart.');
+    }
+
     // Reset all game loop state
     this.accumulator = 0;
     this.lastTime = 0;
@@ -1266,6 +1341,13 @@ export class Game {
     // Clear HUD messages
     // notificationService handles this automatically
 
+    // Reset playback mode if we were in it
+    if (this.mode === GameMode.PLAYBACK) {
+      this.playbackController.pause();
+      this.hud.setPlaybackMode(false);
+      // Revert to practice mode by default when exiting playback via restart
+      this.mode = GameMode.PRACTICE;
+    }
 
     // Rebuild physics world (recomputes rails/pockets from current CONFIG)
     this.world = new PhysicsWorld();
@@ -1288,6 +1370,9 @@ export class Game {
       renderer3D.clearBalls();
     }
     this.initializeGame();
+
+    // Notify listeners
+    window.dispatchEvent(new CustomEvent('game:restarted'));
   }
 
   setupCollisionTracking() {
@@ -1984,11 +2069,7 @@ export class Game {
   startPlayback(data: MatchData) {
     if (!data || (!data.shots.length && !data.snapshots?.length)) {
       console.warn('⚠️ No playback data available');
-      // @ts-ignore - notificationService is global or imported in HUD but we need access
-      // Actually, we can import it or just use console for now, or access via HUD if exposed.
-      // HUD doesn't expose it directly.
-      // Let's just log for now and maybe alert.
-      alert('No recording data found! Please play a few shots first.');
+      notificationService.show('No recording data found! Please play a few shots first.', 'error');
       return;
     }
 
@@ -2002,6 +2083,7 @@ export class Game {
     this.playbackController.play();
     this.hud.setMode('Replay');
     this.hud.hideTurnIndicator();
+    this.hud.setPlaybackMode(true);
 
     // Show Playback UI
     this.hud.panelManager.openPanel('playback-panel');
@@ -2011,6 +2093,7 @@ export class Game {
   stopPlayback() {
     console.log('📼 stopPlayback called');
     this.playbackController.pause();
+    this.hud.setPlaybackMode(false);
     this.mode = GameMode.PRACTICE; // Default back to practice
     this.restart();
 

@@ -6,6 +6,7 @@ export class RemoteBridge {
     private settingsManager: SettingsManager;
     private renderer: Renderer3D;
     private reconnectInterval: number = 1000;
+    private isProcessingRemoteCommand: boolean = false;
 
     constructor(settingsManager: SettingsManager, renderer: Renderer3D) {
         this.settingsManager = settingsManager;
@@ -20,6 +21,28 @@ export class RemoteBridge {
         this.ws.onopen = () => {
             console.log('[RemoteBridge] Connected to relay server');
             this.broadcastState();
+
+            // Check for saved recording from previous session/crash
+            try {
+                const savedRecording = localStorage.getItem('latest_recording');
+                if (savedRecording) {
+                    console.log('[RemoteBridge] Found saved recording, syncing to devtools...');
+                    const data = JSON.parse(savedRecording);
+                    this.sendMessage({
+                        type: 'match:recorded',
+                        payload: {
+                            timestamp: Date.now(),
+                            data: data
+                        }
+                    });
+                    // Optional: Clear it after sending? 
+                    // Better to keep it until overwritten to ensure it's available if devtools wasn't open yet.
+                    // Or maybe clear it to avoid sending old data repeatedly?
+                    // Let's keep it for now, devtools can handle duplicates or user can ignore.
+                }
+            } catch (e) {
+                console.error('[RemoteBridge] Failed to sync saved recording', e);
+            }
         };
 
         this.ws.onmessage = async (event) => {

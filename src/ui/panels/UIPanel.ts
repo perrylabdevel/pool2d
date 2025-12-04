@@ -83,17 +83,39 @@ export class UIPanel extends EventTarget {
       return;
     }
 
+    const active = this.getActiveElement();
+    if (active && this.element.contains(active)) {
+      this.blurElement(active);
+    }
+
     this.openState = false;
-    this.hideElement();
 
-    if (!(options?.silent ?? false)) {
-      this.dispatchEvent(new CustomEvent('panel:close', { detail: { id: this.id } }));
-    }
+    const focusTarget =
+      (this.previouslyFocused && document.contains(this.previouslyFocused) && this.previouslyFocused) ||
+      document.body;
 
-    if (this.previouslyFocused && document.contains(this.previouslyFocused)) {
-      this.safeFocus(this.previouslyFocused);
+    if (focusTarget === document.body && !document.body.hasAttribute('tabindex')) {
+      document.body.setAttribute('tabindex', '-1');
     }
+    this.safeFocus(focusTarget);
     this.previouslyFocused = null;
+
+    requestAnimationFrame(() => {
+      const afterFocus = this.getActiveElement();
+      if (afterFocus && this.element.contains(afterFocus)) {
+        this.blurElement(afterFocus);
+        if (!document.body.hasAttribute('tabindex')) {
+          document.body.setAttribute('tabindex', '-1');
+        }
+        this.safeFocus(document.body);
+      }
+
+      this.hideElement();
+
+      if (!(options?.silent ?? false)) {
+        this.dispatchEvent(new CustomEvent('panel:close', { detail: { id: this.id } }));
+      }
+    });
   }
 
   toggle(options?: UIPanelOpenOptions & UIPanelCloseOptions): void {
@@ -133,14 +155,26 @@ export class UIPanel extends EventTarget {
     if (this.openClass) {
       this.element.classList.add(this.openClass);
     }
+    this.element.removeAttribute('inert');
     this.element.setAttribute('aria-hidden', 'false');
   }
 
   protected hideElement(): void {
+    // Ensure nothing inside retains focus before hiding
+    const active = this.getActiveElement();
+    if (active && this.element.contains(active)) {
+      this.blurElement(active);
+      if (!document.body.hasAttribute('tabindex')) {
+        document.body.setAttribute('tabindex', '-1');
+      }
+      this.safeFocus(document.body);
+    }
+
     this.element.classList.add(this.hiddenClass);
     if (this.openClass) {
       this.element.classList.remove(this.openClass);
     }
+    this.element.setAttribute('inert', '');
     this.element.setAttribute('aria-hidden', 'true');
   }
 
@@ -193,5 +227,15 @@ export class UIPanel extends EventTarget {
       return null;
     }
     return active;
+  }
+
+  private blurElement(element: HTMLElement): void {
+    if (typeof (element as any).blur === 'function') {
+      try {
+        (element as any).blur();
+      } catch {
+        /* ignore */
+      }
+    }
   }
 }
