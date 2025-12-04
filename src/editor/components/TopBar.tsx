@@ -41,6 +41,17 @@ const TopBar: React.FC<TopBarProps> = ({ state, dispatch }) => {
             <div style={{ flex: 1 }} />
 
             <button onClick={() => dispatch({ type: 'TOGGLE_GRID' })} style={getButtonStyle(state.gridVisible)}>Grid</button>
+            {state.gridVisible && (
+                <input
+                    type="number"
+                    min="1"
+                    max="50"
+                    value={state.gridSize}
+                    onChange={(e) => dispatch({ type: 'SET_GRID_SIZE', payload: parseInt(e.target.value) || 10 })}
+                    style={{ width: '50px', padding: '5px', background: '#444', color: '#fff', border: '1px solid #555', borderRadius: '4px' }}
+                    title="Grid Spacing (1-50)"
+                />
+            )}
             <button onClick={() => dispatch({ type: 'TOGGLE_SNAP' })} style={getButtonStyle(state.snapEnabled)}>Snap</button>
             <div style={{ width: '1px', height: '20px', background: '#555' }} />
             <button onClick={() => dispatch({ type: 'DELETE_SELECTION' })} style={{ ...getButtonStyle(false), background: '#d9534f' }} disabled={state.selection.length === 0}>Delete</button>

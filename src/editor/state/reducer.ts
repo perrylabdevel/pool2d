@@ -21,7 +21,8 @@ export type EditorAction =
         | { type: 'RESET_TO_DEFAULT' }
         | { type: 'IMPORT_CONFIG'; payload: PoolTableConfig }
         | { type: 'MOVE_OBJECT_ORDER'; payload: { id: string; direction: 'up' | 'down' } }
-        | { type: 'UPDATE_RENDER_ORDER'; payload: string[] };
+        | { type: 'UPDATE_RENDER_ORDER'; payload: string[] }
+        | { type: 'SET_GRID_SIZE'; payload: number };
 
 export function editorReducer(state: EditorState, action: EditorAction): EditorState {
         switch (action.type) {
@@ -54,6 +55,8 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
                         return { ...state, gridVisible: !state.gridVisible };
                 case 'TOGGLE_SNAP':
                         return { ...state, snapEnabled: !state.snapEnabled };
+                case 'SET_GRID_SIZE':
+                        return { ...state, gridSize: Math.max(1, Math.min(50, action.payload)) };
                 case 'ADD_RAIL': {
                         const { x, y } = action.payload;
                         const newRail = {
