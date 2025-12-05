@@ -91,6 +91,7 @@ export class Game {
   predictor: Predictor;
   audio: AudioManager;
   mode: GameMode;
+  private modeBeforePlayback: GameMode | null = null;
   currentClubId: string | null = null; // Track which club the current match is in
   currentEntryFee: number = 0; // Entry fee for prize calculation
   currentRuleset: string = 'TOURNAMENT'; // Tournament rules as default
@@ -1003,9 +1004,21 @@ export class Game {
     } catch (error) {
       console.error('Failed to initialize game:', error);
     } finally {
-      // Hide loading screen once initialization is complete (or failed)
-      this.renderer.hideLoadingScreen();
+      // Hide loading screen only after renderer assets are ready
+      this.waitForRendererAssetsAndHideLoading();
     }
+  }
+
+  private waitForRendererAssetsAndHideLoading() {
+    this.renderer
+      .waitForAssets()
+      .catch((err) => {
+        console.warn('[Game] Renderer assets failed to finish loading in time', err);
+      })
+      .finally(() => {
+        document.body?.classList.remove('is-loading');
+        this.renderer.hideLoadingScreen();
+      });
   }
 
   initializePlayers() {
@@ -2077,6 +2090,7 @@ export class Game {
       return;
     }
 
+    this.modeBeforePlayback = this.mode;
     this.mode = GameMode.PLAYBACK;
 
     // Update PlaybackController's world reference to current world
@@ -2098,8 +2112,8 @@ export class Game {
     console.log('📼 stopPlayback called');
     this.playbackController.pause();
     this.hud.setPlaybackMode(false);
-    this.mode = GameMode.PRACTICE; // Default back to practice
-    this.restart();
+    this.mode = this.modeBeforePlayback ?? GameMode.PRACTICE;
+    this.modeBeforePlayback = null;
 
     this.hud.panelManager.closePanel('playback-panel');
   }

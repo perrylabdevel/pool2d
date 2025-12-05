@@ -31,6 +31,15 @@
       visibility: hidden;
     }
 
+    body.is-loading {
+      cursor: progress;
+    }
+
+    body.is-loading #workspace {
+      pointer-events: none;
+      user-select: none;
+    }
+
     .loading-content {
       display: flex;
       flex-direction: column;
@@ -84,7 +93,7 @@
   </style>
 </head>
 
-<body>
+<body class="is-loading">
   <div id="loading-screen">
     <div class="loading-content">
       <img src="/src/assets/img/logo.png" alt="RailRush" class="loading-logo" />

@@ -74,6 +74,7 @@ export class Renderer3D extends BaseRenderer {
 
   private debugMode: boolean = false;
   ballScale: number = 1.0;
+  private assetsReadyPromise: Promise<void> | null = null;
 
   get ballModelsLoaded(): boolean {
     return this.ballRenderer.areModelsLoaded();
@@ -207,8 +208,15 @@ export class Renderer3D extends BaseRenderer {
       this.accentLights.push(spot);
     });
 
-    // Load FBX ball models (async)
-    this.ballRenderer.loadModels();
+    // Load FBX ball models (async) and surface progress to loading UI
+    this.assetsReadyPromise = this.ballRenderer
+      .loadModels((message) => this.updateLoadingText(message))
+      .catch((err) => {
+        console.error('[Renderer3D] Failed to load ball models', err);
+      })
+      .finally(() => {
+        this.updateLoadingText('Finishing setup...');
+      });
 
     // React to UI color changes without rebuilding geometry
     window.addEventListener('settings:colors-changed', () => {
@@ -352,11 +360,15 @@ export class Renderer3D extends BaseRenderer {
   hideLoadingScreen() {
     const loadingScreen = document.getElementById('loading-screen');
     if (loadingScreen) {
-      loadingScreen.classList.add('fade-out');
+      loadingScreen.classList.add('fade-out', 'is-hidden');
       setTimeout(() => {
         loadingScreen.style.display = 'none';
       }, 500);
     }
+  }
+
+  waitForAssets(): Promise<void> {
+    return this.assetsReadyPromise ?? Promise.resolve();
   }
 
   resize() {

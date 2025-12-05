@@ -4,7 +4,11 @@ import os from 'node:os';
 const port = Number(process.env.PORT) || 8080;
 const devPort = Number(process.env.VITE_PORT) || 5173;
 
-const wss = new WebSocketServer({ port });
+const wss = new WebSocketServer({
+  port,
+  // Allow large match recordings and asset payloads without disconnecting
+  maxPayload: 128 * 1024 * 1024, // 128MB
+});
 
 logAccessLinks();
 

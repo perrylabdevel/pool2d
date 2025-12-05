@@ -4,7 +4,6 @@
  */
 
 import { SettingsManager, PhysicsSettings, GameSettings, UIColors, GeometrySettings, RenderSettings, DebugSettings } from './SettingsManager';
-import { CONFIG } from '../config';
 
 export interface CompleteSettings {
   version: string;
@@ -23,6 +22,14 @@ export interface CompleteSettings {
 export class SettingsIO {
   constructor(private settingsManager: SettingsManager) { }
 
+  private supportsDebugSettings(manager: SettingsManager): manager is SettingsManager & {
+    getDebugSettings: () => DebugSettings;
+    saveDebugSettings: (settings: Partial<DebugSettings>) => void;
+  } {
+    return typeof (manager as any).getDebugSettings === 'function'
+      && typeof (manager as any).saveDebugSettings === 'function';
+  }
+
   /**
    * Export all current settings to a JSON object
    */
@@ -36,7 +43,9 @@ export class SettingsIO {
       geometry: this.settingsManager.getGeometrySettings(),
 
       render: this.settingsManager.getRenderSettings(),
-      debug: this.settingsManager.getDebugSettings(),
+      debug: this.supportsDebugSettings(this.settingsManager)
+        ? this.settingsManager.getDebugSettings()
+        : {},
     };
   }
 
@@ -120,8 +129,10 @@ export class SettingsIO {
       this.settingsManager.saveRenderSettings(settings.render);
     }
 
-    if (settings.debug) {
+    if (settings.debug && this.supportsDebugSettings(this.settingsManager)) {
       this.settingsManager.saveDebugSettings(settings.debug);
+    } else if (settings.debug) {
+      console.warn('⚠️ Settings manager does not support debug settings; skipping import.');
     }
 
     if (settings.geometry && !skipGeometry) {
