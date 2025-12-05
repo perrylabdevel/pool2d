@@ -9,7 +9,6 @@ import { uiStateMachine, UIState } from './UIStateMachine';
 import { sceneController } from './SceneController';
 import { AssetRegistry } from '../assets/AssetRegistry';
 import { TextureEditor } from '../textures/ui/TextureEditor';
-import { RecordingPanel } from './RecordingPanel';
 
 export class HUD {
   fpsElement: HTMLElement | null;
@@ -22,9 +21,8 @@ export class HUD {
   settingsManager: SettingsManager;
   panelManager = panelManager;
   private gameSettingsPanel: GameSettingsPanel;
-  private recordingPanel: RecordingPanel;
   playbackOverlay: HTMLElement | null;
-
+  playbackTimestamp: HTMLElement | null;
   showStats: boolean = true;
 
   constructor() {
@@ -36,11 +34,11 @@ export class HUD {
     this.player2Panel = document.getElementById('player2-info');
     this.statsElement = document.getElementById('stats');
 
-    this.playbackOverlay = document.createElement('div');
-    this.playbackOverlay.className = 'playback-overlay';
-    this.playbackOverlay.textContent = 'PLAYBACK MODE';
-    this.playbackOverlay.style.display = 'none';
-    document.body.appendChild(this.playbackOverlay);
+    this.statsElement = document.getElementById('stats');
+
+    // Overlay removed in favor of panel indicators
+    this.playbackOverlay = null;
+    this.playbackTimestamp = null;
 
     this.settingsManager = new SettingsManager();
 
@@ -60,14 +58,17 @@ export class HUD {
       hotkeys: ['o', 'O'],
     });
 
-    this.recordingPanel = new RecordingPanel();
-    document.body.appendChild(this.recordingPanel.getElement());
-    this.registerPanel('recording-panel', this.recordingPanel.getController(), {
-      persistState: false,
-      allowMultiple: true, // Keep it visible until the user explicitly closes it
-      group: 'floating',
-      // hotkeys: ['R'], // Shift+R handled by Game.ts
+    this.registerPanel('game-settings', this.gameSettingsPanel.getController(), {
+      persistState: true,
+      hotkeys: ['o', 'O'],
     });
+
+    // RecordingPanel removed - features merged into PlaybackPanel
+    // this.recordingPanel = new RecordingPanel();
+    // document.body.appendChild(this.recordingPanel.getElement());
+    // this.registerPanel('recording-panel', this.recordingPanel.getController(), { ... });
+
+    this.setupControls();
 
     this.setupControls();
     this.loadSettings();
@@ -168,9 +169,11 @@ export class HUD {
   }
 
   setPlaybackMode(active: boolean) {
-    if (this.playbackOverlay) {
-      this.playbackOverlay.style.display = active ? 'block' : 'none';
-    }
+    // Overlay removed. Status is now handled by the panels themselves.
+  }
+
+  updatePlaybackTime(currentTime: number, totalDuration: number, timestamp?: number) {
+    // Moved to PlaybackPanel
   }
 
   setMode(mode: string) {

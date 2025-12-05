@@ -1,5 +1,39 @@
 /* Recording & playback panels */
 
+.media-panel {
+  position: absolute;
+  top: 100px;
+  left: calc(50% - 210px);
+  /* Centered with 420px width */
+  width: 420px;
+  background: rgba(20, 20, 25, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  /* Changed to column to support rows */
+  gap: 0;
+  /* Gap handled by margins */
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  z-index: 100;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  color: #fff;
+  font-family: 'Inter', sans-serif;
+}
+
+.media-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.media-row.main-controls {
+  justify-content: space-between;
+}
+
 .recording-panel.compact {
   min-width: auto;
   width: auto !important;
@@ -14,7 +48,7 @@
   backdrop-filter: blur(8px);
   display: flex;
   flex-direction: row;
-  align-items:center;
+  align-items: center;
   padding: 4px 8px;
   gap: 8px;
   font-family: 'Inter', sans-serif;
@@ -209,4 +243,314 @@
     opacity: 1;
     transform: scale(1);
   }
+}
+
+/* --- NEW MEDIA PANEL STYLES --- */
+
+:root {
+  --panel-bg: #14161c;
+  --panel-border: #262a33;
+  --panel-radius: 10px;
+  --panel-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+
+  --btn-bg: #1e222b;
+  --btn-bg-hover: #282d38;
+  --btn-primary-bg: #3a7bff;
+  --btn-primary-bg-hover: #2864d6;
+  --btn-record: #ff3b30;
+  --btn-record-hover: #d92b22;
+
+  --timeline-bg: #242835;
+  --timeline-progress: #3a7bff;
+  --text-muted: #a7b0c3;
+  --text-strong: #e6ebf5;
+
+  --badge-bg-playback: #3a7bff;
+  --badge-bg-recording: #ff3b30;
+}
+
+/* Panel container */
+.media-panel {
+  width: auto;
+  min-width: 420px;
+  max-width: 90vw;
+  /* Slightly wider to accommodate new controls */
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--panel-radius);
+  box-shadow: var(--panel-shadow);
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--text-strong);
+  box-sizing: border-box;
+  overflow: hidden;
+  /* Ensure no bleed */
+
+  /* Positioning for floating panel */
+  position: absolute;
+  top: 100px;
+  /* Left set via JS for drag compatibility */
+  z-index: 2000;
+}
+
+.media-panel.hidden {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+/* Left/center/right areas */
+.media-left,
+.media-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.media-center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Buttons */
+.media-panel .btn {
+  border: none;
+  outline: none;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: var(--btn-bg);
+  color: var(--text-strong);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background 0.15s ease,
+    transform 0.08s ease,
+    box-shadow 0.15s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35);
+}
+
+.media-panel .btn.icon-btn {
+  min-width: 32px;
+  min-height: 28px;
+}
+
+/* Primary (Play/Pause) */
+.media-panel .btn.primary {
+  background: var(--btn-primary-bg);
+  font-weight: 600;
+}
+
+/* Record button */
+.media-panel .btn.record {
+  background: var(--btn-record);
+  font-size: 16px;
+}
+
+/* Hover / active states */
+.media-panel .btn:hover {
+  background: var(--btn-bg-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.45);
+}
+
+.media-panel .btn.primary:hover {
+  background: var(--btn-primary-bg-hover);
+}
+
+.media-panel .btn.record:hover {
+  background: var(--btn-record-hover);
+}
+
+.media-panel .btn:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+/* Timeline */
+.timeline {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--timeline-bg);
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.timeline-progress {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--timeline-progress), #6ca4ff);
+  width: 0%;
+  /* Dynamic */
+  pointer-events: none;
+}
+
+/* Timecodes */
+.timecode {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.shot-index {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+/* Status Badges */
+.status-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-right: 4px;
+}
+
+.status-badge.playback {
+  background: rgba(58, 123, 255, 0.2);
+  color: #6ca4ff;
+  border: 1px solid rgba(58, 123, 255, 0.4);
+}
+
+.status-badge.recording {
+  background: rgba(255, 59, 48, 0.2);
+  color: #ff6b61;
+  border: 1px solid rgba(255, 59, 48, 0.4);
+  opacity: 0.5;
+  transition: opacity 0.3s ease;
+}
+
+.status-badge.recording.active {
+  opacity: 1;
+  animation: pulse-badge 2s infinite;
+}
+
+@keyframes pulse-badge {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.4);
+  }
+
+  70% {
+    box-shadow: 0 0 0 6px rgba(255, 59, 48, 0);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 59, 48, 0);
+  }
+}
+
+/* Record Button */
+.media-panel .btn-record {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 59, 48, 0.1);
+  border: 1px solid rgba(255, 59, 48, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-right: 8px;
+}
+
+.media-panel .btn-record:hover {
+  background: rgba(255, 59, 48, 0.2);
+  transform: scale(1.05);
+}
+
+.media-panel .btn-record .record-icon {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ff3b30;
+  transition: all 0.2s ease;
+}
+
+.media-panel .btn-record.recording {
+  background: rgba(255, 59, 48, 0.2);
+  border-color: #ff3b30;
+  box-shadow: 0 0 10px rgba(255, 59, 48, 0.3);
+}
+
+.media-panel .btn-record.recording .record-icon {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  /* Square for stop */
+  animation: pulse-record 2s infinite;
+}
+
+@keyframes pulse-record {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.6;
+    transform: scale(0.9);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Exit Row & VCR Info */
+.media-row.exit-row {
+  justify-content: space-between;
+  margin-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 8px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.vcr-info {
+  font-family: "Courier New", Courier, monospace;
+  font-size: 13px;
+  color: #a7b0c3;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-shrink: 1;
+  /* Allow shrinking if needed */
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+#pb-vcr-time {
+  color: #fff;
+  font-weight: bold;
+  letter-spacing: 0.5px;
+}
+
+.media-panel .btn.exit-btn {
+  background: rgba(255, 59, 48, 0.2);
+  color: #ff6b61;
+  border: 1px solid rgba(255, 59, 48, 0.4);
+  font-weight: 700;
+  padding: 4px 12px;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+  /* Don't shrink the button */
+  margin-left: 12px;
 }

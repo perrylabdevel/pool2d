@@ -48,6 +48,10 @@ export class PlaybackController {
         window.dispatchEvent(new CustomEvent('playback:durationUpdate', { detail: this.duration }));
     }
 
+    getMatchData(): MatchData | null {
+        return this.matchData;
+    }
+
     play() {
         console.log('📼 PlaybackController.play', { hasData: !!this.matchData });
         if (!this.matchData) return;
@@ -68,6 +72,66 @@ export class PlaybackController {
 
     setSpeed(speed: number) {
         this.playbackSpeed = speed;
+    }
+
+    prevShot() {
+        if (!this.matchData || !this.matchData.shots || this.matchData.shots.length === 0) {
+            console.log('⏪ No shots to navigate');
+            return;
+        }
+
+        // Find previous shot
+        const shots = this.matchData.shots;
+        let targetIndex = this.currentShotIndex - 1;
+
+        // If at beginning of current shot, go to previous shot
+        // Otherwise, restart current shot
+        if (this.currentShotIndex >= 0) {
+            const currentShot = shots[this.currentShotIndex];
+            if (this.currentTime - currentShot.startTime < 0.5) {
+                // Already near start of shot, go to previous
+                targetIndex = this.currentShotIndex - 1;
+            } else {
+                // Go to start of current shot
+                targetIndex = this.currentShotIndex;
+            }
+        }
+
+        if (targetIndex < 0) {
+            // Go to beginning
+            this.seek(0);
+            this.currentShotIndex = 0;
+        } else {
+            const shot = shots[targetIndex];
+            this.seek(shot.startTime);
+            this.currentShotIndex = targetIndex;
+        }
+
+        console.log('⏪ Jumped to shot', this.currentShotIndex + 1, 'of', shots.length);
+        this.onShotChange?.(this.currentShotIndex);
+    }
+
+    nextShot() {
+        if (!this.matchData || !this.matchData.shots || this.matchData.shots.length === 0) {
+            console.log('⏩ No shots to navigate');
+            return;
+        }
+
+        const shots = this.matchData.shots;
+        const targetIndex = this.currentShotIndex + 1;
+
+        if (targetIndex >= shots.length) {
+            // Go to end
+            this.seek(this.duration);
+            console.log('⏩ Already at last shot');
+        } else {
+            const shot = shots[targetIndex];
+            this.seek(shot.startTime);
+            this.currentShotIndex = targetIndex;
+            console.log('⏩ Jumped to shot', this.currentShotIndex + 1, 'of', shots.length);
+        }
+
+        this.onShotChange?.(this.currentShotIndex);
     }
 
     update(dt: number) {

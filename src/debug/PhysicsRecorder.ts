@@ -65,8 +65,11 @@ export class PhysicsRecorder {
   private events: PhysicsEvent[] = [];
   private shots: ShotRecord[] = [];
   private currentShot: ShotRecord | null = null;
-  private snapshotInterval: number = 2; // Record more frequently for smooth playback (60fps / 2 = 30fps effective)
+  private snapshotInterval: number = 1; // Record every frame for smooth 60fps playback
 
+  private history: MatchData[] = [];
+
+  // Start a NEW match recording (clears existing data)
   start() {
     this.recording = true;
     this.startTime = performance.now();
@@ -75,7 +78,35 @@ export class PhysicsRecorder {
     this.events = [];
     this.shots = [];
     this.currentShot = null;
-    console.log('📹 Physics recording started');
+    console.log('📹 Physics recording started (new match)');
+  }
+
+  // Resume recording within the same match (keeps existing data)
+  resume() {
+    if (this.snapshots.length === 0) {
+      // No existing data, start fresh
+      this.start();
+      return;
+    }
+    this.recording = true;
+    console.log('📹 Physics recording resumed (continuing match, shots:', this.shots.length, ')');
+  }
+
+  // Check if there's existing data that could be resumed
+  hasData(): boolean {
+    return this.snapshots.length > 0 || this.shots.length > 0;
+  }
+
+  // Clear all recording data without starting a new recording
+  clear() {
+    this.recording = false;
+    this.startTime = 0;
+    this.frameCount = 0;
+    this.snapshots = [];
+    this.events = [];
+    this.shots = [];
+    this.currentShot = null;
+    console.log('🗑️ Recording data cleared');
   }
 
   stop() {
@@ -89,12 +120,25 @@ export class PhysicsRecorder {
     // Dispatch event with match data for devtools
     const matchData = this.getMatchData();
 
+    // Add to history
+    this.history.push(matchData);
+
     // Persist to localStorage for reliability (in case of page unload/crash)
+    // Only save a summary (not full snapshots) to avoid quota issues
     try {
-      localStorage.setItem('latest_recording', JSON.stringify(matchData));
-      console.log('💾 Recording saved to localStorage');
+      // Clear old recording first
+      localStorage.removeItem('latest_recording');
+
+      // Create a lighter version for storage (limit to 100 snapshots)
+      const lightMatchData = {
+        ...matchData,
+        snapshots: matchData.snapshots.slice(0, Math.min(100, matchData.snapshots.length))
+      };
+      localStorage.setItem('latest_recording', JSON.stringify(lightMatchData));
+      console.log('💾 Recording saved to localStorage (limited to 100 snapshots)');
     } catch (e) {
-      console.warn('⚠️ Failed to save recording to localStorage (quota exceeded?)', e);
+      // If still fails, just skip localStorage - history array still has the data
+      console.warn('⚠️ Could not save to localStorage, using in-memory history only');
     }
 
     window.dispatchEvent(new CustomEvent('match:recorded', {
@@ -103,6 +147,14 @@ export class PhysicsRecorder {
         data: matchData
       }
     }));
+  }
+
+  getHistory(): MatchData[] {
+    return this.history;
+  }
+
+  getRecording(index: number): MatchData | null {
+    return this.history[index] || null;
   }
 
   isRecording(): boolean {

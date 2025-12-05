@@ -177,6 +177,7 @@ export class Game {
     this.playbackPanelUI = new PlaybackPanel(this.playbackController, () => {
       this.stopPlayback();
     });
+    document.body.appendChild(this.playbackPanelUI.getElement());
     this.playbackController.onStateChange = (isPlaying) => {
       // Show overlay only while actively playing
       this.hud.setPlaybackMode(isPlaying);
@@ -537,6 +538,9 @@ export class Game {
         this.startPlayback(e.detail);
       }
     });
+    window.addEventListener('playback:stop', () => {
+      this.stopPlayback();
+    });
 
     window.addEventListener('recording:play-last', () => {
       console.log('📼 recording:play-last event received');
@@ -557,11 +561,11 @@ export class Game {
     });
 
     window.addEventListener('keydown', (e) => {
-      // Shift+R: Toggle Recording Panel
+      // Shift+R: Toggle Media/Playback Panel
       if ((e.key === 'r' || e.key === 'R') && e.shiftKey) {
-        const toggled = this.hud.panelManager.togglePanel('recording-panel');
+        const toggled = this.hud.panelManager.togglePanel('playback-panel');
         if (!toggled) {
-          this.hud.panelManager.openPanel('recording-panel');
+          this.hud.panelManager.openPanel('playback-panel');
         }
         return;
       }
