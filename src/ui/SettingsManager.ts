@@ -2,6 +2,8 @@
 import { CONFIG } from '../config';
 import { RenderLayerSettings, defaultRenderLayerSettings } from '../render/RenderLayers';
 import type { ModernPocketGeometry } from '../geometry/ModernGeometry';
+import { Capacitor } from '@capacitor/core';
+import iosSettings from '../config/ios-settings.json';
 import { TableAppearance, DEFAULT_TABLE_APPEARANCE, TABLE_THEMES } from '../textures/TableAppearance';
 
 export type { TableAppearance };
@@ -12,6 +14,8 @@ export interface GameSettings {
   call8Ball: boolean;
   showFPS: boolean;
   aiDifficulty?: 'EASY' | 'MEDIUM' | 'HARD' | 'EXPERT';
+  sidebarDialSide: 'left' | 'right';
+  touchAimMode: boolean;
   BREAK_SPEED_THRESHOLD: number;
   BALL_IN_HAND_ANYWHERE: boolean;
   SHOW_AIM_INFO: boolean;
@@ -215,6 +219,8 @@ export const DEFAULT_GAME_SETTINGS: GameSettings = {
   call8Ball: false,
   showFPS: true,
   aiDifficulty: 'MEDIUM',
+  sidebarDialSide: 'left',
+  touchAimMode: false,
   BREAK_SPEED_THRESHOLD: CONFIG.BREAK_SPEED_THRESHOLD ?? 5.0,
   BALL_IN_HAND_ANYWHERE: CONFIG.BALL_IN_HAND_ANYWHERE ?? false,
   SHOW_AIM_INFO: CONFIG.SHOW_AIM_INFO ?? true,
@@ -353,11 +359,59 @@ export class SettingsManager {
     this.tableAppearance = this.loadTableAppearance();
 
     // Apply loaded settings
+    this.applyGameSettings();
     this.applyPhysicsSettings();
     this.applyUIColors();
     this.applyGeometrySettings();
     this.applyRenderSettings();
     this.applyDebugSettings();
+
+    this.applyPlatformOverrides();
+  }
+
+  private applyPlatformOverrides() {
+    if (Capacitor.getPlatform() === 'ios') {
+      console.log('[SettingsManager] Applying iOS overrides');
+
+      if (iosSettings.physics) {
+        this.physicsSettings = { ...this.physicsSettings, ...iosSettings.physics };
+        this.applyPhysicsSettings();
+      }
+
+      if (iosSettings.render) {
+        // Cast to any to allow partial updates if types don't perfectly match JSON
+        this.renderSettings = { ...this.renderSettings, ...iosSettings.render } as RenderSettings;
+        this.applyRenderSettings();
+      }
+
+      if ((iosSettings as any).geometry) {
+        this.geometrySettings = { ...this.geometrySettings, ...(iosSettings as any).geometry };
+        this.applyGeometrySettings();
+      }
+
+      if ((iosSettings as any).game) {
+        this.gameSettings = { ...this.gameSettings, ...(iosSettings as any).game };
+        this.applyGameSettings();
+      }
+
+      if ((iosSettings as any).colors) {
+        const colors = (iosSettings as any).colors;
+        this.uiColors = { ...this.uiColors, ...colors };
+        this.applyUIColors();
+
+        // Sync to TableAppearance for texture generation
+        if (colors.tableColor) this.tableAppearance.felt.color = colors.tableColor;
+        if (colors.frameColor) this.tableAppearance.frame.color = colors.frameColor;
+        if (colors.railFillColor) this.tableAppearance.cushion.color = colors.railFillColor;
+        
+        // Dispatch appearance change to trigger texture update
+        window.dispatchEvent(
+          new CustomEvent('settings:appearance-changed', { detail: { appearance: this.tableAppearance } })
+        );
+      }
+
+      // Add other sections as needed (game, audio, etc.)
+    }
   }
 
   // Game Settings
@@ -388,6 +442,8 @@ export class SettingsManager {
     CONFIG.BREAK_SPEED_THRESHOLD = this.gameSettings.BREAK_SPEED_THRESHOLD;
     CONFIG.BALL_IN_HAND_ANYWHERE = this.gameSettings.BALL_IN_HAND_ANYWHERE;
     CONFIG.SHOW_AIM_INFO = this.gameSettings.SHOW_AIM_INFO;
+    CONFIG.SIDEBAR_DIAL_SIDE = this.gameSettings.sidebarDialSide ?? 'left';
+    CONFIG.TOUCH_AIM_MODE = this.gameSettings.touchAimMode ?? false;
   }
 
   getGameSettings(): GameSettings {

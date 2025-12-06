@@ -198,12 +198,14 @@ export class SettingsScene implements UIScene {
             this.toggleControls = [
                 { id: 'aimAssist', label: 'Aim Assist', value: gameSettings.aimAssist, rect: { x: startX, y, width: controlWidth, height: controlHeight } },
                 { id: 'call8Ball', label: 'Call 8-Ball', value: gameSettings.call8Ball, rect: { x: startX, y: y += controlHeight + gap, width: controlWidth, height: controlHeight } },
-                { id: 'showFPS', label: 'Show FPS/UPS', value: gameSettings.showFPS, rect: { x: startX, y: y += controlHeight + gap, width: controlWidth, height: controlHeight } }
+                { id: 'showFPS', label: 'Show FPS/UPS', value: gameSettings.showFPS, rect: { x: startX, y: y += controlHeight + gap, width: controlWidth, height: controlHeight } },
+                { id: 'touchAimMode', label: 'Touch Aim Only (power via bar)', value: !!gameSettings.touchAimMode, rect: { x: startX, y: y += controlHeight + gap, width: controlWidth, height: controlHeight } }
             ];
 
             y += controlHeight + gap * 2;
             this.selectControls = [
-                { id: 'aiDifficulty', label: 'AI Difficulty', value: gameSettings.aiDifficulty || 'MEDIUM', options: ['EASY', 'MEDIUM', 'HARD', 'EXPERT'], rect: { x: startX, y, width: controlWidth, height: controlHeight } }
+                { id: 'aiDifficulty', label: 'AI Difficulty', value: gameSettings.aiDifficulty || 'MEDIUM', options: ['EASY', 'MEDIUM', 'HARD', 'EXPERT'], rect: { x: startX, y, width: controlWidth, height: controlHeight } },
+                { id: 'dialSide', label: 'Aim Dial Side', value: gameSettings.sidebarDialSide || 'left', options: ['left', 'right'], rect: { x: startX, y: y += controlHeight + gap, width: controlWidth, height: controlHeight } }
             ];
 
             y += controlHeight + gap * 2;
@@ -619,6 +621,9 @@ export class SettingsScene implements UIScene {
                 case 'showFPS':
                     this.settingsManager.saveGameSettings({ showFPS: newValue });
                     break;
+                case 'touchAimMode':
+                    this.settingsManager.saveGameSettings({ touchAimMode: newValue });
+                    break;
             }
         } else if (this.activeTab === 'audio') {
             const update: any = {};
@@ -638,6 +643,8 @@ export class SettingsScene implements UIScene {
         if (control.id === 'aiDifficulty') {
             this.settingsManager.saveGameSettings({ aiDifficulty: control.value as any });
             window.dispatchEvent(new CustomEvent('game:ai-difficulty-changed', { detail: { value: control.value } }));
+        } else if (control.id === 'dialSide') {
+            this.settingsManager.saveGameSettings({ sidebarDialSide: control.value as 'left' | 'right' });
         } else if (this.activeTab === 'table') {
             const appearance = this.settingsManager.getTableAppearance();
             if (control.id === 'feltPattern') {

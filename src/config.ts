@@ -53,6 +53,8 @@ export const CONFIG = {
   DISTANCE_AIM_MAX_DISTANCE: 60, // Distance (in) at which maximum scaling is applied
   DISTANCE_AIM_MIN_SENSITIVITY: 0.35, // Sensitivity multiplier at max distance (0.35 = 35% of normal)
 
+  // Control scheme
+  TOUCH_AIM_MODE: false, // When true, touch/drag aims only and power is set via the power bar
   // Debug and diagnostics
   DEBUG_BIH_LOG: false, // Verbose console logs for ball-in-hand clamping and drag
 
@@ -66,6 +68,7 @@ export const CONFIG = {
   OBJECT_PATH_PERCENTAGE: 1.0, // Multiplier for object ball path length (0.5 = 50% length)
   SHOW_AIM_INFO: true, // Display aim angle, distance, speed, and cut angle overlay
   AIM_INFO_SCALE: 1.0, // Scale multiplier for aim info indicators (0.5 = 50% size, 2.0 = 200% size)
+  SIDEBAR_DIAL_SIDE: 'left' as 'left' | 'right', // Which side the micro dial lives on (power bar goes opposite)
   // Pocket visual animation tuning
   POCKET_ANIMATION_DROP_DURATION_MS: 300, // duration of drop phase
   POCKET_ANIMATION_ROLL_DURATION_MS: 500, // duration of roll phase

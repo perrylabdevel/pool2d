@@ -74,6 +74,17 @@ export class GameSettingsPanel {
               <option value="EXPERT">Expert</option>
             </select>
           </div>
+          <label class="panel-toggle-row">
+            <input type="checkbox" id="touch-aim-toggle" />
+            <span>Touch Aim Only (power via bar)</span>
+          </label>
+          <div class="panel-input-row" style="display:flex; align-items:center; gap:8px;">
+            <label for="dial-side-select" style="min-width: 140px;">Aim Dial Side</label>
+            <select id="dial-side-select">
+              <option value="left">Left</option>
+              <option value="right">Right</option>
+            </select>
+          </div>
         </div>
         <div class="settings-group">
           <h4 class="settings-group-title">UI Colors</h4>
@@ -143,6 +154,8 @@ export class GameSettingsPanel {
     const call8Toggle = this.panel.querySelector<HTMLInputElement>('#call-8-toggle');
     const showFpsToggle = this.panel.querySelector<HTMLInputElement>('#show-fps-toggle');
     const aiDifficultySelect = this.panel.querySelector<HTMLSelectElement>('#ai-difficulty-select');
+    const touchAimToggle = this.panel.querySelector<HTMLInputElement>('#touch-aim-toggle');
+    const dialSideSelect = this.panel.querySelector<HTMLSelectElement>('#dial-side-select');
 
     aimAssistToggle?.addEventListener('change', (event) => {
       const enabled = (event.target as HTMLInputElement).checked;
@@ -166,6 +179,16 @@ export class GameSettingsPanel {
       const value = (event.target as HTMLSelectElement).value as 'EASY' | 'MEDIUM' | 'HARD' | 'EXPERT';
       this.settingsManager.saveGameSettings({ aiDifficulty: value });
       window.dispatchEvent(new CustomEvent('game:ai-difficulty-changed', { detail: { value } }));
+    });
+
+    touchAimToggle?.addEventListener('change', (event) => {
+      const enabled = (event.target as HTMLInputElement).checked;
+      this.settingsManager.saveGameSettings({ touchAimMode: enabled });
+    });
+
+    dialSideSelect?.addEventListener('change', (event) => {
+      const value = (event.target as HTMLSelectElement).value as 'left' | 'right';
+      this.settingsManager.saveGameSettings({ sidebarDialSide: value });
     });
 
     const colorInputs = this.panel.querySelectorAll<HTMLInputElement>('.color-setting input[type="color"]');
@@ -258,6 +281,8 @@ export class GameSettingsPanel {
     const call8Toggle = this.panel.querySelector<HTMLInputElement>('#call-8-toggle');
     const showFpsToggle = this.panel.querySelector<HTMLInputElement>('#show-fps-toggle');
     const aiDifficultySelect = this.panel.querySelector<HTMLSelectElement>('#ai-difficulty-select');
+    const touchAimToggle = this.panel.querySelector<HTMLInputElement>('#touch-aim-toggle');
+    const dialSideSelect = this.panel.querySelector<HTMLSelectElement>('#dial-side-select');
 
     if (aimAssistToggle) aimAssistToggle.checked = !!gs.aimAssist;
     if (call8Toggle) call8Toggle.checked = !!gs.call8Ball;
@@ -266,6 +291,8 @@ export class GameSettingsPanel {
       this.callbacks.onStatsVisibilityChange?.(gs.showFPS);
     }
     if (aiDifficultySelect && gs.aiDifficulty) aiDifficultySelect.value = gs.aiDifficulty;
+    if (touchAimToggle) touchAimToggle.checked = !!gs.touchAimMode;
+    if (dialSideSelect) dialSideSelect.value = gs.sidebarDialSide || 'left';
 
     this.syncColorInputs();
   }
@@ -286,4 +313,3 @@ export class GameSettingsPanel {
     set('cue-tip-color', colors.cueTipColor);
   }
 }
-

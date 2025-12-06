@@ -10,6 +10,10 @@
 
 **RailRush** is a tournament-grade billiards game targeting a polished, mobile-style experience similar to *Miniclip 8 Ball Pool*. Built with TypeScript, Vite, and WebGL/Three.js.
 
+## Known Issues (High Priority)
+
+- **Touch Aim Mode aim offset:** In the new touch/drag aim-only mode, clicks/drags outside the rendered table can still hijack aim and lock the shot direction (captured angle can be 0°). Needs a screen-space play-area clamp that accounts for renderer scale, padding, and current canvas sizing (not just world play bounds). Workaround: only click/drag within the felt area until fixed.
+
 ---
 
 ## Core Systems Status

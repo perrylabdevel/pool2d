@@ -7,6 +7,12 @@
   --ball-chip-outline-bottom: rgba(255, 255, 255, 0.28);
   --ball-chip-placeholder-outline-top: rgba(0, 0, 0, 0.45);
   --ball-chip-placeholder-outline-bottom: rgba(255, 255, 255, 0.14);
+
+  /* Safe Area Variables */
+  --sat: env(safe-area-inset-top);
+  --sar: env(safe-area-inset-right);
+  --sab: env(safe-area-inset-bottom);
+  --sal: env(safe-area-inset-left);
 }
 
 * {
@@ -17,9 +23,20 @@
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-  background: #1a1a1a;
+  background: #000000;
+  /* Black background for notch blending */
   color: #ffffff;
   overflow: hidden;
+
+  /* Native App Feel */
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  padding-top: var(--sat);
+  padding-bottom: var(--sab);
+  padding-left: var(--sal);
+  padding-right: var(--sar);
 }
 
 button {

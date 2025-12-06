@@ -58,6 +58,11 @@ export class CueRenderer {
             this.ghostBall = null;
         }
 
+        // Draw power bar and micro dial first (UI layer), so cue/aim sit above
+        if (showPowerBar) {
+            this.drawPowerBar2D(power, isAimMode, microDialState);
+        }
+
         // Draw cue stick in 2D (clamped to play area so it doesn't clip off-canvas)
         const cueLength = CONFIG.CUE_LENGTH_IN ?? 20;
         // As power increases, cue pulls back away from ball (not toward it)
@@ -270,11 +275,6 @@ export class CueRenderer {
             }
         }
 
-        // Draw power bar in 2D
-        if (showPowerBar) {
-            this.drawPowerBar2D(power, isAimMode, microDialState);
-        }
-
         // Draw aim info overlay (only if scale > 0)
         if (CONFIG.SHOW_AIM_INFO && CONFIG.AIM_INFO_SCALE > 0) {
             this.drawAimInfo(ball, angle, power, prediction);
@@ -283,10 +283,25 @@ export class CueRenderer {
 
     drawPowerBar2D(power: number, isAimMode: boolean, microDialState?: MicroDialRenderState) {
         const { width: barWidth, height: barHeight } = this.getSidebarSize();
-        const rect = this.getSideBarRect('right', barWidth, barHeight);
+        const { powerSide } = this.getSidebarSides();
+        const rect = this.getSideBarRect(powerSide, barWidth, barHeight);
         const barX = rect.x;
         const barY = rect.y;
         const ctx = this.uiCtx;
+        const drawRoundedRect = (x: number, y: number, w: number, h: number, r: number) => {
+            const radius = Math.min(r, w / 2, h / 2);
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
+            ctx.lineTo(x + w - radius, y);
+            ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
+            ctx.lineTo(x + w, y + h - radius);
+            ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+            ctx.lineTo(x + radius, y + h);
+            ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
+            ctx.lineTo(x, y + radius);
+            ctx.quadraticCurveTo(x, y, x + radius, y);
+            ctx.closePath();
+        };
 
         // Background with subtle plate behind the color fill plus inner padding
         ctx.fillStyle = 'rgba(28, 32, 39, 0.65)';
@@ -307,7 +322,8 @@ export class CueRenderer {
         ctx.fillRect(innerX, innerY, innerWidth, innerHeight);
 
         // Cue overlay: clipped so the shaft slides downward as power increases
-        const cueWidth = Math.max(3, innerWidth * 0.5);
+        const cueLaneWidth = innerWidth / 1.5; // keep cue visuals similar size while bar widens
+        const cueWidth = Math.max(3, cueLaneWidth * 0.5);
         const cueLength = innerHeight * 3.0;
         const cueX = innerX + (innerWidth - cueWidth) / 2;
         const ferruleHeight = Math.max(4, cueWidth * 0.3);
@@ -399,12 +415,30 @@ export class CueRenderer {
         ctx.lineWidth = 1.5;
         ctx.strokeRect(innerX, innerY, innerWidth, innerHeight);
 
+        // Power readout badge below the bar
+        const labelHeight = Math.max(18, innerPadding * 2.2);
+        const labelWidth = barWidth + innerPadding * 1.6;
+        const labelX = barX - innerPadding * 0.8;
+        const labelY = barY + barHeight + 6;
+        ctx.fillStyle = 'rgba(8, 10, 14, 0.82)';
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+        ctx.lineWidth = 1;
+        drawRoundedRect(labelX, labelY, labelWidth, labelHeight, 5);
+        ctx.fill();
+        ctx.stroke();
+        ctx.font = 'bold 11px monospace';
+        ctx.fillStyle = '#f2f2f2';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(`${Math.round(powerPercent * 100)}%`, labelX + labelWidth / 2, labelY + labelHeight / 2);
+
         this.drawMicroDial2D(microDialState);
     }
 
     private drawMicroDial2D(state?: MicroDialRenderState) {
         const { width: barWidth, height: barHeight } = this.getSidebarSize();
-        const rect = this.getSideBarRect('left', barWidth, barHeight);
+        const { dialSide } = this.getSidebarSides();
+        const rect = this.getSideBarRect(dialSide, barWidth, barHeight);
         const barX = rect.x;
         const barY = rect.y;
         const ctx = this.uiCtx;
@@ -489,97 +523,110 @@ export class CueRenderer {
     }
 
     drawAimInfo(ball: Ball, angle: number, power: number, prediction?: PredictionResult) {
+        const ctx = this.uiCtx;
+        const drawRoundedRect = (x: number, y: number, w: number, h: number, r: number) => {
+            const radius = Math.min(r, w / 2, h / 2);
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
+            ctx.lineTo(x + w - radius, y);
+            ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
+            ctx.lineTo(x + w, y + h - radius);
+            ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+            ctx.lineTo(x + radius, y + h);
+            ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
+            ctx.lineTo(x, y + radius);
+            ctx.quadraticCurveTo(x, y, x + radius, y);
+            ctx.closePath();
+        };
+
         // Calculate values
         let angleDeg = (angle * 180 / Math.PI) % 360;
         if (angleDeg < 0) angleDeg += 360;
 
         const velocity = power * CONFIG.CUE_POWER_MULTIPLIER;
-        const powerPct = (power / CONFIG.CUE_POWER_MAX) * 100;
+        const distanceText = prediction && prediction.type !== 'none' ? `${prediction.distance.toFixed(1)}"` : '';
 
-        // Prepare metrics with icons
-        const metrics: Array<{ icon: string; value: string; color: string }> = [
-            { icon: '⟲', value: `${angleDeg.toFixed(1)}°`, color: '#4fc3f7' },
-            { icon: '⚡', value: `${velocity.toFixed(0)}`, color: '#ffeb3b' },
-            { icon: '⚙', value: `${powerPct.toFixed(0)}%`, color: '#ff5722' }
-        ];
-
-        // Add distance if available
-        if (prediction && prediction.type !== 'none') {
-            metrics.splice(1, 0, {
-                icon: '↔',
-                value: `${prediction.distance.toFixed(1)}"`,
-                color: '#66bb6a'
-            });
-        }
-
-        // Add cut angle for ball-to-ball collisions
+        let cutAngleText = '';
         if (prediction && prediction.type === 'ball' && prediction.hitBall) {
             const targetBall = prediction.hitBall;
             const toBallAngle = Math.atan2(targetBall.y - ball.y, targetBall.x - ball.x);
             let cutAngle = Math.abs(angle - toBallAngle) * 180 / Math.PI;
             if (cutAngle > 90) cutAngle = 180 - cutAngle;
+            cutAngleText = `${cutAngle.toFixed(1)}°`;
+        }
+
+        const metrics: Array<{ icon: string; value: string; color: string }> = [
+            { icon: '⟲', value: `${angleDeg.toFixed(1)}°`, color: '#4fc3f7' }
+        ];
+        if (distanceText) {
             metrics.push({
-                icon: '◐',
-                value: `${cutAngle.toFixed(1)}°`,
-                color: '#ab47bc'
+                icon: '↔',
+                value: cutAngleText ? `${distanceText} · ${cutAngleText}` : distanceText,
+                color: cutAngleText ? '#9c6cff' : '#66bb6a'
             });
         }
 
-        // Position below table frame using world-to-screen coordinates
+        // Position badges on the upper-left frame, laid out in a single row past the pocket
         const geom = getTableGeometry();
-        const frameBottom = -geom.frameOutline.outerHalfHeight;
-        const tableFrameBottom = this.worldToScreen(0, frameBottom);
-        const offsetBelowFrame = 8; // Fixed pixel offset below frame edge
+        const frameTop = geom.frameOutline.outerHalfHeight;
+        const frameLeft = -geom.frameOutline.outerHalfWidth;
+        const topLeft = this.worldToScreen(frameLeft, frameTop);
 
-        // Layout configuration for circular badges
-        const badgeRadius = 28 * CONFIG.AIM_INFO_SCALE;
-        const badgeSpacing = 12 * CONFIG.AIM_INFO_SCALE;
-        const totalWidth = metrics.length * (badgeRadius * 2) + (metrics.length - 1) * badgeSpacing;
-        const canvas = this.getUiCanvas();
-        const startX = (canvas.width - totalWidth) / 2;
-        const startY = tableFrameBottom.y + offsetBelowFrame;
+        const badgeHeight = 26 * CONFIG.AIM_INFO_SCALE;
+        const horizontalPadding = 10 * CONFIG.AIM_INFO_SCALE;
+        const iconSpacing = 6 * CONFIG.AIM_INFO_SCALE;
+        const inset = 14 * CONFIG.AIM_INFO_SCALE;
+        const topOffset = 16 * CONFIG.AIM_INFO_SCALE;
+        const pocketClearPx = 100 * CONFIG.AIM_INFO_SCALE;
+        const badgeGap = 8 * CONFIG.AIM_INFO_SCALE;
 
-        // Draw each metric badge as a circle
+        const measureBadge = (metric: { icon: string; value: string }) => {
+            ctx.font = `bold ${14 * CONFIG.AIM_INFO_SCALE}px Arial`;
+            const iconWidth = ctx.measureText(metric.icon).width;
+            ctx.font = `bold ${12 * CONFIG.AIM_INFO_SCALE}px monospace`;
+            const valueWidth = ctx.measureText(metric.value).width;
+            const width = horizontalPadding * 2 + iconWidth + iconSpacing + valueWidth;
+            return { width, iconWidth, valueWidth };
+        };
+
+        const measurements = metrics.map(measureBadge);
+
+        let cursorX = topLeft.x + inset + pocketClearPx;
         metrics.forEach((metric, i) => {
-            const centerX = startX + badgeRadius + i * (badgeRadius * 2 + badgeSpacing);
-            const centerY = startY + badgeRadius;
+            const { width, iconWidth } = measurements[i];
+            const center = {
+                x: cursorX + width / 2,
+                y: topLeft.y + topOffset + badgeHeight / 2
+            };
+            cursorX += width + badgeGap;
+            const x = center.x - width / 2;
+            const y = center.y - badgeHeight / 2;
 
-            // Draw outer glow
-            const glowGradient = this.uiCtx.createRadialGradient(centerX, centerY, badgeRadius * 0.7, centerX, centerY, badgeRadius + 4);
-            glowGradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
-            glowGradient.addColorStop(1, 'rgba(0, 0, 0, 0.5)');
-            this.uiCtx.fillStyle = glowGradient;
-            this.uiCtx.beginPath();
-            this.uiCtx.arc(centerX, centerY, badgeRadius + 4, 0, Math.PI * 2);
-            this.uiCtx.fill();
+            const gradient = ctx.createLinearGradient(x, y, x, y + badgeHeight);
+            gradient.addColorStop(0, 'rgba(18, 20, 28, 0.92)');
+            gradient.addColorStop(1, 'rgba(12, 14, 20, 0.96)');
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+            drawRoundedRect(x - 2, y - 2, width + 4, badgeHeight + 4, 8 * CONFIG.AIM_INFO_SCALE);
+            ctx.fill();
+            ctx.fillStyle = gradient;
+            drawRoundedRect(x, y, width, badgeHeight, 8 * CONFIG.AIM_INFO_SCALE);
+            ctx.fill();
+            ctx.strokeStyle = metric.color;
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
 
-            // Draw circle background with gradient
-            const gradient = this.uiCtx.createRadialGradient(centerX, centerY - 5, 0, centerX, centerY, badgeRadius);
-            gradient.addColorStop(0, 'rgba(30, 30, 40, 0.95)');
-            gradient.addColorStop(1, 'rgba(15, 15, 20, 0.98)');
-            this.uiCtx.fillStyle = gradient;
-            this.uiCtx.beginPath();
-            this.uiCtx.arc(centerX, centerY, badgeRadius, 0, Math.PI * 2);
-            this.uiCtx.fill();
+            ctx.font = `bold ${14 * CONFIG.AIM_INFO_SCALE}px Arial`;
+            ctx.fillStyle = metric.color;
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            const iconX = x + horizontalPadding;
+            const textY = center.y;
+            ctx.fillText(metric.icon, iconX, textY);
 
-            // Draw colored ring
-            this.uiCtx.strokeStyle = metric.color;
-            this.uiCtx.lineWidth = 2.5;
-            this.uiCtx.beginPath();
-            this.uiCtx.arc(centerX, centerY, badgeRadius - 2, 0, Math.PI * 2);
-            this.uiCtx.stroke();
-
-            // Draw icon
-            this.uiCtx.font = 'bold 18px Arial';
-            this.uiCtx.fillStyle = metric.color;
-            this.uiCtx.textAlign = 'center';
-            this.uiCtx.textBaseline = 'middle';
-            this.uiCtx.fillText(metric.icon, centerX, centerY - 6);
-
-            // Draw value
-            this.uiCtx.font = 'bold 10px monospace';
-            this.uiCtx.fillStyle = '#ffffff';
-            this.uiCtx.fillText(metric.value, centerX, centerY + 10);
+            ctx.font = `bold ${12 * CONFIG.AIM_INFO_SCALE}px monospace`;
+            ctx.fillStyle = '#ffffff';
+            const valueX = iconX + iconWidth + iconSpacing;
+            ctx.fillText(metric.value, valueX, textY);
         });
     }
 
@@ -1027,13 +1074,15 @@ export class CueRenderer {
 
     getPowerBarBounds() {
         const { width, height } = this.getSidebarSize();
-        const rect = this.getSideBarRect('right', width, height);
+        const { powerSide } = this.getSidebarSides();
+        const rect = this.getSideBarRect(powerSide, width, height);
         return { x: rect.x, y: rect.y, width, height };
     }
 
     getMicroDialBounds() {
         const { width, height } = this.getSidebarSize();
-        const rect = this.getSideBarRect('left', width, height);
+        const { dialSide } = this.getSidebarSides();
+        const rect = this.getSideBarRect(dialSide, width, height);
         return { x: rect.x, y: rect.y, width, height };
     }
 
@@ -1051,10 +1100,16 @@ export class CueRenderer {
         return { x, y, width, height };
     }
 
+    private getSidebarSides() {
+        const dialSide = CONFIG.SIDEBAR_DIAL_SIDE === 'right' ? 'right' : 'left';
+        const powerSide = dialSide === 'left' ? 'right' : 'left';
+        return { dialSide, powerSide };
+    }
+
     private getSidebarSize() {
         const bounds = this.getTableFrameScreenBounds();
         const height = Math.max(160, bounds.height * 0.75);
-        const width = Math.max(36, height * 0.08);
+        const width = Math.max(36 * 1.5, height * 0.08 * 1.5);
         return { width, height };
     }
 

@@ -98,14 +98,13 @@ export class PlaybackController {
         }
 
         if (targetIndex < 0) {
-            // Go to beginning
-            this.seek(0);
-            this.currentShotIndex = 0;
-        } else {
-            const shot = shots[targetIndex];
-            this.seek(shot.startTime);
-            this.currentShotIndex = targetIndex;
+            // Wrap to last shot
+            targetIndex = shots.length - 1;
         }
+
+        const shot = shots[targetIndex];
+        this.seek(shot.startTime);
+        this.currentShotIndex = targetIndex;
 
         console.log('⏪ Jumped to shot', this.currentShotIndex + 1, 'of', shots.length);
         this.onShotChange?.(this.currentShotIndex);
@@ -118,18 +117,17 @@ export class PlaybackController {
         }
 
         const shots = this.matchData.shots;
-        const targetIndex = this.currentShotIndex + 1;
+        let targetIndex = this.currentShotIndex + 1;
 
         if (targetIndex >= shots.length) {
-            // Go to end
-            this.seek(this.duration);
-            console.log('⏩ Already at last shot');
-        } else {
-            const shot = shots[targetIndex];
-            this.seek(shot.startTime);
-            this.currentShotIndex = targetIndex;
-            console.log('⏩ Jumped to shot', this.currentShotIndex + 1, 'of', shots.length);
+            // Wrap to first shot
+            targetIndex = 0;
         }
+
+        const shot = shots[targetIndex];
+        this.seek(shot.startTime);
+        this.currentShotIndex = targetIndex;
+        console.log('⏩ Jumped to shot', this.currentShotIndex + 1, 'of', shots.length);
 
         this.onShotChange?.(this.currentShotIndex);
     }
@@ -356,27 +354,5 @@ export class PlaybackController {
         }
     }
 
-    nextShot() {
-        if (!this.matchData || this.matchData.shots.length === 0) return;
-
-        let targetIndex = this.currentShotIndex + 1;
-        if (targetIndex >= this.matchData.shots.length) {
-            targetIndex = 0; // Loop to start
-        }
-
-        const targetShot = this.matchData.shots[targetIndex];
-        this.seek(targetShot.startTime);
-    }
-
-    prevShot() {
-        if (!this.matchData || this.matchData.shots.length === 0) return;
-
-        let targetIndex = this.currentShotIndex - 1;
-        if (targetIndex < 0) {
-            targetIndex = this.matchData.shots.length - 1;
-        }
-
-        const targetShot = this.matchData.shots[targetIndex];
-        this.seek(targetShot.startTime);
-    }
+    // nextShot/prevShot defined earlier with full navigation logic
 }

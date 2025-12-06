@@ -4,6 +4,7 @@
 import { Ball } from '../physics/Shapes';
 import { CONFIG } from '../config';
 import { uiStateMachine, UIState } from '../ui/UIStateMachine';
+import { getTableGeometry } from '../geometry/Geometry';
 
 export class InputManager {
   canvas: HTMLCanvasElement;
@@ -23,52 +24,60 @@ export class InputManager {
   isDraggingPowerBar: boolean = false;
   powerBarDragStart: number = 0;
   private aimSuppressed: boolean = false;
+  private touchAimMode: boolean = false;
+  private aimDragActive: boolean = true;
+  private pointerDown: boolean = false;
 
   // Callbacks
   onShoot?: (angle: number, power: number) => void;
   onPowerChange?: (power: number) => void;
   onClick?: (worldX: number, worldY: number, event: MouseEvent) => boolean;
-  
+
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     this.scale = CONFIG.CANVAS_SCALE;
-    
+
     this.setupListeners();
   }
-  
+
   setupListeners() {
     this.canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
     window.addEventListener('mousemove', (e) => this.handleMouseMove(e));
     window.addEventListener('mouseup', (e) => this.handleMouseUp(e));
-    
+
     // Touch support
     this.canvas.addEventListener('touchstart', (e) => this.handleTouchStart(e));
     window.addEventListener('touchmove', (e) => this.handleTouchMove(e));
     window.addEventListener('touchend', (e) => this.handleTouchEnd(e));
   }
-  
+
   updateScale(scale: number) {
     this.scale = scale;
   }
-  
+
   screenToGame(screenX: number, screenY: number): { x: number; y: number } {
     const rect = this.canvas.getBoundingClientRect();
     const canvasX = screenX - rect.left;
     const canvasY = screenY - rect.top;
-    
+
     // Convert from canvas coords (top-left origin, Y-down) to world coords (center origin, Y-up)
     // Use rect dimensions (displayed size) not canvas.width/height (internal resolution)
     const canvasCenterX = rect.width / 2;
     const canvasCenterY = rect.height / 2;
-    
+
     return {
       x: (canvasX - canvasCenterX) / this.scale,
       y: -(canvasY - canvasCenterY) / this.scale, // Flip Y
     };
   }
-  
+
   handleMouseDown(e: MouseEvent) {
     if (uiStateMachine.state !== UIState.IN_GAME) return;
+    this.pointerDown = true;
+    if (this.touchAimMode) {
+      this.setAimDragActive(true);
+    }
+    this.updateAimFromScreen(e.clientX, e.clientY, true);
     // Fire click callback with world coordinates
     if (this.onClick) {
       const pos = this.screenToGame(e.clientX, e.clientY);
@@ -80,12 +89,13 @@ export class InputManager {
       }
     }
   }
-  
+
   handleMouseMove(e: MouseEvent) {
     if (uiStateMachine.state !== UIState.IN_GAME) return;
-    const pos = this.screenToGame(e.clientX, e.clientY);
-    this.mouseTargetX = pos.x;
-    this.mouseTargetY = pos.y;
+    if (this.touchAimMode && (!this.aimDragActive || !this.pointerDown)) return;
+    // Use updateAimFromScreen to enforce table bounds and prevent aim hijacking
+    this.updateAimFromScreen(e.clientX, e.clientY, false);
+
     if (this.aimSuppressed) {
       return;
     }
@@ -98,46 +108,59 @@ export class InputManager {
       this.mouseY = this.mouseTargetY;
     }
   }
-  
+
   handleMouseUp(_e: MouseEvent) {
     if (this.isDraggingPowerBar) {
       this.isDraggingPowerBar = false;
     }
+    this.pointerDown = false;
+    if (this.touchAimMode) {
+      this.setAimDragActive(false);
+    }
   }
-  
+
   handleTouchStart(e: TouchEvent) {
     if (uiStateMachine.state !== UIState.IN_GAME) return;
     e.preventDefault();
+    if (this.touchAimMode) {
+      this.pointerDown = true;
+      this.setAimDragActive(true);
+    }
     if (this.onClick && e.touches.length > 0) {
       const touch = e.touches[0];
       const pos = this.screenToGame(touch.clientX, touch.clientY);
+      // For initial touch, apply immediately (force=true)
+      this.updateAimFromScreen(touch.clientX, touch.clientY, true);
       const handled = this.onClick(pos.x, pos.y, e as any);
       if (handled) {
         e.stopPropagation();
       }
     }
   }
-  
+
   handleTouchMove(e: TouchEvent) {
     if (uiStateMachine.state !== UIState.IN_GAME) return;
     e.preventDefault();
+    if (this.touchAimMode && !this.aimDragActive) return;
     if (e.touches.length > 0) {
       const touch = e.touches[0];
-      const pos = this.screenToGame(touch.clientX, touch.clientY);
-      this.mouseTargetX = pos.x;
-      this.mouseTargetY = pos.y;
-      this.mouseX = this.mouseTargetX;
-      this.mouseY = this.mouseTargetY;
+      // Use updateAimFromScreen to enforce table bounds
+      this.updateAimFromScreen(touch.clientX, touch.clientY, false);
     }
   }
-  
+
   handleTouchEnd(e: TouchEvent) {
+    if (uiStateMachine.state !== UIState.IN_GAME) return;
     e.preventDefault();
     if (this.isDraggingPowerBar) {
       this.isDraggingPowerBar = false;
     }
+    if (this.touchAimMode) {
+      this.pointerDown = false;
+      this.setAimDragActive(false);
+    }
   }
-  
+
   getAimAngle(ball: Ball, sensitivityMultiplier: number = 1.0): number {
     // Calculate the raw angle from ball to mouse
     const dx = this.mouseX - ball.x;
@@ -169,15 +192,15 @@ export class InputManager {
   resetAimAngle(): void {
     this.lastAimAngle = null;
   }
-  
+
   startPowerBarDrag(screenY: number) {
     this.isDraggingPowerBar = true;
     this.powerBarDragStart = screenY;
   }
-  
+
   getPowerBarValue(currentScreenY: number): number {
     if (!this.isDraggingPowerBar) return 0;
-    
+
     const distance = Math.abs(this.powerBarDragStart - currentScreenY);
     return Math.min(CONFIG.CUE_POWER_MAX, distance * 0.1);
   }
@@ -195,6 +218,45 @@ export class InputManager {
     if (!suppressed) {
       this.mouseX = this.mouseTargetX;
       this.mouseY = this.mouseTargetY;
+    }
+  }
+
+  setTouchAimMode(enabled: boolean) {
+    this.touchAimMode = enabled;
+    this.pointerDown = false;
+    this.setAimDragActive(!enabled ? true : false);
+  }
+
+  setAimDragActive(active: boolean) {
+    this.aimDragActive = active;
+    if (this.touchAimMode) {
+      this.setAimSuppressed(!active);
+    }
+    // Reset smoothing when re-enabling aim drag to avoid stale angle
+    if (active) {
+      this.resetAimAngle();
+    }
+  }
+
+  private updateAimFromScreen(screenX: number, screenY: number, applyNow: boolean) {
+    const pos = this.screenToGame(screenX, screenY);
+    const geom = getTableGeometry();
+    const halfW = (geom.playWidthIn ?? CONFIG.TABLE_WIDTH) / 2;
+    const halfH = (geom.playHeightIn ?? CONFIG.TABLE_HEIGHT) / 2;
+    const frameHalfW = geom.frameOutline.outerHalfWidth;
+    const frameHalfH = geom.frameOutline.outerHalfHeight;
+    const margin = 0.25; // allow slight tolerance near the edge
+    // Reject if outside frame (screen taps on sidebars/padding)
+    if (Math.abs(pos.x) > frameHalfW + margin || Math.abs(pos.y) > frameHalfH + margin) {
+      return; // ignore clicks/drags outside the table/frame
+    }
+    const clampedX = Math.max(-halfW, Math.min(halfW, pos.x));
+    const clampedY = Math.max(-halfH, Math.min(halfH, pos.y));
+    this.mouseTargetX = clampedX;
+    this.mouseTargetY = clampedY;
+    if (!this.aimSuppressed || applyNow) {
+      this.mouseX = clampedX;
+      this.mouseY = clampedY;
     }
   }
 }

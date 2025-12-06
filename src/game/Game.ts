@@ -142,6 +142,8 @@ export class Game {
   wasAimModeBeforeSpace: boolean = true;
   powerDragStartY: number = 0;
   spaceKeyHeld: boolean = false;
+  latestAimAngle: number = 0;
+  currentAimAngle: number = 0;
   hasStartedRack: boolean = false;
   microAimDialValue: number = 0;
   isDraggingMicroDial: boolean = false;
@@ -199,6 +201,10 @@ export class Game {
       const detail = (event as CustomEvent<{ settings: any }>).detail;
       if (detail?.settings) {
         this.aimAssist = !!detail.settings.aimAssist;
+        this.input.setTouchAimMode(!!detail.settings.touchAimMode);
+        if (this.isTouchAimOnly()) {
+          this.isSpacePowerMode = false;
+        }
         // Update other live game settings if needed
         if (this.ai) {
           const opponentId = this.mapDifficultyToOpponentId(detail.settings.aiDifficulty ?? 'MEDIUM');
@@ -217,6 +223,7 @@ export class Game {
     // Initialize settings
     const initialGameSettings = this.hud.settingsManager.getGameSettings();
     this.aimAssist = initialGameSettings.aimAssist;
+    this.input.setTouchAimMode(initialGameSettings.touchAimMode ?? false);
 
     // Initialize turn-based gameplay components (only for EIGHT_BALL mode)
     this.players = [];
@@ -304,6 +311,10 @@ export class Game {
       this.handleBallDragStart(e);
       this.handlePowerBarMouseDown(e);
       this.handleMicroDialMouseDown(e);
+      if (this.isTouchAimOnly()) {
+        const engageAim = !this.isDraggingPower && !this.isDraggingMicroDial && !this.isDraggingBall;
+        this.input.setAimDragActive(engageAim);
+      }
     });
     const isPointerOverHudHeader = (e: MouseEvent) => {
       const header = document.querySelector('.hud-header') as HTMLElement | null;
@@ -365,6 +376,7 @@ export class Game {
         return;
       }
       if (e.code === 'Space') {
+        if (this.isTouchAimOnly()) return; // power only via bar in touch-aim mode
         // Always prevent default to avoid page scrolling
         e.preventDefault();
         if (this.isPlayerInputBlocked()) return;
@@ -388,6 +400,7 @@ export class Game {
         this.input.setFineAimActive(false);
       }
       if (e.code === 'Space') {
+        if (this.isTouchAimOnly()) return;
         // Always prevent default to avoid page scrolling
         e.preventDefault();
         if (!this.isSpacePowerMode) {
@@ -2065,6 +2078,10 @@ export class Game {
     }
   }
 
+  private isTouchAimOnly(): boolean {
+    return !!CONFIG.TOUCH_AIM_MODE;
+  }
+
   private getMicroAimOffsetDegrees(): number {
     const maxDegrees = CONFIG.MICRO_AIM_MAX_DEGREES ?? 0;
     return maxDegrees * this.microAimDialValue;
@@ -2183,6 +2200,10 @@ export class Game {
 
       // Use locked angle in power mode, live angle in aim mode
       const baseAngle = this.isAimMode ? this.input.getAimAngle(this.cueBall, aimSensitivity) : this.lockedAngle;
+      if (this.isAimMode) {
+        this.latestAimAngle = baseAngle;
+        this.currentAimAngle = baseAngle;
+      }
       const angle = this.applyMicroAimOffset(baseAngle);
 
       // Predict first contact (always run to clip aim line at rails/balls)
@@ -2364,10 +2385,20 @@ export class Game {
       mouseY <= bounds.y + bounds.height
     ) {
       this.isDraggingPower = true;
-      // Reverse: pulling down increases power (mouseY closer to bottom = higher power)
-      this.currentPower = ((mouseY - bounds.y) / bounds.height) * CONFIG.CUE_POWER_MAX;
-      this.currentPower = Math.max(CONFIG.CUE_POWER_MIN, Math.min(CONFIG.CUE_POWER_MAX, this.currentPower));
+      // Freeze aim at current direction for the shot (use last live aim, not sidebar position)
+      const liveAim = this.currentAimAngle || this.latestAimAngle || this.input.getAimAngle(this.cueBall, this.calculateAimSensitivity());
+      const angleToLock = this.isAimMode ? liveAim : this.lockedAngle;
+      this.lockedAngle = angleToLock;
+      this.latestAimAngle = angleToLock;
+
+      // Relative drag: Start at 0 power
+      this.currentPower = 0;
+      this.powerDragStartY = e.clientY;
+
       this.input.setAimSuppressed(true);
+      if (this.isTouchAimOnly()) {
+        this.input.setAimDragActive(false);
+      }
     }
   }
 
@@ -2383,13 +2414,16 @@ export class Game {
       return;
     }
 
-    const bounds = this.renderer.getPowerBarBounds();
-    const rect = this.input.canvas.getBoundingClientRect();
-    const mouseY = e.clientY - rect.top;
+    // Relative drag logic for UI power bar
+    // Dragging DOWN adds power
+    const dragDistance = e.clientY - this.powerDragStartY;
+    const maxDragPixels = this.renderer.getPowerBarBounds()?.height ?? 200;
 
-    // Reverse: pulling down increases power (mouseY closer to bottom = higher power)
-    this.currentPower = ((mouseY - bounds.y) / bounds.height) * CONFIG.CUE_POWER_MAX;
-    this.currentPower = Math.max(CONFIG.CUE_POWER_MIN, Math.min(CONFIG.CUE_POWER_MAX, this.currentPower));
+    // Scale drag so full bar height = max power
+    const rawPower = (dragDistance / maxDragPixels) * CONFIG.CUE_POWER_MAX;
+
+    // Clamp between 0 and MAX (cannot go negative)
+    this.currentPower = Math.max(0, Math.min(CONFIG.CUE_POWER_MAX, rawPower));
   }
 
   handlePowerBarMouseUp(_e: MouseEvent) {
@@ -2397,6 +2431,9 @@ export class Game {
 
     this.isDraggingPower = false;
     this.input.setAimSuppressed(false);
+    if (this.isTouchAimOnly()) {
+      this.input.setAimDragActive(false);
+    }
 
     const canShootNow =
       this.currentPower >= CONFIG.CUE_POWER_MIN &&
@@ -2405,7 +2442,19 @@ export class Game {
 
     let shotFired = false;
     if (canShootNow) {
-      const shotAngle = this.applyMicroAimOffset(this.lockedAngle);
+      const baseShotAngle = this.lockedAngle;
+      console.log('[SHOT] fire', {
+        touchAimMode: this.isTouchAimOnly(),
+        isAimMode: this.isAimMode,
+        lockedAngle: baseShotAngle,
+        latestAimAngle: this.latestAimAngle,
+        currentAimAngle: this.currentAimAngle,
+        microOffsetDeg: this.getMicroAimOffsetDegrees(),
+        applyMicro: !!this.microAimDialValue,
+        currentPower: this.currentPower,
+        cueBall: { x: this.cueBall?.x, y: this.cueBall?.y }
+      });
+      const shotAngle = this.applyMicroAimOffset(baseShotAngle);
       this.shoot(shotAngle, this.currentPower);
       this.currentPower = 0;
       shotFired = true;
@@ -2444,6 +2493,9 @@ export class Game {
       }
       this.isDraggingMicroDial = true;
       this.updateMicroDialFromMouse(bounds, mouseY);
+      if (this.isTouchAimOnly()) {
+        this.input.setAimDragActive(false);
+      }
     }
   }
 
@@ -2460,6 +2512,9 @@ export class Game {
   handleMicroDialMouseUp(_e: MouseEvent) {
     if (!this.isDraggingMicroDial) return;
     this.isDraggingMicroDial = false;
+    if (this.isTouchAimOnly()) {
+      this.input.setAimDragActive(false);
+    }
   }
 
   handleBallDragStart(e: MouseEvent) {
@@ -2477,8 +2532,17 @@ export class Game {
     const screenX = e.clientX - rect.left;
     const screenY = e.clientY - rect.top;
 
-    const mouseX = (screenX - canvasCenterX) / this.renderer.scale;
-    const mouseY = -(screenY - canvasCenterY) / this.renderer.scale; // Flip Y
+    const geom = getTableGeometry();
+    const halfW = (geom.playWidthIn ?? CONFIG.TABLE_WIDTH) / 2;
+    const halfH = (geom.playHeightIn ?? CONFIG.TABLE_HEIGHT) / 2;
+    const mouseX = Math.max(
+      -halfW,
+      Math.min(halfW, (screenX - canvasCenterX) / this.renderer.scale)
+    );
+    const mouseY = Math.max(
+      -halfH,
+      Math.min(halfH, -(screenY - canvasCenterY) / this.renderer.scale) // Flip Y
+    );
 
     // Check if clicking on cue ball - must click directly on the ball
     const dx = mouseX - this.cueBall.x;

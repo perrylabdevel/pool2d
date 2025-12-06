@@ -687,7 +687,6 @@ export class Renderer3D extends BaseRenderer {
     this.ballRenderer.setLayerVisibility('showBalls', settings.showBalls);
     this.setLayerVisibility('showUIOverlay', settings.showUIOverlay);
     this.setLayerVisibility('showMeasurementOverlay', settings.showMeasurementOverlay);
-    this.setLayerVisibility('showMeasurementOverlay', settings.showMeasurementOverlay);
     this.setLayerVisibility('showReferenceOverlay', settings.showReferenceOverlay);
     this.setLayerVisibility('showTextures', settings.showTextures);
   }
@@ -758,7 +757,6 @@ export class Renderer3D extends BaseRenderer {
       case 'showMeasurementOverlay':
         this.toggleMeasurementOverlay(visible);
         break;
-      case 'showReferenceOverlay':
       case 'showReferenceOverlay':
         this.setReferenceOverlayVisible(visible);
         break;

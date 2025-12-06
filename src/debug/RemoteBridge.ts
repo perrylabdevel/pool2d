@@ -59,7 +59,7 @@ export class RemoteBridge {
         };
 
         this.ws.onclose = () => {
-            console.log('[RemoteBridge] Disconnected from relay server');
+            // console.debug('[RemoteBridge] Disconnected from relay server');
             setTimeout(() => this.connect(), this.reconnectInterval);
         };
     }

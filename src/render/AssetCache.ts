@@ -18,16 +18,16 @@ class AssetCacheManager {
 
   async init(): Promise<void> {
     if (this.initPromise) return this.initPromise;
-    
+
     this.initPromise = new Promise((resolve, reject) => {
       const request = indexedDB.open(DB_NAME, DB_VERSION);
-      
+
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
         this.db = request.result;
         resolve();
       };
-      
+
       request.onupgradeneeded = (event) => {
         const db = (event.target as IDBOpenDBRequest).result;
         if (!db.objectStoreNames.contains(STORE_NAME)) {
@@ -36,7 +36,7 @@ class AssetCacheManager {
         }
       };
     });
-    
+
     return this.initPromise;
   }
 
@@ -99,13 +99,19 @@ class AssetCacheManager {
 
 export const assetCache = new AssetCacheManager();
 
+import { Capacitor } from '@capacitor/core';
+
 // Helper to fetch with caching
 export async function fetchWithCache(url: string, type: 'fbx' | 'texture'): Promise<ArrayBuffer> {
-  // Check cache first
-  const cached = await assetCache.get(url);
-  if (cached) {
-    console.log(`  ✓ Cache hit: ${url}`);
-    return cached;
+  const isIOS = Capacitor.getPlatform() === 'ios';
+
+  // Check cache first (skip on iOS to prevent memory/quota crashes with large assets)
+  if (!isIOS) {
+    const cached = await assetCache.get(url);
+    if (cached) {
+      console.log(`  ✓ Cache hit: ${url}`);
+      return cached;
+    }
   }
 
   // Cache miss - fetch from network
@@ -116,10 +122,16 @@ export async function fetchWithCache(url: string, type: 'fbx' | 'texture'): Prom
   }
 
   const data = await response.arrayBuffer();
-  
-  // Store in cache for next time
-  await assetCache.set(url, data, type);
-  
+
+  // Store in cache for next time (skip on iOS)
+  if (!isIOS) {
+    try {
+      await assetCache.set(url, data, type);
+    } catch (e) {
+      console.warn('Failed to cache asset:', e);
+    }
+  }
+
   return data;
 }
 
