@@ -1,5 +1,7 @@
 # Project Specification
 
+> Reviewed: December 6, 2025. For live status/known issues, see `PROJECT_STATUS.md`.
+
 This is the living spec for Pool 2D. It captures the intended scope, technology stack, and milestone checklist as the project evolves beyond the original brief.
 
 ## Vision
