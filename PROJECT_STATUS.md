@@ -8,7 +8,7 @@
 
 **Canonical Status Note**
 
-- This document is the single source of truth for current project status and known issues. Older roadmap/status Markdown files (e.g. `docs/ui-canvas-roadmap.md`, `docs/ui-overhaul-plan.md`, `docs/ui-overhaul-status.md`) are archived; refer here instead.
+- This document is the single source of truth for current project status and known issues. Older plans/roadmaps are now in `docs/archived/`; refer here for current info.
 
 ## Project Overview
 
