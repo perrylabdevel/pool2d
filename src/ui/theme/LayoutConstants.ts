@@ -30,9 +30,27 @@ export const Breakpoints = {
 };
 
 /**
+ * Check if the screen is in landscape orientation
+ */
+export function isLandscape(width: number, height: number): boolean {
+    return width > height;
+}
+
+/**
+ * Check if this is a phone in landscape mode (short height, wide)
+ */
+export function isPhoneLandscape(width: number, height: number): boolean {
+    return isLandscape(width, height) && height <= 500;
+}
+
+/**
  * Device type detection helper
  */
-export function getDeviceType(width: number): 'mobile' | 'tablet' | 'desktop' {
+export function getDeviceType(width: number, height?: number): 'mobile' | 'tablet' | 'desktop' {
+    // If height provided and we're in phone landscape, treat as mobile
+    if (height !== undefined && isPhoneLandscape(width, height)) {
+        return 'mobile';
+    }
     if (width <= Breakpoints.SM) return 'mobile';
     if (width <= Breakpoints.LG) return 'tablet';
     return 'desktop';

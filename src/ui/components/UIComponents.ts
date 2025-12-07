@@ -223,31 +223,42 @@ export function drawCurrencyPill(
 
         ctx.restore(); // Remove clipping
 
-        // Text stack
-        const textAreaStart = x + iconPadding + iconSize + 8;
-        const valueFontSize = Math.max(20, height * 0.6);
-        // const label = type === 'coins' ? 'COINS' : 'CASH';
+        // Text stack - with clipping to prevent overflow
+        const textAreaStart = x + iconPadding + iconSize + 6;
+        const textAreaEnd = x + width - 4; // Leave small right padding
+        const availableTextWidth = textAreaEnd - textAreaStart;
 
-        // Label (small, above value)
-        // ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-        // ctx.font = `600 10px ${LayoutConstants.Fonts.Family.Display}`;
-        // ctx.textAlign = 'left';
-        // ctx.textBaseline = 'bottom';
-        // ctx.fillText(label, textAreaStart, y + height / 2 - 2);
+        // Calculate font size that fits - start with desired size and shrink if needed
+        const amountStr = amount.toLocaleString();
+        let valueFontSize = Math.max(14, height * 0.55);
+
+        // Measure and shrink font until it fits
+        ctx.font = `${LayoutConstants.Fonts.Weight.Black} ${valueFontSize}px ${LayoutConstants.Fonts.Family.Default}`;
+        let textWidth = ctx.measureText(amountStr).width;
+        while (textWidth > availableTextWidth && valueFontSize > 10) {
+            valueFontSize -= 1;
+            ctx.font = `${LayoutConstants.Fonts.Weight.Black} ${valueFontSize}px ${LayoutConstants.Fonts.Family.Default}`;
+            textWidth = ctx.measureText(amountStr).width;
+        }
+
+        // Clip to pill bounds for text as well
+        ctx.save();
+        drawRoundedRect(ctx, x, y, width, height, pillRadius);
+        ctx.clip();
 
         // Value (large, centered vertically)
         ctx.fillStyle = ColorTokens.text.primary;
-        // Use standard sans-serif for cleaner look as requested
-        ctx.font = `${LayoutConstants.Fonts.Weight.Black} ${valueFontSize}px ${LayoutConstants.Fonts.Family.Default}`;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
         // Remove heavy shadow, use subtle one
         ctx.shadowColor = ColorTokens.effects.shadowTextLight;
         ctx.shadowBlur = 2;
         ctx.shadowOffsetY = 1;
-        ctx.fillText(amount.toLocaleString(), textAreaStart, y + height / 2 + 1);
+        ctx.fillText(amountStr, textAreaStart, y + height / 2 + 1);
         ctx.shadowBlur = 0;
         ctx.shadowOffsetY = 0;
+
+        ctx.restore(); // Remove text clipping
 
     } else {
         // Default theme (e.g. for tooltips or other UI)

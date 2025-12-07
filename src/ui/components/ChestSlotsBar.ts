@@ -30,6 +30,9 @@ export class ChestSlotsBar {
     private lastUpdateTime: number = 0;
     private updateInterval: number = 1000; // Update every second for timers
 
+    private isMobile: boolean = false;
+    private currentCanvasWidth: number = 0;
+
     constructor() {
         // Preloading handled by ChestRenderer
     }
@@ -81,29 +84,63 @@ export class ChestSlotsBar {
         console.log(`📦 Added test ${type} chest to slot ${emptySlot.slotIndex}`);
     }
 
+    private isLandscapeMode: boolean = false;
+
     getHeight(): number {
-        return CHEST_BAR_HEIGHT;
+        // Responsive height based on screen size and orientation
+        if (this.isLandscapeMode) {
+            return 56; // Very compact in landscape
+        }
+        return this.isMobile ? 72 : CHEST_BAR_HEIGHT;
     }
 
     setupLayout(canvasWidth: number, canvasHeight: number): void {
-        // Chests are approx 1.8:1 ratio. 
-        // Width is 130. Height needs to accommodate the chest + timer ribbon.
-        const slotWidth = 95;
-        const slotHeight = 88; // Increased from 75 to fit ribbon
-        const gap = 12;
-        const totalWidth = slotWidth * 4 + gap * 3;
-        const startX = (canvasWidth - totalWidth) / 2;
-        const y = canvasHeight - CHEST_BAR_HEIGHT + (CHEST_BAR_HEIGHT - slotHeight) / 2;
+        this.currentCanvasWidth = canvasWidth;
+        this.isMobile = canvasWidth < 600 || canvasHeight < 500;
+        this.isLandscapeMode = canvasWidth > canvasHeight && canvasHeight < 500;
 
-        this.slotRects = [];
-        for (let i = 0; i < 4; i++) {
-            this.slotRects.push({
-                slotIndex: i,
-                x: startX + i * (slotWidth + gap),
-                y: y,
-                width: slotWidth,
-                height: slotHeight
-            });
+        const barHeight = this.getHeight();
+
+        // In landscape, spread slots across the width like lobby cards
+        if (this.isLandscapeMode) {
+            const padding = 16;
+            const contentWidth = canvasWidth - padding * 2;
+            const numSlots = 4;
+            const gap = 12;
+            const slotWidth = (contentWidth - gap * (numSlots - 1)) / numSlots;
+            const slotHeight = barHeight - 12; // Leave some padding top/bottom
+            const y = canvasHeight - barHeight + (barHeight - slotHeight) / 2;
+
+            this.slotRects = [];
+            for (let i = 0; i < numSlots; i++) {
+                this.slotRects.push({
+                    slotIndex: i,
+                    x: padding + i * (slotWidth + gap),
+                    y: y,
+                    width: slotWidth,
+                    height: slotHeight
+                });
+            }
+        } else {
+            // Portrait/Desktop: centered slots with fixed sizes
+            const slotWidth = this.isMobile ? 70 : 95;
+            const slotHeight = this.isMobile ? 60 : 88;
+            const gap = this.isMobile ? 8 : 12;
+
+            const totalWidth = slotWidth * 4 + gap * 3;
+            const startX = (canvasWidth - totalWidth) / 2;
+            const y = canvasHeight - barHeight + (barHeight - slotHeight) / 2;
+
+            this.slotRects = [];
+            for (let i = 0; i < 4; i++) {
+                this.slotRects.push({
+                    slotIndex: i,
+                    x: startX + i * (slotWidth + gap),
+                    y: y,
+                    width: slotWidth,
+                    height: slotHeight
+                });
+            }
         }
     }
 
@@ -259,9 +296,10 @@ export class ChestSlotsBar {
 
     render(ctx: CanvasRenderingContext2D, canvasWidth: number): void {
         // Background bar
-        const barY = ctx.canvas.height - CHEST_BAR_HEIGHT;
+        const barHeight = this.getHeight();
+        const barY = ctx.canvas.height - barHeight;
         ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        ctx.fillRect(0, barY, canvasWidth, CHEST_BAR_HEIGHT);
+        ctx.fillRect(0, barY, canvasWidth, barHeight);
 
         // Top border
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';

@@ -124,25 +124,28 @@ export class LobbyScene implements UIScene {
         sceneController.focusManager.clear();
         this.buttons = [];
 
-        // Setup navigation bar
-        this.navigationBar.setupLayout(width);
+        // Setup navigation bar (pass height for landscape detection)
+        this.navigationBar.setupLayout(width, height);
         const navHeight = this.navigationBar.getHeight();
 
         // Setup chest slots bar at the bottom
         this.chestSlotsBar.setupLayout(width, height);
 
-        // Detect device type for responsive layout
-        const deviceType = getDeviceType(width);
+        // Detect device type and orientation for responsive layout
+        const deviceType = getDeviceType(width, height);
         const isMobile = deviceType === 'mobile';
         const isTablet = deviceType === 'tablet';
+        const isLandscape = width > height && height < 500; // Phone in landscape
 
-        // Responsive padding and gap
-        const padding = isMobile ? 12 : (isTablet ? 16 : 24);
-        const gap = isMobile ? 10 : (isTablet ? 12 : 16);
-        const topSpacing = navHeight + (isMobile ? 10 : 20);
+        // Responsive padding and gap - more compact in landscape
+        const padding = isLandscape ? 8 : (isMobile ? 12 : (isTablet ? 16 : 24));
+        const gap = isLandscape ? 6 : (isMobile ? 10 : (isTablet ? 12 : 16));
+        // Ensure content starts well below the nav bar, not under it
+        const topSpacing = navHeight + (isLandscape ? 8 : (isMobile ? 12 : 20));
 
         // Calculate available height for cards
-        const chestBarHeight = isMobile ? 60 : CHEST_BAR_HEIGHT;
+        // Use the responsive chest bar height from the component
+        const chestBarHeight = this.chestSlotsBar.getHeight();
         const availableHeight = height - topSpacing - padding * 2 - chestBarHeight;
 
         // Define cards with their actions (layout computed below based on device)
@@ -184,8 +187,13 @@ export class LobbyScene implements UIScene {
         ];
 
         if (isMobile) {
-            // Mobile: 2-column grid layout
-            this.setupMobileLayout(width, height, padding, gap, topSpacing, availableHeight, cardDefs);
+            if (isLandscape) {
+                // Landscape mobile: horizontal layout with smaller cards
+                this.setupLandscapeLayout(width, height, padding, gap, topSpacing, availableHeight, cardDefs);
+            } else {
+                // Portrait mobile: 2-column grid layout
+                this.setupMobileLayout(width, height, padding, gap, topSpacing, availableHeight, cardDefs);
+            }
         } else if (isTablet) {
             // Tablet: 2-column with featured card
             this.setupTabletLayout(width, height, padding, gap, topSpacing, availableHeight, cardDefs);
@@ -195,16 +203,53 @@ export class LobbyScene implements UIScene {
         }
     }
 
+    private setupLandscapeLayout(width: number, _height: number, padding: number, gap: number, topSpacing: number, availableHeight: number, cardDefs: Array<{ id: string; text: string; subtitle: string; icon: string; color: string; action: () => void }>) {
+        // In landscape, spread cards across full width and height
+        const sidePadding = 16;
+        const contentWidth = width - sidePadding * 2;
+        const numCards = cardDefs.length;
+        const cardGap = 12;
+        const cardWidth = (contentWidth - cardGap * (numCards - 1)) / numCards;
+        // Use full available height, not capped at 80px
+        const cardHeight = availableHeight;
+
+        cardDefs.forEach((card, index) => {
+            const cardX = sidePadding + index * (cardWidth + cardGap);
+
+            this.buttons.push({
+                id: card.id,
+                text: card.text,
+                subtitle: '', // Hide subtitle in landscape to save space
+                icon: card.icon,
+                rect: { x: cardX, y: topSpacing, width: cardWidth, height: cardHeight },
+                color: card.color,
+                action: card.action,
+                variant: 'nav'
+            });
+        });
+    }
+
     private setupMobileLayout(width: number, _height: number, padding: number, gap: number, topSpacing: number, availableHeight: number, cardDefs: Array<{ id: string; text: string; subtitle: string; icon: string; color: string; action: () => void }>) {
         const contentWidth = width - padding * 2;
         const startX = padding;
+        const numCols = 2; // Always 2-column on mobile
 
-        // 2-column grid with featured Play card spanning full width
-        const colWidth = (contentWidth - gap) / 2;
-        const playCardHeight = Math.min(availableHeight * 0.25, 120);
-        const remainingHeight = availableHeight - playCardHeight - gap;
-        const rowCount = Math.ceil((cardDefs.length - 1) / 2); // -1 for play card
-        const rowHeight = Math.min((remainingHeight - gap * (rowCount - 1)) / rowCount, 90);
+        // Grid layout calculations
+        const colWidth = (contentWidth - gap) / numCols;
+
+        // Cards: 1 play card (full width) + remaining in 2-col grid
+        // With 6 cards total: Play + 5 others = Play row + 3 rows (last row has 1 card)
+        const otherCards = cardDefs.filter(c => c.id !== 'play');
+        const numRows = Math.ceil(otherCards.length / numCols);
+
+        // Calculate heights to fill available space
+        const totalGaps = gap * numRows; // gap between play and first row, + gaps between rows
+        const heightForCards = availableHeight - totalGaps;
+
+        // Play card gets ~25% of height, rest split among other rows
+        const playCardHeight = Math.max(80, Math.min(heightForCards * 0.22, 130));
+        const remainingHeight = heightForCards - playCardHeight;
+        const rowHeight = Math.max(70, remainingHeight / numRows);
 
         cardDefs.forEach((card, index) => {
             if (card.id === 'play') {
@@ -222,17 +267,25 @@ export class LobbyScene implements UIScene {
             } else {
                 // Other cards: 2-column grid below play card
                 const adjustedIndex = index - 1; // Skip play card
-                const col = adjustedIndex % 2;
-                const row = Math.floor(adjustedIndex / 2);
-                const cardX = startX + col * (colWidth + gap);
+                const col = adjustedIndex % numCols;
+                const row = Math.floor(adjustedIndex / numCols);
                 const cardY = topSpacing + playCardHeight + gap + row * (rowHeight + gap);
+
+                // Check if this is the last row and it's a single item
+                const isLastRow = row === numRows - 1;
+                const itemsInLastRow = otherCards.length % numCols;
+                const isSingleItemLastRow = isLastRow && itemsInLastRow === 1;
+
+                // If single item in last row, make it full width
+                const cardWidth = isSingleItemLastRow ? contentWidth : colWidth;
+                const cardX = isSingleItemLastRow ? startX : (startX + col * (colWidth + gap));
 
                 this.buttons.push({
                     id: card.id,
                     text: card.text,
                     subtitle: card.subtitle,
                     icon: card.icon,
-                    rect: { x: cardX, y: cardY, width: colWidth, height: rowHeight },
+                    rect: { x: cardX, y: cardY, width: cardWidth, height: rowHeight },
                     color: card.color,
                     action: card.action,
                     variant: 'nav'

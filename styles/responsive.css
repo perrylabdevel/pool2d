@@ -133,8 +133,8 @@
   }
 
   #hud-menu-btn {
-    width: 40px;
-    height: 40px;
+    width: 44px; /* Increased to 44px for better touch target */
+    height: 44px;
     border-radius: 8px;
     flex-shrink: 0;
   }
@@ -180,8 +180,7 @@
   }
 
   #stats {
-    gap: 10px;
-    font-size: 10px;
+    display: none !important; /* Hide stats on mobile */
   }
 }
 
@@ -217,8 +216,8 @@
   }
 
   #hud-menu-btn {
-    width: 36px;
-    height: 36px;
+    width: 44px; /* Maintain 44px even on small screens */
+    height: 44px;
   }
 
   #hud-menu-btn span {

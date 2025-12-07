@@ -316,6 +316,35 @@ export class Game {
         this.input.setAimDragActive(engageAim);
       }
     });
+    // Touch support for power bar / micro dial (aim handled in InputManager)
+    this.input.canvas.addEventListener('touchstart', (e) => {
+      if (isUIBlockingGameplay()) return;
+      if (this.isPlayerInputBlocked()) return;
+      if (this.waitingForPocketCall) return;
+      const touch = e.touches[0];
+      if (!touch) return;
+      e.preventDefault();
+      const fake = { clientX: touch.clientX, clientY: touch.clientY, detail: 1 } as MouseEvent;
+      this.handlePowerBarMouseDown(fake);
+      this.handleMicroDialMouseDown(fake);
+    }, { passive: false });
+    this.input.canvas.addEventListener('touchmove', (e) => {
+      if (!this.isDraggingPower && !this.isDraggingMicroDial) return;
+      const touch = e.touches[0];
+      if (!touch) return;
+      e.preventDefault();
+      const fake = { clientX: touch.clientX, clientY: touch.clientY } as MouseEvent;
+      this.handlePowerBarMouseMove(fake);
+      this.handleMicroDialMouseMove(fake);
+    }, { passive: false });
+    this.input.canvas.addEventListener('touchend', (e) => {
+      if (!this.isDraggingPower && !this.isDraggingMicroDial) return;
+      e.preventDefault();
+      const touch = e.changedTouches[0];
+      const fake = touch ? ({ clientX: touch.clientX, clientY: touch.clientY } as MouseEvent) : ({ clientX: 0, clientY: 0 } as MouseEvent);
+      this.handlePowerBarMouseUp(fake);
+      this.handleMicroDialMouseUp(fake);
+    }, { passive: false });
     const isPointerOverHudHeader = (e: MouseEvent) => {
       const header = document.querySelector('.hud-header') as HTMLElement | null;
       if (!header) return false;

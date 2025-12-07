@@ -1091,16 +1091,36 @@ export class CueRenderer {
         const frameHalfWidth = geom.frameOutline.outerHalfWidth;
         const frameWorldX = side === 'right' ? frameHalfWidth : -frameHalfWidth;
         const frameScreen = this.worldToScreen(frameWorldX, 0);
-        const offsetFromFrame = 20;
+        const offsetFromFrame = 16;
         const x = side === 'right' ? frameScreen.x + offsetFromFrame : frameScreen.x - offsetFromFrame - width;
         const bounds = this.getTableFrameScreenBounds();
+
         let y = bounds.centerY - height / 2;
-        const maxY = Math.max(0, this.getUiCanvas().height - height);
-        y = Math.max(0, Math.min(maxY, y));
+
+        // Mobile optimization: Align to bottom for easier thumb access
+        // and push slightly away from the very edge if needed
+        const canvas = this.getUiCanvas();
+        if (canvas.width < 500) {
+            // Align bottom of sidebar with bottom of table frame (minus generous padding)
+            // But clamp so it doesn't go off screen bottom (minus safe area approx)
+            const bottomMargin = 20;
+            const targetBottom = bounds.bottom - bottomMargin;
+            y = targetBottom - height;
+
+            // Ensure we don't go too high (top of screen)
+            y = Math.max(canvas.height * 0.1, y);
+
+            // Ensure we don't go off bottom
+            y = Math.min(canvas.height - height - 10, y);
+        } else {
+            const maxY = Math.max(0, canvas.height - height);
+            y = Math.max(0, Math.min(maxY, y));
+        }
+
         return { x, y, width, height };
     }
 
-    private getSidebarSides() {
+    private getSidebarSides(): { dialSide: 'left' | 'right'; powerSide: 'left' | 'right' } {
         const dialSide = CONFIG.SIDEBAR_DIAL_SIDE === 'right' ? 'right' : 'left';
         const powerSide = dialSide === 'left' ? 'right' : 'left';
         return { dialSide, powerSide };
@@ -1109,7 +1129,13 @@ export class CueRenderer {
     private getSidebarSize() {
         const bounds = this.getTableFrameScreenBounds();
         const height = Math.max(160, bounds.height * 0.75);
-        const width = Math.max(36 * 1.5, height * 0.08 * 1.5);
+
+        // Increase width for mobile touch targets
+        const isMobile = this.getUiCanvas().width < 500;
+        const widthScale = isMobile ? 0.12 : 0.08 * 1.5;
+        const minWidth = isMobile ? 60 : 54;
+
+        const width = Math.max(minWidth, height * widthScale);
         return { width, height };
     }
 

@@ -100,6 +100,11 @@ export class SettingsScene implements UIScene {
     private keyHandler: ((e: KeyboardEvent) => void) | null = null;
     private navigationBar: NavigationBar;
 
+    private scrollOffset = 0;
+    private maxScroll = 0;
+    private touchStartY: number | null = null;
+    private contentRect: Rect | null = null;
+
     constructor(settingsManager: SettingsManager) {
         this.settingsManager = settingsManager;
         this.navigationBar = new NavigationBar({
@@ -116,11 +121,14 @@ export class SettingsScene implements UIScene {
         this.canvas = document.getElementById('ui-stage') as HTMLCanvasElement;
         if (!this.canvas) return;
 
-        this.setupLayout(this.canvas.width);
+        this.setupLayout(this.canvas.width, this.canvas.height);
         this.canvas.addEventListener('mousemove', this.onMouseMove);
         this.canvas.addEventListener('mousedown', this.onMouseDown);
         this.canvas.addEventListener('mouseup', this.onMouseUp);
         this.canvas.addEventListener('click', this.onClick);
+        this.canvas.addEventListener('wheel', this.onWheel, { passive: true });
+        this.canvas.addEventListener('touchstart', this.onTouchStart, { passive: true });
+        this.canvas.addEventListener('touchmove', this.onTouchMove, { passive: true });
         window.addEventListener('resize', this.onResize);
 
         this.keyHandler = (e: KeyboardEvent) => {
@@ -137,6 +145,9 @@ export class SettingsScene implements UIScene {
         this.canvas.removeEventListener('mousedown', this.onMouseDown);
         this.canvas.removeEventListener('mouseup', this.onMouseUp);
         this.canvas.removeEventListener('click', this.onClick);
+        this.canvas.removeEventListener('wheel', this.onWheel);
+        this.canvas.removeEventListener('touchstart', this.onTouchStart);
+        this.canvas.removeEventListener('touchmove', this.onTouchMove);
         window.removeEventListener('resize', this.onResize);
 
         if (this.keyHandler) {
@@ -148,33 +159,62 @@ export class SettingsScene implements UIScene {
         this.canvas = null;
     }
 
-    private setupLayout(width: number) {
-        // Setup navigation bar
-        this.navigationBar.setupLayout(width);
+    private setupLayout(width: number, height: number) {
+        // Setup navigation bar with height for proper landscape detection
+        this.navigationBar.setupLayout(width, height);
         const navHeight = this.navigationBar.getHeight();
 
         const tabHeight = LayoutConstants.Dimensions.ControlHeight;
         const gap = LayoutConstants.Spacing.GapMedium;
 
-        // Tab buttons
+        // Tab buttons - centered if space allows, or scaled
         const tabWidth = LayoutConstants.Dimensions.ButtonWidthMedium;
         const tabGap = LayoutConstants.Spacing.GapSmall;
         const totalTabWidth = tabWidth * 4 + tabGap * 3;
-        const tabStartX = (width - totalTabWidth) / 2;
-        const tabY = navHeight + 20;
+
+        let tabStartX = (width - totalTabWidth) / 2;
+        let finalTabWidth = tabWidth;
+
+        // If tabs don't fit (mobile portrait), scale them down
+        if (totalTabWidth > width - 20) {
+            const availableWidth = width - 20;
+            finalTabWidth = (availableWidth - tabGap * 3) / 4;
+            tabStartX = 10;
+        }
+
+        const tabY = navHeight + 10; // Tighter spacing
 
         this.tabButtons = [
-            { id: 'gameplay', text: 'Gameplay', rect: { x: tabStartX, y: tabY, width: tabWidth, height: tabHeight } },
-            { id: 'colors', text: 'Colors', rect: { x: tabStartX + tabWidth + tabGap, y: tabY, width: tabWidth, height: tabHeight } },
-            { id: 'audio', text: 'Audio', rect: { x: tabStartX + (tabWidth + tabGap) * 2, y: tabY, width: tabWidth, height: tabHeight } },
-            { id: 'table', text: 'Table', rect: { x: tabStartX + (tabWidth + tabGap) * 3, y: tabY, width: tabWidth, height: tabHeight } }
+            { id: 'gameplay', text: 'Gameplay', rect: { x: tabStartX, y: tabY, width: finalTabWidth, height: tabHeight } },
+            { id: 'colors', text: 'Colors', rect: { x: tabStartX + finalTabWidth + tabGap, y: tabY, width: finalTabWidth, height: tabHeight } },
+            { id: 'audio', text: 'Audio', rect: { x: tabStartX + (finalTabWidth + tabGap) * 2, y: tabY, width: finalTabWidth, height: tabHeight } },
+            { id: 'table', text: 'Table', rect: { x: tabStartX + (finalTabWidth + tabGap) * 3, y: tabY, width: finalTabWidth, height: tabHeight } }
         ];
 
-        // Content area
-        const contentY = tabY + tabHeight + gap;
+        // Content area starts after tabs
+        const contentStartY = tabY + tabHeight + gap;
 
-        // Setup controls based on active tab
-        this.setupControls(width, contentY);
+        // Define scrollable content area
+        this.contentRect = {
+            x: 0,
+            y: contentStartY,
+            width: width,
+            height: height - contentStartY
+        };
+
+        // Setup controls 
+        // Note: Controls are laid out starting at y=0 (relative to content area)
+        this.setupControls(width, 0);
+
+        // Calculate max scroll
+        let contentHeight = 0;
+        if (this.buttonControls.length > 0) {
+            const lastBtn = this.buttonControls[this.buttonControls.length - 1];
+            contentHeight = lastBtn.rect.y + lastBtn.rect.height + 20;
+        }
+
+        this.maxScroll = Math.max(0, contentHeight - this.contentRect.height);
+        this.scrollOffset = Math.min(this.scrollOffset, this.maxScroll);
     }
 
     private setupControls(width: number, startY: number) {
@@ -185,7 +225,7 @@ export class SettingsScene implements UIScene {
         this.buttonControls = [];
         this.muteToggleMap = {};
 
-        const controlWidth = LayoutConstants.Dimensions.ControlWidth;
+        const controlWidth = Math.min(LayoutConstants.Dimensions.ControlWidth, width - 40);
         const controlHeight = LayoutConstants.Dimensions.ControlHeight;
         const gap = 15;
         const startX = (width - controlWidth) / 2;
@@ -193,13 +233,13 @@ export class SettingsScene implements UIScene {
         if (this.activeTab === 'gameplay') {
             const gameSettings = this.settingsManager.getGameSettings();
             const renderSettings = this.settingsManager.getRenderSettings();
-            let y = startY + 20;
+            let y = startY + 10;
 
             this.toggleControls = [
                 { id: 'aimAssist', label: 'Aim Assist', value: gameSettings.aimAssist, rect: { x: startX, y, width: controlWidth, height: controlHeight } },
                 { id: 'call8Ball', label: 'Call 8-Ball', value: gameSettings.call8Ball, rect: { x: startX, y: y += controlHeight + gap, width: controlWidth, height: controlHeight } },
                 { id: 'showFPS', label: 'Show FPS/UPS', value: gameSettings.showFPS, rect: { x: startX, y: y += controlHeight + gap, width: controlWidth, height: controlHeight } },
-                { id: 'touchAimMode', label: 'Touch Aim Only (power via bar)', value: !!gameSettings.touchAimMode, rect: { x: startX, y: y += controlHeight + gap, width: controlWidth, height: controlHeight } }
+                { id: 'touchAimMode', label: 'Touch Aim Only', value: !!gameSettings.touchAimMode, rect: { x: startX, y: y += controlHeight + gap, width: controlWidth, height: controlHeight } }
             ];
 
             y += controlHeight + gap * 2;
@@ -233,23 +273,23 @@ export class SettingsScene implements UIScene {
             ];
         } else if (this.activeTab === 'colors') {
             const colors = this.settingsManager.getUIColors();
-            let y = startY + 20;
+            let y = startY + 10;
 
-            const colorSize = 40;
+            const colorSize = 34; // Slightly smaller to fix nice
             const colorRectX = startX + controlWidth - colorSize - 10;
 
             this.colorControls = [
-                { id: 'tableColor', label: 'Table Cloth', value: colors.tableColor, rect: { x: startX, y, width: controlWidth, height: controlHeight }, colorRect: { x: colorRectX, y: y + 5, width: colorSize, height: colorSize } },
-                { id: 'frameColor', label: 'Table Frame', value: colors.frameColor, rect: { x: startX, y: y += controlHeight + gap, width: controlWidth, height: controlHeight }, colorRect: { x: colorRectX, y: y + 5, width: colorSize, height: colorSize } },
-                { id: 'railColor', label: 'Rail Cushion', value: colors.railColor, rect: { x: startX, y: y += controlHeight + gap, width: controlWidth, height: controlHeight }, colorRect: { x: colorRectX, y: y + 5, width: colorSize, height: colorSize } },
-                { id: 'railFillColor', label: 'Corner Fill', value: colors.railFillColor, rect: { x: startX, y: y += controlHeight + gap, width: controlWidth, height: controlHeight }, colorRect: { x: colorRectX, y: y + 5, width: colorSize, height: colorSize } },
-                { id: 'activePlayerColor', label: 'Active Player', value: colors.activePlayerColor, rect: { x: startX, y: y += controlHeight + gap, width: controlWidth, height: controlHeight }, colorRect: { x: colorRectX, y: y + 5, width: colorSize, height: colorSize } },
-                { id: 'turnIndicatorColor', label: 'Turn Indicator', value: colors.turnIndicatorColor, rect: { x: startX, y: y += controlHeight + gap, width: controlWidth, height: controlHeight }, colorRect: { x: colorRectX, y: y + 5, width: colorSize, height: colorSize } },
-                { id: 'cueStickColor', label: 'Cue Stick', value: colors.cueStickColor, rect: { x: startX, y: y += controlHeight + gap, width: controlWidth, height: controlHeight }, colorRect: { x: colorRectX, y: y + 5, width: colorSize, height: colorSize } },
-                { id: 'cueTipColor', label: 'Cue Tip', value: colors.cueTipColor, rect: { x: startX, y: y += controlHeight + gap, width: controlWidth, height: controlHeight }, colorRect: { x: colorRectX, y: y + 5, width: colorSize, height: colorSize } }
+                { id: 'tableColor', label: 'Table Cloth', value: colors.tableColor, rect: { x: startX, y, width: controlWidth, height: controlHeight }, colorRect: { x: colorRectX, y: y + (controlHeight - colorSize) / 2, width: colorSize, height: colorSize } },
+                { id: 'frameColor', label: 'Table Frame', value: colors.frameColor, rect: { x: startX, y: y += controlHeight + gap, width: controlWidth, height: controlHeight }, colorRect: { x: colorRectX, y: y + (controlHeight - colorSize) / 2, width: colorSize, height: colorSize } },
+                { id: 'railColor', label: 'Rail Cushion', value: colors.railColor, rect: { x: startX, y: y += controlHeight + gap, width: controlWidth, height: controlHeight }, colorRect: { x: colorRectX, y: y + (controlHeight - colorSize) / 2, width: colorSize, height: colorSize } },
+                { id: 'railFillColor', label: 'Corner Fill', value: colors.railFillColor, rect: { x: startX, y: y += controlHeight + gap, width: controlWidth, height: controlHeight }, colorRect: { x: colorRectX, y: y + (controlHeight - colorSize) / 2, width: colorSize, height: colorSize } },
+                { id: 'activePlayerColor', label: 'Active Player', value: colors.activePlayerColor, rect: { x: startX, y: y += controlHeight + gap, width: controlWidth, height: controlHeight }, colorRect: { x: colorRectX, y: y + (controlHeight - colorSize) / 2, width: colorSize, height: colorSize } },
+                { id: 'turnIndicatorColor', label: 'Turn Indicator', value: colors.turnIndicatorColor, rect: { x: startX, y: y += controlHeight + gap, width: controlWidth, height: controlHeight }, colorRect: { x: colorRectX, y: y + (controlHeight - colorSize) / 2, width: colorSize, height: colorSize } },
+                { id: 'cueStickColor', label: 'Cue Stick', value: colors.cueStickColor, rect: { x: startX, y: y += controlHeight + gap, width: controlWidth, height: controlHeight }, colorRect: { x: colorRectX, y: y + (controlHeight - colorSize) / 2, width: colorSize, height: colorSize } },
+                { id: 'cueTipColor', label: 'Cue Tip', value: colors.cueTipColor, rect: { x: startX, y: y += controlHeight + gap, width: controlWidth, height: controlHeight }, colorRect: { x: colorRectX, y: y + (controlHeight - colorSize) / 2, width: colorSize, height: colorSize } }
             ];
         } else if (this.activeTab === 'audio') {
-            let y = startY + 20;
+            let y = startY + 10;
             const audioSettings = this.settingsManager.getAudioSettings();
 
             // Sliders
@@ -277,11 +317,19 @@ export class SettingsScene implements UIScene {
         } else if (this.activeTab === 'table') {
             // Setup Sub-tabs
             const subTabs: SubTabId[] = ['themes', 'felt', 'frame', 'cushion', 'pocket'];
-            const subTabWidth = 80;
-            const subTabHeight = 30;
+
+            // Scalable subtabs
+            const maxSubTabWidth = 80;
             const subTabGap = 5;
+            const availableW = width - 20;
+            const totalRequiredW = subTabs.length * maxSubTabWidth + (subTabs.length - 1) * subTabGap;
+            const subTabWidth = totalRequiredW > availableW
+                ? (availableW - (subTabs.length - 1) * subTabGap) / subTabs.length
+                : maxSubTabWidth;
+
             const totalSubTabW = subTabs.length * subTabWidth + (subTabs.length - 1) * subTabGap;
             const subTabStartX = (width - totalSubTabW) / 2;
+            const subTabHeight = 30;
             const subTabY = startY + 10;
 
             const subTabLabels: Record<SubTabId, string> = {
@@ -300,17 +348,24 @@ export class SettingsScene implements UIScene {
 
             if (this.activeSubTab === 'themes') {
                 const cardW = 140, cardH = 90, cardGap = 14;
-                const cols = Math.max(1, Math.floor((width - 60) / (cardW + cardGap)));
+                // Calculate columns based on width
+                const cols = Math.max(1, Math.floor((width - 40) / (cardW + cardGap)));
                 const entries = Object.entries(TABLE_THEMES);
+                // Center the grid
+                const rowWidth = Math.min(cols, entries.length) * (cardW + cardGap) - cardGap;
+                const gridStartX = (width - rowWidth) / 2;
+
                 this.themeCards = entries.map(([id, theme], i) => {
                     const row = Math.floor(i / cols), col = i % cols;
-                    const rowW = Math.min(cols, entries.length - row * cols) * (cardW + cardGap) - cardGap;
-                    const rowStartX = (width - rowW) / 2;
                     return {
                         id, name: theme.name, appearance: theme.appearance,
-                        rect: { x: rowStartX + col * (cardW + cardGap), y: y + row * (cardH + cardGap), width: cardW, height: cardH }
+                        rect: { x: gridStartX + col * (cardW + cardGap), y: y + row * (cardH + cardGap), width: cardW, height: cardH }
                     };
                 });
+                // Update Y to be below last card row
+                const lastRow = Math.floor((entries.length - 1) / cols);
+                y = y + lastRow * (cardH + cardGap) + cardH;
+
             } else if (this.activeSubTab === 'felt') {
                 const colorSize = 36;
                 this.colorControls.push({ id: 'feltColor', label: 'Color', value: appearance.felt.color, rect: { x: startX, y, width: controlWidth, height: controlHeight }, colorRect: { x: startX + controlWidth - colorSize - 12, y: y + 7, width: colorSize, height: colorSize } });
@@ -352,17 +407,23 @@ export class SettingsScene implements UIScene {
             }
         }
 
-        // Add Reset Button to all tabs
-        // Calculate Y position based on last control
-        let lastY = startY;
-        if (this.toggleControls.length > 0) lastY = Math.max(lastY, this.toggleControls[this.toggleControls.length - 1].rect.y);
-        if (this.colorControls.length > 0) lastY = Math.max(lastY, this.colorControls[this.colorControls.length - 1].rect.y);
-        if (this.selectControls.length > 0) lastY = Math.max(lastY, this.selectControls[this.selectControls.length - 1].rect.y);
-        if (this.sliderControls.length > 0) lastY = Math.max(lastY, this.sliderControls[this.sliderControls.length - 1].rect.y);
+        // Add Reset Button - always at bottom
+        let lastY = 0;
+        if (this.toggleControls.length) lastY = Math.max(lastY, this.toggleControls[this.toggleControls.length - 1].rect.y + controlHeight);
+        if (this.colorControls.length) lastY = Math.max(lastY, this.colorControls[this.colorControls.length - 1].rect.y + controlHeight);
+        if (this.selectControls.length) lastY = Math.max(lastY, this.selectControls[this.selectControls.length - 1].rect.y + controlHeight);
+        if (this.sliderControls.length) lastY = Math.max(lastY, this.sliderControls[this.sliderControls.length - 1].rect.y + controlHeight);
+        if (this.themeCards.length) {
+            const lastCard = this.themeCards[this.themeCards.length - 1];
+            lastY = Math.max(lastY, lastCard.rect.y + lastCard.rect.height);
+        }
+
+        // Ensure some initial padding even if empty
+        if (lastY === 0 && startY > 0) lastY = startY;
 
         const buttonWidth = LayoutConstants.Dimensions.ButtonWidthSmall;
         const buttonHeight = 40;
-        const buttonY = lastY + controlHeight + gap * 2;
+        const buttonY = lastY + gap * 2;
 
         this.buttonControls = [
             {
@@ -376,38 +437,152 @@ export class SettingsScene implements UIScene {
 
     private onResize = () => {
         if (!this.canvas) return;
-        this.setupLayout(this.canvas.width);
+        this.setupLayout(this.canvas.width, this.canvas.height);
+    };
+
+    private onWheel = (e: WheelEvent) => {
+        if (!this.contentRect) return;
+        const delta = e.deltaY;
+        this.scrollOffset = Math.max(0, Math.min(this.scrollOffset + delta, this.maxScroll));
+    };
+
+    private onTouchStart = (e: TouchEvent) => {
+        if (e.touches.length > 0) {
+            this.touchStartY = e.touches[0].clientY;
+        }
+    };
+
+    private onTouchMove = (e: TouchEvent) => {
+        if (!this.contentRect || this.touchStartY === null) return;
+        const currentY = e.touches[0].clientY;
+        const delta = this.touchStartY - currentY;
+        this.touchStartY = currentY;
+        this.scrollOffset = Math.max(0, Math.min(this.scrollOffset + delta, this.maxScroll));
     };
 
     private onMouseMove = (e: MouseEvent) => {
         if (!this.canvas) return;
         const rect = this.canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
 
-        // Handle dragging slider
-        if (this.activeSlider) {
-            this.handleSliderDrag(this.activeSlider, x);
-            return;
-        }
-
-        // Check navigation bar first
-        if (this.navigationBar.handleMouseMove(x, y)) {
-            this.hoveredTab = null;
-            this.hoveredSubTab = null;
-            this.hoveredToggle = null;
-            this.hoveredSlider = null;
-            this.hoveredColor = null;
-            this.hoveredSelect = null;
-            this.hoveredButton = null;
-            this.hoveredTheme = null;
+        // Navigation check (not affected by scroll)
+        if (this.navigationBar.handleMouseMove(mouseX, mouseY)) {
+            this.clearHover();
             this.canvas.style.cursor = this.navigationBar.getCursor();
             return;
         }
 
+        // Tabs check (not affected by scroll)
         let cursor = 'default';
+        this.clearHover();
 
-        // Reset all hovered states
+        for (const tab of this.tabButtons) {
+            if (this.isInside(mouseX, mouseY, tab.rect)) {
+                this.hoveredTab = tab;
+                cursor = 'pointer';
+            }
+        }
+
+        if (this.hoveredTab) {
+            this.canvas.style.cursor = cursor;
+            return;
+        }
+
+        // Content Area Check (applied scroll offset)
+        if (this.contentRect && this.isInside(mouseX, mouseY, this.contentRect)) {
+            const scrollY = mouseY - this.contentRect.y + this.scrollOffset;
+            const contentX = mouseX; // X matches, controls are relative to X but Y is relative to scroll layer
+
+            // Check subtabs (they scroll)
+            if (this.activeTab === 'table') {
+                for (const subTab of this.subTabButtons) {
+                    if (this.isInside(contentX, scrollY, subTab.rect)) {
+                        this.hoveredSubTab = subTab;
+                        cursor = 'pointer';
+                    }
+                }
+            }
+
+            // Check content controls
+            if (!this.hoveredSubTab) {
+                // Themes
+                if (this.activeTab === 'table' && this.activeSubTab === 'themes') {
+                    for (const card of this.themeCards) {
+                        if (this.isInside(contentX, scrollY, card.rect)) {
+                            this.hoveredTheme = card;
+                            cursor = 'pointer';
+                        }
+                    }
+                }
+
+                // Controls
+                if (!this.hoveredTheme) {
+                    for (const toggle of this.toggleControls) {
+                        if (this.isInside(contentX, scrollY, toggle.rect)) {
+                            this.hoveredToggle = toggle;
+                            cursor = 'pointer';
+                        }
+                    }
+                    if (!this.hoveredToggle) {
+                        // Slider mutes first
+                        for (const key in this.muteToggleMap) {
+                            const mute = this.muteToggleMap[key];
+                            if (this.isInside(contentX, scrollY, mute.rect)) {
+                                this.hoveredToggle = mute; // reusing toggle logic
+                                cursor = 'pointer';
+                                break;
+                            }
+                        }
+
+                        if (!this.hoveredToggle) {
+                            for (const slider of this.sliderControls) {
+                                if (this.isInside(contentX, scrollY, slider.rect)) {
+                                    this.hoveredSlider = slider;
+                                    cursor = 'pointer';
+                                }
+                            }
+                        }
+                    }
+                    if (!this.hoveredToggle && !this.hoveredSlider) {
+                        for (const color of this.colorControls) {
+                            if (this.isInside(contentX, scrollY, color.colorRect)) {
+                                this.hoveredColor = color;
+                                cursor = 'pointer';
+                            }
+                        }
+                    }
+                    if (!this.hoveredToggle && !this.hoveredSlider && !this.hoveredColor) {
+                        for (const select of this.selectControls) {
+                            if (this.isInside(contentX, scrollY, select.rect)) {
+                                this.hoveredSelect = select;
+                                cursor = 'pointer';
+                            }
+                        }
+                    }
+                    if (!this.hoveredToggle && !this.hoveredSlider && !this.hoveredColor && !this.hoveredSelect) {
+                        for (const button of this.buttonControls) {
+                            if (this.isInside(contentX, scrollY, button.rect)) {
+                                this.hoveredButton = button;
+                                cursor = 'pointer';
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Handle Slider Dragging (activeSlider)
+            if (this.activeSlider) {
+                // slider drag logic relies on X, not affected by scroll usually, but handled here
+                this.handleSliderDrag(this.activeSlider, mouseX);
+                cursor = 'pointer';
+            }
+        }
+
+        this.canvas.style.cursor = cursor;
+    };
+
+    private clearHover() {
         this.hoveredTab = null;
         this.hoveredSubTab = null;
         this.hoveredToggle = null;
@@ -416,92 +591,7 @@ export class SettingsScene implements UIScene {
         this.hoveredSelect = null;
         this.hoveredButton = null;
         this.hoveredTheme = null;
-
-        // Check tabs
-        for (const tab of this.tabButtons) {
-            if (this.isInside(x, y, tab.rect)) {
-                this.hoveredTab = tab;
-                cursor = 'pointer';
-                break;
-            }
-        }
-
-        if (!this.hoveredTab && this.activeTab === 'table') {
-            for (const subTab of this.subTabButtons) {
-                if (this.isInside(x, y, subTab.rect)) {
-                    this.hoveredSubTab = subTab;
-                    cursor = 'pointer';
-                    break;
-                }
-            }
-        }
-
-        if (!this.hoveredTab && !this.hoveredSubTab) {
-            if (this.activeTab === 'table' && this.activeSubTab === 'themes') {
-                for (const card of this.themeCards) {
-                    if (this.isInside(x, y, card.rect)) {
-                        this.hoveredTheme = card;
-                        cursor = 'pointer';
-                        break;
-                    }
-                }
-            }
-
-            // Check controls
-            if (!this.hoveredTheme) {
-                for (const toggle of this.toggleControls) {
-                    if (this.isInside(x, y, toggle.rect)) {
-                        this.hoveredToggle = toggle;
-                        cursor = 'pointer';
-                        break;
-                    }
-                }
-            }
-            // ... rest of controls
-            if (!this.hoveredToggle && !this.hoveredTheme) {
-                for (const slider of this.sliderControls) {
-                    const muteToggle = this.muteToggleMap[slider.id];
-                    if (muteToggle && this.isInside(x, y, muteToggle.rect)) {
-                        continue;
-                    }
-                    if (this.isInside(x, y, slider.rect)) {
-                        this.hoveredSlider = slider;
-                        cursor = 'pointer';
-                        break;
-                    }
-                }
-            }
-            if (!this.hoveredToggle && !this.hoveredSlider && !this.hoveredTheme) {
-                for (const color of this.colorControls) {
-                    if (this.isInside(x, y, color.colorRect)) {
-                        this.hoveredColor = color;
-                        cursor = 'pointer';
-                        break;
-                    }
-                }
-            }
-            if (!this.hoveredToggle && !this.hoveredSlider && !this.hoveredColor && !this.hoveredTheme) {
-                for (const select of this.selectControls) {
-                    if (this.isInside(x, y, select.rect)) {
-                        this.hoveredSelect = select;
-                        cursor = 'pointer';
-                        break;
-                    }
-                }
-            }
-            if (!this.hoveredToggle && !this.hoveredSlider && !this.hoveredColor && !this.hoveredSelect && !this.hoveredTheme) {
-                for (const button of this.buttonControls) {
-                    if (this.isInside(x, y, button.rect)) {
-                        this.hoveredButton = button;
-                        cursor = 'pointer';
-                        break;
-                    }
-                }
-            }
-        }
-
-        this.canvas.style.cursor = cursor;
-    };
+    }
 
     private onMouseDown = (e: MouseEvent) => {
         if (!this.canvas || !this.hoveredSlider) return;
@@ -522,84 +612,79 @@ export class SettingsScene implements UIScene {
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
 
-        // Check navigation bar first
-        if (this.navigationBar.handleClick(x, y)) {
-            return;
-        }
+        // Nav click
+        if (this.navigationBar.handleClick(x, y)) return;
 
+        // Tab click
         if (this.hoveredTab) {
             this.activeTab = this.hoveredTab.id;
-            // Reset sub-tab when switching main tabs if needed, or keep state
-            this.setupControls(this.canvas!.width, this.tabButtons[0].rect.y + this.tabButtons[0].rect.height + 20);
+            this.scrollOffset = 0; // Reset scroll on tab change
+            this.setupLayout(this.canvas.width, this.canvas.height);
             return;
         }
 
-        if (this.activeTab === 'table') {
+        // Content clicks
+        if (this.contentRect && this.isInside(x, y, this.contentRect)) {
             if (this.hoveredSubTab) {
                 this.activeSubTab = this.hoveredSubTab.id;
-                this.setupControls(this.canvas!.width, this.tabButtons[0].rect.y + this.tabButtons[0].rect.height + 20);
+                this.setupLayout(this.canvas.width, this.canvas.height);
                 return;
             }
-            if (this.activeSubTab === 'themes' && this.hoveredTheme) {
+            if (this.hoveredTheme) {
                 try {
                     this.settingsManager.applyTheme(this.hoveredTheme.id);
-                    // Refresh controls to reflect new theme
-                    this.setupControls(this.canvas!.width, this.tabButtons[0].rect.y + this.tabButtons[0].rect.height + 20);
+                    this.setupLayout(this.canvas.width, this.canvas.height);
                 } catch (err) { console.error(err); }
                 return;
             }
-        }
-
-        if (this.hoveredToggle) {
-            const control = this.hoveredToggle;
-            this.handleToggle(control);
-            return;
-        }
-
-        if (this.hoveredButton) {
-            if (this.hoveredButton.id === 'reset') {
-                this.handleReset();
+            if (this.hoveredToggle) {
+                this.handleToggle(this.hoveredToggle);
+                return;
             }
-            return;
-        }
-
-        if (this.hoveredSelect) {
-            this.handleSelectClick(this.hoveredSelect);
-            return;
-        }
-
-        if (this.hoveredColor) {
-            const control = this.hoveredColor;
-            const input = document.createElement('input');
-            input.type = 'color';
-            input.value = control.value;
-            input.style.position = 'absolute';
-            input.style.opacity = '0';
-            document.body.appendChild(input);
-
-            input.addEventListener('input', () => {
-                control.value = input.value;
-                if (this.activeTab === 'colors') {
-                    const update: any = {};
-                    update[control.id] = input.value;
-                    this.settingsManager.saveUIColors(update);
-                } else if (this.activeTab === 'table') {
-                    const appearance = this.settingsManager.getTableAppearance();
-                    if (control.id === 'feltColor') this.settingsManager.saveTableAppearance({ felt: { ...appearance.felt, color: input.value } });
-                    else if (control.id === 'frameColor') this.settingsManager.saveTableAppearance({ frame: { ...appearance.frame, color: input.value } });
-                    else if (control.id === 'cushionColor') this.settingsManager.saveTableAppearance({ cushion: { ...appearance.cushion, color: input.value } });
-                    else if (control.id === 'pocketColor') this.settingsManager.saveTableAppearance({ pocket: { ...appearance.pocket, color: input.value } });
-                    else if (control.id === 'pocketRimColor') this.settingsManager.saveTableAppearance({ pocket: { ...appearance.pocket, rimColor: input.value } });
-                }
-            });
-
-            input.addEventListener('change', () => {
-                document.body.removeChild(input);
-            });
-
-            input.click();
+            if (this.hoveredSelect) {
+                this.handleSelectClick(this.hoveredSelect);
+                return;
+            }
+            if (this.hoveredButton && this.hoveredButton.id === 'reset') {
+                this.handleReset();
+                return;
+            }
+            if (this.hoveredColor) {
+                this.openColorPicker(this.hoveredColor);
+            }
         }
     };
+
+    private openColorPicker(control: ColorControl) {
+        const input = document.createElement('input');
+        input.type = 'color';
+        input.value = control.value;
+        input.style.position = 'absolute';
+        input.style.opacity = '0';
+        document.body.appendChild(input);
+
+        input.addEventListener('input', () => {
+            control.value = input.value;
+            if (this.activeTab === 'colors') {
+                const update: any = {};
+                update[control.id] = input.value;
+                this.settingsManager.saveUIColors(update);
+            } else if (this.activeTab === 'table') {
+                const appearance = this.settingsManager.getTableAppearance();
+                if (control.id === 'feltColor') this.settingsManager.saveTableAppearance({ felt: { ...appearance.felt, color: input.value } });
+                else if (control.id === 'frameColor') this.settingsManager.saveTableAppearance({ frame: { ...appearance.frame, color: input.value } });
+                else if (control.id === 'cushionColor') this.settingsManager.saveTableAppearance({ cushion: { ...appearance.cushion, color: input.value } });
+                else if (control.id === 'pocketColor') this.settingsManager.saveTableAppearance({ pocket: { ...appearance.pocket, color: input.value } });
+                else if (control.id === 'pocketRimColor') this.settingsManager.saveTableAppearance({ pocket: { ...appearance.pocket, rimColor: input.value } });
+            }
+        });
+
+        input.addEventListener('change', () => {
+            document.body.removeChild(input);
+        });
+
+        input.click();
+    }
 
     private isInside(x: number, y: number, rect: Rect): boolean {
         return x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height;
@@ -754,20 +839,61 @@ export class SettingsScene implements UIScene {
         this.renderBackground(ctx, width, height);
         this.renderTabs(ctx);
 
-        if (this.activeTab === 'table') {
-            this.renderSubTabs(ctx);
-            if (this.activeSubTab === 'themes') {
-                this.renderThemes(ctx);
+        // Navigation bar rendered last to stay on top
+        this.navigationBar.render(ctx, width);
+
+        // Render Scrollable Content
+        if (this.contentRect) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(this.contentRect.x, this.contentRect.y, this.contentRect.width, this.contentRect.height);
+            ctx.clip();
+
+            // Translate for scroll
+            ctx.translate(0, -this.scrollOffset);
+
+            // Offset logic for rendering controls inside content rect
+            // Note: Controls Y coordinates are already relative to content start *if* they were set up that way,
+            // but in setupControls we set them relative to 0 of the content area.
+            // However, draw functions use absolute coordinates. 
+            // We need to translate the context so that (0,0) of setupControls matches (contentRect.x, contentRect.y)
+            ctx.translate(this.contentRect.x, this.contentRect.y);
+
+            if (this.activeTab === 'table') {
+                this.renderSubTabs(ctx);
+                if (this.activeSubTab === 'themes') {
+                    this.renderThemes(ctx);
+                } else {
+                    this.renderControls(ctx);
+                }
             } else {
                 this.renderControls(ctx);
             }
-        } else {
-            this.renderControls(ctx);
+
+            ctx.restore();
+
+            // Scrollbar (if needed)
+            if (this.maxScroll > 0) {
+                const scrollRatio = this.contentRect.height / (this.contentRect.height + this.maxScroll);
+                const barHeight = Math.max(30, this.contentRect.height * scrollRatio);
+                const barY = this.contentRect.y + (this.scrollOffset / this.maxScroll) * (this.contentRect.height - barHeight);
+
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                ctx.beginPath();
+                ctx.roundRect(width - 8, barY, 4, barHeight, 2);
+                ctx.fill();
+            }
         }
-        this.navigationBar.render(ctx, width);
     }
 
     private renderSubTabs(ctx: CanvasRenderingContext2D) {
+        // SubTabs are setup with Y relative to 0 (which is contentStartY)
+        // But drawGlossyButton expects absolute coords.
+        // Wait, setupControls sets rect.y = startY + ...
+        // and startY passed is 0.
+        // So rect.y is relative to content top.
+        // The translation `ctx.translate(this.contentRect.x, this.contentRect.y)` handles this.
+
         for (const tab of this.subTabButtons) {
             const isActive = tab.id === this.activeSubTab;
             const isHovered = tab === this.hoveredSubTab;

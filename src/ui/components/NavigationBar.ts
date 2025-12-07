@@ -56,8 +56,13 @@ export class NavigationBar {
         this.config = { ...this.config, ...config };
     }
 
+    private isLandscapeMode: boolean = false;
+
     getHeight(): number {
-        // Return responsive height based on device type
+        // Return responsive height based on device type and orientation
+        if (this.isLandscapeMode) {
+            return 44; // Very compact in landscape
+        }
         if (this.deviceType === 'mobile') {
             return 60;
         } else if (this.deviceType === 'tablet') {
@@ -66,18 +71,22 @@ export class NavigationBar {
         return this.height;
     }
 
-    setupLayout(width: number) {
+    setupLayout(width: number, height?: number) {
         this.buttons = [];
-        this.deviceType = getDeviceType(width);
-        
+        this.deviceType = getDeviceType(width, height);
+
+        // Detect landscape mode for phones
+        this.isLandscapeMode = height !== undefined && height < 500 && width > height;
+
         const isMobile = this.deviceType === 'mobile';
         const isTablet = this.deviceType === 'tablet';
-        
+        const isLandscape = this.isLandscapeMode;
+
         const horizontalPadding = 0;
         const buttonHeight = this.getHeight();
-        const backWidth = isMobile ? 80 : (isTablet ? 100 : 132);
-        const settingsWidth = isMobile ? 48 : (isTablet ? 64 : Math.max(96, buttonHeight * 0.6));
-        const profileSize = isMobile ? 52 : (isTablet ? 72 : buttonHeight);
+        const backWidth = isLandscape ? 60 : (isMobile ? 80 : (isTablet ? 100 : 132));
+        const settingsWidth = isLandscape ? 40 : (isMobile ? 44 : (isTablet ? 64 : Math.max(96, buttonHeight * 0.6)));
+        const profileSize = isLandscape ? 44 : (isMobile ? 52 : (isTablet ? 72 : buttonHeight));
 
         // Back button (left)
         if (this.config.showBack) {
@@ -115,7 +124,7 @@ export class NavigationBar {
     }
 
     handleMouseMove(x: number, y: number): boolean {
-        if (y > this.height) {
+        if (y > this.getHeight()) {
             this.hoveredButton = null;
             return false;
         }
@@ -131,7 +140,7 @@ export class NavigationBar {
     }
 
     handleClick(_x: number, y: number): boolean {
-        if (!this.hoveredButton || y > this.height) return false;
+        if (!this.hoveredButton || y > this.getHeight()) return false;
 
         switch (this.hoveredButton.id) {
             case 'back':
@@ -165,7 +174,7 @@ export class NavigationBar {
     }
 
     render(ctx: CanvasRenderingContext2D, width: number) {
-        const height = this.height;
+        const height = this.getHeight(); // Use responsive height, not fixed
 
         ctx.save();
 
@@ -196,37 +205,7 @@ export class NavigationBar {
 
         ctx.restore();
 
-        // Logo (centered) - replaces title text
-        if (this.logoImage && this.logoImage.complete && this.logoImage.naturalWidth > 0) {
-            ctx.save();
-
-            // Logo dimensions - scaled to fit nicely in the nav bar
-            const logoMaxHeight = height * 0.75; // Increased to 75% for better visibility
-            const logoAspect = this.logoImage.naturalWidth / this.logoImage.naturalHeight;
-            const logoHeight = logoMaxHeight;
-            const logoWidth = logoHeight * logoAspect;
-            const logoX = (width / 2) - (logoWidth / 2);
-            const logoY = (height / 2) - (logoHeight / 2);
-
-            // Light glow to lift logo off dark background
-            ctx.shadowColor = 'rgba(255, 255, 255, 0.15)';
-            ctx.shadowBlur = 15;
-            ctx.shadowOffsetY = 0;
-
-            ctx.drawImage(this.logoImage, logoX, logoY, logoWidth, logoHeight);
-            ctx.restore();
-        } else if (this.config.title) {
-            // Fallback to text if logo hasn't loaded yet
-            ctx.save();
-            ctx.fillStyle = ColorTokens.text.primary;
-            ctx.font = 'bold 28px Arial';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.shadowColor = ColorTokens.effects.shadow;
-            ctx.shadowBlur = 8;
-            ctx.fillText(this.config.title, width / 2, height / 2);
-            ctx.restore();
-        }
+        // Logo removed - takes up too much space on small devices
 
         // Buttons
         for (const btn of this.buttons) {
@@ -310,33 +289,32 @@ export class NavigationBar {
 
     private renderCurrencies(ctx: CanvasRenderingContext2D, width: number) {
         const navHeight = this.getHeight();
+        const isMobile = this.deviceType === 'mobile';
         const isTablet = this.deviceType === 'tablet';
         const metrics = this.getCurrencyPillMetrics(navHeight);
         const currencyY = (navHeight - metrics.height) / 2;
-        const pillGap = isTablet ? 6 : 10; // Tight gap between pills
+        const pillGap = isMobile ? 4 : (isTablet ? 6 : 10);
 
         // Calculate position: pills should hug the left side of settings button
         // Find where settings button starts (from right edge)
         let settingsLeftEdge = width;
-        
+
         if (this.config.showProfile) {
-            const profileSize = isTablet ? 72 : navHeight;
+            const profileSize = isMobile ? 52 : (isTablet ? 72 : navHeight);
             settingsLeftEdge -= profileSize;
         }
 
         if (this.config.showSettings) {
-            const settingsWidth = isTablet ? 64 : Math.max(96, navHeight * 0.6);
+            const settingsWidth = isMobile ? 44 : (isTablet ? 64 : Math.max(96, navHeight * 0.6));
             settingsLeftEdge -= settingsWidth;
         }
 
-        // Small padding between pills and settings button
-        const paddingFromSettings = 10;
-        
-        // Position pills from right to left, hugging settings
-        // Order from left to right: [Coins] [Cash] [Trophies] [Settings] [Profile]
-        const trophiesX = settingsLeftEdge - paddingFromSettings - metrics.totalWidth;
-        const cashX = trophiesX - pillGap - metrics.totalWidth;
-        const coinsX = cashX - pillGap - metrics.totalWidth;
+        const paddingFromSettings = isMobile ? 6 : 10;
+        const leftPadding = isMobile ? 8 : 16; // Minimum padding from left edge
+
+        // On mobile, show only 2 currencies (coins + trophies) to save space
+        // On tablet/desktop, show all 3
+        const showCash = !isMobile;
 
         const balances = this.config.balancesProvider ? this.config.balancesProvider() : { coins: 0, gold: 0, trophies: 0 };
 
@@ -347,27 +325,56 @@ export class NavigationBar {
             theme: 'nav' as const,
         };
 
-        drawCurrencyPill(ctx, coinsX, currencyY, balances.coins, 'coins', {
-            ...baseOptions,
-            dividerLeft: false,
-            dividerRight: true, // divider after coins
-        });
-        drawCurrencyPill(ctx, cashX, currencyY, balances.gold, 'cash', {
-            ...baseOptions,
-            dividerLeft: false,
-            dividerRight: true, // divider after cash
-        });
-        drawCurrencyPill(ctx, trophiesX, currencyY, balances.trophies ?? 0, 'trophies', {
-            ...baseOptions,
-            dividerLeft: false,
-            dividerRight: false,
-        });
-        
+        if (showCash) {
+            // Desktop/Tablet: Show all 3 currencies
+            // Position pills from right to left
+            const trophiesX = settingsLeftEdge - paddingFromSettings - metrics.totalWidth;
+            const cashX = trophiesX - pillGap - metrics.totalWidth;
+            const coinsX = cashX - pillGap - metrics.totalWidth;
+
+            // Clamp to ensure coins doesn't go off left edge
+            const clampedCoinsX = Math.max(leftPadding, coinsX);
+
+            drawCurrencyPill(ctx, clampedCoinsX, currencyY, balances.coins, 'coins', {
+                ...baseOptions,
+                dividerLeft: false,
+                dividerRight: true,
+            });
+            drawCurrencyPill(ctx, cashX, currencyY, balances.gold, 'cash', {
+                ...baseOptions,
+                dividerLeft: false,
+                dividerRight: true,
+            });
+            drawCurrencyPill(ctx, trophiesX, currencyY, balances.trophies ?? 0, 'trophies', {
+                ...baseOptions,
+                dividerLeft: false,
+                dividerRight: false,
+            });
+        } else {
+            // Mobile: Show only coins and trophies
+            const trophiesX = settingsLeftEdge - paddingFromSettings - metrics.totalWidth;
+            const coinsX = trophiesX - pillGap - metrics.totalWidth;
+
+            // Clamp to ensure coins doesn't go off left edge
+            const clampedCoinsX = Math.max(leftPadding, coinsX);
+
+            drawCurrencyPill(ctx, clampedCoinsX, currencyY, balances.coins, 'coins', {
+                ...baseOptions,
+                dividerLeft: false,
+                dividerRight: true,
+            });
+            drawCurrencyPill(ctx, trophiesX, currencyY, balances.trophies ?? 0, 'trophies', {
+                ...baseOptions,
+                dividerLeft: false,
+                dividerRight: false,
+            });
+        }
+
         // Draw divider between trophies and settings
         const dividerX = settingsLeftEdge;
         this.drawVerticalDivider(ctx, dividerX, navHeight);
     }
-    
+
     private drawVerticalDivider(ctx: CanvasRenderingContext2D, x: number, height: number) {
         const padding = 12;
         ctx.save();
@@ -508,9 +515,9 @@ export class NavigationBar {
         // Scale pill size based on nav height
         const isMobile = navHeight <= 60;
         const isTablet = navHeight <= 80 && !isMobile;
-        
-        const height = isMobile ? 32 : (isTablet ? 36 : 42);
-        const width = isMobile ? 100 : (isTablet ? 120 : 150);
+
+        const height = isMobile ? 28 : (isTablet ? 36 : 42);
+        const width = isMobile ? 72 : (isTablet ? 120 : 150);
         const plusButtonSpace = 0; // removed plus button
         return { height, width, totalWidth: width + plusButtonSpace };
     }

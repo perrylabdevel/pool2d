@@ -245,10 +245,10 @@ export class InputManager {
     const halfH = (geom.playHeightIn ?? CONFIG.TABLE_HEIGHT) / 2;
     const frameHalfW = geom.frameOutline.outerHalfWidth;
     const frameHalfH = geom.frameOutline.outerHalfHeight;
-    const margin = 0.25; // allow slight tolerance near the edge
-    // Reject if outside frame (screen taps on sidebars/padding)
+    const margin = 0.25; // small tolerance near the frame
+    // Ignore inputs outside the table/frame to prevent sidebar/power-bar clicks from hijacking aim
     if (Math.abs(pos.x) > frameHalfW + margin || Math.abs(pos.y) > frameHalfH + margin) {
-      return; // ignore clicks/drags outside the table/frame
+      return;
     }
     const clampedX = Math.max(-halfW, Math.min(halfW, pos.x));
     const clampedY = Math.max(-halfH, Math.min(halfH, pos.y));
