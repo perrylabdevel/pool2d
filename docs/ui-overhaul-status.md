@@ -1,4 +1,6 @@
-# UI Overhaul Implementation Status
+# UI Overhaul Implementation Status (Archived)
+
+> This document is archived. For current status and known issues, see `PROJECT_STATUS.md`.
 
 ## ✅ Completed
 - **Design System**: Neon/arcade aesthetic with `design-tokens.css`.

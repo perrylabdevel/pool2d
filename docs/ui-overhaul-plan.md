@@ -1,4 +1,6 @@
-# RailRush UI Architecture & Roadmap
+# RailRush UI Architecture & Roadmap (Archived)
+
+> This document is archived. For current status/priorities, see `PROJECT_STATUS.md`.
 
 This document replaces the legacy “plan vs. status” split. It tracks the current UI stack (Home Hub, modal chrome, legacy dock bridge) and the remaining roadmap items.
 

@@ -1,10 +1,14 @@
 # RailRush — Project Status & Deliverables
 
-> **Last Updated:** November 28, 2025  
+> **Last Updated:** December 6, 2025  
 > **Version:** Pre-Alpha  
 > **Platform:** Web (Desktop & Mobile)
 
 ---
+
+**Canonical Status Note**
+
+- This document is the single source of truth for current project status and known issues. Older roadmap/status Markdown files (e.g. `docs/ui-canvas-roadmap.md`, `docs/ui-overhaul-plan.md`, `docs/ui-overhaul-status.md`) are archived; refer here instead.
 
 ## Project Overview
 

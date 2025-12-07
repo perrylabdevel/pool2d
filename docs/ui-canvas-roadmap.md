@@ -1,4 +1,6 @@
-# Miniclip-Style UI Canvas Roadmap
+# Miniclip-Style UI Canvas Roadmap (Archived)
+
+> This document is archived. For current status and priorities, see `PROJECT_STATUS.md`.
 
 ## Goals
 - Replace stacked modals with cinematic full-screen canvases that mimic Miniclip 8 Ball Pool navigation.
