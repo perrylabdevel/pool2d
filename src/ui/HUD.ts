@@ -93,12 +93,12 @@ export class HUD {
     const debugToggle = document.getElementById('debug-toggle');
 
     if (hudMenuBtn) {
-      const goMenu = () => uiStateMachine.transitionTo(UIState.LOBBY);
-      hudMenuBtn.addEventListener('click', goMenu);
-      hudMenuBtn.addEventListener('touchstart', (e) => {
+      const goMenu = (e: Event) => {
         e.preventDefault();
-        goMenu();
-      }, { passive: false });
+        uiStateMachine.transitionTo(UIState.IN_GAME_MENU);
+      };
+      hudMenuBtn.addEventListener('click', goMenu);
+      hudMenuBtn.addEventListener('touchstart', goMenu, { passive: false });
     }
 
     if (pauseBtn) {
