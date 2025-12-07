@@ -93,9 +93,12 @@ export class HUD {
     const debugToggle = document.getElementById('debug-toggle');
 
     if (hudMenuBtn) {
-      hudMenuBtn.addEventListener('click', () => {
-        uiStateMachine.transitionTo(UIState.LOBBY);
-      });
+      const goMenu = () => uiStateMachine.transitionTo(UIState.LOBBY);
+      hudMenuBtn.addEventListener('click', goMenu);
+      hudMenuBtn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        goMenu();
+      }, { passive: false });
     }
 
     if (pauseBtn) {
