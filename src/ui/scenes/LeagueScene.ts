@@ -352,7 +352,7 @@ export class LeagueScene implements UIScene {
 
             return {
                 id: tier,
-                title: `${tier.toUpperCase()} LEAGUE`,
+                title: tier.toUpperCase(),
                 colors: this.getLeagueColors(tier),
                 standings: await this.ensureMockStandings(queryId, isUserTier),
             };

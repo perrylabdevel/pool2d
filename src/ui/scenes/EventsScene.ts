@@ -53,6 +53,10 @@ export class EventsScene implements UIScene {
     private cardRects: Map<string, Rect> = new Map();
     private hoveredCardId: string | null = null;
     private keyHandler: ((e: KeyboardEvent) => void) | null = null;
+    private scrollOffset = 0;
+    private maxScroll = 0;
+    private touchStartY: number | null = null;
+    private contentRect: Rect | null = null;
 
     constructor() {
         this.navigationBar = new NavigationBar({
@@ -76,6 +80,9 @@ export class EventsScene implements UIScene {
         this.setupLayout(this.canvas.width, this.canvas.height);
         this.canvas.addEventListener('mousemove', this.onMouseMove);
         this.canvas.addEventListener('click', this.onClick);
+        this.canvas.addEventListener('wheel', this.onWheel, { passive: true });
+        this.canvas.addEventListener('touchstart', this.onTouchStart, { passive: true });
+        this.canvas.addEventListener('touchmove', this.onTouchMove, { passive: true });
         window.addEventListener('resize', this.onResize);
 
         this.keyHandler = (e: KeyboardEvent) => {
@@ -90,6 +97,9 @@ export class EventsScene implements UIScene {
         if (!this.canvas) return;
         this.canvas.removeEventListener('mousemove', this.onMouseMove);
         this.canvas.removeEventListener('click', this.onClick);
+        this.canvas.removeEventListener('wheel', this.onWheel);
+        this.canvas.removeEventListener('touchstart', this.onTouchStart);
+        this.canvas.removeEventListener('touchmove', this.onTouchMove);
         window.removeEventListener('resize', this.onResize);
         this.canvas.style.cursor = 'default';
 
@@ -106,8 +116,28 @@ export class EventsScene implements UIScene {
         this.setupLayout(this.canvas.width, this.canvas.height);
     };
 
+    private onWheel = (e: WheelEvent) => {
+        if (!this.contentRect) return;
+        const delta = e.deltaY;
+        this.scrollOffset = Math.max(0, Math.min(this.scrollOffset + delta, this.maxScroll));
+    };
+
+    private onTouchStart = (e: TouchEvent) => {
+        if (e.touches.length > 0) {
+            this.touchStartY = e.touches[0].clientY;
+        }
+    };
+
+    private onTouchMove = (e: TouchEvent) => {
+        if (!this.contentRect || this.touchStartY === null) return;
+        const currentY = e.touches[0].clientY;
+        const delta = this.touchStartY - currentY;
+        this.touchStartY = currentY;
+        this.scrollOffset = Math.max(0, Math.min(this.scrollOffset + delta, this.maxScroll));
+    };
+
     private setupLayout(width: number, height: number) {
-        this.navigationBar.setupLayout(width);
+        this.navigationBar.setupLayout(width, height);
         const navHeight = this.navigationBar.getHeight();
 
         const padding = width * LayoutConstants.Spacing.PaddingScreen;
@@ -118,20 +148,18 @@ export class EventsScene implements UIScene {
         const columns = width < 720 ? 1 : width < 1080 ? 2 : 3;
         const rows = Math.ceil(this.cards.length / columns);
 
-        // Cards responsive to available height
-        const availableHeight = height - navHeight - padding * 2;
-        const totalGapHeight = gap * (rows - 1);
-        const availableCardHeight = (availableHeight - totalGapHeight) / rows;
-        const cardHeight = Math.min(Math.floor(availableCardHeight * 0.95), 480); // 95% of available per row, max 480px
+        // Card dimensions
+        const cardHeight = 400; // Fixed height for consistency
         const cardWidth = (contentWidth - gap * (columns - 1)) / columns;
-        const startY = navHeight + padding;
+        const contentStartY = navHeight + padding;
 
+        // Cards positioned relative to content start (y=0)
         this.cardRects.clear();
         this.cards.forEach((card, index) => {
             const col = index % columns;
             const row = Math.floor(index / columns);
             const x = padding + (cardWidth + gap) * col;
-            const y = startY + (cardHeight + gap) * row;
+            const y = row * (cardHeight + gap);
 
             this.cardRects.set(card.id, {
                 x,
@@ -140,6 +168,21 @@ export class EventsScene implements UIScene {
                 height: cardHeight
             });
         });
+
+        // Define scrollable content area
+        this.contentRect = {
+            x: 0,
+            y: contentStartY,
+            width: width,
+            height: height - contentStartY
+        };
+
+        // Calculate total content height
+        const totalContentHeight = rows * cardHeight + (rows - 1) * gap + padding * 2;
+
+        // Calculate max scroll
+        this.maxScroll = Math.max(0, totalContentHeight - this.contentRect.height);
+        this.scrollOffset = Math.min(this.scrollOffset, this.maxScroll);
     }
 
     private onMouseMove = (e: MouseEvent) => {
@@ -195,12 +238,39 @@ export class EventsScene implements UIScene {
         drawSceneBackground(ctx, width, height, 'purple'); // Different bg for events
         this.navigationBar.render(ctx, width);
 
-        this.cards.forEach(card => {
-            const rect = this.cardRects.get(card.id);
-            if (rect) {
-                this.renderCard(ctx, card, rect, this.hoveredCardId === card.id);
+        // Render scrollable content (cards)
+        if (this.contentRect) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(this.contentRect.x, this.contentRect.y, this.contentRect.width, this.contentRect.height);
+            ctx.clip();
+
+            // Translate for scroll
+            ctx.translate(0, -this.scrollOffset);
+            // Translate to content start Y
+            ctx.translate(0, this.contentRect.y);
+
+            this.cards.forEach(card => {
+                const rect = this.cardRects.get(card.id);
+                if (rect) {
+                    this.renderCard(ctx, card, rect, this.hoveredCardId === card.id);
+                }
+            });
+
+            ctx.restore();
+
+            // Scrollbar
+            if (this.maxScroll > 0) {
+                const scrollRatio = this.contentRect.height / (this.contentRect.height + this.maxScroll);
+                const barHeight = Math.max(30, this.contentRect.height * scrollRatio);
+                const barY = this.contentRect.y + (this.scrollOffset / this.maxScroll) * (this.contentRect.height - barHeight);
+
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                ctx.beginPath();
+                ctx.roundRect(width - 8, barY, 4, barHeight, 2);
+                ctx.fill();
             }
-        });
+        }
     }
 
     private renderCard(ctx: CanvasRenderingContext2D, card: EventCard, rect: Rect, isHovered: boolean) {

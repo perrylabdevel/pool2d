@@ -46,6 +46,10 @@ export class PlayModesScene implements UIScene {
     private keyHandler: ((e: KeyboardEvent) => void) | null = null;
     private navigationBar: NavigationBar;
     private cardImages: Record<string, HTMLImageElement> = {};
+    private scrollOffset = 0;
+    private maxScroll = 0;
+    private touchStartY: number | null = null;
+    private contentRect: Rect | null = null;
 
     constructor() {
         this.navigationBar = new NavigationBar({
@@ -69,6 +73,9 @@ export class PlayModesScene implements UIScene {
 
         canvas.addEventListener('mousemove', this.onMouseMove);
         canvas.addEventListener('click', this.onClick);
+        canvas.addEventListener('wheel', this.onWheel, { passive: true });
+        canvas.addEventListener('touchstart', this.onTouchStart, { passive: true });
+        canvas.addEventListener('touchmove', this.onTouchMove, { passive: true });
         window.addEventListener('resize', this.onResize);
 
         this.keyHandler = (e: KeyboardEvent) => {
@@ -86,6 +93,9 @@ export class PlayModesScene implements UIScene {
         const canvas = document.getElementById('ui-stage') as HTMLCanvasElement;
         canvas.removeEventListener('mousemove', this.onMouseMove);
         canvas.removeEventListener('click', this.onClick);
+        canvas.removeEventListener('wheel', this.onWheel);
+        canvas.removeEventListener('touchstart', this.onTouchStart);
+        canvas.removeEventListener('touchmove', this.onTouchMove);
         window.removeEventListener('resize', this.onResize);
 
         if (this.keyHandler) {
@@ -101,19 +111,57 @@ export class PlayModesScene implements UIScene {
         this.setupLayout(canvas.width, canvas.height);
     }
 
+    private onWheel = (e: WheelEvent) => {
+        if (!this.contentRect) return;
+        const delta = e.deltaY;
+        this.scrollOffset = Math.max(0, Math.min(this.scrollOffset + delta, this.maxScroll));
+    };
+
+    private onTouchStart = (e: TouchEvent) => {
+        if (e.touches.length > 0) {
+            this.touchStartY = e.touches[0].clientY;
+        }
+    };
+
+    private onTouchMove = (e: TouchEvent) => {
+        if (!this.contentRect || this.touchStartY === null) return;
+        const currentY = e.touches[0].clientY;
+        const delta = this.touchStartY - currentY;
+        this.touchStartY = currentY;
+        this.scrollOffset = Math.max(0, Math.min(this.scrollOffset + delta, this.maxScroll));
+    };
+
     private setupLayout(width: number, height: number) {
         this.buttons = [];
         this.modeCards = [];
 
-        // Setup navigation bar
-        this.navigationBar.setupLayout(width);
+        // Setup navigation bar with height for landscape detection
+        this.navigationBar.setupLayout(width, height);
         const navHeight = this.navigationBar.getHeight();
 
-        // Cards Layout - responsive to available height
-        const availableHeight = height - navHeight - 60; // 60px for top/bottom margins
-        const cardHeight = Math.min(Math.floor(availableHeight * 0.85), 520); // 85% of available height, max 520px
-        const cardWidth = Math.floor(cardHeight * 0.74); // Maintain aspect ratio (roughly 3:4)
-        const gap = Math.max(24, Math.floor(width * 0.02)); // Responsive gap (2% of width, min 24px)
+        // Cards Layout - responsive to orientation
+        const isPortrait = height > width;
+        const isMobile = width <= LayoutConstants.Breakpoints.SM;
+        const shouldStack = isPortrait && isMobile;
+
+        const padding = width * LayoutConstants.Spacing.PaddingScreen;
+        const contentWidth = width - padding * 2;
+        const gap = LayoutConstants.Spacing.GapLarge;
+
+        const contentStartY = navHeight + padding;
+
+        let cardWidth: number, cardHeight: number;
+
+        if (shouldStack) {
+            // Portrait mobile: Stack vertically (1 column)
+            cardWidth = contentWidth; // Full width
+            cardHeight = 400; // Fixed height
+        } else {
+            // Landscape or desktop: Arrange horizontally (3 columns)
+            const columns = 3;
+            cardWidth = (contentWidth - gap * (columns - 1)) / columns;
+            cardHeight = 400; // Fixed height for consistency
+        }
 
         // Define mode cards with billiard-themed colors
         const modes: ModeCard[] = [
@@ -151,26 +199,62 @@ export class PlayModesScene implements UIScene {
 
         this.modeCards = modes;
 
-        const totalWidth = modes.length * cardWidth + (modes.length - 1) * gap;
-        const startX = (width - totalWidth) / 2;
-        const startY = navHeight + (availableHeight - cardHeight) / 2 + 30;
+        if (shouldStack) {
+            // Vertical stack layout for portrait mobile - cards positioned relative to 0
+            const startX = padding;
 
-        modes.forEach((mode, index) => {
-            const x = startX + index * (cardWidth + gap);
-
-            // Store card rect for hover detection
-            mode.rect = { x, y: startY, width: cardWidth, height: cardHeight };
-
-            // Create clickable button for entire card
-            this.buttons.push({
-                id: mode.id,
-                text: mode.title,
-                rect: { x, y: startY, width: cardWidth, height: cardHeight },
-                color: mode.color,
-                action: () => this.handleModeSelect(mode.id),
-                icon: mode.icon
+            modes.forEach((mode, index) => {
+                const y = index * (cardHeight + gap);
+                mode.rect = { x: startX, y, width: cardWidth, height: cardHeight };
+                this.buttons.push({
+                    id: mode.id,
+                    text: mode.title,
+                    rect: { x: startX, y, width: cardWidth, height: cardHeight },
+                    color: mode.color,
+                    action: () => this.handleModeSelect(mode.id),
+                    icon: mode.icon
+                });
             });
-        });
+
+            // Calculate scroll for vertical stack
+            this.contentRect = {
+                x: 0,
+                y: contentStartY,
+                width: width,
+                height: height - contentStartY
+            };
+
+            const totalContentHeight = modes.length * cardHeight + (modes.length - 1) * gap + padding * 2;
+            this.maxScroll = Math.max(0, totalContentHeight - this.contentRect.height);
+            this.scrollOffset = Math.min(this.scrollOffset, this.maxScroll);
+        } else {
+            // Horizontal layout for landscape/desktop - cards positioned relative to 0
+            const columns = 3;
+            const startX = padding;
+
+            modes.forEach((mode, index) => {
+                const x = startX + index * (cardWidth + gap);
+                mode.rect = { x, y: 0, width: cardWidth, height: cardHeight };
+                this.buttons.push({
+                    id: mode.id,
+                    text: mode.title,
+                    rect: { x, y: 0, width: cardWidth, height: cardHeight },
+                    color: mode.color,
+                    action: () => this.handleModeSelect(mode.id),
+                    icon: mode.icon
+                });
+            });
+
+            // No scroll needed for horizontal layout (should fit)
+            this.contentRect = {
+                x: 0,
+                y: contentStartY,
+                width: width,
+                height: height - contentStartY
+            };
+            this.maxScroll = 0;
+            this.scrollOffset = 0;
+        }
     }
 
     private handleModeSelect(id: string) {
@@ -206,17 +290,26 @@ export class PlayModesScene implements UIScene {
             return;
         }
 
-        // Check card hover
+        // Check card hover - adjust y for scroll
         this.hoveredButton = null;
         this.hoveredCard = null;
-        for (let i = 0; i < this.buttons.length; i++) {
-            const btn = this.buttons[i];
-            if (x >= btn.rect.x && x <= btn.rect.x + btn.rect.width &&
-                y >= btn.rect.y && y <= btn.rect.y + btn.rect.height) {
-                this.hoveredButton = btn;
-                this.hoveredCard = this.modeCards[i];
-                canvas.style.cursor = 'pointer';
-                return;
+
+        if (this.contentRect) {
+            // Adjust y coordinate for scrolled content
+            const contentY = y - this.contentRect.y + this.scrollOffset;
+
+            for (let i = 0; i < this.buttons.length; i++) {
+                const btn = this.buttons[i];
+                // Check if within content area first
+                if (y >= this.contentRect.y && y <= this.contentRect.y + this.contentRect.height) {
+                    if (x >= btn.rect.x && x <= btn.rect.x + btn.rect.width &&
+                        contentY >= btn.rect.y && contentY <= btn.rect.y + btn.rect.height) {
+                        this.hoveredButton = btn;
+                        this.hoveredCard = this.modeCards[i];
+                        canvas.style.cursor = 'pointer';
+                        return;
+                    }
+                }
             }
         }
         canvas.style.cursor = 'default';
@@ -247,15 +340,39 @@ export class PlayModesScene implements UIScene {
 
         // Background - use green theme for pool table feel
         drawSceneBackground(ctx, width, height, 'green');
-
-        // Render Cards
-        this.modeCards.forEach((card, index) => {
-            const isHovered = card === this.hoveredCard;
-            this.renderCard(ctx, card, isHovered);
-        });
-
-        // Render navigation bar on top
         this.navigationBar.render(ctx, width);
+
+        // Render scrollable content (cards)
+        if (this.contentRect) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(this.contentRect.x, this.contentRect.y, this.contentRect.width, this.contentRect.height);
+            ctx.clip();
+
+            // Translate for scroll
+            ctx.translate(0, -this.scrollOffset);
+            // Translate to content start Y
+            ctx.translate(0, this.contentRect.y);
+
+            this.modeCards.forEach((card) => {
+                const isHovered = card === this.hoveredCard;
+                this.renderCard(ctx, card, isHovered);
+            });
+
+            ctx.restore();
+
+            // Scrollbar
+            if (this.maxScroll > 0) {
+                const scrollRatio = this.contentRect.height / (this.contentRect.height + this.maxScroll);
+                const barHeight = Math.max(30, this.contentRect.height * scrollRatio);
+                const barY = this.contentRect.y + (this.scrollOffset / this.maxScroll) * (this.contentRect.height - barHeight);
+
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                ctx.beginPath();
+                ctx.roundRect(width - 8, barY, 4, barHeight, 2);
+                ctx.fill();
+            }
+        }
     }
 
     private renderCard(ctx: CanvasRenderingContext2D, card: ModeCard, isHovered: boolean): void {

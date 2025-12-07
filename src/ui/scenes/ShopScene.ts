@@ -68,6 +68,10 @@ export class ShopScene implements UIScene {
         CHIPS: { x: 0, y: 0, width: 0, height: 0 }
     };
     private navigationBar: NavigationBar;
+    private scrollOffset = 0;
+    private maxScroll = 0;
+    private touchStartY: number | null = null;
+    private contentRect: Rect | null = null;
 
     constructor() {
         this.syncEquippedCue();
@@ -85,62 +89,116 @@ export class ShopScene implements UIScene {
         this.canvas = document.getElementById('ui-stage') as HTMLCanvasElement;
         if (!this.canvas) return;
         this.syncEquippedCue();
-        this.updateLayout();
+        this.updateLayout(this.canvas.width, this.canvas.height);
         this.canvas.addEventListener('mousemove', this.onMouseMove);
         this.canvas.addEventListener('click', this.onClick);
-        window.addEventListener('resize', this.updateLayout);
+        this.canvas.addEventListener('wheel', this.onWheel, { passive: true });
+        this.canvas.addEventListener('touchstart', this.onTouchStart, { passive: true });
+        this.canvas.addEventListener('touchmove', this.onTouchMove, { passive: true });
+        window.addEventListener('resize', this.onResize);
     }
 
     unmount(): void {
         if (!this.canvas) return;
         this.canvas.removeEventListener('mousemove', this.onMouseMove);
         this.canvas.removeEventListener('click', this.onClick);
-        window.removeEventListener('resize', this.updateLayout);
+        this.canvas.removeEventListener('wheel', this.onWheel);
+        this.canvas.removeEventListener('touchstart', this.onTouchStart);
+        this.canvas.removeEventListener('touchmove', this.onTouchMove);
+        window.removeEventListener('resize', this.onResize);
         this.canvas.style.cursor = 'default';
     }
 
-    private updateLayout = () => {
+    private updateLayout = (width?: number, height?: number) => {
         if (!this.canvas) return;
-        const width = this.canvas.width;
-        const height = this.canvas.height;
+        const canvasWidth = width ?? this.canvas.width;
+        const canvasHeight = height ?? this.canvas.height;
 
-        // Setup navigation bar
-        this.navigationBar.setupLayout(width);
+        // Setup navigation bar with height for landscape detection
+        this.navigationBar.setupLayout(canvasWidth, canvasHeight);
         const navHeight = this.navigationBar.getHeight();
 
-        const horizontalPadding = Math.max(LayoutConstants.Spacing.HorizontalPaddingMin, width * 0.05);
+        const horizontalPadding = Math.max(LayoutConstants.Spacing.HorizontalPaddingMin, canvasWidth * 0.05);
 
         // No footer buttons needed - cards are directly clickable
         this.buttons = [];
 
-        const cardWidth = LayoutConstants.Cards.Width;
-        const cardHeight = LayoutConstants.Cards.Height;
-        const gap = LayoutConstants.Cards.Gap;
+        const padding = canvasWidth * LayoutConstants.Spacing.PaddingScreen;
+        const contentWidth = canvasWidth - padding * 2;
+        const gap = LayoutConstants.Spacing.GapLarge;
+
         // Setup Tab Rects
         const tabWidth = LayoutConstants.Tabs.Width;
         const tabHeight = LayoutConstants.Tabs.Height;
         const tabY = navHeight + LayoutConstants.Tabs.OffsetY;
-        const tabCenterX = width / 2;
+        const tabCenterX = canvasWidth / 2;
         const totalTabsWidth = tabWidth * 2 + LayoutConstants.Tabs.Gap;
 
         this.tabRects.CUES = { x: tabCenterX - totalTabsWidth / 2, y: tabY, width: tabWidth, height: tabHeight };
         this.tabRects.CHIPS = { x: tabCenterX - totalTabsWidth / 2 + tabWidth + LayoutConstants.Tabs.Gap, y: tabY, width: tabWidth, height: tabHeight };
 
         const items = this.currentTab === 'CUES' ? CUES : CHIPS;
-        const columns = Math.max(1, Math.floor((width - horizontalPadding * 2) / (cardWidth + gap)));
-        const startX = (width - Math.min(columns, items.length) * cardWidth - Math.max(0, Math.min(columns, items.length) - 1) * gap) / 2;
-        const startY = navHeight + 100;
 
+        // Responsive column count
+        const columns = canvasWidth < 720 ? 1 : canvasWidth < 1080 ? 2 : 3;
+
+        // Responsive card dimensions
+        const cardHeight = 400; // Fixed height for consistency
+        const cardWidth = (contentWidth - gap * (columns - 1)) / columns;
+        const contentStartY = tabY + tabHeight + 20;
+
+        // Cards positioned relative to content start (y=0)
         this.cardRects = items.map((_item, index) => {
             const col = index % columns;
             const row = Math.floor(index / columns);
             return {
-                x: startX + col * (cardWidth + gap),
-                y: startY + row * (cardHeight + gap),
+                x: padding + col * (cardWidth + gap),
+                y: row * (cardHeight + gap),
                 width: cardWidth,
                 height: cardHeight
             };
         });
+
+        // Define scrollable content area
+        this.contentRect = {
+            x: 0,
+            y: contentStartY,
+            width: canvasWidth,
+            height: canvasHeight - contentStartY
+        };
+
+        // Calculate total content height
+        const rows = Math.ceil(items.length / columns);
+        const totalContentHeight = rows * cardHeight + (rows - 1) * gap + 40; // Add bottom padding
+
+        // Calculate max scroll
+        this.maxScroll = Math.max(0, totalContentHeight - this.contentRect.height);
+        this.scrollOffset = Math.min(this.scrollOffset, this.maxScroll);
+    };
+
+    private onResize = () => {
+        if (!this.canvas) return;
+        this.updateLayout(this.canvas.width, this.canvas.height);
+    };
+
+    private onWheel = (e: WheelEvent) => {
+        if (!this.contentRect) return;
+        const delta = e.deltaY;
+        this.scrollOffset = Math.max(0, Math.min(this.scrollOffset + delta, this.maxScroll));
+    };
+
+    private onTouchStart = (e: TouchEvent) => {
+        if (e.touches.length > 0) {
+            this.touchStartY = e.touches[0].clientY;
+        }
+    };
+
+    private onTouchMove = (e: TouchEvent) => {
+        if (!this.contentRect || this.touchStartY === null) return;
+        const currentY = e.touches[0].clientY;
+        const delta = this.touchStartY - currentY;
+        this.touchStartY = currentY;
+        this.scrollOffset = Math.max(0, Math.min(this.scrollOffset + delta, this.maxScroll));
     };
 
     private onMouseMove = (e: MouseEvent) => {
@@ -205,10 +263,33 @@ export class ShopScene implements UIScene {
             return;
         }
 
+        // Check tabs (before cards since tabs are fixed)
+        if (x >= this.tabRects.CUES.x && x <= this.tabRects.CUES.x + this.tabRects.CUES.width &&
+            y >= this.tabRects.CUES.y && y <= this.tabRects.CUES.y + this.tabRects.CUES.height) {
+            this.currentTab = 'CUES';
+            this.selectedCardIndex = CUES.findIndex(c => c.id === this.equippedCueId);
+            if (this.selectedCardIndex === -1) this.selectedCardIndex = 0;
+            this.scrollOffset = 0; // Reset scroll on tab change
+            this.updateLayout(this.canvas.width, this.canvas.height);
+            return;
+        }
+        if (x >= this.tabRects.CHIPS.x && x <= this.tabRects.CHIPS.x + this.tabRects.CHIPS.width &&
+            y >= this.tabRects.CHIPS.y && y <= this.tabRects.CHIPS.y + this.tabRects.CHIPS.height) {
+            this.currentTab = 'CHIPS';
+            this.selectedCardIndex = CHIPS.findIndex(c => c.id === this.equippedChipId);
+            if (this.selectedCardIndex === -1) this.selectedCardIndex = 0;
+            this.scrollOffset = 0; // Reset scroll on tab change
+            this.updateLayout(this.canvas.width, this.canvas.height);
+            return;
+        }
+
+        // Check buttons
         if (this.hoveredButton) {
             this.handleButtonClick(this.hoveredButton.id);
             return;
         }
+
+        // Check cards
         if (this.hoveredCardIndex !== -1) {
             this.selectedCardIndex = this.hoveredCardIndex;
 
@@ -230,24 +311,6 @@ export class ShopScene implements UIScene {
                     notificationService.show(`${chip.name} selected!`, 'success', LayoutConstants.Animation.Notification.Toast);
                 }
             }
-        }
-
-        // Check tabs
-        if (x >= this.tabRects.CUES.x && x <= this.tabRects.CUES.x + this.tabRects.CUES.width &&
-            y >= this.tabRects.CUES.y && y <= this.tabRects.CUES.y + this.tabRects.CUES.height) {
-            this.currentTab = 'CUES';
-            this.selectedCardIndex = CUES.findIndex(c => c.id === this.equippedCueId);
-            if (this.selectedCardIndex === -1) this.selectedCardIndex = 0;
-            this.updateLayout();
-            return;
-        }
-        if (x >= this.tabRects.CHIPS.x && x <= this.tabRects.CHIPS.x + this.tabRects.CHIPS.width &&
-            y >= this.tabRects.CHIPS.y && y <= this.tabRects.CHIPS.y + this.tabRects.CHIPS.height) {
-            this.currentTab = 'CHIPS';
-            this.selectedCardIndex = CHIPS.findIndex(c => c.id === this.equippedChipId);
-            if (this.selectedCardIndex === -1) this.selectedCardIndex = 0;
-            this.updateLayout();
-            return;
         }
     };
 
@@ -274,11 +337,39 @@ export class ShopScene implements UIScene {
         const width = ctx.canvas.width;
         const height = ctx.canvas.height;
         this.renderBackground(ctx, width, height);
-        // Header is handled by NavigationBar
         this.renderTabs(ctx);
-        this.renderCards(ctx);
-        this.renderFooter(ctx);
         this.navigationBar.render(ctx, width);
+
+        // Render scrollable content (cards)
+        if (this.contentRect) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(this.contentRect.x, this.contentRect.y, this.contentRect.width, this.contentRect.height);
+            ctx.clip();
+
+            // Translate for scroll
+            ctx.translate(0, -this.scrollOffset);
+            // Translate to content start Y
+            ctx.translate(0, this.contentRect.y);
+
+            this.renderCards(ctx);
+
+            ctx.restore();
+
+            // Scrollbar
+            if (this.maxScroll > 0) {
+                const scrollRatio = this.contentRect.height / (this.contentRect.height + this.maxScroll);
+                const barHeight = Math.max(30, this.contentRect.height * scrollRatio);
+                const barY = this.contentRect.y + (this.scrollOffset / this.maxScroll) * (this.contentRect.height - barHeight);
+
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                ctx.beginPath();
+                ctx.roundRect(width - 8, barY, 4, barHeight, 2);
+                ctx.fill();
+            }
+        }
+
+        this.renderFooter(ctx);
     }
 
     private renderBackground(ctx: CanvasRenderingContext2D, width: number, height: number) {

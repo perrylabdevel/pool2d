@@ -94,11 +94,14 @@ export class HUD {
 
     if (hudMenuBtn) {
       const goMenu = (e: Event) => {
-        e.preventDefault();
+        // Don't preventDefault on touch - browsers won't allow it anyway
+        if (e.type !== 'touchstart') {
+          e.preventDefault();
+        }
         uiStateMachine.transitionTo(UIState.IN_GAME_MENU);
       };
       hudMenuBtn.addEventListener('click', goMenu);
-      hudMenuBtn.addEventListener('touchstart', goMenu, { passive: false });
+      hudMenuBtn.addEventListener('touchstart', goMenu);
     }
 
     if (pauseBtn) {

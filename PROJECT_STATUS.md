@@ -1,6 +1,6 @@
 # RailRush — Project Status & Deliverables
 
-> **Last Updated:** December 6, 2025  
+> **Last Updated:** December 7, 2025  
 > **Version:** Pre-Alpha  
 > **Platform:** Web (Desktop & Mobile)
 
@@ -79,11 +79,12 @@
 | Scene | Status | Notes |
 |-------|--------|-------|
 | LobbyScene | ✅ Complete | Main menu with card grid |
-| PlayModesScene | ✅ Complete | Mode selection |
-| ShopScene | ✅ Complete | Cue equipment browser |
+| PlayModesScene | ✅ Complete | Mode selection, touch scrolling, portrait/landscape |
+| ShopScene | ✅ Complete | Cue equipment browser, touch scrolling, responsive cards |
 | ProfileScene | ✅ Complete | Stats & achievements |
 | SettingsScene | ✅ Complete | Gameplay, colors, audio tabs |
-| LeagueScene | ✅ Complete | Standings with rankings |
+| EventsScene | ✅ Complete | Events browser, touch scrolling, responsive cards |
+| LeagueScene | ✅ Complete | Standings with rankings, landscape support |
 | ConfirmScene | ✅ Complete | Confirmation dialogs |
 | InGameMenuScene | ✅ Complete | Pause menu |
 | GoldenSpinScene | ✅ Complete | Reward spin wheel |
@@ -111,6 +112,9 @@
 | Desktop (1024px+) | ✅ Complete | Full layout |
 | Tablet (768-1024px) | ✅ Complete | Condensed nav |
 | Mobile (<768px) | ✅ Complete | Stacked layouts, hidden currencies |
+| Touch scrolling | ✅ Complete | Swipe gestures on Shop, Events, Arcade |
+| Mobile landscape | ✅ Complete | Compact nav bars, optimized layouts |
+| Responsive cards | ✅ Complete | Consistent widths across all scenes |
 
 ---
 
