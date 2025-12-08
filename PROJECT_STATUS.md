@@ -196,6 +196,7 @@
 | Extended achievements | More tracking & rewards |
 | Mini-games section | Additional game modes |
 | Audio sample selection | Per-event sound variants |
+| Progressive Texture Loading | Load high-res textures in background after initial load (Low-res textures look poor on low-end monitors) |
 
 ### Low Priority
 | Item | Notes |

@@ -5,7 +5,7 @@ import { CONFIG, BALL_CUE } from '../../config';
 import { Ball } from '../../physics/Shapes';
 import { RenderLayerSettings, RenderLayerOrderKey, RenderLayerBooleanKey } from '../RenderLayers';
 
-const ASSET_VERSION = 'v2';
+const ASSET_VERSION = 'v3';
 const withVersion = (path: string) => `${path}?v=${ASSET_VERSION}`;
 
 export class BallRenderer {
@@ -435,21 +435,21 @@ export class BallRenderer {
         // Enable texture compression for faster loading
         textureLoader.setCrossOrigin('anonymous');
         const textureMap: Record<number, { low: string; high: string }> = {
-            1: { low: withVersion('/textures/low/poolballTx01.jpg'), high: withVersion('/textures/poolballTx01.jpg') },
-            2: { low: withVersion('/textures/low/poolballTx02.jpg'), high: withVersion('/textures/poolballTx02.jpg') },
-            3: { low: withVersion('/textures/low/poolballTx03.jpg'), high: withVersion('/textures/poolballTx03.jpg') },
-            4: { low: withVersion('/textures/low/poolballTx04.jpg'), high: withVersion('/textures/poolballTx04.jpg') },
-            5: { low: withVersion('/textures/low/poolballTx5.jpg'), high: withVersion('/textures/poolballTx5.jpg') },
-            6: { low: withVersion('/textures/low/poolballTx6.jpg'), high: withVersion('/textures/poolballTx6.jpg') },
-            7: { low: withVersion('/textures/low/poolballTx7.jpg'), high: withVersion('/textures/poolballTx7.jpg') },
-            8: { low: withVersion('/textures/low/poolballTx8.jpg'), high: withVersion('/textures/poolballTx8.jpg') },
-            9: { low: withVersion('/textures/low/poolballTx9.jpg'), high: withVersion('/textures/poolballTx9.jpg') },
-            10: { low: withVersion('/textures/low/poolballTx10.jpg'), high: withVersion('/textures/poolballTx10.jpg') },
-            11: { low: withVersion('/textures/low/poolballTx11.jpg'), high: withVersion('/textures/poolballTx11.jpg') },
-            12: { low: withVersion('/textures/low/poolballTx12.jpg'), high: withVersion('/textures/poolballTx12.jpg') },
-            13: { low: withVersion('/textures/low/poolballTx13.jpg'), high: withVersion('/textures/poolballTx13.jpg') },
-            14: { low: withVersion('/textures/low/poolballTx14.jpg'), high: withVersion('/textures/poolballTx14.jpg') },
-            15: { low: withVersion('/textures/low/poolballTx15.jpg'), high: withVersion('/textures/poolballTx15.jpg') }
+            1: { low: withVersion('/assets/textures/poolballs/low/poolballTx01.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx01.jpg') },
+            2: { low: withVersion('/assets/textures/poolballs/low/poolballTx02.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx02.jpg') },
+            3: { low: withVersion('/assets/textures/poolballs/low/poolballTx03.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx03.jpg') },
+            4: { low: withVersion('/assets/textures/poolballs/low/poolballTx04.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx04.jpg') },
+            5: { low: withVersion('/assets/textures/poolballs/low/poolballTx5.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx5.jpg') },
+            6: { low: withVersion('/assets/textures/poolballs/low/poolballTx6.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx6.jpg') },
+            7: { low: withVersion('/assets/textures/poolballs/low/poolballTx7.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx7.jpg') },
+            8: { low: withVersion('/assets/textures/poolballs/low/poolballTx8.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx8.jpg') },
+            9: { low: withVersion('/assets/textures/poolballs/low/poolballTx9.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx9.jpg') },
+            10: { low: withVersion('/assets/textures/poolballs/low/poolballTx10.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx10.jpg') },
+            11: { low: withVersion('/assets/textures/poolballs/low/poolballTx11.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx11.jpg') },
+            12: { low: withVersion('/assets/textures/poolballs/low/poolballTx12.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx12.jpg') },
+            13: { low: withVersion('/assets/textures/poolballs/low/poolballTx13.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx13.jpg') },
+            14: { low: withVersion('/assets/textures/poolballs/low/poolballTx14.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx14.jpg') },
+            15: { low: withVersion('/assets/textures/poolballs/low/poolballTx15.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx15.jpg') }
         };
 
         try {
@@ -502,14 +502,12 @@ export class BallRenderer {
                         });
 
                     // Try low, then high
-                    let chosenUrl = paths.low;
                     registerAliases(paths.low, paths.low);
                     registerAliases(paths.high, paths.low);
 
                     let texture = await tryLoad(paths.low);
                     if (!texture) {
                         console.warn(`Low-res texture failed for ball ${ballId}, trying high-res`);
-                        chosenUrl = paths.high;
                         registerAliases(paths.low, paths.high);
                         registerAliases(paths.high, paths.high);
                         texture = await tryLoad(paths.high);
@@ -517,13 +515,13 @@ export class BallRenderer {
 
                     if (!texture) {
                         console.warn(`No texture could be loaded for ball ${ballId}`);
-                        return [Number(ballId), null];
+                        return [Number(ballId), null] as [number, THREE.Texture | null];
                     }
 
                     texturesLoaded++;
                     console.log(`  Texture ${texturesLoaded}/${totalTextures} loaded`);
                     if (onProgress) onProgress(`Loading textures... ${texturesLoaded}/${totalTextures}`);
-                    return [Number(ballId), texture];
+                    return [Number(ballId), texture] as [number, THREE.Texture | null];
                 })
             );
 
@@ -534,7 +532,7 @@ export class BallRenderer {
             const glbStart = performance.now();
             performance.mark('balls:glb:start');
 
-            const glbData = await fetchWithCache(withVersion('/poolballs.glb'), 'glb');
+            const glbData = await fetchWithCache(withVersion('/assets/models/poolballs.glb'), 'glb');
             const glbBlob = new Blob([glbData], { type: 'model/gltf-binary' });
             const glbBlobUrl = URL.createObjectURL(glbBlob);
 

@@ -22,7 +22,7 @@ export const AssetRegistry = {
    * Logo and other branding elements
    */
   branding: {
-    logo: () => new URL('./img/logo.png', import.meta.url).href,
+    logo: () => '/assets/images/logo.png',
   },
 
   /**
@@ -30,13 +30,13 @@ export const AssetRegistry = {
    * Used in the main lobby for different game options
    */
   lobbyCards: {
-    practice: () => new URL('./img/lobby-cards/practice.png', import.meta.url).href,
-    arcade: () => new URL('./img/lobby-cards/arcade.png', import.meta.url).href,
-    playRanked: () => new URL('./img/lobby-cards/play-ranked.png', import.meta.url).href,
-    shop: () => new URL('./img/lobby-cards/shop.png', import.meta.url).href,
-    events: () => new URL('./img/lobby-cards/events.png', import.meta.url).href,
-    miniGames: () => new URL('./img/lobby-cards/mini-games.png', import.meta.url).href,
-    league: () => new URL('./img/lobby-cards/league.png', import.meta.url).href,
+    practice: () => '/assets/images/lobby-cards/practice.png',
+    arcade: () => '/assets/images/lobby-cards/arcade.png',
+    playRanked: () => '/assets/images/lobby-cards/play-ranked.png',
+    shop: () => '/assets/images/lobby-cards/shop.png',
+    events: () => '/assets/images/lobby-cards/events.png',
+    miniGames: () => '/assets/images/lobby-cards/mini-games.png',
+    league: () => '/assets/images/lobby-cards/league.png',
   },
 
   /**
@@ -44,10 +44,10 @@ export const AssetRegistry = {
    * Used in the play modes selection scene
    */
   modeCards: {
-    practice: () => new URL('./img/lobby-cards/practice.png', import.meta.url).href,
+    practice: () => '/assets/images/lobby-cards/practice.png',
     // Add specific mode cards here as you create them:
-    eightBall: () => new URL('./img/mode-cards/8ball.png', import.meta.url).href,
-    timeAttack: () => new URL('./img/mode-cards/time-attack.png', import.meta.url).href,
+    eightBall: () => '/assets/images/mode-cards/8ball.png',
+    timeAttack: () => '/assets/images/mode-cards/time-attack.png',
   },
 
   /**
@@ -56,74 +56,74 @@ export const AssetRegistry = {
    */
   eventCards: {
     // Using lobby images as placeholders - replace with specific event card images as you create them
-    goldenSpin: () => new URL('./img/event-cards/spin.jpg', import.meta.url).href,
+    goldenSpin: () => '/assets/images/event-cards/spin.jpg',
     // Add these when you create specific event card images:
-    bullseye: () => new URL('./img/event-cards/bulls-eye.jpg', import.meta.url).href,
-    winStreak: () => new URL('./img/event-cards/win-streak.jpg', import.meta.url).href,
+    bullseye: () => '/assets/images/event-cards/bulls-eye.jpg',
+    winStreak: () => '/assets/images/event-cards/win-streak.jpg',
   },
 
   /**
    * Avatar images
    */
   avatars: {
-    default: () => new URL('./img/avatars/avatar_default.png', import.meta.url).href,
-    player: () => new URL('./img/avatars/avatar_player.png', import.meta.url).href,
-    shark_sally: () => new URL('./img/avatars/shark_sally.png', import.meta.url).href,
-    the_machine: () => new URL('./img/avatars/the_machine.png', import.meta.url).href,
-    rookie_rick: () => new URL('./img/avatars/rookie_rick.png', import.meta.url).href,
-    nervous_ned: () => new URL('./img/avatars/nervous_ned.png', import.meta.url).href,
-    casual_carl: () => new URL('./img/avatars/casual_carl.png', import.meta.url).href,
-    slow_sam: () => new URL('./img/avatars/slow_sam.png', import.meta.url).href,
-    lucky_lucy: () => new URL('./img/avatars/lucky_lucy.png', import.meta.url).href,
-    steady_steve: () => new URL('./img/avatars/steady_steve.png', import.meta.url).href,
-    bankshot_betty: () => new URL('./img/avatars/bankshot_betty.png', import.meta.url).href,
-    angle_andy: () => new URL('./img/avatars/angle_andy.png', import.meta.url).href,
-    combo_chris: () => new URL('./img/avatars/combo_chris.png', import.meta.url).href,
-    defensive_dan: () => new URL('./img/avatars/defensive_dan.png', import.meta.url).href,
-    spin_doctor_sid: () => new URL('./img/avatars/spin_doctor_sid.png', import.meta.url).href,
-    power_pete: () => new URL('./img/avatars/power_pete.png', import.meta.url).href,
-    finesse_fiona: () => new URL('./img/avatars/finesse_fiona.png', import.meta.url).href,
-    trickshot_tim: () => new URL('./img/avatars/trickshot_tim.png', import.meta.url).href,
-    precision_paul: () => new URL('./img/avatars/precision_paul.png', import.meta.url).href,
-    viper_vicky: () => new URL('./img/avatars/viper_vicky.png', import.meta.url).href,
-    master_mike: () => new URL('./img/avatars/master_mike.png', import.meta.url).href,
-    legend_larry: () => new URL('./img/avatars/legend_larry.png', import.meta.url).href,
+    default: () => '/assets/images/avatars/avatar_default.png',
+    player: () => '/assets/images/avatars/avatar_player.png',
+    shark_sally: () => '/assets/images/avatars/shark_sally.png',
+    the_machine: () => '/assets/images/avatars/the_machine.png',
+    rookie_rick: () => '/assets/images/avatars/rookie_rick.png',
+    nervous_ned: () => '/assets/images/avatars/nervous_ned.png',
+    casual_carl: () => '/assets/images/avatars/casual_carl.png',
+    slow_sam: () => '/assets/images/avatars/slow_sam.png',
+    lucky_lucy: () => '/assets/images/avatars/lucky_lucy.png',
+    steady_steve: () => '/assets/images/avatars/steady_steve.png',
+    bankshot_betty: () => '/assets/images/avatars/bankshot_betty.png',
+    angle_andy: () => '/assets/images/avatars/angle_andy.png',
+    combo_chris: () => '/assets/images/avatars/combo_chris.png',
+    defensive_dan: () => '/assets/images/avatars/defensive_dan.png',
+    spin_doctor_sid: () => '/assets/images/avatars/spin_doctor_sid.png',
+    power_pete: () => '/assets/images/avatars/power_pete.png',
+    finesse_fiona: () => '/assets/images/avatars/finesse_fiona.png',
+    trickshot_tim: () => '/assets/images/avatars/trickshot_tim.png',
+    precision_paul: () => '/assets/images/avatars/precision_paul.png',
+    viper_vicky: () => '/assets/images/avatars/viper_vicky.png',
+    master_mike: () => '/assets/images/avatars/master_mike.png',
+    legend_larry: () => '/assets/images/avatars/legend_larry.png',
   },
 
   /**
    * League Frames
    */
   frames: {
-    bronze: () => new URL('./img/frames/frame_bronze_new.png', import.meta.url).href,
-    silver: () => new URL('./img/frames/frame_silver_new.png', import.meta.url).href,
-    gold: () => new URL('./img/frames/frame_gold_new.png', import.meta.url).href,
-    platinum: () => new URL('./img/frames/frame_platinum_new.png', import.meta.url).href,
-    diamond: () => new URL('./img/frames/frame_diamond_new.png', import.meta.url).href,
-    master: () => new URL('./img/frames/frame_master_new.png', import.meta.url).href,
-    grandmaster: () => new URL('./img/frames/frame_grandmaster_new.png', import.meta.url).href,
-    elite: () => new URL('./img/frames/frame_elite_new.png', import.meta.url).href,
-    emerald: () => new URL('./img/frames/frame_emerald_new.png', import.meta.url).href,
-    crystal: () => new URL('./img/frames/frame_crystal_new.png', import.meta.url).href,
+    bronze: () => '/assets/images/frames/frame_bronze_new.png',
+    silver: () => '/assets/images/frames/frame_silver_new.png',
+    gold: () => '/assets/images/frames/frame_gold_new.png',
+    platinum: () => '/assets/images/frames/frame_platinum_new.png',
+    diamond: () => '/assets/images/frames/frame_diamond_new.png',
+    master: () => '/assets/images/frames/frame_master_new.png',
+    grandmaster: () => '/assets/images/frames/frame_grandmaster_new.png',
+    elite: () => '/assets/images/frames/frame_elite_new.png',
+    emerald: () => '/assets/images/frames/frame_emerald_new.png',
+    crystal: () => '/assets/images/frames/frame_crystal_new.png',
   },
 
   /**
    * Economy assets (Chests, Coins, etc.)
    */
   economy: {
-    chestCommon: () => new URL('./img/economy/chest_common.png', import.meta.url).href,
-    chestRare: () => new URL('./img/economy/chest_rare.png', import.meta.url).href,
-    chestEpic: () => new URL('./img/economy/chest_epic.png', import.meta.url).href,
+    chestCommon: () => '/assets/images/economy/chest_common.png',
+    chestRare: () => '/assets/images/economy/chest_rare.png',
+    chestEpic: () => '/assets/images/economy/chest_epic.png',
   },
 
   /**
    * Chest Assets
    */
   chests: {
-    spriteSheet: () => new URL('./chests/chests_sprite_sheet.png', import.meta.url).href,
-    bronze: () => new URL('./chests/chest_bronze.png', import.meta.url).href,
-    gold: () => new URL('./chests/chest_gold.png', import.meta.url).href,
-    platinum: () => new URL('./chests/chest_platinum.png', import.meta.url).href,
-    diamond: () => new URL('./chests/chest_diamond.png', import.meta.url).href,
+    spriteSheet: () => '/assets/images/chests/chests_sprite_sheet.png',
+    bronze: () => '/assets/images/chests/chest_bronze.png',
+    gold: () => '/assets/images/chests/chest_gold.png',
+    platinum: () => '/assets/images/chests/chest_platinum.png',
+    diamond: () => '/assets/images/chests/chest_diamond.png',
   },
 } as const;
 
