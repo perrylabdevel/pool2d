@@ -210,12 +210,12 @@ export class Renderer3D extends BaseRenderer {
 
     // Load FBX ball models (async) and surface progress to loading UI
     this.assetsReadyPromise = this.ballRenderer
-      .loadModels((message) => this.updateLoadingText(message))
+      .loadModels(this.renderer, (message) => this.updateLoadingText(message))
       .catch((err) => {
         console.error('[Renderer3D] Failed to load ball models', err);
       })
       .finally(() => {
-        this.updateLoadingText('Finishing setup...');
+        this.updateLoadingText('Ready to break!');
       });
 
     // React to UI color changes without rebuilding geometry
@@ -432,6 +432,7 @@ export class Renderer3D extends BaseRenderer {
     const width = Math.max(1, (CONFIG.TABLE_WIDTH + padWorldIn * 2) * this.scale);
     const height = Math.max(1, (CONFIG.TABLE_HEIGHT + padWorldIn * 2) * this.scale);
 
+    this.renderer.setPixelRatio(window.devicePixelRatio || 1);
     this.renderer.setSize(width, height);
     this.canvas.style.width = `${width}px`;
     this.canvas.style.height = `${height}px`;

@@ -8,6 +8,24 @@ import { RenderLayerSettings, RenderLayerOrderKey, RenderLayerBooleanKey } from 
 const ASSET_VERSION = 'v3';
 const withVersion = (path: string) => `${path}?v=${ASSET_VERSION}`;
 
+const TEXTURE_MAP: Record<number, { low: string; high: string }> = {
+    1: { low: withVersion('/assets/textures/poolballs/low/poolballTx01.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx01.jpg') },
+    2: { low: withVersion('/assets/textures/poolballs/low/poolballTx02.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx02.jpg') },
+    3: { low: withVersion('/assets/textures/poolballs/low/poolballTx03.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx03.jpg') },
+    4: { low: withVersion('/assets/textures/poolballs/low/poolballTx04.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx04.jpg') },
+    5: { low: withVersion('/assets/textures/poolballs/low/poolballTx5.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx5.jpg') },
+    6: { low: withVersion('/assets/textures/poolballs/low/poolballTx6.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx6.jpg') },
+    7: { low: withVersion('/assets/textures/poolballs/low/poolballTx7.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx7.jpg') },
+    8: { low: withVersion('/assets/textures/poolballs/low/poolballTx8.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx8.jpg') },
+    9: { low: withVersion('/assets/textures/poolballs/low/poolballTx9.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx9.jpg') },
+    10: { low: withVersion('/assets/textures/poolballs/low/poolballTx10.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx10.jpg') },
+    11: { low: withVersion('/assets/textures/poolballs/low/poolballTx11.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx11.jpg') },
+    12: { low: withVersion('/assets/textures/poolballs/low/poolballTx12.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx12.jpg') },
+    13: { low: withVersion('/assets/textures/poolballs/low/poolballTx13.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx13.jpg') },
+    14: { low: withVersion('/assets/textures/poolballs/low/poolballTx14.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx14.jpg') },
+    15: { low: withVersion('/assets/textures/poolballs/low/poolballTx15.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx15.jpg') }
+};
+
 export class BallRenderer {
     private scene: THREE.Scene;
     private layerOrder: Record<RenderLayerOrderKey, number>;
@@ -403,11 +421,12 @@ export class BallRenderer {
         return this.ballModels.size;
     }
 
-    async loadModels(onProgress?: (msg: string) => void) {
+    async loadModels(renderer: THREE.WebGLRenderer, onProgress?: (msg: string) => void) {
         const startTime = performance.now();
-        console.log('⏳ Loading ball models...');
+        const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
+        console.log(`⏳ Loading ball models... (Max Anisotropy: ${maxAnisotropy})`);
         console.log('📊 Performance Profile:');
-        if (onProgress) onProgress('Loading ball models...');
+        if (onProgress) onProgress('Polishing the balls...');
 
         const loadingManager = new THREE.LoadingManager();
         const embeddedTextureMap = new Map<string, string>();
@@ -434,32 +453,16 @@ export class BallRenderer {
 
         // Enable texture compression for faster loading
         textureLoader.setCrossOrigin('anonymous');
-        const textureMap: Record<number, { low: string; high: string }> = {
-            1: { low: withVersion('/assets/textures/poolballs/low/poolballTx01.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx01.jpg') },
-            2: { low: withVersion('/assets/textures/poolballs/low/poolballTx02.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx02.jpg') },
-            3: { low: withVersion('/assets/textures/poolballs/low/poolballTx03.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx03.jpg') },
-            4: { low: withVersion('/assets/textures/poolballs/low/poolballTx04.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx04.jpg') },
-            5: { low: withVersion('/assets/textures/poolballs/low/poolballTx5.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx5.jpg') },
-            6: { low: withVersion('/assets/textures/poolballs/low/poolballTx6.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx6.jpg') },
-            7: { low: withVersion('/assets/textures/poolballs/low/poolballTx7.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx7.jpg') },
-            8: { low: withVersion('/assets/textures/poolballs/low/poolballTx8.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx8.jpg') },
-            9: { low: withVersion('/assets/textures/poolballs/low/poolballTx9.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx9.jpg') },
-            10: { low: withVersion('/assets/textures/poolballs/low/poolballTx10.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx10.jpg') },
-            11: { low: withVersion('/assets/textures/poolballs/low/poolballTx11.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx11.jpg') },
-            12: { low: withVersion('/assets/textures/poolballs/low/poolballTx12.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx12.jpg') },
-            13: { low: withVersion('/assets/textures/poolballs/low/poolballTx13.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx13.jpg') },
-            14: { low: withVersion('/assets/textures/poolballs/low/poolballTx14.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx14.jpg') },
-            15: { low: withVersion('/assets/textures/poolballs/low/poolballTx15.jpg'), high: withVersion('/assets/textures/poolballs/high/poolballTx15.jpg') }
-        };
+
 
         try {
             performance.mark('balls:load:start');
 
             // Preload all textures in parallel with progress tracking
             let texturesLoaded = 0;
-            const totalTextures = Object.keys(textureMap).length;
+            const totalTextures = Object.keys(TEXTURE_MAP).length;
 
-            const textureEntries = Object.entries(textureMap);
+            const textureEntries = Object.entries(TEXTURE_MAP);
 
             const loadedTextures = await Promise.all(
                 textureEntries.map(async ([ballId, paths]) => {
@@ -489,7 +492,7 @@ export class BallRenderer {
                                     loadedTexture.wrapS = THREE.RepeatWrapping;
                                     loadedTexture.wrapT = THREE.RepeatWrapping;
                                     loadedTexture.repeat.set(2, 1); // squeeze horizontally to keep decals circular
-                                    loadedTexture.anisotropy = 4;
+                                    loadedTexture.anisotropy = maxAnisotropy;
                                     loadedTexture.generateMipmaps = true;
                                     loadedTexture.minFilter = THREE.LinearMipmapLinearFilter;
                                     loadedTexture.magFilter = THREE.LinearFilter;
@@ -520,7 +523,7 @@ export class BallRenderer {
 
                     texturesLoaded++;
                     console.log(`  Texture ${texturesLoaded}/${totalTextures} loaded`);
-                    if (onProgress) onProgress(`Loading textures... ${texturesLoaded}/${totalTextures}`);
+                    if (onProgress) onProgress(`Painting the stripes... ${texturesLoaded}/${totalTextures}`);
                     return [Number(ballId), texture] as [number, THREE.Texture | null];
                 })
             );
@@ -528,7 +531,7 @@ export class BallRenderer {
             performance.mark('balls:textures:end');
 
             console.log('  Loading GLB file (2.5MB)...');
-            if (onProgress) onProgress('Loading 3D models (2.5MB)...');
+            if (onProgress) onProgress('Leveling the table...');
             const glbStart = performance.now();
             performance.mark('balls:glb:start');
 
@@ -543,7 +546,7 @@ export class BallRenderer {
             const glbTime = performance.now() - glbStart;
             console.log(`  ⏱️ GLB + Textures loaded in ${glbTime.toFixed(0)}ms`);
             console.log('  GLB loaded, processing geometry...');
-            if (onProgress) onProgress('Processing geometry...');
+            if (onProgress) onProgress("Racking 'em up...");
 
             const geometryStart = performance.now();
             performance.mark('balls:geom:start');
@@ -649,6 +652,10 @@ export class BallRenderer {
                 console.info(`  - Geometry processing: ${geometryTime.toFixed(0)}ms (${(geometryTime / elapsed * 100).toFixed(1)}%)`);
 
                 this.clearBalls();
+
+                // Trigger background loading of high-res textures
+                // Don't await this - let it happen progressively
+                this.upgradeToHighResTextures(renderer);
             }
         } catch (error) {
             console.error('✗ Error loading GLB:', error);
@@ -771,5 +778,72 @@ export class BallRenderer {
         this.ballMeshes.forEach((mesh) => {
             this.applyBallRenderOrder(mesh);
         });
+    }
+
+    async upgradeToHighResTextures(renderer: THREE.WebGLRenderer) {
+        console.log('⏳ Starting background high-res texture upgrade...');
+        const textureLoader = new THREE.TextureLoader();
+        textureLoader.setCrossOrigin('anonymous');
+        const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
+
+        for (const [idStr, paths] of Object.entries(TEXTURE_MAP)) {
+            const id = Number(idStr);
+            const highResUrl = paths.high;
+
+            try {
+                // Load high-res texture
+                const highResTexture = await new Promise<THREE.Texture>((resolve, reject) => {
+                    textureLoader.load(
+                        highResUrl,
+                        (tex) => {
+                            tex.colorSpace = THREE.SRGBColorSpace;
+                            tex.flipY = false;
+                            tex.wrapS = THREE.RepeatWrapping;
+                            tex.wrapT = THREE.RepeatWrapping;
+                            tex.repeat.set(2, 1);
+                            tex.anisotropy = maxAnisotropy;
+                            tex.generateMipmaps = true;
+                            tex.minFilter = THREE.LinearMipmapLinearFilter;
+                            tex.magFilter = THREE.LinearFilter;
+                            resolve(tex);
+                        },
+                        undefined,
+                        (err) => reject(err)
+                    );
+                });
+
+                // Update model
+                const model = this.ballModels.get(id);
+                if (model) {
+                    const oldMap = model.material.map;
+                    model.material.map = highResTexture;
+                    model.material.needsUpdate = true;
+
+                    // Dispose old texture if possible
+                    if (oldMap) {
+                        oldMap.dispose();
+                    }
+
+                    // Update any active instances
+                    const activeMesh = this.ballMeshes.get(id);
+                    if (activeMesh) {
+                        const activeMaterial = activeMesh.material as THREE.MeshStandardMaterial;
+                        if (activeMaterial && activeMaterial !== model.material) {
+                            // If material was cloned (unlikely but safe to check)
+                            activeMaterial.map = highResTexture;
+                            activeMaterial.needsUpdate = true;
+                        }
+                    }
+
+                    console.log(`  ✨ Upgraded ball ${id} to high-res texture`);
+                }
+
+                // Small delay to prevent frame drops
+                await new Promise(resolve => setTimeout(resolve, 50));
+            } catch (error) {
+                console.warn(`Failed to upgrade texture for ball ${id}:`, error);
+            }
+        }
+        console.log('✅ High-res texture upgrade complete');
     }
 }
