@@ -138,7 +138,8 @@
 
   <script type="module">
     import * as THREE from 'three';
-    import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
     const logEl = document.getElementById('log');
     function log(message, data = null) {
@@ -157,22 +158,22 @@
 
     // Texture paths matching the main app
     const textureMap = {
-      1: '/textures/poolballTx01.jpg',
-      9: '/textures/poolballTx9.jpg'
+      1: '/textures/poolballTx01.jpg?v=v2',
+      9: '/textures/poolballTx9.jpg?v=v2'
     };
 
     const ballNameMap = {
-      poolball16: 0,
-      poolball1: 1,
-      poolball22: 9
+      Ball_0: 0,
+      Ball_1: 1,
+      Ball_9: 9
     };
 
     // Preload textures and FBX once
-    let fbxCache = null;
+    let gltfCache = null;
     let textureCache = new Map();
 
     async function loadAssets() {
-      if (fbxCache) return; // Already loaded
+      if (gltfCache) return; // Already loaded
 
       log('Preloading textures...');
 
@@ -217,6 +218,10 @@
               dataUrl,
               (texture) => {
                 texture.colorSpace = THREE.SRGBColorSpace;
+                texture.flipY = false;
+                texture.wrapS = THREE.RepeatWrapping;
+                texture.wrapT = THREE.RepeatWrapping;
+                texture.repeat.set(2, 1); // match in-game horizontal squeeze
                 texture.generateMipmaps = true;
                 texture.minFilter = THREE.LinearMipmapLinearFilter;
                 texture.magFilter = THREE.LinearFilter;
@@ -245,15 +250,25 @@
         }
       });
 
-      log('Loading FBX...');
+      log('Loading GLB...');
 
-      // Load FBX
-      const loader = new FBXLoader(loadingManager);
-      fbxCache = await new Promise((resolve, reject) => {
-        loader.load('/poolballs.fbx', resolve, undefined, reject);
+      // Load GLB (Draco-compressed)
+      const loader = new GLTFLoader(loadingManager);
+      const dracoLoader = new DRACOLoader();
+      dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
+      loader.setDRACOLoader(dracoLoader);
+
+      gltfCache = await new Promise((resolve, reject) => {
+        loader.load('/poolballs.glb?v=v2', resolve, undefined, reject);
       });
 
-      log('FBX loaded successfully');
+      log('GLB loaded successfully');
+      log('Meshes in GLB:');
+      gltfCache.scene.traverse((child) => {
+        if (child.isMesh) {
+          log(`  mesh: ${child.name}`);
+        }
+      });
     }
 
     // Shared renderer to maintain WebGL context
@@ -303,7 +318,7 @@
         const [ballMeshName] = ballNames;
         let ballMesh = null;
 
-        fbxCache.traverse((child) => {
+        gltfCache.scene.traverse((child) => {
           if (child.isMesh && child.name === ballMeshName) {
             ballMesh = child;
             log(`Found ball mesh: ${child.name}`);
@@ -311,7 +326,7 @@
         });
 
         if (!ballMesh) {
-          log(`ERROR: Ball mesh '${ballMeshName}' not found in FBX`);
+          log(`ERROR: Ball mesh '${ballMeshName}' not found in GLB`);
           return;
         }
 
@@ -515,7 +530,7 @@
     }
 
     // Render ball at specific rotation
-    async function renderBallAtRotation(ballId, canvasId, rotationX, rotationY) {
+    async function renderBallAtRotation(ballId, canvasId, rotationX, rotationY, rotationZ = 0) {
       initSharedRenderer();
       const targetCanvas = document.getElementById(canvasId);
 
@@ -525,7 +540,7 @@
       const [ballMeshName] = ballNames;
       let ballMesh = null;
 
-      fbxCache.traverse((child) => {
+      gltfCache.scene.traverse((child) => {
         if (child.isMesh && child.name === ballMeshName) {
           ballMesh = child;
         }
@@ -551,6 +566,7 @@
       const mesh = new THREE.Mesh(geom, testMat);
       mesh.rotation.x = rotationX;
       mesh.rotation.y = rotationY;
+      mesh.rotation.z = rotationZ;
 
       const meshesToRemove = [];
       sharedScene.traverse((obj) => {
@@ -569,18 +585,27 @@
     // Load assets first
     await loadAssets();
 
-    // Render ball 1 at 8 different X-axis rotations (keep Y at 90° since that looked good)
-    const fixedY1 = Math.PI / 2;  // 90 degrees
-    for (let i = 0; i < 8; i++) {
-      const angleX = (i * Math.PI / 4);
-      await renderBallAtRotation(1, `ball1-rot${i}`, angleX, fixedY1);
-    }
+    // Test a 3D grid of rotations (X, Y, Z) for balls 1 and 9
+    const angles = [0, Math.PI / 4, Math.PI / 2, (3 * Math.PI) / 4, Math.PI]; // 0,45,90,135,180
+    const yAngles = [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2]; // 0,90,180,270
+    const zAngles = [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2]; // 0,90,180,270
 
-    // Render ball 9 at 8 different X-axis rotations (keep Y at 90°)
-    const fixedY9 = Math.PI / 2;  // 90 degrees
-    for (let i = 0; i < 8; i++) {
-      const angleX = (i * Math.PI / 4);
-      await renderBallAtRotation(9, `ball9-rot${i}`, angleX, fixedY9);
+    let chipIndex = 0;
+
+    for (const ballId of [1, 9]) {
+      for (const y of yAngles) {
+        for (const z of zAngles) {
+          for (const x of angles) {
+            const canvasId = ballId === 1 ? `ball1-rot${chipIndex}` : `ball9-rot${chipIndex}`;
+            await renderBallAtRotation(ballId, canvasId, x, y, z);
+            chipIndex++;
+            if (chipIndex >= 8) break; // only 8 canvases exist per ball
+          }
+          if (chipIndex >= 8) break;
+        }
+        if (chipIndex >= 8) break;
+      }
+      chipIndex = 0; // reset for next ball
     }
 
     log('Test complete!');

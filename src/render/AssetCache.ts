@@ -2,14 +2,14 @@
 // This eliminates the 1.8s reload time by storing parsed assets locally
 
 const DB_NAME = 'pool2d-assets';
-const DB_VERSION = 1;
+const DB_VERSION = 2; // bump to invalidate stale cached assets
 const STORE_NAME = 'cached-assets';
 
 interface CachedAsset {
   url: string;
   data: ArrayBuffer;
   timestamp: number;
-  type: 'fbx' | 'texture';
+  type: 'fbx' | 'glb' | 'texture';
 }
 
 class AssetCacheManager {
@@ -30,10 +30,12 @@ class AssetCacheManager {
 
       request.onupgradeneeded = (event) => {
         const db = (event.target as IDBOpenDBRequest).result;
-        if (!db.objectStoreNames.contains(STORE_NAME)) {
-          const store = db.createObjectStore(STORE_NAME, { keyPath: 'url' });
-          store.createIndex('timestamp', 'timestamp', { unique: false });
+        // Drop and recreate to clear old entries when we bump DB_VERSION
+        if (db.objectStoreNames.contains(STORE_NAME)) {
+          db.deleteObjectStore(STORE_NAME);
         }
+        const store = db.createObjectStore(STORE_NAME, { keyPath: 'url' });
+        store.createIndex('timestamp', 'timestamp', { unique: false });
       };
     });
 
@@ -57,7 +59,7 @@ class AssetCacheManager {
     });
   }
 
-  async set(url: string, data: ArrayBuffer, type: 'fbx' | 'texture'): Promise<void> {
+  async set(url: string, data: ArrayBuffer, type: 'fbx' | 'glb' | 'texture'): Promise<void> {
     await this.init();
     if (!this.db) return;
 
@@ -102,7 +104,7 @@ export const assetCache = new AssetCacheManager();
 import { Capacitor } from '@capacitor/core';
 
 // Helper to fetch with caching
-export async function fetchWithCache(url: string, type: 'fbx' | 'texture'): Promise<ArrayBuffer> {
+export async function fetchWithCache(url: string, type: 'fbx' | 'glb' | 'texture'): Promise<ArrayBuffer> {
   const isIOS = Capacitor.getPlatform() === 'ios';
 
   // Check cache first (skip on iOS to prevent memory/quota crashes with large assets)

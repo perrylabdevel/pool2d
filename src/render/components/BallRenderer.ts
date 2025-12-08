@@ -1,9 +1,12 @@
 import * as THREE from 'three';
-import { FBXLoader } from 'three-stdlib';
+import { GLTFLoader, DRACOLoader } from 'three-stdlib';
 import { fetchWithCache } from '../AssetCache';
 import { CONFIG, BALL_CUE } from '../../config';
 import { Ball } from '../../physics/Shapes';
 import { RenderLayerSettings, RenderLayerOrderKey, RenderLayerBooleanKey } from '../RenderLayers';
+
+const ASSET_VERSION = 'v2';
+const withVersion = (path: string) => `${path}?v=${ASSET_VERSION}`;
 
 export class BallRenderer {
     private scene: THREE.Scene;
@@ -420,30 +423,38 @@ export class BallRenderer {
             );
         });
 
-        const loader = new FBXLoader(loadingManager);
+        const loader = new GLTFLoader(loadingManager);
+
+        // Set up Draco decoder for compressed meshes
+        const dracoLoader = new DRACOLoader();
+        dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
+        loader.setDRACOLoader(dracoLoader);
+
         const textureLoader = new THREE.TextureLoader(loadingManager);
 
         // Enable texture compression for faster loading
         textureLoader.setCrossOrigin('anonymous');
-        const textureMap: Record<number, string> = {
-            1: '/textures/poolballTx01.jpg',
-            2: '/textures/poolballTx02.jpg',
-            3: '/textures/poolballTx03.jpg',
-            4: '/textures/poolballTx04.jpg',
-            5: '/textures/poolballTx5.jpg',
-            6: '/textures/poolballTx6.jpg',
-            7: '/textures/poolballTx7.jpg',
-            8: '/textures/poolballTx8.jpg',
-            9: '/textures/poolballTx9.jpg',
-            10: '/textures/poolballTx10.jpg',
-            11: '/textures/poolballTx11.jpg',
-            12: '/textures/poolballTx12.jpg',
-            13: '/textures/poolballTx13.jpg',
-            14: '/textures/poolballTx14.jpg',
-            15: '/textures/poolballTx15.jpg'
+        const textureMap: Record<number, { low: string; high: string }> = {
+            1: { low: withVersion('/textures/low/poolballTx01.jpg'), high: withVersion('/textures/poolballTx01.jpg') },
+            2: { low: withVersion('/textures/low/poolballTx02.jpg'), high: withVersion('/textures/poolballTx02.jpg') },
+            3: { low: withVersion('/textures/low/poolballTx03.jpg'), high: withVersion('/textures/poolballTx03.jpg') },
+            4: { low: withVersion('/textures/low/poolballTx04.jpg'), high: withVersion('/textures/poolballTx04.jpg') },
+            5: { low: withVersion('/textures/low/poolballTx5.jpg'), high: withVersion('/textures/poolballTx5.jpg') },
+            6: { low: withVersion('/textures/low/poolballTx6.jpg'), high: withVersion('/textures/poolballTx6.jpg') },
+            7: { low: withVersion('/textures/low/poolballTx7.jpg'), high: withVersion('/textures/poolballTx7.jpg') },
+            8: { low: withVersion('/textures/low/poolballTx8.jpg'), high: withVersion('/textures/poolballTx8.jpg') },
+            9: { low: withVersion('/textures/low/poolballTx9.jpg'), high: withVersion('/textures/poolballTx9.jpg') },
+            10: { low: withVersion('/textures/low/poolballTx10.jpg'), high: withVersion('/textures/poolballTx10.jpg') },
+            11: { low: withVersion('/textures/low/poolballTx11.jpg'), high: withVersion('/textures/poolballTx11.jpg') },
+            12: { low: withVersion('/textures/low/poolballTx12.jpg'), high: withVersion('/textures/poolballTx12.jpg') },
+            13: { low: withVersion('/textures/low/poolballTx13.jpg'), high: withVersion('/textures/poolballTx13.jpg') },
+            14: { low: withVersion('/textures/low/poolballTx14.jpg'), high: withVersion('/textures/poolballTx14.jpg') },
+            15: { low: withVersion('/textures/low/poolballTx15.jpg'), high: withVersion('/textures/poolballTx15.jpg') }
         };
 
         try {
+            performance.mark('balls:load:start');
+
             // Preload all textures in parallel with progress tracking
             let texturesLoaded = 0;
             const totalTextures = Object.keys(textureMap).length;
@@ -451,100 +462,131 @@ export class BallRenderer {
             const textureEntries = Object.entries(textureMap);
 
             const loadedTextures = await Promise.all(
-                textureEntries.map(async ([ballId, path]) => {
-                    try {
-                        const data = await fetchWithCache(path, 'texture');
-                        const bytes = new Uint8Array(data);
-                        let binary = '';
-                        for (let i = 0; i < bytes.length; i++) {
-                            binary += String.fromCharCode(bytes[i]);
-                        }
-                        const base64 = btoa(binary);
-                        const dataUrl = `data:image/jpeg;base64,${base64}`;
+                textureEntries.map(async ([ballId, paths]) => {
+                    const texMark = `balls:texture:${ballId}:start`;
+                    performance.mark(texMark);
 
-                        const filename = path.split('/').pop() ?? path;
-                        embeddedTextureMap.set(path, dataUrl);
-                        embeddedTextureMap.set(path.replace(/^\//, ''), dataUrl);
-                        embeddedTextureMap.set(`./${filename}`, dataUrl);
-                        embeddedTextureMap.set(`textures/${filename}`, dataUrl);
-                        embeddedTextureMap.set(`/${filename}`, dataUrl);
-                        embeddedTextureMap.set(filename, dataUrl);
+                    // Register aliases so GLB lookups hit the chosen URL
+                    const registerAliases = (p: string, targetUrl: string) => {
+                        const basePath = p.split('?')[0];
+                        const filename = basePath.split('/').pop() ?? basePath;
+                        embeddedTextureMap.set(p, targetUrl);
+                        embeddedTextureMap.set(basePath, targetUrl);
+                        embeddedTextureMap.set(basePath.replace(/^\//, ''), targetUrl);
+                        embeddedTextureMap.set(`./${filename}`, targetUrl);
+                        embeddedTextureMap.set(`textures/${filename}`, targetUrl);
+                        embeddedTextureMap.set(`/${filename}`, targetUrl);
+                        embeddedTextureMap.set(filename, targetUrl);
+                    };
 
-                        return await new Promise<[number, THREE.Texture | null]>((resolve) => {
+                    const tryLoad = (url: string): Promise<THREE.Texture | null> =>
+                        new Promise((resolve) => {
                             textureLoader.load(
-                                dataUrl,
+                                url,
                                 (loadedTexture) => {
                                     loadedTexture.colorSpace = THREE.SRGBColorSpace;
+                                    loadedTexture.flipY = false; // match GLTF UV convention
+                                    loadedTexture.wrapS = THREE.RepeatWrapping;
+                                    loadedTexture.wrapT = THREE.RepeatWrapping;
+                                    loadedTexture.repeat.set(2, 1); // squeeze horizontally to keep decals circular
                                     loadedTexture.anisotropy = 4;
                                     loadedTexture.generateMipmaps = true;
                                     loadedTexture.minFilter = THREE.LinearMipmapLinearFilter;
                                     loadedTexture.magFilter = THREE.LinearFilter;
-                                    texturesLoaded++;
-                                    console.log(`  Texture ${texturesLoaded}/${totalTextures} loaded`);
-                                    if (onProgress) onProgress(`Loading textures... ${texturesLoaded}/${totalTextures}`);
-                                    resolve([Number(ballId), loadedTexture]);
+                                    loadedTexture.needsUpdate = true;
+                                    resolve(loadedTexture);
                                 },
                                 undefined,
-                                (err) => {
-                                    console.warn(`Failed to load texture for ball ${ballId}:`, err);
-                                    resolve([Number(ballId), null]);
-                                }
+                                () => resolve(null)
                             );
                         });
-                    } catch (err) {
-                        console.warn(`Failed to fetch texture for ball ${ballId}:`, err);
+
+                    // Try low, then high
+                    let chosenUrl = paths.low;
+                    registerAliases(paths.low, paths.low);
+                    registerAliases(paths.high, paths.low);
+
+                    let texture = await tryLoad(paths.low);
+                    if (!texture) {
+                        console.warn(`Low-res texture failed for ball ${ballId}, trying high-res`);
+                        chosenUrl = paths.high;
+                        registerAliases(paths.low, paths.high);
+                        registerAliases(paths.high, paths.high);
+                        texture = await tryLoad(paths.high);
+                    }
+
+                    if (!texture) {
+                        console.warn(`No texture could be loaded for ball ${ballId}`);
                         return [Number(ballId), null];
                     }
+
+                    texturesLoaded++;
+                    console.log(`  Texture ${texturesLoaded}/${totalTextures} loaded`);
+                    if (onProgress) onProgress(`Loading textures... ${texturesLoaded}/${totalTextures}`);
+                    return [Number(ballId), texture];
                 })
             );
 
-            console.log('  Loading FBX file (16MB, may take a moment)...');
-            if (onProgress) onProgress('Loading 3D models (16MB)...');
-            const fbxStart = performance.now();
+            performance.mark('balls:textures:end');
 
-            const fbxData = await fetchWithCache('/poolballs.fbx', 'fbx');
-            const fbxBlob = new Blob([fbxData], { type: 'application/octet-stream' });
-            const fbxBlobUrl = URL.createObjectURL(fbxBlob);
+            console.log('  Loading GLB file (2.5MB)...');
+            if (onProgress) onProgress('Loading 3D models (2.5MB)...');
+            const glbStart = performance.now();
+            performance.mark('balls:glb:start');
 
-            const fbx = await loader.loadAsync(fbxBlobUrl);
-            URL.revokeObjectURL(fbxBlobUrl);
+            const glbData = await fetchWithCache(withVersion('/poolballs.glb'), 'glb');
+            const glbBlob = new Blob([glbData], { type: 'model/gltf-binary' });
+            const glbBlobUrl = URL.createObjectURL(glbBlob);
 
-            const fbxTime = performance.now() - fbxStart;
-            console.log(`  ⏱️ FBX + Textures loaded in ${fbxTime.toFixed(0)}ms`);
-            console.log('  FBX loaded, processing geometry...');
+            const gltf = await loader.loadAsync(glbBlobUrl);
+            URL.revokeObjectURL(glbBlobUrl);
+            performance.mark('balls:glb:end');
+
+            const glbTime = performance.now() - glbStart;
+            console.log(`  ⏱️ GLB + Textures loaded in ${glbTime.toFixed(0)}ms`);
+            console.log('  GLB loaded, processing geometry...');
             if (onProgress) onProgress('Processing geometry...');
 
             const geometryStart = performance.now();
+            performance.mark('balls:geom:start');
             const textureCache = new Map<number, THREE.Texture>();
             loadedTextures.forEach(([id, tex]) => {
                 if (tex) textureCache.set(id, tex);
             });
 
             const ballNameMap: Record<string, number> = {
-                poolball16: 0,
-                poolball1: 1,
-                poolball2: 2,
-                poolball3: 3,
-                poolball17: 4,
-                poolball18: 5,
-                poolball19: 6,
-                poolball20: 7,
-                poolball21: 8,
-                poolball22: 9,
-                poolball23: 10,
-                poolball24: 11,
-                poolball25: 12,
-                poolball26: 13,
-                poolball27: 14,
-                poolball28: 15
+                Ball_0: 0,
+                Ball_1: 1,
+                Ball_2: 2,
+                Ball_3: 3,
+                Ball_4: 4,
+                Ball_5: 5,
+                Ball_6: 6,
+                Ball_7: 7,
+                Ball_8: 8,
+                Ball_9: 9,
+                Ball_10: 10,
+                Ball_11: 11,
+                Ball_12: 12,
+                Ball_13: 13,
+                Ball_14: 14,
+                Ball_15: 15
             };
 
-            const source = fbx.getObjectByName('pooballl_grp') ?? fbx;
+            const source = gltf.scene;
             const handled = new Set<number>();
+
+            // Debug: Log all mesh names in the GLB
+            console.log('🔍 Meshes found in GLB:');
+            source.traverse((child) => {
+                if (child instanceof THREE.Mesh) {
+                    console.log(`  - Mesh: "${child.name}" (type: ${child.type})`);
+                }
+            });
 
             source.traverse((child) => {
                 if (!(child instanceof THREE.Mesh)) return;
-                if (!child.name.startsWith('poolball')) return;
+                if (!child.name.startsWith('Ball_')) return;
                 const ballId = ballNameMap[child.name];
                 if (ballId === undefined || handled.has(ballId)) return;
                 handled.add(ballId);
@@ -582,21 +624,36 @@ export class BallRenderer {
             });
 
             const geometryTime = performance.now() - geometryStart;
+            performance.mark('balls:geom:end');
             console.log(`  ⏱️ Geometry processing: ${geometryTime.toFixed(0)}ms`);
+
+            // Emit perf measures
+            const measure = (name: string, start: string, end: string) => {
+                performance.measure(name, start, end);
+                const entry = performance.getEntriesByName(name).pop();
+                if (entry) {
+                    console.log(`[Perf] ${name}: ${entry.duration.toFixed(1)}ms`);
+                }
+            };
+
+            measure('balls:textures', 'balls:load:start', 'balls:textures:end');
+            measure('balls:glb', 'balls:glb:start', 'balls:glb:end');
+            measure('balls:geometry', 'balls:geom:start', 'balls:geom:end');
+            measure('balls:total', 'balls:load:start', 'balls:geom:end');
 
             this.setModelsLoaded(true);
             if (this.areModelsLoaded()) {
                 const elapsed = performance.now() - startTime;
                 const seconds = (elapsed / 1000).toFixed(1);
-                console.info(`✓ Loaded ${this.getModelCount()} FBX ball models in ${seconds}s (${elapsed.toFixed(0)}ms)`);
+                console.info(`✓ Loaded ${this.getModelCount()} GLB ball models in ${seconds}s (${elapsed.toFixed(0)}ms)`);
                 console.info(`📊 Breakdown:`);
-                console.info(`  - FBX + Textures: ${fbxTime.toFixed(0)}ms (${(fbxTime / elapsed * 100).toFixed(1)}%)`);
+                console.info(`  - GLB + Textures: ${glbTime.toFixed(0)}ms (${(glbTime / elapsed * 100).toFixed(1)}%)`);
                 console.info(`  - Geometry processing: ${geometryTime.toFixed(0)}ms (${(geometryTime / elapsed * 100).toFixed(1)}%)`);
 
                 this.clearBalls();
             }
         } catch (error) {
-            console.error('✗ Error loading FBX:', error);
+            console.error('✗ Error loading GLB:', error);
             this.setModelsLoaded(false);
         }
     }
@@ -605,6 +662,9 @@ export class BallRenderer {
         if (this.ballIconCaches.has(sizePx)) {
             return this.ballIconCaches.get(sizePx)!;
         }
+
+        // Slightly shrink the ball in chip renders so the numbers/stripes have breathing room
+        const iconScale = 0.7;
 
         const icons = new Map<number, string>();
         const scene = new THREE.Scene();
@@ -638,7 +698,7 @@ export class BallRenderer {
                 const template = this.ballModels.get(ballId)!;
                 mesh = new THREE.Mesh(template.geometry, template.material);
                 if (ballId === BALL_CUE) {
-                    this.addCueBallMeasles(mesh, CONFIG.BALL_RADIUS);
+                    this.addCueBallMeasles(mesh, CONFIG.BALL_RADIUS * iconScale);
                 }
             } else {
                 const geometry = new THREE.SphereGeometry(CONFIG.BALL_RADIUS, 32, 32);
@@ -648,13 +708,14 @@ export class BallRenderer {
                 const material = new THREE.MeshStandardMaterial({ color, roughness: 0.3, metalness: 0.4 });
                 mesh = new THREE.Mesh(geometry, material);
                 if (ballId !== BALL_CUE) this.addBallNumber(mesh, ballId);
-                if (ballId >= 9 && ballId <= 15) this.addBallStripe(mesh, CONFIG.BALL_RADIUS);
-                if (ballId === BALL_CUE) this.addCueBallMeasles(mesh, CONFIG.BALL_RADIUS);
+                if (ballId >= 9 && ballId <= 15) this.addBallStripe(mesh, CONFIG.BALL_RADIUS * iconScale);
+                if (ballId === BALL_CUE) this.addCueBallMeasles(mesh, CONFIG.BALL_RADIUS * iconScale);
             }
 
             mesh.position.set(0, 0, 0);
-            // Rotate based on test-chips.html findings (X=270deg, Y=90deg)
-            mesh.rotation.set(Math.PI * 1.5, Math.PI / 2, 0);
+            // Orient to face camera; texture flipY handles upright orientation
+            mesh.rotation.set(0, 0, 0);
+            mesh.scale.setScalar(iconScale);
 
             scene.add(mesh);
 
