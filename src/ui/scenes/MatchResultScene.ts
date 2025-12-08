@@ -50,14 +50,14 @@ export class MatchResultScene implements UIScene {
 
         this.canvas.addEventListener('mousemove', this.onMouseMove);
         this.canvas.addEventListener('click', this.onClick);
-        window.addEventListener('resize', this.onResize);
+
     }
 
     unmount(): void {
         if (!this.canvas) return;
         this.canvas.removeEventListener('mousemove', this.onMouseMove);
         this.canvas.removeEventListener('click', this.onClick);
-        window.removeEventListener('resize', this.onResize);
+
         this.canvas.style.cursor = 'default';
     }
 
@@ -93,9 +93,9 @@ export class MatchResultScene implements UIScene {
         ];
     };
 
-    private onResize = () => {
+    public onResize(_width: number, _height: number) {
         this.setupLayout();
-    };
+    }
 
     private onMouseMove = (e: MouseEvent) => {
         if (!this.canvas) return;

@@ -53,18 +53,17 @@ export class ProfileScene implements UIScene {
         if (!this.canvas) return;
 
         this.loadData();
-        this.updateLayout();
+        this.onResize(this.canvas.width, this.canvas.height);
 
         this.canvas.addEventListener('mousemove', this.onMouseMove);
         this.canvas.addEventListener('click', this.onClick);
-        window.addEventListener('resize', this.updateLayout);
     }
 
     unmount(): void {
         if (!this.canvas) return;
         this.canvas.removeEventListener('mousemove', this.onMouseMove);
         this.canvas.removeEventListener('click', this.onClick);
-        window.removeEventListener('resize', this.updateLayout);
+
         this.canvas.style.cursor = 'default';
     }
 
@@ -76,10 +75,8 @@ export class ProfileScene implements UIScene {
         }
     }
 
-    private updateLayout = () => {
+    public onResize(width: number, height: number) {
         if (!this.canvas) return;
-        const width = this.canvas.width;
-        const height = this.canvas.height;
         const gap = LayoutConstants.Spacing.GapMedium;
         const paddingX = width * LayoutConstants.Spacing.PaddingScreen;
         const contentWidth = width - paddingX * 2;
@@ -137,7 +134,7 @@ export class ProfileScene implements UIScene {
                 rect: { x: buttonRight - buttonWidth * 2 - btnGap, y: buttonY, width: buttonWidth, height: buttonHeight }
             }
         ];
-    };
+    }
 
     private onMouseMove = (e: MouseEvent) => {
         if (!this.canvas) return;

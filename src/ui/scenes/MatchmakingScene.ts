@@ -27,11 +27,11 @@ export class MatchmakingScene implements UIScene {
 
         await this.loadUserData();
 
-        window.addEventListener('resize', this.onResize);
+
     }
 
     unmount(): void {
-        window.removeEventListener('resize', this.onResize);
+
         this.canvas = null;
     }
 
@@ -47,9 +47,9 @@ export class MatchmakingScene implements UIScene {
         }
     }
 
-    private onResize = () => {
+    public onResize(_width: number, _height: number) {
         // Handle resize if needed
-    };
+    }
 
     update(dt: number): void {
         this.searchTime += dt;

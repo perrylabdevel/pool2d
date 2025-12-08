@@ -76,7 +76,7 @@ export class PlayModesScene implements UIScene {
         canvas.addEventListener('wheel', this.onWheel, { passive: true });
         canvas.addEventListener('touchstart', this.onTouchStart, { passive: true });
         canvas.addEventListener('touchmove', this.onTouchMove, { passive: true });
-        window.addEventListener('resize', this.onResize);
+
 
         this.keyHandler = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
@@ -96,7 +96,7 @@ export class PlayModesScene implements UIScene {
         canvas.removeEventListener('wheel', this.onWheel);
         canvas.removeEventListener('touchstart', this.onTouchStart);
         canvas.removeEventListener('touchmove', this.onTouchMove);
-        window.removeEventListener('resize', this.onResize);
+
 
         if (this.keyHandler) {
             window.removeEventListener('keydown', this.keyHandler);
@@ -106,9 +106,8 @@ export class PlayModesScene implements UIScene {
         this.cardImages = {};
     }
 
-    private onResize = () => {
-        const canvas = document.getElementById('ui-stage') as HTMLCanvasElement;
-        this.setupLayout(canvas.width, canvas.height);
+    public onResize(width: number, height: number) {
+        this.setupLayout(width, height);
     }
 
     private onWheel = (e: WheelEvent) => {

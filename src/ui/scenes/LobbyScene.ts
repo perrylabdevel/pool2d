@@ -82,7 +82,7 @@ export class LobbyScene implements UIScene {
         this.setupLayout(this.canvas.width, this.canvas.height);
         this.canvas.addEventListener('mousemove', this.onMouseMove);
         this.canvas.addEventListener('click', this.onClick);
-        window.addEventListener('resize', this.onResize);
+
 
         // ESC key handled globally by SceneController now
         // this.keyHandler = (e: KeyboardEvent) => {
@@ -105,7 +105,7 @@ export class LobbyScene implements UIScene {
         if (!this.canvas) return;
         this.canvas.removeEventListener('mousemove', this.onMouseMove);
         this.canvas.removeEventListener('click', this.onClick);
-        window.removeEventListener('resize', this.onResize);
+
         this.canvas.style.cursor = 'default';
 
         if (this.keyHandler) {
@@ -115,10 +115,10 @@ export class LobbyScene implements UIScene {
         this.cardImages = {};
     }
 
-    private onResize = () => {
+    public onResize(width: number, height: number) {
         if (!this.canvas) return;
-        this.setupLayout(this.canvas.width, this.canvas.height);
-    };
+        this.setupLayout(width, height);
+    }
 
     private setupLayout(width: number, height: number) {
         sceneController.focusManager.clear();

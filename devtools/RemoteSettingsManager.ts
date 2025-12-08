@@ -153,6 +153,19 @@ export class RemoteSettingsManager extends EventTarget {
         this.sendMessage({ type: 'command', command, payload });
     }
 
+    getFullState() {
+        return {
+            geometry: this.geometrySettings,
+            render: this.renderSettings,
+            modernGeometry: this.modernGeometrySettings,
+            audio: this.audioSettings,
+            game: this.gameSettings,
+            uiColors: this.uiColors,
+            tableAppearance: this.tableAppearance,
+            physics: this.physicsSettings,
+        };
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private handleMessage(message: any) {
         switch (message.type) {
@@ -211,6 +224,9 @@ export class RemoteSettingsManager extends EventTarget {
                 this.physicsSettings = { ...this.physicsSettings, ...message.payload };
                 window.dispatchEvent(new CustomEvent('settings:physics-changed', { detail: { settings: this.physicsSettings } }));
                 this.dispatchEvent(new Event('state-updated'));
+                break;
+            case 'build:ios:status':
+                this.dispatchEvent(new CustomEvent('build:ios:status', { detail: message }));
                 break;
             case 'playbackUpdate':
                 window.dispatchEvent(new CustomEvent(`playback:${message.kind}Update`, { detail: message.value }));

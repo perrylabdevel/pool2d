@@ -44,7 +44,7 @@ export class ClubSelectionScene implements UIScene {
         if (!this.canvas) return;
 
         this.loadData();
-        this.updateLayout();
+        this.onResize(this.canvas.width, this.canvas.height);
 
         this.canvas.addEventListener('mousemove', this.onMouseMove);
         this.canvas.addEventListener('click', this.onClick);
@@ -52,7 +52,6 @@ export class ClubSelectionScene implements UIScene {
         this.canvas.addEventListener('touchstart', this.onTouchStart, { passive: true });
         this.canvas.addEventListener('touchmove', this.onTouchMove, { passive: true });
         this.canvas.addEventListener('touchend', this.onTouchEnd);
-        window.addEventListener('resize', this.updateLayout);
     }
 
     unmount(): void {
@@ -63,7 +62,7 @@ export class ClubSelectionScene implements UIScene {
         this.canvas.removeEventListener('touchstart', this.onTouchStart);
         this.canvas.removeEventListener('touchmove', this.onTouchMove);
         this.canvas.removeEventListener('touchend', this.onTouchEnd);
-        window.removeEventListener('resize', this.updateLayout);
+
         this.canvas.style.cursor = 'default';
     }
 
@@ -77,10 +76,8 @@ export class ClubSelectionScene implements UIScene {
         }
     }
 
-    private updateLayout = () => {
+    public onResize(width: number, height: number) {
         if (!this.canvas) return;
-        const width = this.canvas.width;
-        const height = this.canvas.height;
         const navHeight = this.navigationBar.getHeight();
 
         // Calculate total width of all cards + gaps
@@ -100,7 +97,7 @@ export class ClubSelectionScene implements UIScene {
         };
 
         this.navigationBar.setupLayout(width);
-    };
+    }
 
     private hoveredClubIndex: number = -1;
 
@@ -128,7 +125,7 @@ export class ClubSelectionScene implements UIScene {
             const gap = 20;
             const startY = this.layout.listRect.y + (this.layout.listRect.height - cardHeight) / 2;
 
-            CLUBS.forEach((club, index) => {
+            CLUBS.forEach((_club, index) => {
                 const cardX = gap + index * (cardWidth + gap) - this.scrollOffset;
 
                 if (x >= cardX && x <= cardX + cardWidth &&

@@ -24,14 +24,14 @@ export class CustomizationScene implements UIScene {
   private canvas: HTMLCanvasElement | null = null;
   private settingsManager: SettingsManager;
   private navigationBar: NavigationBar;
-  
+
   private activeTab: CustomTab = 'themes';
   private tabButtons: TabButton[] = [];
   private themeCards: ThemeCard[] = [];
   private colorControls: ColorControl[] = [];
   private sliderControls: SliderControl[] = [];
   private selectControls: SelectControl[] = [];
-  
+
   private hoveredTab: TabButton | null = null;
   private hoveredTheme: ThemeCard | null = null;
   private hoveredColor: ColorControl | null = null;
@@ -54,8 +54,7 @@ export class CustomizationScene implements UIScene {
   mount(): void {
     this.canvas = document.getElementById('ui-stage') as HTMLCanvasElement;
     if (!this.canvas) return;
-    this.navigationBar.setupLayout(this.canvas.width);
-    this.setupLayout(this.canvas.width);
+    this.onResize(this.canvas.width, this.canvas.height);
     this.canvas.addEventListener('mousemove', this.onMouseMove);
     this.canvas.addEventListener('mousedown', this.onMouseDown);
     this.canvas.addEventListener('mouseup', this.onMouseUp);
@@ -70,9 +69,10 @@ export class CustomizationScene implements UIScene {
     this.canvas?.removeEventListener('click', this.onClick);
   }
 
-  update(_dt: number): void {}
+  update(_dt: number): void { }
 
-  private setupLayout(width: number): void {
+  public onResize(width: number, _height: number) {
+    this.navigationBar.setupLayout(width);
     const navHeight = this.navigationBar.getHeight();
     const tabHeight = 40;
     const tabWidth = 90;
@@ -254,7 +254,12 @@ export class CustomizationScene implements UIScene {
 
     if (this.hoveredTab) {
       this.activeTab = this.hoveredTab.id;
-      this.setupTabContent(this.canvas!.width, this.tabButtons[0].rect.y + this.tabButtons[0].rect.height + 20);
+      // Re-run setupTabContent. Since onResize calls it, we can just call onResize or directly setupTabContent if we have width.
+      // But we need to recalculate top position which is done in onResize.
+      // Easiest is to call onResize to refresh everything.
+      if (this.canvas) {
+        this.onResize(this.canvas.width, this.canvas.height);
+      }
       this.render();
       return;
     }

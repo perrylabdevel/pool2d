@@ -3,7 +3,7 @@ import { UIScene } from '../SceneController';
 import { uiStateMachine, UIState } from '../UIStateMachine';
 import { ColorTokens, SemanticColors } from '../theme/ColorTokens';
 import { LayoutConstants } from '../theme/LayoutConstants';
-import { drawGlossyButton, drawRoundedRect, Rect } from '../components/UIComponents';
+import { drawGlossyButton, Rect } from '../components/UIComponents';
 
 interface MenuButton {
     id: 'resume' | 'settings' | 'quit';
@@ -59,7 +59,7 @@ export class InGameMenuScene implements UIScene {
         this.setupButtons(this.canvas.width, this.canvas.height);
         this.canvas.addEventListener('mousemove', this.onMouseMove);
         this.canvas.addEventListener('click', this.onClick);
-        window.addEventListener('resize', this.onResize);
+
 
         // ESC key to resume game
         this.keyHandler = (e: KeyboardEvent) => {
@@ -77,7 +77,7 @@ export class InGameMenuScene implements UIScene {
         if (!this.canvas) return;
         this.canvas.removeEventListener('mousemove', this.onMouseMove);
         this.canvas.removeEventListener('click', this.onClick);
-        window.removeEventListener('resize', this.onResize);
+
 
         if (this.keyHandler) {
             window.removeEventListener('keydown', this.keyHandler);
@@ -88,10 +88,9 @@ export class InGameMenuScene implements UIScene {
         this.canvas = null;
     }
 
-    private onResize = () => {
-        if (!this.canvas) return;
-        this.setupButtons(this.canvas.width, this.canvas.height);
-    };
+    public onResize(width: number, height: number) {
+        this.setupButtons(width, height);
+    }
 
     private onMouseMove = (e: MouseEvent) => {
         if (!this.canvas) return;

@@ -95,7 +95,7 @@ export class ShopScene implements UIScene {
         this.canvas.addEventListener('wheel', this.onWheel, { passive: true });
         this.canvas.addEventListener('touchstart', this.onTouchStart, { passive: true });
         this.canvas.addEventListener('touchmove', this.onTouchMove, { passive: true });
-        window.addEventListener('resize', this.onResize);
+
     }
 
     unmount(): void {
@@ -105,7 +105,7 @@ export class ShopScene implements UIScene {
         this.canvas.removeEventListener('wheel', this.onWheel);
         this.canvas.removeEventListener('touchstart', this.onTouchStart);
         this.canvas.removeEventListener('touchmove', this.onTouchMove);
-        window.removeEventListener('resize', this.onResize);
+
         this.canvas.style.cursor = 'default';
     }
 
@@ -176,10 +176,9 @@ export class ShopScene implements UIScene {
         this.scrollOffset = Math.min(this.scrollOffset, this.maxScroll);
     };
 
-    private onResize = () => {
-        if (!this.canvas) return;
-        this.updateLayout(this.canvas.width, this.canvas.height);
-    };
+    public onResize(width: number, height: number) {
+        this.updateLayout(width, height);
+    }
 
     private onWheel = (e: WheelEvent) => {
         if (!this.contentRect) return;

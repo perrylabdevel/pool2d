@@ -27,24 +27,21 @@ export class ConfirmScene implements UIScene {
     mount(): void {
         this.canvas = document.getElementById('ui-stage') as HTMLCanvasElement;
         if (!this.canvas) return;
-        this.updateLayout();
+        this.onResize(this.canvas.width, this.canvas.height);
         this.canvas.addEventListener('mousemove', this.onMouseMove);
         this.canvas.addEventListener('click', this.onClick);
-        window.addEventListener('resize', this.updateLayout);
     }
 
     unmount(): void {
         if (!this.canvas) return;
         this.canvas.removeEventListener('mousemove', this.onMouseMove);
         this.canvas.removeEventListener('click', this.onClick);
-        window.removeEventListener('resize', this.updateLayout);
+
         this.canvas.style.cursor = 'default';
     }
 
-    private updateLayout = () => {
+    public onResize(width: number, height: number) {
         if (!this.canvas) return;
-        const width = this.canvas.width;
-        const height = this.canvas.height;
 
         const buttonWidth = 140;
         const buttonHeight = 50;
@@ -67,7 +64,7 @@ export class ConfirmScene implements UIScene {
                 rect: { x: startX + buttonWidth + gap, y: startY, width: buttonWidth, height: buttonHeight }
             }
         ];
-    };
+    }
 
     private onMouseMove = (e: MouseEvent) => {
         if (!this.canvas) return;
@@ -100,7 +97,7 @@ export class ConfirmScene implements UIScene {
         }
     };
 
-    update(_dt: number): void {}
+    update(_dt: number): void { }
 
     render(ctx: CanvasRenderingContext2D): void {
         const width = ctx.canvas.width;
@@ -172,7 +169,7 @@ export class ConfirmScene implements UIScene {
 
         // Update button labels
         if (this.canvas) {
-            this.updateLayout();
+            this.onResize(this.canvas.width, this.canvas.height);
         }
     }
 }

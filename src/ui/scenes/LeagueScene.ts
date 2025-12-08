@@ -42,14 +42,7 @@ export class LeagueScene implements UIScene {
         if (!this.canvas) return;
 
         this.loadData();
-        this.updateLayout();
-
-        this.canvas.addEventListener('mousemove', this.onMouseMove);
-        this.canvas.addEventListener('click', this.onClick);
-        this.canvas.addEventListener('wheel', this.onWheel, { passive: true });
-        this.canvas.addEventListener('touchstart', this.onTouchStart, { passive: true });
-        this.canvas.addEventListener('touchmove', this.onTouchMove, { passive: true });
-        window.addEventListener('resize', this.updateLayout);
+        this.onResize(this.canvas.width, this.canvas.height);
     }
 
     unmount(): void {
@@ -59,7 +52,7 @@ export class LeagueScene implements UIScene {
         this.canvas.removeEventListener('wheel', this.onWheel);
         this.canvas.removeEventListener('touchstart', this.onTouchStart);
         this.canvas.removeEventListener('touchmove', this.onTouchMove);
-        window.removeEventListener('resize', this.updateLayout);
+
         this.canvas.style.cursor = 'default';
     }
 
@@ -71,10 +64,8 @@ export class LeagueScene implements UIScene {
         }
     }
 
-    private updateLayout = () => {
+    public onResize(width: number, height: number) {
         if (!this.canvas) return;
-        const width = this.canvas.width;
-        const height = this.canvas.height;
         const gap = LayoutConstants.Spacing.GapMedium;
         const paddingX = width * LayoutConstants.Spacing.PaddingScreen;
         const contentWidth = width - paddingX * 2;
@@ -100,7 +91,7 @@ export class LeagueScene implements UIScene {
         };
 
         this.navigationBar.setupLayout(width);
-    };
+    }
 
     private onMouseMove = (e: MouseEvent) => {
         if (!this.canvas) return;

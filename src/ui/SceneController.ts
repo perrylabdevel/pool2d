@@ -26,6 +26,7 @@ export interface UIScene {
     unmount(): void;
     update(dt: number): void;
     render(ctx: CanvasRenderingContext2D): void;
+    onResize?(width: number, height: number): void;
 }
 
 // Re-export TransitionType for backward compatibility
@@ -212,6 +213,15 @@ export class SceneController {
             this.canvas.height = height;
             this.canvas.style.width = `${width}px`;
             this.canvas.style.height = `${height}px`;
+
+            // Notify current scene of resize
+            if (this.currentScene && this.currentScene.onResize) {
+                this.currentScene.onResize(width, height);
+            }
+            // Also notify next scene if transitioning
+            if (this.isTransitioning && this.nextScene && this.nextScene.onResize) {
+                this.nextScene.onResize(width, height);
+            }
         };
         window.addEventListener('resize', resize);
 

@@ -129,7 +129,7 @@ export class SettingsScene implements UIScene {
         this.canvas.addEventListener('wheel', this.onWheel, { passive: true });
         this.canvas.addEventListener('touchstart', this.onTouchStart, { passive: true });
         this.canvas.addEventListener('touchmove', this.onTouchMove, { passive: true });
-        window.addEventListener('resize', this.onResize);
+
 
         this.keyHandler = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
@@ -148,7 +148,7 @@ export class SettingsScene implements UIScene {
         this.canvas.removeEventListener('wheel', this.onWheel);
         this.canvas.removeEventListener('touchstart', this.onTouchStart);
         this.canvas.removeEventListener('touchmove', this.onTouchMove);
-        window.removeEventListener('resize', this.onResize);
+
 
         if (this.keyHandler) {
             window.removeEventListener('keydown', this.keyHandler);
@@ -435,10 +435,9 @@ export class SettingsScene implements UIScene {
         ];
     }
 
-    private onResize = () => {
-        if (!this.canvas) return;
-        this.setupLayout(this.canvas.width, this.canvas.height);
-    };
+    public onResize(width: number, height: number) {
+        this.setupLayout(width, height);
+    }
 
     private onWheel = (e: WheelEvent) => {
         if (!this.contentRect) return;

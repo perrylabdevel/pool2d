@@ -12,12 +12,10 @@ import { NavigationBar } from '../components/NavigationBar';
 import { drawSceneBackground } from '../components/SceneBackground';
 import { AssetRegistry } from '../../assets/AssetRegistry';
 import { AssetLoader } from '../../assets/AssetLoader';
-import { OPPONENTS, getOpponentsByLeague } from '../../ai/OpponentRegistry';
 import { OpponentDef } from '../../data/models';
 import { db } from '../../data/db';
 import { getLeagueById } from '../../game/leagues/LeagueSystem';
-import { Game, GameMode } from '../../game/Game';
-import { currencyStore } from '../CurrencyStore';
+import { Game } from '../../game/Game';
 
 interface PreviewButton {
     id: 'play' | 'change';
@@ -57,14 +55,14 @@ export class OpponentPreviewScene implements UIScene {
 
         this.canvas.addEventListener('mousemove', this.onMouseMove);
         this.canvas.addEventListener('click', this.onClick);
-        window.addEventListener('resize', this.onResize);
+
     }
 
     unmount(): void {
         if (!this.canvas) return;
         this.canvas.removeEventListener('mousemove', this.onMouseMove);
         this.canvas.removeEventListener('click', this.onClick);
-        window.removeEventListener('resize', this.onResize);
+
         this.canvas.style.cursor = 'default';
         this.opponentAvatar = null;
     }
@@ -127,9 +125,28 @@ export class OpponentPreviewScene implements UIScene {
         return getter ? getter() : AssetRegistry.avatars.default();
     }
 
-    private onResize = () => {
+    public onResize(_width: number, _height: number) {
         this.setupLayout();
-    };
+    }
+
+    private selectRandomOpponent() {
+        // Fallback default opponent
+        this.selectedOpponent = {
+            id: 'bot_rookie',
+            name: 'Rookie Rick',
+            avatarId: 'avatar_rookie_rick',
+            leagueId: 'bronze_1',
+            bio: 'Ready to learn!',
+            stats: {
+                accuracy: 0.4,
+                consistency: 0.5,
+                aggression: 0.3,
+                speed: 0.5,
+                spinControl: 0.2
+            },
+            difficulty: 0.3
+        };
+    }
 
     private setupLayout() {
         if (!this.canvas) return;
