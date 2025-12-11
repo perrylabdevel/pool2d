@@ -7,27 +7,31 @@ export const CONFIG = {
   PHYSICS_DT: 1 / 120, // Fixed timestep (120 Hz)
   MAX_SUBSTEPS: 10,
   SOLVER_ITERATIONS: 15,
-  
+
   // Table dimensions (9-ft table: 100" x 50" play area)
   // NOTE: Actual geometry defined in src/geometry/Geometry.ts
   TABLE_WIDTH: 100, // inches (full width, for legacy compat)
   TABLE_HEIGHT: 50,  // inches (full height, for legacy compat)
-  RAIL_THICKNESS_INNER: 0.2, // inward extension toward play area (inches)
+  RAIL_THICKNESS_INNER: 0, // Ignored by SVG
+
+  // Experimental: SVG Geometry Override
+  USE_SVG_GEOMETRY: true,
+  SVG_PATH: '/assets/tmp/table.svg', // Informational, used by loader if async
   RAIL_THICKNESS_OUTER: 0.2, // outward extension toward frame (inches)
-  
+
   // Ball properties
   BALL_BASE_RADIUS: 2.25 / 2, // 2.25" diameter baseline
   BALL_RADIUS: 2.25 / 2,
   BALL_MASS: 1.0,
   BALL_RESTITUTION: 0.93, // Ball-ball
   CUSHION_RESTITUTION: 0.88, // Ball-cushion
-  
+
   // Friction - balanced for 10x velocity multiplier
   ROLLING_FRICTION: 0.62, // Slightly higher for heavier rolling feel (tuned for 10x velocity)
   SLIDING_FRICTION: 0.65, // Ball-table friction
   BALL_BALL_FRICTION: 0.01, // Reduced for more realistic smooth ball surfaces (phenolic resin)
   VELOCITY_EPSILON: 0.2, // Sleep threshold adjusted for 10x velocity scale
-  
+
   // Pockets (center-origin coordinates: see Geometry.ts for authoritative definitions)
   POCKET_RADIUS: 2.5,
   POCKET_CAPTURE_RADIUS_CORNER: 2.5,
@@ -36,7 +40,7 @@ export const CONFIG = {
   POCKET_VISUAL_RADIUS_SIDE: 2.5,
   POCKET_SHELF_DEPTH_IN: 1.5, // Slider range 0-3, default at 50% depth
   POCKET_SHELF_DEPTH_SIDE_IN: 0.75, // Proportionally adjusted
-  
+
   // Cue
   CUE_POWER_MIN: 0.5,
   CUE_POWER_MAX: 25.0, // Power bar range
@@ -84,7 +88,7 @@ export const CONFIG = {
   POCKET_CAPTURE_GRAVITY: 60, // extra in/s^2 acceleration toward center for fast captures
   HEAVY_SHOT_SHAKE_MAX_OFFSET_PX: 0,
   HEAVY_SHOT_SHAKE_DURATION_MS: 0,
-  
+
   // Rendering
   CANVAS_SCALE: 8, // Pixels per game unit
   CANVAS_SCALE_MULTIPLIER: 1,
@@ -121,7 +125,7 @@ export const CONFIG = {
   ],
   CUE_BALL_MEASLE_RADIUS_RATIO: 0.12,
   CUE_BALL_MEASLE_COLOR: '#c62828',
-  
+
   BALL_COLORS: [
     '#ffff00', // 1 - yellow (solid)
     '#0000ff', // 2 - blue (solid)
@@ -139,20 +143,20 @@ export const CONFIG = {
     '#008000', // 14 - green (stripe)
     '#8b0000', // 15 - maroon (stripe)
   ],
-  
+
   // Debug
   DEBUG_DRAW_NORMALS: true,
   DEBUG_DRAW_VELOCITIES: true,
   DEBUG_DRAW_AABB: true,
   DEBUG_DRAW_CONTACTS: true,
-  
+
   // Performance
   TARGET_FPS: 60,
-  
+
   // Game rules
   BREAK_SPEED_THRESHOLD: 5.0, // Minimum speed for legal break
   BALL_IN_HAND_ANYWHERE: false, // 8-ball: behind head string only on break
-  
+
   // Geometry tuning
   FRAME_OFFSET_IN: 4.0, // Outer frame offset from play area (in)
   FRAME_CORNER_RADIUS_IN: 0.0, // Outer frame corner radius (0 = square)

@@ -1,7 +1,11 @@
+
 // Geometry Contract: Authoritative coordinate system and table layout
 // Origin (0,0) at play-area center; +X right (East), +Y up (North/head)
 
 import { CONFIG } from '../config';
+import { parseSVG } from '../editor/utils/svgUtils';
+import tableSvg from '../../public/assets/tmp/table.svg?raw'; // Import default SVG raw content
+
 
 export interface Vec2 {
   x: number;
@@ -58,24 +62,36 @@ export interface TableGeometry {
   rails: RailDef[];
   frameOutline: FrameOutline;
   pockets: PocketDef[];
+  // New properties for SVG-based geometry, or procedural fallbacks
+  cornerPocketWidthIn: number;
+  cornerPocketDepthIn: number;
+  cornerPocketRadiusIn: number;
+  sidePocketWidthIn: number;
+  sidePocketDepthIn: number;
+  sidePocketRadiusIn: number;
+  cornerJawRadiusIn: number;
+  sideJawRadiusIn: number;
 }
 
 export function computePlayBoundaryPoints(rails: RailDef[]): Vec2[] {
-  if (!rails.length) {
-    return [];
+  let points: Vec2[] = [];
+  if (rails.length === 0) return points;
+
+  // Extract points (start of each rail segment)
+  points = rails.map(r => r.from);
+
+  // Robustly sort points to form a valid polygon for the play area (felt).
+  // This handles both ordered procedural rails and potentially disordered SVG rail segments.
+  // We sort CCW around the centroid.
+  if (points.length > 0) {
+    const centerX = points.reduce((s, p) => s + p.x, 0) / points.length;
+    const centerY = points.reduce((s, p) => s + p.y, 0) / points.length;
+
+    points.sort((a, b) => {
+      return Math.atan2(a.y - centerY, a.x - centerX) - Math.atan2(b.y - centerY, b.x - centerX);
+    });
   }
 
-  const points: Vec2[] = [];
-  points.push({ x: rails[0].from.x, y: rails[0].from.y });
-  rails.forEach((rail, index) => {
-    const point = { x: rail.to.x, y: rail.to.y };
-    const first = points[0];
-    const isClosing =
-      index === rails.length - 1 && Math.abs(point.x - first.x) < 1e-6 && Math.abs(point.y - first.y) < 1e-6;
-    if (!isClosing) {
-      points.push(point);
-    }
-  });
   return points;
 }
 
@@ -84,11 +100,13 @@ export interface BoundaryBounds {
   maxX: number;
   minY: number;
   maxY: number;
+  width: number;
+  height: number;
 }
 
 export function computeBoundaryBounds(points: Vec2[]): BoundaryBounds {
   if (!points.length) {
-    return { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+    return { minX: 0, maxX: 0, minY: 0, maxY: 0, width: 0, height: 0 };
   }
 
   let minX = points[0].x;
@@ -104,7 +122,11 @@ export function computeBoundaryBounds(points: Vec2[]): BoundaryBounds {
     if (y > maxY) maxY = y;
   }
 
-  return { minX, maxX, minY, maxY };
+  return {
+    minX, maxX, minY, maxY,
+    width: maxX - minX,
+    height: maxY - minY
+  };
 }
 
 const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
@@ -240,7 +262,7 @@ function deriveSideJawXMagnitudes(
   const maxOuterSafe = Math.max(1, Math.min(maxOuter, PLAY_HALF_W_IN - 1));
   const xOuterClamped = clampPos(isFinite(xOuter) ? xOuter : 6.0, 0.5, maxOuterSafe);
   const xInnerClamped = clampPos(isFinite(xInner) ? xInner : 2.5, 0.25, xOuterClamped - 0.25);
-  
+
   return { xOuter: xOuterClamped, xInner: xInnerClamped };
 }
 
@@ -255,19 +277,19 @@ function deriveCornerJawX(
   const r = referenceRadius;
   const under = Math.max(0, r * r - f * f);
   const xi = Math.sqrt(under);
-  
+
   if (!(xi > 1e-6)) {
     return 46.0; // Fallback to current geometry
   }
-  
+
   // Tangent line from frame edge inward toward straight section
   // Pocket at (50, 25), tangent contact on frame, line goes to (x, 23.5)
   const yFrame = PLAY_HALF_H_IN + f; // 29.0
-  
+
   // Parameter along tangent line to reach Y_N_STRAIGHT
   const s = (yFrame - straightY) / xi;
   const xCorner = PLAY_HALF_W_IN - xi + f * s;
-  
+
   const xClamped = Number.isFinite(xCorner) && xCorner > 0.01 ? xCorner : 46.0;
   return xClamped;
 }
@@ -283,16 +305,16 @@ function deriveCornerJawY(
   const r = referenceRadius;
   const under = Math.max(0, r * r - f * f);
   const xi = Math.sqrt(under);
-  
+
   if (!(xi > 1e-6)) {
     return fallbackY; // Fallback to current geometry
   }
-  
+
   // Parameter along tangent line to reach X_E_STRAIGHT (48.5)
   const xFrame = PLAY_HALF_W_IN + f; // 54.0
   const s = (xFrame - straightX) / xi;
   const yCorner = PLAY_HALF_H_IN - xi + f * s;
-  
+
   const yClamped = Number.isFinite(yCorner) && yCorner > 0.01 ? yCorner : fallbackY;
   return yClamped;
 }
@@ -505,9 +527,131 @@ function computeBaseCoordinates(jawPositions: JawPositions): BaseCoordinates {
   };
 }
 
+let cachedSVGGeometry: TableGeometry | null = null;
+
 export function getTableGeometry(): TableGeometry {
-  // Compute jaw positions for side and corner pockets
+  // 1. Check if SVG Geometry is enabled
+  if (CONFIG.USE_SVG_GEOMETRY) {
+    if (cachedSVGGeometry) return cachedSVGGeometry;
+
+    try {
+      // Parse the SVG (using the imported raw string or fetch if we were async, 
+      // but Geometry is synchronous, so we rely on build-time import or pre-fetched content).
+      // For this implementation, we use the imported 'tableSvg' string.
+      // In a real game, this might need to be async or pre-loaded.
+      const parsed = parseSVG(tableSvg);
+
+      if (parsed.rails && parsed.pockets) {
+        // RE-IMPLEMENTATION with actual vector logic
+        // We need Vector2 helper or just basic math.
+        const computeNormal = (from: { x: number, y: number }, to: { x: number, y: number }) => {
+          const dx = to.x - from.x;
+          const dy = to.y - from.y;
+          const len = Math.sqrt(dx * dx + dy * dy);
+          if (len === 0) return { x: 0, y: 0 }; // Avoid division by zero
+          // Righthand normal: (-dy, dx)
+          // We need inward normal, so check direction relative to table center (0,0)
+          let nx = -dy / len;
+          let ny = dx / len;
+          const midX = (from.x + to.x) * 0.5;
+          const midY = (from.y + to.y) * 0.5;
+          const dotToCenter = nx * -midX + ny * -midY; // Vector from mid to center is (-midX, -midY)
+          if (dotToCenter < 0) { // If normal points away from center, flip it
+            nx = -nx;
+            ny = -ny;
+          }
+          return { x: nx, y: ny };
+        };
+
+        const processedRails: RailDef[] = [];
+        parsed.rails.forEach(r => {
+          const pts = r.points;
+          if (pts.length < 2) return;
+
+          // Treat as polygon loop
+          const isClosed = true; // Assume cushions are closed shapes
+          const limit = isClosed ? pts.length : pts.length - 1;
+
+          for (let i = 0; i < limit; i++) {
+            const p1 = pts[i];
+            const p2 = pts[(i + 1) % pts.length];
+            const normal = computeNormal(p1, p2);
+
+            // Heuristic: Only keep inward facing rails? 
+            // Or just keep all. Wall bounce logic handles "inside" well usually.
+            // Let's keep all for robustness.
+            processedRails.push({
+              id: `${r.id}_s${i}`,
+              from: { x: p1.x, y: p1.y }, // Ensure Vec2 format match
+              to: { x: p2.x, y: p2.y },
+              normal: { x: normal.x, y: normal.y } // Geometry expects Vec2
+            });
+          }
+        });
+
+        const processedPockets: PocketDef[] = parsed.pockets.map(p => ({
+          id: p.id,
+          center: { x: p.center.x, y: p.center.y },
+          visualRadius: p.radius, // Visual radius
+          captureRadius: p.radius * 1.1, // Default capture slightly larger
+          cutNormalHint: { x: 0, y: 0 }, // SVG doesn't provide this directly, default to 0
+          cutAngleDeg: 0, // Default
+          shelfDepth: 0, // Default
+          radius: p.radius, // Legacy alias
+        }));
+
+        // For SVG, frameOutline is not directly parsed from the SVG content itself,
+        // but rather the rails define the play area. We can create a dummy or
+        // derive it from the rail bounds if needed, but for now, use a default.
+        const defaultFrameOutline: FrameOutline = {
+          outerHalfWidth: PLAY_HALF_W_IN + 5,
+          outerHalfHeight: PLAY_HALF_H_IN + 5,
+          innerHalfWidth: PLAY_HALF_W_IN,
+          innerHalfHeight: PLAY_HALF_H_IN,
+          cornerRadius: 0,
+          corners: {
+            northWest: { horizontal: { x: -PLAY_HALF_W_IN, y: PLAY_HALF_H_IN }, vertical: { x: -PLAY_HALF_W_IN, y: PLAY_HALF_H_IN } },
+            northEast: { horizontal: { x: PLAY_HALF_W_IN, y: PLAY_HALF_H_IN }, vertical: { x: PLAY_HALF_W_IN, y: PLAY_HALF_H_IN } },
+            southEast: { horizontal: { x: PLAY_HALF_W_IN, y: -PLAY_HALF_H_IN }, vertical: { x: PLAY_HALF_W_IN, y: -PLAY_HALF_H_IN } },
+            southWest: { horizontal: { x: -PLAY_HALF_W_IN, y: -PLAY_HALF_H_IN }, vertical: { x: -PLAY_HALF_W_IN, y: -PLAY_HALF_H_IN } },
+          }
+        };
+
+        cachedSVGGeometry = {
+          playWidthIn: 100, // Derived from scale, but config says 100
+          playHeightIn: 50,
+          cushionProfileIn: 0, // Not relevant for vector rails
+          rails: processedRails,
+          pockets: processedPockets,
+          frameOutline: defaultFrameOutline, // Use a default or derive from SVG bounds
+          // Default/fallback values for pocket dimensions not directly in SVG
+          pocketCaptureRadiusIn: 2.25,
+          cornerPocketCaptureRadiusIn: 2.25,
+          sidePocketCaptureRadiusIn: 2.5,
+          cornerPocketVisualRadiusIn: 2.25,
+          sidePocketVisualRadiusIn: 2.5,
+          pocketShelfDepthIn: 0,
+          cornerPocketWidthIn: 4.5, // Fallback
+          cornerPocketDepthIn: 0,
+          cornerPocketRadiusIn: 2.25,
+          sidePocketWidthIn: 5,
+          sidePocketDepthIn: 0,
+          sidePocketRadiusIn: 2.25,
+          cornerJawRadiusIn: 0,
+          sideJawRadiusIn: 0,
+        };
+
+        console.log(`[Geometry] Loaded ${processedRails.length} rails and ${processedPockets.length} pockets from SVG.`);
+        return cachedSVGGeometry;
+      }
+    } catch (e) {
+      console.error("Failed to load SVG geometry, falling back to procedural:", e);
+    }
+  }
+
+  // 2. Procedural Fallback (Original Code)
   const jawPositions = computeJawPositions();
+
   const {
     JAW_X_OUTER,
     JAW_X_INNER,
@@ -777,6 +921,14 @@ export function getTableGeometry(): TableGeometry {
     cornerPocketVisualRadiusIn: CONFIG.POCKET_VISUAL_RADIUS_CORNER,
     sidePocketVisualRadiusIn: CONFIG.POCKET_VISUAL_RADIUS_SIDE,
     pocketShelfDepthIn: CONFIG.POCKET_SHELF_DEPTH_IN,
+    cornerPocketWidthIn: 4.5,
+    cornerPocketDepthIn: 0,
+    cornerPocketRadiusIn: CONFIG.POCKET_VISUAL_RADIUS_CORNER,
+    sidePocketWidthIn: 5,
+    sidePocketDepthIn: 0,
+    sidePocketRadiusIn: CONFIG.POCKET_VISUAL_RADIUS_SIDE,
+    cornerJawRadiusIn: CONFIG.CORNER_JAW_REF_RADIUS_IN,
+    sideJawRadiusIn: CONFIG.JAW_REF_RADIUS_IN,
 
     // Rails approximating WPA throat geometry, normals point inward
     // Corner rails stop short of pocket centers to leave openings
@@ -859,19 +1011,19 @@ export class CoordinateTransform {
   private scale: number;
   private canvasCenterX: number;
   private canvasCenterY: number;
-  
+
   constructor(scale: number, canvasCenterX: number, canvasCenterY: number) {
     this.scale = scale;
     this.canvasCenterX = canvasCenterX;
     this.canvasCenterY = canvasCenterY;
   }
-  
+
   updateScale(scale: number, canvasCenterX: number, canvasCenterY: number) {
     this.scale = scale;
     this.canvasCenterX = canvasCenterX;
     this.canvasCenterY = canvasCenterY;
   }
-  
+
   // World (Y-up, center origin) to Canvas (Y-down, top-left origin)
   worldToCanvas(world: Vec2): CanvasPoint {
     return {
@@ -879,7 +1031,7 @@ export class CoordinateTransform {
       y: this.canvasCenterY - this.scale * world.y // Flip Y
     };
   }
-  
+
   // Canvas to World
   canvasToWorld(canvas: CanvasPoint): Vec2 {
     return {
@@ -887,13 +1039,64 @@ export class CoordinateTransform {
       y: -(canvas.y - this.canvasCenterY) / this.scale // Flip Y
     };
   }
-  
+
   // Transform a distance (no translation, just scale)
   worldDistanceToCanvas(worldDist: number): number {
     return this.scale * worldDist;
   }
-  
+
   canvasDistanceToWorld(canvasDist: number): number {
     return canvasDist / this.scale;
   }
+}
+
+export function computePlayBoundaryPoints(rails: RailDef[]): Vec2[] {
+  let points: Vec2[] = [];
+  if (rails.length === 0) return points;
+
+  // Extract points
+  points = rails.map(r => r.from);
+
+  // Sort by angle to ensure valid polygon shape for rendering (Approximation for generic/SVG tables)
+  // Logic: Sort CCW around the centroid
+  if (points.length > 0) {
+    const centerX = points.reduce((s, p) => s + p.x, 0) / points.length;
+    const centerY = points.reduce((s, p) => s + p.y, 0) / points.length;
+
+    points.sort((a, b) => {
+      return Math.atan2(a.y - centerY, a.x - centerX) - Math.atan2(b.y - centerY, b.x - centerX);
+    });
+  }
+
+  return points;
+}
+
+export interface BoundaryBounds {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+  width: number;
+  height: number;
+}
+
+export function computeBoundaryBounds(points: Vec2[]): BoundaryBounds {
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  points.forEach(p => {
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.y > maxY) maxY = p.y;
+  });
+
+  // Handle empty case
+  if (points.length === 0) {
+    return { minX: 0, maxX: 0, minY: 0, maxY: 0, width: 0, height: 0 };
+  }
+
+  return {
+    minX, maxX, minY, maxY,
+    width: maxX - minX,
+    height: maxY - minY
+  };
 }
