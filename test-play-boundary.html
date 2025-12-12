@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <title>Play Boundary Debug</title>
@@ -10,12 +11,14 @@
       background: #0b1220;
       color: #e4f5ff;
     }
+
     body {
       margin: 0;
       padding: 24px;
       display: grid;
       gap: 16px;
     }
+
     .panel {
       background: #0f172a;
       border: 1px solid #1f2937;
@@ -23,10 +26,13 @@
       padding: 16px;
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
     }
-    h1, h2 {
+
+    h1,
+    h2 {
       margin: 0 0 8px;
       color: #7dd3fc;
     }
+
     pre {
       background: #0b1220;
       border: 1px solid #1f2937;
@@ -37,6 +43,7 @@
       font-size: 12px;
       line-height: 1.4;
     }
+
     button {
       background: #00e7ff;
       color: #041019;
@@ -46,9 +53,11 @@
       font-weight: 700;
       cursor: pointer;
     }
+
     button:hover {
       background: #2cf0ff;
     }
+
     svg {
       width: 100%;
       height: auto;
@@ -58,12 +67,13 @@
     }
   </style>
 </head>
+
 <body>
   <div class="panel">
-    <h1>Play Boundary Debug (Figma JSON-derived)</h1>
+    <h1>Play Boundary Debug (Physics JSON)</h1>
     <p>
-      This renders the play boundary polygon generated from <code>public/assets/tmp/table.json</code>.
-      It uses the same <code>parseFigmaJSON()</code> and <code>computePlayBoundaryPoints()</code> logic as the game.
+      This renders the play boundary polygon generated from <code>public/assets/tmp/table.physics.json</code>.
+      It uses the same <code>computePlayBoundaryPoints()</code> logic as the game, driven by the SVG→physics converter output.
       Serve via Vite dev server and open <code>/test-play-boundary.html</code> in the browser.
     </p>
     <button id="downloadBtn">Download SVG</button>
@@ -80,8 +90,7 @@
   </div>
 
   <script type="module">
-    import tableJson from '/public/assets/tmp/table.json';
-    import { parseFigmaJSON } from '/src/editor/utils/figmaJsonUtils.ts';
+    import physicsJson from '/public/assets/tmp/table.physics.json';
     import { computePlayBoundaryPoints } from '/src/geometry/Geometry.ts';
 
     const isFiniteVec2 = (p) => Number.isFinite(p?.x) && Number.isFinite(p?.y);
@@ -102,26 +111,117 @@
       return { x: nx, y: ny };
     };
 
-    const toRailSegments = (parsedRails) => {
-      const rails = [];
-      parsedRails.forEach((r) => {
-        const pts = r.points;
-        if (!pts || pts.length < 2) return;
-        const isClosed = pts.length > 2; // 2-point rails are inner faces, not loops
-        const limit = isClosed ? pts.length : pts.length - 1;
-        for (let i = 0; i < limit; i++) {
-          const p1 = pts[i];
-          const p2 = pts[(i + 1) % pts.length];
-          const normal = computeNormal(p1, p2);
-          rails.push({
-            id: `${r.id}_s${i}`,
-            from: { x: p1.x, y: p1.y },
-            to: { x: p2.x, y: p2.y },
-            normal,
-          });
+    const toRailSegments = (rawRails) => {
+      return (rawRails || []).map((r) => {
+        const from = r.from || r.fromPoint || r.points?.[0];
+        const to = r.to || r.toPoint || r.points?.[1];
+        if (!isFiniteVec2(from) || !isFiniteVec2(to)) return null;
+        const normal = isFiniteVec2(r.normal) ? r.normal : computeNormal(from, to);
+        const outline = Array.isArray(r.outline) ? r.outline.filter(isFiniteVec2) : [];
+        return {
+          id: r.id || 'rail',
+          from,
+          to,
+          normal,
+          outline,
+        };
+      }).filter(Boolean);
+    };
+
+    const clampRailToCushions = (rail, cushions) => {
+      const dx = rail.to.x - rail.from.x;
+      const dy = rail.to.y - rail.from.y;
+      const len = Math.hypot(dx, dy);
+      if (len < 1e-4) return rail;
+
+      const intersections = [];
+      const segmentIntersect = (a, b, c, d) => {
+        const den = (a.x - b.x) * (c.y - d.y) - (a.y - b.y) * (c.x - d.x);
+        if (Math.abs(den) < 1e-8) return null; // parallel or colinear
+        const t = ((a.x - c.x) * (c.y - d.y) - (a.y - c.y) * (c.x - d.x)) / den;
+        const u = ((a.x - c.x) * (a.y - b.y) - (a.y - c.y) * (a.x - b.x)) / den;
+        if (t < -1e-4 || t > 1 + 1e-4 || u < -1e-4 || u > 1 + 1e-4) return null;
+        return t;
+      };
+
+      (cushions || []).forEach((c) => {
+        const outline = Array.isArray(c.outline) && c.outline.length > 1 ? c.outline : [c.from, c.to];
+        for (let i = 0; i < outline.length; i++) {
+          const p1 = outline[i];
+          const p2 = outline[(i + 1) % outline.length];
+          if (!isFiniteVec2(p1) || !isFiniteVec2(p2)) continue;
+          const t = segmentIntersect(rail.from, rail.to, p1, p2);
+          if (t != null) intersections.push(t);
         }
       });
-      return rails;
+
+      if (intersections.length < 2) return rail;
+      const minT = Math.max(0, Math.min(...intersections));
+      const maxT = Math.min(1, Math.max(...intersections));
+      if (maxT - minT < 1e-4) return rail;
+      const lerpPoint = (t) => ({
+        x: rail.from.x + dx * t,
+        y: rail.from.y + dy * t,
+      });
+      return { ...rail, from: lerpPoint(minT), to: lerpPoint(maxT) };
+    };
+
+    const splitRailByPockets = (rail, pockets, cushions) => {
+      const clamped = clampRailToCushions(rail, cushions);
+      const dx = clamped.to.x - clamped.from.x;
+      const dy = clamped.to.y - clamped.from.y;
+      const len = Math.hypot(dx, dy);
+      if (len < 1e-4) return [clamped];
+      const ux = dx / len;
+      const uy = dy / len;
+
+      const lerpPoint = (t) => ({
+        x: clamped.from.x + dx * t,
+        y: clamped.from.y + dy * t,
+      });
+
+      const gaps = [];
+      (pockets || []).forEach((p) => {
+        if (!isFiniteVec2(p?.center) || !Number.isFinite(p.radius)) return;
+        const vx = p.center.x - clamped.from.x;
+        const vy = p.center.y - clamped.from.y;
+        const proj = vx * ux + vy * uy; // distance along rail to pocket center
+        const perp = Math.abs(vx * (-uy) + vy * ux); // perpendicular distance
+        const gapLen = Math.max(p.radius * 1.3, 1.0); // slightly larger gap
+        if (proj < -gapLen || proj > len + gapLen) return;
+        if (perp > p.radius * 1.2) return; // pocket not near this rail
+        const t0 = Math.max(0, (proj - gapLen) / len);
+        const t1 = Math.min(1, (proj + gapLen) / len);
+        gaps.push([t0, t1]);
+      });
+
+      if (!gaps.length) return [clamped];
+      gaps.sort((a, b) => a[0] - b[0]);
+      const merged = [];
+      let cur = gaps[0];
+      for (let i = 1; i < gaps.length; i++) {
+        const g = gaps[i];
+        if (g[0] <= cur[1] + 1e-4) {
+          cur[1] = Math.max(cur[1], g[1]);
+        } else {
+          merged.push(cur);
+          cur = g;
+        }
+      }
+      merged.push(cur);
+
+      const segments = [];
+      let cursor = 0;
+      merged.forEach(([s, e]) => {
+        if (s > cursor + 1e-4) {
+          segments.push({ ...clamped, from: lerpPoint(cursor), to: lerpPoint(s) });
+        }
+        cursor = Math.max(cursor, e);
+      });
+      if (cursor < 1 - 1e-4) {
+        segments.push({ ...clamped, from: lerpPoint(cursor), to: lerpPoint(1) });
+      }
+      return segments;
     };
 
     const makePathString = (points, scale, width, height) => {
@@ -139,18 +239,26 @@
     };
 
     const render = () => {
-      const parsed = parseFigmaJSON(tableJson);
-      const rails = toRailSegments(parsed.rails || []);
+      const rails = toRailSegments(physicsJson.rails || []);
+      const cushionRails = rails.filter(r => r.id.includes('cushion'));
       const points = computePlayBoundaryPoints(rails).filter(isFiniteVec2);
-      const pockets = parsed.pockets || [];
+      const pockets = physicsJson.pockets || [];
+      const playArea = physicsJson.playArea;
+
+      // Collect all points for bounds to ensure we see everything
+      const allPoints = [...points];
+      rails.forEach(r => { allPoints.push(r.from); allPoints.push(r.to); });
+      if (playArea?.corners) {
+        playArea.corners.forEach(p => allPoints.push(p));
+      }
 
       // Bounds
       let minX = 0, maxX = 0, minY = 0, maxY = 0;
-      if (points.length) {
-        minX = Math.min(...points.map((p) => p.x));
-        maxX = Math.max(...points.map((p) => p.x));
-        minY = Math.min(...points.map((p) => p.y));
-        maxY = Math.max(...points.map((p) => p.y));
+      if (allPoints.length) {
+        minX = Math.min(...allPoints.map((p) => p.x));
+        maxX = Math.max(...allPoints.map((p) => p.x));
+        minY = Math.min(...allPoints.map((p) => p.y));
+        maxY = Math.max(...allPoints.map((p) => p.y));
       } else {
         minX = -50; maxX = 50; minY = -25; maxY = 25;
       }
@@ -162,46 +270,101 @@
       const widthPx = Math.max(200, widthIn * scale + pad * 2);
       const heightPx = Math.max(200, heightIn * scale + pad * 2);
 
+      const toSvgCoord = (p) => ({
+        x: (p.x * scale + widthPx / 2).toFixed(2),
+        y: (-p.y * scale + heightPx / 2).toFixed(2), // flip Y
+      });
+
       const path = makePathString(points, scale, widthPx, heightPx);
-      const pocketPaths = pockets
-        .map((p, idx) => {
-          const outline = makePathString(p.outline || [], scale, widthPx, heightPx);
-          const cx = (p.center.x * scale + widthPx / 2).toFixed(2);
-          const cy = (-p.center.y * scale + heightPx / 2).toFixed(2);
-          const r = (p.radius * scale).toFixed(2);
-          const stroke = p.sourceTag === 'ellipse' ? '#ff5a5f' : '#ffb347';
-          const fill = p.sourceTag === 'ellipse' ? 'rgba(255,90,95,0.15)' : 'rgba(255,179,71,0.15)';
-          return { id: `${p.id} (${p.sourceTag || 'path'})`, outline, cx, cy, r, stroke, fill };
-        })
-        .filter((p) => p.outline.length || Number.isFinite(parseFloat(p.r)));
-      const svg = `
+
+      // Rails overlay (cushion rails in orange, play_area rails in purple)
+      const railsMarkup = rails.map((r) => {
+        const c = r.id.includes('cushion') ? '#ff9f1c' : '#7c3aed';
+        const subRails = r.id.includes('play_area') ? splitRailByPockets(r, pockets, cushionRails) : [r];
+        const outlinePts = Array.isArray(r.outline) ? r.outline : [];
+        const outline = outlinePts.length > 1
+          ? `<polygon points="${outlinePts.map(p => `${toSvgCoord(p).x},${toSvgCoord(p).y}`).join(' ')}"
+                      fill="rgba(255,159,28,0.25)" stroke="${c}" stroke-width="2"
+                      vector-effect="non-scaling-stroke" />`
+          : '';
+        const outlinePoints = r.id.includes('cushion') && outlinePts.length
+          ? outlinePts.map(p => {
+              const s = toSvgCoord(p);
+              return `<circle cx="${s.x}" cy="${s.y}" r="2.5" fill="#ff9f1c" stroke="#ff9f1c" vector-effect="non-scaling-stroke" />`;
+            }).join('')
+          : '';
+
+        const lines = subRails.map(seg => {
+          const f = toSvgCoord(seg.from);
+          const t = toSvgCoord(seg.to);
+          const marker = r.id.includes('cushion')
+            ? `<circle cx="${f.x}" cy="${f.y}" r="4" fill="${c}" vector-effect="non-scaling-stroke" />
+               <circle cx="${t.x}" cy="${t.y}" r="4" fill="${c}" vector-effect="non-scaling-stroke" />`
+            : '';
+          return `
+            <line x1="${f.x}" y1="${f.y}" x2="${t.x}" y2="${t.y}" stroke="${c}" stroke-width="3" fill="none" stroke-linecap="round" vector-effect="non-scaling-stroke" />
+            ${marker}
+          `;
+        }).join('\n');
+
+        return `
+          ${outline}
+          ${lines}
+          ${outlinePoints}
+        `;
+      }).join('\n');
+
+      // Pocket centers
+      const pocketsMarkup = pockets.map((p) => {
+        const c = toSvgCoord(p.center);
+        const rPx = (p.radius || 0) * scale;
+        return `<circle cx="${c.x}" cy="${c.y}" r="${rPx.toFixed(2)}" fill="none" stroke="#0af" stroke-width="1.5" />`;
+      }).join('\n');
+
+      // Simplified: Only draw play boundary as requested
+  const svg = `
 <svg xmlns="http://www.w3.org/2000/svg" width="${widthPx}" height="${heightPx}" viewBox="0 0 ${widthPx} ${heightPx}">
   <rect x="0" y="0" width="${widthPx}" height="${heightPx}" fill="#0b1220" />
-  <path d="${path}" fill="rgba(0,255,255,0.16)" stroke="#00e7ff" stroke-width="2" />
-  ${pocketPaths
-    .map(
-      (p) => `
-  ${p.outline ? `<path d="${p.outline}" fill="${p.fill}" stroke="${p.stroke}" stroke-width="2" />` : ''}
-  <circle cx="${p.cx}" cy="${p.cy}" r="${p.r}" fill="none" stroke="${p.stroke}" stroke-width="2" />
-  <text x="${p.cx}" y="${p.cy}" fill="${p.stroke}" font-size="10" text-anchor="middle" dy="-6">${p.id}</text>
-`
-    )
-    .join('')}
+  <!-- Computed Boundary (Cyan) -->
+  <path d="${path}" fill="rgba(0,255,255,0.16)" stroke="#00e7ff" stroke-width="3" vector-effect="non-scaling-stroke" />
+  <!-- Rails -->
+  ${railsMarkup}
+  <!-- Pockets -->
+  ${pocketsMarkup}
 </svg>`;
 
       document.getElementById('preview').innerHTML = svg;
       document.getElementById('data').textContent = JSON.stringify(
         {
+          meta: physicsJson.meta,
+          playArea,
           pointCount: points.length,
           points,
           bounds: { minX, maxX, minY, maxY, width: widthIn, height: heightIn },
           pockets: pockets.map((p) => ({
             id: p.id,
-            sourceTag: p.sourceTag,
+            sourceTag: p.source || p.sourceTag,
             center: p.center,
             radius: p.radius,
             outlineCount: (p.outline || []).length,
           })),
+          rails: rails.length,
+          railIds: rails.map(r => r.id),
+          railOutlines: rails.map(r => {
+            const pts = r.outline || [];
+            const xs = pts.map(p => p.x);
+            const ys = pts.map(p => p.y);
+            const minX = xs.length ? Math.min(...xs) : null;
+            const maxX = xs.length ? Math.max(...xs) : null;
+            const minY = ys.length ? Math.min(...ys) : null;
+            const maxY = ys.length ? Math.max(...ys) : null;
+            return {
+              id: r.id,
+              outlineCount: pts.length,
+              width: xs.length ? maxX - minX : null,
+              height: ys.length ? maxY - minY : null,
+            };
+          }),
         },
         null,
         2
@@ -222,4 +385,5 @@
     render();
   </script>
 </body>
+
 </html>
