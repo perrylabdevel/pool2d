@@ -14,19 +14,13 @@
 <path d="M447 32H468.152L480.469 64.821H447V32Z" fill="#FF00E6"/>
 </g>
 <path id="pocket1_felt" d="M54.1807 28C65.7773 28 75.5407 35.7834 78.4654 46.375L79.3614 45.5L95.9807 62L63.2458 94L46.6265 77.5L47.1311 77.0049C36.6556 73.9776 29 64.3774 29 53C29 39.1929 40.2738 28 54.1807 28Z" fill="#FF00E6"/>
-<g id="cushion_6">
-<path d="M46 76L63 93.4146V244H46V76Z" fill="white"/>
-<path d="M46 412L63 394.585V244H46V412Z" fill="white"/>
-</g>
+<path id="cushion_6" d="M63 93.4146L46 76V412L63 394.585V93.4146Z" fill="white"/>
 <path id="cushion_5" d="M95.3139 426L78.354 443H421.316L414.91 426H95.3139Z" fill="#FDFDFD"/>
 <path id="cushion_4" d="M798.686 426L815.646 443H472.684L479.09 426H798.686Z" fill="#FDFDFD"/>
-<g id="cushion_3">
-<path d="M848 76L831 93.4146V244H848V76Z" fill="white"/>
-<path d="M848 412L831 394.585V244H848V412Z" fill="white"/>
-</g>
+<path id="cushion_3" d="M831 93.4146L848 76V412L831 394.585V93.4146Z" fill="white"/>
 <path id="cushion_2" d="M798.686 62L815.646 45H472.684L479.09 62H798.686Z" fill="#FDFDFD"/>
 <path id="cushion_1" d="M95.3139 62L78.354 45H421.316L414.91 62H95.3139Z" fill="#FDFDFD"/>
-<rect id="play_area" x="831" y="426" width="768" height="364" transform="rotate(180 831 426)" fill="#FF00E6"/>
+<path id="play_area" d="M831 426H63V62H831V426Z" fill="#FF00E6"/>
 <circle id="pocket_2" cx="446.5" cy="36.5" r="22.5" fill="black"/>
 <circle id="pocket_2_2" cx="54.5" cy="434.5" r="22.5" fill="black"/>
 <circle id="pocket_2_3" cx="54.5" cy="53.5" r="22.5" fill="black"/>

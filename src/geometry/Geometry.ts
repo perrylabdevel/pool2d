@@ -6,7 +6,7 @@ import { CONFIG } from '../config';
 import { parseSVG } from '../editor/utils/svgUtils';
 import { parseFigmaJSON } from '../editor/utils/figmaJsonUtils';
 import tableSvg from '../assets/tmp/table.svg?raw'; // Import default SVG raw content
-import tableJson from '../../public/assets/tmp/table.json'; // Import Figma JSON
+import tableJson from '../assets/tmp/table.json'; // Import Figma JSON
 
 
 export interface Vec2 {
@@ -92,8 +92,12 @@ const defaultPlayRectangle = (): Vec2[] => {
 
 export function computePlayBoundaryPoints(rails: RailDef[]): Vec2[] {
   // Prefer rails originating from play_area if present (added by SVG parser), otherwise use all rails
+  // Prefer detailed cushion rails if present
+  const cushionRails = rails.filter(r => r.id.includes('cushion'));
   const playAreaRails = rails.filter(r => r.id.includes('play_area'));
-  const sourceRails = playAreaRails.length >= 3 ? playAreaRails : rails;
+
+  // Priority: Cushions (detailed) -> Play Area (simple rect) -> All (fallback)
+  const sourceRails = cushionRails.length >= 3 ? cushionRails : (playAreaRails.length >= 3 ? playAreaRails : rails);
 
   // Extract valid points (both ends of each rail segment)
   const rawPoints = sourceRails.flatMap(r => [r.from, r.to]).filter(isFiniteVec2);
@@ -579,7 +583,7 @@ export function getTableGeometry(): TableGeometry {
     try {
       // Parse geometry from JSON (preferred) or SVG fallback
       // JSON is cleaner since it's structured Figma export data
-      const parsed = CONFIG.USE_JSON_GEOMETRY 
+      const parsed = CONFIG.USE_JSON_GEOMETRY
         ? parseFigmaJSON(tableJson)
         : parseSVG(tableSvg);
 
