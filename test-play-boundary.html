@@ -72,8 +72,9 @@
   <div class="panel">
     <h1>Play Boundary Debug (Physics JSON)</h1>
     <p>
-      This renders the play boundary polygon generated from <code>public/assets/tmp/table.physics.json</code>.
-      It uses the same <code>computePlayBoundaryPoints()</code> logic as the game, driven by the SVG→physics converter output.
+      This renders the play boundary polygon generated from <code>src/geometry/table.physics.json</code>.
+      It uses the same <code>computePlayBoundaryPoints()</code> logic as the game, driven by the SVG→physics converter
+      output.
       Serve via Vite dev server and open <code>/test-play-boundary.html</code> in the browser.
     </p>
     <button id="downloadBtn">Download SVG</button>
@@ -90,7 +91,7 @@
   </div>
 
   <script type="module">
-    import physicsJson from '/public/assets/tmp/table.physics.json';
+    import physicsJson from '/src/geometry/table.physics.json';
     import { computePlayBoundaryPoints } from '/src/geometry/Geometry.ts';
 
     const isFiniteVec2 = (p) => Number.isFinite(p?.x) && Number.isFinite(p?.y);
@@ -289,9 +290,9 @@
           : '';
         const outlinePoints = r.id.includes('cushion') && outlinePts.length
           ? outlinePts.map(p => {
-              const s = toSvgCoord(p);
-              return `<circle cx="${s.x}" cy="${s.y}" r="2.5" fill="#ff9f1c" stroke="#ff9f1c" vector-effect="non-scaling-stroke" />`;
-            }).join('')
+            const s = toSvgCoord(p);
+            return `<circle cx="${s.x}" cy="${s.y}" r="2.5" fill="#ff9f1c" stroke="#ff9f1c" vector-effect="non-scaling-stroke" />`;
+          }).join('')
           : '';
 
         const lines = subRails.map(seg => {
@@ -322,7 +323,7 @@
       }).join('\n');
 
       // Simplified: Only draw play boundary as requested
-  const svg = `
+      const svg = `
 <svg xmlns="http://www.w3.org/2000/svg" width="${widthPx}" height="${heightPx}" viewBox="0 0 ${widthPx} ${heightPx}">
   <rect x="0" y="0" width="${widthPx}" height="${heightPx}" fill="#0b1220" />
   <!-- Computed Boundary (Cyan) -->

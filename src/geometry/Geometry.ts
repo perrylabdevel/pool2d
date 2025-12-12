@@ -3,10 +3,7 @@
 // Origin (0,0) at play-area center; +X right (East), +Y up (North/head)
 
 import { CONFIG } from '../config';
-import { parseSVG } from '../editor/utils/svgUtils';
-import { parseFigmaJSON } from '../editor/utils/figmaJsonUtils';
-import tableSvg from '../assets/tmp/table.svg?raw'; // Import default SVG raw content
-import tableJson from '../assets/tmp/table.json'; // Import Figma JSON
+import physicsJson from './table.physics.json'; // Import Pre-processed Physics JSON
 
 
 export interface Vec2 {
@@ -19,6 +16,7 @@ export interface RailDef {
   from: Vec2;
   to: Vec2;
   normal: Vec2; // Points inward to play area
+  outline?: Vec2[];
 }
 
 export interface FrameCorner {
@@ -73,6 +71,7 @@ export interface TableGeometry {
   sidePocketRadiusIn: number;
   cornerJawRadiusIn: number;
   sideJawRadiusIn: number;
+  pixelsPerInch?: number; // Optional, from source JSON
 }
 
 const isFiniteVec2 = (p: Vec2): boolean => Number.isFinite(p.x) && Number.isFinite(p.y);
@@ -573,129 +572,117 @@ function computeBaseCoordinates(jawPositions: JawPositions): BaseCoordinates {
   };
 }
 
-let cachedSVGGeometry: TableGeometry | null = null;
+
+
+
+let cachedGeometry: TableGeometry | null = null;
 
 export function getTableGeometry(): TableGeometry {
+  if (cachedGeometry) return cachedGeometry;
+
   // 1. Check if SVG/JSON Geometry is enabled
   if (CONFIG.USE_SVG_GEOMETRY) {
-    if (cachedSVGGeometry) return cachedSVGGeometry;
-
     try {
-      // Parse geometry from JSON (preferred) or SVG fallback
-      // JSON is cleaner since it's structured Figma export data
-      const parsed = CONFIG.USE_JSON_GEOMETRY
-        ? parseFigmaJSON(tableJson)
-        : parseSVG(tableSvg);
+      console.log('[Geometry] Loading physics geometry from table.physics.json');
 
-      if (parsed.rails && parsed.pockets) {
-        // RE-IMPLEMENTATION with actual vector logic
-        // We need Vector2 helper or just basic math.
-        const computeNormal = (from: { x: number, y: number }, to: { x: number, y: number }) => {
-          const dx = to.x - from.x;
-          const dy = to.y - from.y;
-          const len = Math.sqrt(dx * dx + dy * dy);
-          if (len === 0) return { x: 0, y: 0 }; // Avoid division by zero
-          // Righthand normal: (-dy, dx)
-          // We need inward normal, so check direction relative to table center (0,0)
-          let nx = -dy / len;
-          let ny = dx / len;
-          const midX = (from.x + to.x) * 0.5;
-          const midY = (from.y + to.y) * 0.5;
-          const dotToCenter = nx * -midX + ny * -midY; // Vector from mid to center is (-midX, -midY)
-          if (dotToCenter < 0) { // If normal points away from center, flip it
-            nx = -nx;
-            ny = -ny;
-          }
-          return { x: nx, y: ny };
-        };
+      const rails: RailDef[] = (physicsJson.rails || []).map((r: any) => ({
+        id: r.id,
+        from: r.from,
+        to: r.to,
+        normal: r.normal,
+        outline: r.outline
+      }));
 
-        const processedRails: RailDef[] = [];
-        parsed.rails.forEach(r => {
-          const pts = r.points;
-          if (pts.length < 2) return;
+      const pockets: PocketDef[] = (physicsJson.pockets || []).map((p: any) => ({
+        id: p.id,
+        center: p.center,
+        visualRadius: p.radius,
+        captureRadius: p.radius * 1.1,
+        cutNormalHint: { x: 0, y: 0 },
+        cutAngleDeg: 0,
+        shelfDepth: 0,
+        radius: p.radius,
+        outline: p.outline // Keep outline for bounds calculation
+      }));
 
-          // Treat as open when only 2 points (inner face segment), closed otherwise
-          const isClosed = pts.length > 2;
-          const limit = isClosed ? pts.length : pts.length - 1;
+      const pixelsPerInch = physicsJson.meta?.pixelsPerInch || 7.68; // Default to 7.68 if missing
 
-          for (let i = 0; i < limit; i++) {
-            const p1 = pts[i];
-            const p2 = pts[(i + 1) % pts.length];
-            const normal = computeNormal(p1, p2);
+      // Calculate the actual physical extent of the table based on all available geometry
+      let maxExtentX = 0;
+      let maxExtentY = 0;
 
-            // Heuristic: Only keep inward facing rails? 
-            // Or just keep all. Wall bounce logic handles "inside" well usually.
-            // Let's keep all for robustness.
-            processedRails.push({
-              id: `${r.id}_s${i}`,
-              from: { x: p1.x, y: p1.y }, // Ensure Vec2 format match
-              to: { x: p2.x, y: p2.y },
-              normal: { x: normal.x, y: normal.y } // Geometry expects Vec2
-            });
-          }
-        });
+      const updateExtents = (points: { x: number, y: number }[]) => {
+        if (!points) return;
+        for (const p of points) {
+          maxExtentX = Math.max(maxExtentX, Math.abs(p.x));
+          maxExtentY = Math.max(maxExtentY, Math.abs(p.y));
+        }
+      };
 
-        const processedPockets: PocketDef[] = parsed.pockets.map(p => ({
-          id: p.id,
-          center: { x: p.center.x, y: p.center.y },
-          visualRadius: p.radius, // Visual radius
-          captureRadius: p.radius * 1.1, // Default capture slightly larger
-          cutNormalHint: { x: 0, y: 0 }, // SVG doesn't provide this directly, default to 0
-          cutAngleDeg: 0, // Default
-          shelfDepth: 0, // Default
-          radius: p.radius, // Legacy alias
-        }));
+      rails.forEach(r => updateExtents(r.outline as any));
+      pockets.forEach(p => updateExtents((p as any).outline));
 
-        // For SVG, frameOutline is not directly parsed from the SVG content itself,
-        // but rather the rails define the play area. We can create a dummy or
-        // derive it from the rail bounds if needed, but for now, use a default.
-        const defaultFrameOutline: FrameOutline = {
-          outerHalfWidth: PLAY_HALF_W_IN + 5,
-          outerHalfHeight: PLAY_HALF_H_IN + 5,
-          innerHalfWidth: PLAY_HALF_W_IN,
-          innerHalfHeight: PLAY_HALF_H_IN,
-          cornerRadius: 0,
-          corners: {
-            northWest: { horizontal: { x: -PLAY_HALF_W_IN, y: PLAY_HALF_H_IN }, vertical: { x: -PLAY_HALF_W_IN, y: PLAY_HALF_H_IN } },
-            northEast: { horizontal: { x: PLAY_HALF_W_IN, y: PLAY_HALF_H_IN }, vertical: { x: PLAY_HALF_W_IN, y: PLAY_HALF_H_IN } },
-            southEast: { horizontal: { x: PLAY_HALF_W_IN, y: -PLAY_HALF_H_IN }, vertical: { x: PLAY_HALF_W_IN, y: -PLAY_HALF_H_IN } },
-            southWest: { horizontal: { x: -PLAY_HALF_W_IN, y: -PLAY_HALF_H_IN }, vertical: { x: -PLAY_HALF_W_IN, y: -PLAY_HALF_H_IN } },
-          }
-        };
+      // Fallback if no geometry found
+      if (maxExtentX === 0) maxExtentX = 55; // Default estimate
+      if (maxExtentY === 0) maxExtentY = 28; // Default estimate
 
-        cachedSVGGeometry = {
-          playWidthIn: 100, // Derived from scale, but config says 100
-          playHeightIn: 50,
-          cushionProfileIn: 0, // Not relevant for vector rails
-          rails: processedRails,
-          pockets: processedPockets,
-          frameOutline: defaultFrameOutline, // Use a default or derive from SVG bounds
-          // Default/fallback values for pocket dimensions not directly in SVG
-          pocketCaptureRadiusIn: 2.25,
-          cornerPocketCaptureRadiusIn: 2.25,
-          sidePocketCaptureRadiusIn: 2.5,
-          cornerPocketVisualRadiusIn: 2.25,
-          sidePocketVisualRadiusIn: 2.5,
-          pocketShelfDepthIn: 0,
-          cornerPocketWidthIn: 4.5, // Fallback
-          cornerPocketDepthIn: 0,
-          cornerPocketRadiusIn: 2.25,
-          sidePocketWidthIn: 5,
-          sidePocketDepthIn: 0,
-          sidePocketRadiusIn: 2.25,
-          cornerJawRadiusIn: 0,
-          sideJawRadiusIn: 0,
-        };
+      const playArea = physicsJson.playArea || { width: 100, height: 50 };
+      const halfW = playArea.width / 2;
+      const halfH = playArea.height / 2;
 
-        console.log(`[Geometry] Loaded ${processedRails.length} rails and ${processedPockets.length} pockets from SVG.`);
-        return cachedSVGGeometry;
-      }
+      console.log(`[Geometry] Calculated Frame Extents from Physics: +/- ${maxExtentX.toFixed(3)} x ${maxExtentY.toFixed(3)}`);
+
+      // Derived frame outline matching the physics objects
+      const defaultFrameOutline: FrameOutline = {
+        outerHalfWidth: maxExtentX,
+        outerHalfHeight: maxExtentY,
+        innerHalfWidth: halfW,
+        innerHalfHeight: halfH,
+        cornerRadius: 0,
+        corners: {
+          northWest: { horizontal: { x: -maxExtentX, y: maxExtentY }, vertical: { x: -maxExtentX, y: maxExtentY } },
+          northEast: { horizontal: { x: maxExtentX, y: maxExtentY }, vertical: { x: maxExtentX, y: maxExtentY } },
+          southEast: { horizontal: { x: maxExtentX, y: -maxExtentY }, vertical: { x: maxExtentX, y: -maxExtentY } },
+          southWest: { horizontal: { x: -maxExtentX, y: -maxExtentY }, vertical: { x: -maxExtentX, y: -maxExtentY } },
+        }
+      };
+
+      cachedGeometry = {
+        playWidthIn: playArea.width,
+        playHeightIn: playArea.height,
+        cushionProfileIn: 0,
+        rails: rails,
+        pockets: pockets,
+        frameOutline: defaultFrameOutline,
+        pixelsPerInch,
+
+        // Default/fallback values
+        pocketCaptureRadiusIn: 2.25,
+        cornerPocketCaptureRadiusIn: 2.25,
+        sidePocketCaptureRadiusIn: 2.5,
+        cornerPocketVisualRadiusIn: 2.25,
+        sidePocketVisualRadiusIn: 2.5,
+        pocketShelfDepthIn: 0,
+        cornerPocketWidthIn: 4.5,
+        cornerPocketDepthIn: 0,
+        cornerPocketRadiusIn: 2.25,
+        sidePocketWidthIn: 5,
+        sidePocketDepthIn: 0,
+        sidePocketRadiusIn: 2.25,
+        cornerJawRadiusIn: 0,
+        sideJawRadiusIn: 0,
+      };
+
+      console.log(`[Geometry] Loaded ${rails.length} rails and ${pockets.length} pockets from table.physics.json`);
+      return cachedGeometry;
+
     } catch (e) {
-      console.error("Failed to load SVG geometry, falling back to procedural:", e);
+      console.error("Failed to load physics geometry, falling back to procedural:", e);
     }
   }
 
   // 2. Procedural Fallback (Original Code)
+
   const jawPositions = computeJawPositions();
 
   const {

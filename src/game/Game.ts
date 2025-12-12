@@ -955,8 +955,9 @@ export class Game {
       });
 
       // Initialize 3D scene
+      // Note: initializeTable() internally calls initializeRails() with geometry data (including outlines)
+      // Do NOT call initializeRails(this.world.rails) separately - physics rails don't have outline data
       this.renderer.initializeTable();
-      this.renderer.initializeRails(this.world.rails);
       const geometry = getTableGeometry();
       this.renderer.initializePockets(geometry.pockets);
 

@@ -440,7 +440,7 @@ def main(argv: Iterable[str]) -> int:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("public/assets/tmp/table.physics.json"),
+        default=Path("src/geometry/table.physics.json"),
         help="Destination JSON path.",
     )
     parser.add_argument(

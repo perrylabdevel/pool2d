@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { TextureGenerator } from '../TextureGenerator';
 import { SettingsManager } from '../../ui/SettingsManager';
 import { CONFIG } from '../../config';
 import { getTableGeometry, computePlayBoundaryPoints, computeBoundaryBounds, type Vec2, type BoundaryBounds, type PocketDef } from '../../geometry/Geometry';
@@ -8,6 +7,7 @@ import { RenderLayerSettings, RenderLayerOrderKey, RenderLayerBooleanKey } from 
 import { parseHexColor, lightenColor, mixColors, toRgba } from '../RenderUtils';
 // Legacy imports removed - now using TableTextureManager
 import { TableTextureManager } from '../../textures/TableTextureManager';
+import skinUrl from '../../assets/tmp/skin.png';
 import type { TableAppearance } from '../../textures/TableAppearance';
 
 type FrameClipInfo = { outerX: number; outerY: number; radius: number };
@@ -17,6 +17,7 @@ export class TableRenderer {
     tableMesh: THREE.Mesh | null = null;
     frameMesh: THREE.Group | null = null;
     private frameStencilMesh: THREE.Mesh | null = null;
+    private skinMesh: THREE.Mesh | null = null; // Skin overlay
     railMeshes: THREE.Mesh[] = [];
     pocketMeshes: THREE.Mesh[] = [];
     pocketBottomMeshes: THREE.Mesh[] = [];
@@ -42,7 +43,7 @@ export class TableRenderer {
     private frameClipInfo: FrameClipInfo | null = null;
     private lastPocketDefs: PocketDef[] = [];
     private playBoundaryPoints: Vec2[] = [];
-    private playBounds: BoundaryBounds = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+    private playBounds: BoundaryBounds = { minX: 0, maxX: 0, minY: 0, maxY: 0, width: 0, height: 0 };
 
     // Materials & Textures
     private railHighlightMaterial: THREE.MeshBasicMaterial | null = null;
@@ -58,13 +59,11 @@ export class TableRenderer {
     private pocketSideMaterial: THREE.MeshBasicMaterial | null = null;
     private feltMaterial: THREE.MeshStandardMaterial | null = null;
     private frameMaterial: THREE.MeshStandardMaterial | null = null;
-    private feltTexture: THREE.CanvasTexture | null = null;
+    private feltTexture: THREE.Texture | null = null;
     private frameTexture: THREE.CanvasTexture | null = null;
 
     // Texture Manager (new unified system)
     private textureManager: TableTextureManager;
-
-    // Settings
 
     // Settings
     private railShadowSpread = 1.0;
@@ -165,9 +164,105 @@ export class TableRenderer {
         this.scene.add(this.tableMesh);
         this.createOrUpdateTableOverlays(tableGeometry.playWidthIn, tableGeometry.playHeightIn);
 
+        // Initialize Rails (physics shapes needed for rendering)
+        console.log(`[TableRenderer] initializeTable: creating Rail objects from ${tableGeometry.rails.length} rail definitions`);
+        const rails = tableGeometry.rails.map((r, idx) => {
+            console.log(`[TableRenderer] Rail[${idx}] id=${r.id} outline=${r.outline ? r.outline.length + ' pts' : 'NONE'}`);
+            const rail = new Rail(r.from.x, r.from.y, r.to.x, r.to.y, r.id, r.outline);
+            // Use authoritative normal from geometry
+            rail.nx = r.normal.x;
+            rail.ny = r.normal.y;
+            return rail;
+        });
+        console.log(`[TableRenderer] Rails created: ${rails.length}. Outlines: ${rails.filter(r => r.outline && r.outline.length > 2).length} have >2 pts.`);
+        this.initializeRails(rails);
+        this.initializeRailFillMesh();
+
+        // Initialize Pockets
+        this.initializePockets(tableGeometry.pockets);
+        this.initializePocketCaps(tableGeometry.pockets);
+
         // Wooden frame planks surrounding play surface
         this.initializeFrame();
+
+        // Skin Overlay
+        this.initializeSkinOverlay();
     }
+
+    private initializeSkinOverlay() {
+        if (this.skinMesh) {
+            this.scene.remove(this.skinMesh);
+            this.skinMesh.geometry.dispose();
+            (this.skinMesh.material as THREE.Material).dispose();
+            this.skinMesh = null;
+        }
+
+        const geom = getTableGeometry();
+        // PIXEL PERFECT SCALING:
+        // Use the pixelsPerInch from the physics source to size the skin mesh strictly based on its pixel dimensions.
+        // This ensures exact 1:1 scaling if the skin matches the physics source resolution.
+        const PPI = geom.pixelsPerInch || 7.68;
+
+        // Start with a 1x1 plane that we will scale dynamically
+        const geometry = new THREE.PlaneGeometry(1, 1);
+
+        const loader = new THREE.TextureLoader();
+        const texture = loader.load(skinUrl, (tex) => {
+            const image = tex.image;
+            if (image && image.width && image.height) {
+                // Calculate physical dimensions from pixels
+                const physicalWidth = image.width / PPI;
+                const physicalHeight = image.height / PPI;
+
+                console.log(`[TableRenderer] Skin loaded: ${image.width}x${image.height} px`);
+                console.log(`[TableRenderer] PPI: ${PPI}`);
+                console.log(`[TableRenderer] Applied Physical Size: ${physicalWidth.toFixed(2)}" x ${physicalHeight.toFixed(2)}"`);
+
+                if (this.skinMesh) {
+                    this.skinMesh.scale.set(physicalWidth, physicalHeight, 1);
+                    this.skinMesh.updateMatrix();
+                }
+            }
+        });
+        texture.colorSpace = THREE.SRGBColorSpace;
+
+        const material = new THREE.MeshBasicMaterial({
+            map: texture,
+            transparent: true,
+            side: THREE.DoubleSide
+        });
+
+        this.skinMesh = new THREE.Mesh(geometry, material);
+        this.skinMesh.position.set(0, 0, 0.6);
+        this.skinMesh.name = 'SkinOverlay';
+        this.scene.add(this.skinMesh);
+    }
+
+    private applyNormalizedUVs(geometry: THREE.BufferGeometry, bounds: BoundaryBounds) {
+        const { minX, maxX, minY, maxY } = bounds;
+        const width = maxX - minX;
+        const height = maxY - minY;
+
+        if (width <= 0 || height <= 0) return;
+
+        const posAttribute = geometry.attributes.position;
+        const uvAttribute = geometry.attributes.uv || new THREE.BufferAttribute(new Float32Array(posAttribute.count * 2), 2);
+
+        for (let i = 0; i < posAttribute.count; i++) {
+            const x = posAttribute.getX(i);
+            const y = posAttribute.getY(i);
+
+            // Map x from [minX, maxX] to [0, 1]
+            const u = (x - minX) / width;
+            // Map y from [minY, maxY] to [0, 1]
+            const v = (y - minY) / height;
+
+            uvAttribute.setXY(i, u, v);
+        }
+        geometry.setAttribute('uv', uvAttribute);
+        uvAttribute.needsUpdate = true;
+    }
+
 
     /**
      * Expose a debugging helper to inspect the play boundary polygon produced from the SVG/rails.
@@ -196,8 +291,8 @@ export class TableRenderer {
             const path =
                 points.length > 0
                     ? points
-                          .map((p, i) => `${i === 0 ? 'M' : 'L'} ${toSvgCoord(p)}`)
-                          .join(' ') + ' Z'
+                        .map((p, i) => `${i === 0 ? 'M' : 'L'} ${toSvgCoord(p)}`)
+                        .join(' ') + ' Z'
                     : '';
 
             const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
@@ -470,9 +565,24 @@ export class TableRenderer {
         this.debugRailSegments = [];
         this.railLines = [];
 
-        // Clear existing per-rail highlight meshes
+        // Clear existing rail meshes to prevent duplicates
+        this.railMeshes.forEach(mesh => {
+            if (mesh.parent) {
+                mesh.parent.remove(mesh);
+            }
+            mesh.geometry.dispose();
+            if (Array.isArray(mesh.material)) {
+                mesh.material.forEach(m => m.dispose());
+            } else {
+                (mesh.material as THREE.Material).dispose();
+            }
+        });
+        this.railMeshes = [];
+
         this.railHighlightMeshes.forEach(mesh => {
-            this.scene.remove(mesh);
+            if (mesh.parent) {
+                mesh.parent.remove(mesh);
+            }
             mesh.geometry.dispose();
             const mat = mesh.material as THREE.Material;
             mat.dispose();
@@ -489,112 +599,61 @@ export class TableRenderer {
             stencilZPass: THREE.ReplaceStencilOp,
         });
 
-        const inner = CONFIG.RAIL_THICKNESS_INNER;
-        const outer = CONFIG.RAIL_THICKNESS_OUTER;
-        const totalWidth = inner + outer;
-        const centerShift = (outer - inner) / 2;
+        console.log(`[TableRenderer] Initializing rails: ${rails.length} total.`);
 
-        const geom = getTableGeometry();
-        const { frameOutline } = geom;
-        const outerX = frameOutline.outerHalfWidth;
-        const outerY = frameOutline.outerHalfHeight;
-        const cornerRadius = Math.max(0, Math.min(frameOutline.cornerRadius, outerX, outerY));
-        const clipInfo: FrameClipInfo = { outerX, outerY, radius: cornerRadius };
-        this.frameClipInfo = clipInfo;
-
+        // Loop through all rails
         rails.forEach((rail) => {
-            let nx = rail.nx;
-            let ny = rail.ny;
+            // Populate railLines for shadows/highlights (using the active collision edge)
+            // Use authoritative normal
+            const nx = rail.nx;
+            const ny = rail.ny;
 
-            const midX = (rail.x1 + rail.x2) / 2;
-            const midY = (rail.y1 + rail.y2) / 2;
-            const dot = nx * -midX + ny * -midY;
-            if (dot < 0) {
-                nx = -nx;
-                ny = -ny;
-            }
-
-            const isCornerTaper = (rail.id ?? '').endsWith('_taper');
-            const pointA = { x: rail.x1, y: rail.y1 };
-            const pointB = { x: rail.x2, y: rail.y2 };
-            const absA = Math.max(Math.abs(pointA.x), Math.abs(pointA.y));
-            const absB = Math.max(Math.abs(pointB.x), Math.abs(pointB.y));
-            const innerPoint = absA <= absB ? pointA : pointB;
-            const outerPoint = absA <= absB ? pointB : pointA;
-
-            let trimmedOuter = outerPoint;
-            let trimmedData: { t: number; point: Vec2 } | null = null;
-            const dir = { x: outerPoint.x - innerPoint.x, y: outerPoint.y - innerPoint.y };
-            const allowFrameClipping = false;
-            const shouldClipRails = allowFrameClipping && isCornerTaper && clipInfo.radius > 1e-4;
-            if (shouldClipRails) {
-                const signX = Math.sign(outerPoint.x) || Math.sign(innerPoint.x) || 1;
-                const signY = Math.sign(outerPoint.y) || Math.sign(innerPoint.y) || 1;
-                const outerDistance = centerShift + totalWidth / 2;
-                const startOuter = {
-                    x: innerPoint.x - nx * outerDistance,
-                    y: innerPoint.y - ny * outerDistance,
-                };
-                trimmedData = this.intersectLineWithCornerArc3D(startOuter, dir, signX, signY, clipInfo);
-                const result = trimmedData;
-                if (result) {
-                    const dirLen = Math.sqrt(dir.x * dir.x + dir.y * dir.y) || 1;
-                    const ux = dir.x / dirLen;
-                    const uy = dir.y / dirLen;
-                    const epsilon = -0.05;
-                    trimmedOuter = {
-                        x: result.point.x - ux * epsilon,
-                        y: result.point.y - uy * epsilon,
-                    };
+            // Only render mesh if we have a defined outline (cushions)
+            // Ensure we have enough points for a valid shape
+            // Skip extremely small outlines to avoid degenerate geometry
+            console.log(`[TableRenderer] Checking rail ${rail.id}: outline=${rail.outline ? rail.outline.length + ' pts' : 'UNDEFINED'}`);
+            if (rail.outline && rail.outline.length > 2) {
+                console.log(`[TableRenderer] Creating mesh for rail ${rail.id} with ${rail.outline.length} points: first=(${rail.outline[0].x.toFixed(2)}, ${rail.outline[0].y.toFixed(2)})`);
+                const shape = new THREE.Shape();
+                shape.moveTo(rail.outline[0].x, rail.outline[0].y);
+                for (let i = 1; i < rail.outline.length; i++) {
+                    shape.lineTo(rail.outline[i].x, rail.outline[i].y);
                 }
+                shape.closePath();
+
+                // Extrude to create 3D cushion volume
+                // Depth 0.5 matches previous implementation height (Z -0.5 to 0)
+                const geometry = new THREE.ExtrudeGeometry(shape, {
+                    depth: 0.5,
+                    bevelEnabled: false,
+                });
+
+                // SAFE DEBUG: Use Standard Material (avoids crash) but Magenta + No Depth Test (force visible)
+                const debugMaterial = railMaterial.clone();
+                debugMaterial.color.setHex(0xff00ff);
+                debugMaterial.depthTest = false; // Render on top
+
+                const mesh = new THREE.Mesh(geometry, debugMaterial);
+                // Extrusion is along +Z. Positioning at -0.5 makes it range from -0.5 to 0.0 (flush with felt surface at 0)
+                mesh.position.set(0, 0, -0.5);
+
+                mesh.visible = true; // Force visible
+                mesh.renderOrder = 9999; // Force draw on top
+
+                this.scene.add(mesh);
+                this.railMeshes.push(mesh);
+
+                console.log(`[TableRenderer] Created rail mesh ${rail.id}`);
             }
 
-            const adjMidX = (innerPoint.x + trimmedOuter.x) / 2;
-            const adjMidY = (innerPoint.y + trimmedOuter.y) / 2;
-            const adjToCenterX = -adjMidX;
-            const adjToCenterY = -adjMidY;
-            const adjDot = nx * adjToCenterX + ny * adjToCenterY;
-            if (adjDot < 0) {
-                nx = -nx;
-                ny = -ny;
-            }
-
-            const renderDirX = trimmedOuter.x - innerPoint.x;
-            const renderDirY = trimmedOuter.y - innerPoint.y;
-            const renderLength = Math.sqrt(renderDirX * renderDirX + renderDirY * renderDirY) || 1;
-            const angle = Math.atan2(renderDirY, renderDirX);
-            const renderCenterX = innerPoint.x + renderDirX * 0.5;
-            const renderCenterY = innerPoint.y + renderDirY * 0.5;
-
-            const railGeometry = new THREE.BoxGeometry(renderLength, totalWidth, 0.5);
-
-            const railMesh = new THREE.Mesh(railGeometry, railMaterial.clone());
-            railMesh.position.set(renderCenterX - nx * centerShift, renderCenterY - ny * centerShift, -0.25);
-            railMesh.rotation.z = angle;
-            railMesh.castShadow = true;
-            railMesh.receiveShadow = true;
-            railMesh.visible = this.layerVisibility.showRails;
-            railMesh.renderOrder = this.layerOrder.orderRails;
-            this.enforceRenderOrderControl(railMesh);
-
-            this.scene.add(railMesh);
-            this.railMeshes.push(railMesh);
-
-            const debugStartOuter = {
-                x: innerPoint.x - nx * (centerShift + totalWidth / 2),
-                y: innerPoint.y - ny * (centerShift + totalWidth / 2),
-            };
-            const debugTrimmed = trimmedData ? trimmedData.point : trimmedOuter;
-            this.debugRailSegments.push({
-                id: rail.id ?? `rail-${this.railMeshes.length - 1}`,
-                inner: innerPoint,
-                trimmed: debugTrimmed,
-                startOuter: debugStartOuter,
+            // For shadows/ribbons, we track the inner active edge
+            // Logic adapted from previous implementation but simplified to trust the physics line
+            this.railLines.push({
+                start: { x: rail.x1, y: rail.y1 },
+                end: { x: rail.x2, y: rail.y2 },
+                nx,
+                ny
             });
-
-            const baseStart = { x: innerPoint.x - nx * centerShift, y: innerPoint.y - ny * centerShift };
-            const baseEnd = { x: trimmedOuter.x - nx * centerShift, y: trimmedOuter.y - ny * centerShift };
-            this.railLines.push({ start: baseStart, end: baseEnd, nx, ny });
         });
 
         this.rebuildRailShadowRibbon();

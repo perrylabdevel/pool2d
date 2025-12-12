@@ -17,7 +17,7 @@ export class Ball {
   pocketed: boolean;
   sleeping: boolean;
   lastPocketId: string | null;
-  
+
   // Rotation (for visual spinning)
   angle: number; // Rotation angle in radians
   angularVelocity: number; // Radians per second
@@ -29,11 +29,11 @@ export class Ball {
   rotY: number;
   rotZ: number;
   rotW: number;
-  
+
   // For interpolation
   prevX: number;
   prevY: number;
-  
+
   constructor(id: number, x: number, y: number, radius: number, mass: number) {
     this.id = id;
     this.x = x;
@@ -58,22 +58,22 @@ export class Ball {
     this.prevX = x;
     this.prevY = y;
   }
-  
+
   saveState() {
     this.prevX = this.x;
     this.prevY = this.y;
   }
-  
+
   getSpeed(): number {
     return Math.sqrt(this.vx * this.vx + this.vy * this.vy);
   }
-  
+
   setVelocity(vx: number, vy: number) {
     this.vx = vx;
     this.vy = vy;
     this.sleeping = false;
   }
-  
+
   clone(): Ball {
     const copy = new Ball(this.id, this.x, this.y, this.radius, this.mass);
     copy.vx = this.vx;
@@ -105,32 +105,34 @@ export class Rail {
   y2: number;
   nx: number; // Normal pointing inward
   ny: number;
-  
-  constructor(x1: number, y1: number, x2: number, y2: number, id?: string) {
+  outline?: Vec2[];
+
+  constructor(x1: number, y1: number, x2: number, y2: number, id?: string, outline?: Vec2[]) {
     this.x1 = x1;
     this.y1 = y1;
     this.x2 = x2;
     this.y2 = y2;
     this.id = id;
-    
+    this.outline = outline;
+
     // Calculate normal (perpendicular to rail, pointing inward)
     const dx = x2 - x1;
     const dy = y2 - y1;
     const len = Math.sqrt(dx * dx + dy * dy);
-    
+
     // Perpendicular vector (rotated 90 degrees)
     this.nx = -dy / len;
     this.ny = dx / len;
   }
-  
+
   // Flip normal if needed (to point inward)
   flipNormal() {
     this.nx = -this.nx;
     this.ny = -this.ny;
   }
-  
+
   clone(): Rail {
-    const copy = new Rail(this.x1, this.y1, this.x2, this.y2, this.id);
+    const copy = new Rail(this.x1, this.y1, this.x2, this.y2, this.id, this.outline?.map(p => ({ ...p })));
     copy.nx = this.nx;
     copy.ny = this.ny;
     return copy;
@@ -142,21 +144,21 @@ export class Pocket {
   x: number;
   y: number;
   radius: number;
-  
+
   constructor(x: number, y: number, radius: number, id?: string) {
     this.id = id;
     this.x = x;
     this.y = y;
     this.radius = radius;
   }
-  
+
   contains(ball: Ball): boolean {
     const dx = ball.x - this.x;
     const dy = ball.y - this.y;
     const distSq = dx * dx + dy * dy;
     return distSq < this.radius * this.radius;
   }
-  
+
   clone(): Pocket {
     return new Pocket(this.x, this.y, this.radius, this.id);
   }
