@@ -14,8 +14,9 @@ export const CONFIG = {
   TABLE_HEIGHT: 50,  // inches (full height, for legacy compat)
   RAIL_THICKNESS_INNER: 0, // Ignored by SVG
 
-  // Experimental: SVG Geometry Override
+  // Experimental: SVG/JSON Geometry Override
   USE_SVG_GEOMETRY: true,
+  USE_JSON_GEOMETRY: true, // Prefer Figma JSON over SVG (cleaner structured data)
   SVG_PATH: '/assets/tmp/table.svg', // Informational, used by loader if async
   RAIL_THICKNESS_OUTER: 0.2, // outward extension toward frame (inches)
 

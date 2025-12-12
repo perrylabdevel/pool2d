@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Play Boundary Debug</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: "JetBrains Mono", "SFMono-Regular", Consolas, Menlo, monospace;
+      background: #0b1220;
+      color: #e4f5ff;
+    }
+    body {
+      margin: 0;
+      padding: 24px;
+      display: grid;
+      gap: 16px;
+    }
+    .panel {
+      background: #0f172a;
+      border: 1px solid #1f2937;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+    }
+    h1, h2 {
+      margin: 0 0 8px;
+      color: #7dd3fc;
+    }
+    pre {
+      background: #0b1220;
+      border: 1px solid #1f2937;
+      border-radius: 8px;
+      padding: 12px;
+      overflow: auto;
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    button {
+      background: #00e7ff;
+      color: #041019;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #2cf0ff;
+    }
+    svg {
+      width: 100%;
+      height: auto;
+      background: #0b1220;
+      border: 1px solid #1f2937;
+      border-radius: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="panel">
+    <h1>Play Boundary Debug (Figma JSON-derived)</h1>
+    <p>
+      This renders the play boundary polygon generated from <code>public/assets/tmp/table.json</code>.
+      It uses the same <code>parseFigmaJSON()</code> and <code>computePlayBoundaryPoints()</code> logic as the game.
+      Serve via Vite dev server and open <code>/test-play-boundary.html</code> in the browser.
+    </p>
+    <button id="downloadBtn">Download SVG</button>
+  </div>
+
+  <div class="panel">
+    <h2>Preview</h2>
+    <div id="preview"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Data</h2>
+    <pre id="data"></pre>
+  </div>
+
+  <script type="module">
+    import tableJson from '/public/assets/tmp/table.json';
+    import { parseFigmaJSON } from '/src/editor/utils/figmaJsonUtils.ts';
+    import { computePlayBoundaryPoints } from '/src/geometry/Geometry.ts';
+
+    const isFiniteVec2 = (p) => Number.isFinite(p?.x) && Number.isFinite(p?.y);
+
+    const computeNormal = (from, to) => {
+      const dx = to.x - from.x;
+      const dy = to.y - from.y;
+      const len = Math.hypot(dx, dy) || 1;
+      let nx = -dy / len;
+      let ny = dx / len;
+      const midX = (from.x + to.x) * 0.5;
+      const midY = (from.y + to.y) * 0.5;
+      const dotToCenter = nx * -midX + ny * -midY;
+      if (dotToCenter < 0) {
+        nx = -nx;
+        ny = -ny;
+      }
+      return { x: nx, y: ny };
+    };
+
+    const toRailSegments = (parsedRails) => {
+      const rails = [];
+      parsedRails.forEach((r) => {
+        const pts = r.points;
+        if (!pts || pts.length < 2) return;
+        const isClosed = pts.length > 2; // 2-point rails are inner faces, not loops
+        const limit = isClosed ? pts.length : pts.length - 1;
+        for (let i = 0; i < limit; i++) {
+          const p1 = pts[i];
+          const p2 = pts[(i + 1) % pts.length];
+          const normal = computeNormal(p1, p2);
+          rails.push({
+            id: `${r.id}_s${i}`,
+            from: { x: p1.x, y: p1.y },
+            to: { x: p2.x, y: p2.y },
+            normal,
+          });
+        }
+      });
+      return rails;
+    };
+
+    const makePathString = (points, scale, width, height) => {
+      const toSvgCoord = (p) => {
+        const sx = (p.x * scale + width / 2).toFixed(2);
+        const sy = (-p.y * scale + height / 2).toFixed(2); // flip Y
+        return `${sx},${sy}`;
+      };
+      if (!points.length) return '';
+      return (
+        points
+          .map((p, i) => `${i === 0 ? 'M' : 'L'} ${toSvgCoord(p)}`)
+          .join(' ') + ' Z'
+      );
+    };
+
+    const render = () => {
+      const parsed = parseFigmaJSON(tableJson);
+      const rails = toRailSegments(parsed.rails || []);
+      const points = computePlayBoundaryPoints(rails).filter(isFiniteVec2);
+      const pockets = parsed.pockets || [];
+
+      // Bounds
+      let minX = 0, maxX = 0, minY = 0, maxY = 0;
+      if (points.length) {
+        minX = Math.min(...points.map((p) => p.x));
+        maxX = Math.max(...points.map((p) => p.x));
+        minY = Math.min(...points.map((p) => p.y));
+        maxY = Math.max(...points.map((p) => p.y));
+      } else {
+        minX = -50; maxX = 50; minY = -25; maxY = 25;
+      }
+      const widthIn = maxX - minX || 100;
+      const heightIn = maxY - minY || 50;
+
+      const scale = 8; // px per inch
+      const pad = 48;
+      const widthPx = Math.max(200, widthIn * scale + pad * 2);
+      const heightPx = Math.max(200, heightIn * scale + pad * 2);
+
+      const path = makePathString(points, scale, widthPx, heightPx);
+      const pocketPaths = pockets
+        .map((p, idx) => {
+          const outline = makePathString(p.outline || [], scale, widthPx, heightPx);
+          const cx = (p.center.x * scale + widthPx / 2).toFixed(2);
+          const cy = (-p.center.y * scale + heightPx / 2).toFixed(2);
+          const r = (p.radius * scale).toFixed(2);
+          const stroke = p.sourceTag === 'ellipse' ? '#ff5a5f' : '#ffb347';
+          const fill = p.sourceTag === 'ellipse' ? 'rgba(255,90,95,0.15)' : 'rgba(255,179,71,0.15)';
+          return { id: `${p.id} (${p.sourceTag || 'path'})`, outline, cx, cy, r, stroke, fill };
+        })
+        .filter((p) => p.outline.length || Number.isFinite(parseFloat(p.r)));
+      const svg = `
+<svg xmlns="http://www.w3.org/2000/svg" width="${widthPx}" height="${heightPx}" viewBox="0 0 ${widthPx} ${heightPx}">
+  <rect x="0" y="0" width="${widthPx}" height="${heightPx}" fill="#0b1220" />
+  <path d="${path}" fill="rgba(0,255,255,0.16)" stroke="#00e7ff" stroke-width="2" />
+  ${pocketPaths
+    .map(
+      (p) => `
+  ${p.outline ? `<path d="${p.outline}" fill="${p.fill}" stroke="${p.stroke}" stroke-width="2" />` : ''}
+  <circle cx="${p.cx}" cy="${p.cy}" r="${p.r}" fill="none" stroke="${p.stroke}" stroke-width="2" />
+  <text x="${p.cx}" y="${p.cy}" fill="${p.stroke}" font-size="10" text-anchor="middle" dy="-6">${p.id}</text>
+`
+    )
+    .join('')}
+</svg>`;
+
+      document.getElementById('preview').innerHTML = svg;
+      document.getElementById('data').textContent = JSON.stringify(
+        {
+          pointCount: points.length,
+          points,
+          bounds: { minX, maxX, minY, maxY, width: widthIn, height: heightIn },
+          pockets: pockets.map((p) => ({
+            id: p.id,
+            sourceTag: p.sourceTag,
+            center: p.center,
+            radius: p.radius,
+            outlineCount: (p.outline || []).length,
+          })),
+        },
+        null,
+        2
+      );
+
+      const btn = document.getElementById('downloadBtn');
+      btn.onclick = () => {
+        const blob = new Blob([svg], { type: 'image/svg+xml' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'play-boundary.svg';
+        a.click();
+        URL.revokeObjectURL(url);
+      };
+    };
+
+    render();
+  </script>
+</body>
+</html>

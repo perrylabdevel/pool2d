@@ -276,9 +276,9 @@ npm run preview  # Preview production build
 
 
 
-marjor issue
+major issue
 
-ssets in public directory cannot be imported from JavaScript.
+assets in public directory cannot be imported from JavaScript.
 If you intend to import that asset, put the file in the src directory, and use /src/assets/tmp/table.svg?raw instead of /public/assets/tmp/table.svg?raw.
 If you intend to use the URL of that asset, use /assets/tmp/table.svg?url&raw.
 Client connected

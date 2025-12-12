@@ -4,7 +4,9 @@
 
 import { CONFIG } from '../config';
 import { parseSVG } from '../editor/utils/svgUtils';
-import tableSvg from '../../public/assets/tmp/table.svg?raw'; // Import default SVG raw content
+import { parseFigmaJSON } from '../editor/utils/figmaJsonUtils';
+import tableSvg from '../assets/tmp/table.svg?raw'; // Import default SVG raw content
+import tableJson from '../../public/assets/tmp/table.json'; // Import Figma JSON
 
 
 export interface Vec2 {
@@ -73,24 +75,63 @@ export interface TableGeometry {
   sideJawRadiusIn: number;
 }
 
-export function computePlayBoundaryPoints(rails: RailDef[]): Vec2[] {
-  let points: Vec2[] = [];
-  if (rails.length === 0) return points;
+const isFiniteVec2 = (p: Vec2): boolean => Number.isFinite(p.x) && Number.isFinite(p.y);
 
-  // Extract points (start of each rail segment)
-  points = rails.map(r => r.from);
+const rectangleFromBounds = (minX: number, maxX: number, minY: number, maxY: number): Vec2[] => ([
+  { x: minX, y: minY },
+  { x: maxX, y: minY },
+  { x: maxX, y: maxY },
+  { x: minX, y: maxY },
+]);
+
+const defaultPlayRectangle = (): Vec2[] => {
+  const halfW = (CONFIG.TABLE_WIDTH ?? 100) * 0.5;
+  const halfH = (CONFIG.TABLE_HEIGHT ?? 50) * 0.5;
+  return rectangleFromBounds(-halfW, halfW, -halfH, halfH);
+};
+
+export function computePlayBoundaryPoints(rails: RailDef[]): Vec2[] {
+  // Prefer rails originating from play_area if present (added by SVG parser), otherwise use all rails
+  const playAreaRails = rails.filter(r => r.id.includes('play_area'));
+  const sourceRails = playAreaRails.length >= 3 ? playAreaRails : rails;
+
+  // Extract valid points (both ends of each rail segment)
+  const rawPoints = sourceRails.flatMap(r => [r.from, r.to]).filter(isFiniteVec2);
+
+  // Deduplicate to avoid extremely dense shapes or repeated NaNs
+  const seen = new Set<string>();
+  const points: Vec2[] = [];
+  rawPoints.forEach((p) => {
+    const key = `${p.x.toFixed(6)},${p.y.toFixed(6)}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      points.push(p);
+    }
+  });
+
+  // Fallback to a simple rectangle if we don't have enough points to form a polygon
+  if (points.length < 3) {
+    if (points.length > 0) {
+      const minX = Math.min(...points.map(p => p.x));
+      const maxX = Math.max(...points.map(p => p.x));
+      const minY = Math.min(...points.map(p => p.y));
+      const maxY = Math.max(...points.map(p => p.y));
+      // Guard against degenerate bounds
+      if (Number.isFinite(minX) && Number.isFinite(maxX) && Number.isFinite(minY) && Number.isFinite(maxY)) {
+        return rectangleFromBounds(minX, maxX, minY, maxY);
+      }
+    }
+    return defaultPlayRectangle();
+  }
 
   // Robustly sort points to form a valid polygon for the play area (felt).
-  // This handles both ordered procedural rails and potentially disordered SVG rail segments.
-  // We sort CCW around the centroid.
-  if (points.length > 0) {
-    const centerX = points.reduce((s, p) => s + p.x, 0) / points.length;
-    const centerY = points.reduce((s, p) => s + p.y, 0) / points.length;
+  // Handles both ordered procedural rails and potentially disordered SVG rail segments.
+  const centerX = points.reduce((s, p) => s + p.x, 0) / points.length;
+  const centerY = points.reduce((s, p) => s + p.y, 0) / points.length;
 
-    points.sort((a, b) => {
-      return Math.atan2(a.y - centerY, a.x - centerX) - Math.atan2(b.y - centerY, b.x - centerX);
-    });
-  }
+  points.sort((a, b) => {
+    return Math.atan2(a.y - centerY, a.x - centerX) - Math.atan2(b.y - centerY, b.x - centerX);
+  });
 
   return points;
 }
@@ -105,17 +146,18 @@ export interface BoundaryBounds {
 }
 
 export function computeBoundaryBounds(points: Vec2[]): BoundaryBounds {
-  if (!points.length) {
+  const valid = points.filter(isFiniteVec2);
+  if (!valid.length) {
     return { minX: 0, maxX: 0, minY: 0, maxY: 0, width: 0, height: 0 };
   }
 
-  let minX = points[0].x;
-  let maxX = points[0].x;
-  let minY = points[0].y;
-  let maxY = points[0].y;
+  let minX = valid[0].x;
+  let maxX = valid[0].x;
+  let minY = valid[0].y;
+  let maxY = valid[0].y;
 
-  for (let i = 1; i < points.length; i++) {
-    const { x, y } = points[i];
+  for (let i = 1; i < valid.length; i++) {
+    const { x, y } = valid[i];
     if (x < minX) minX = x;
     if (x > maxX) maxX = x;
     if (y < minY) minY = y;
@@ -530,16 +572,16 @@ function computeBaseCoordinates(jawPositions: JawPositions): BaseCoordinates {
 let cachedSVGGeometry: TableGeometry | null = null;
 
 export function getTableGeometry(): TableGeometry {
-  // 1. Check if SVG Geometry is enabled
+  // 1. Check if SVG/JSON Geometry is enabled
   if (CONFIG.USE_SVG_GEOMETRY) {
     if (cachedSVGGeometry) return cachedSVGGeometry;
 
     try {
-      // Parse the SVG (using the imported raw string or fetch if we were async, 
-      // but Geometry is synchronous, so we rely on build-time import or pre-fetched content).
-      // For this implementation, we use the imported 'tableSvg' string.
-      // In a real game, this might need to be async or pre-loaded.
-      const parsed = parseSVG(tableSvg);
+      // Parse geometry from JSON (preferred) or SVG fallback
+      // JSON is cleaner since it's structured Figma export data
+      const parsed = CONFIG.USE_JSON_GEOMETRY 
+        ? parseFigmaJSON(tableJson)
+        : parseSVG(tableSvg);
 
       if (parsed.rails && parsed.pockets) {
         // RE-IMPLEMENTATION with actual vector logic
@@ -568,8 +610,8 @@ export function getTableGeometry(): TableGeometry {
           const pts = r.points;
           if (pts.length < 2) return;
 
-          // Treat as polygon loop
-          const isClosed = true; // Assume cushions are closed shapes
+          // Treat as open when only 2 points (inner face segment), closed otherwise
+          const isClosed = pts.length > 2;
           const limit = isClosed ? pts.length : pts.length - 1;
 
           for (let i = 0; i < limit; i++) {
@@ -1048,55 +1090,4 @@ export class CoordinateTransform {
   canvasDistanceToWorld(canvasDist: number): number {
     return canvasDist / this.scale;
   }
-}
-
-export function computePlayBoundaryPoints(rails: RailDef[]): Vec2[] {
-  let points: Vec2[] = [];
-  if (rails.length === 0) return points;
-
-  // Extract points
-  points = rails.map(r => r.from);
-
-  // Sort by angle to ensure valid polygon shape for rendering (Approximation for generic/SVG tables)
-  // Logic: Sort CCW around the centroid
-  if (points.length > 0) {
-    const centerX = points.reduce((s, p) => s + p.x, 0) / points.length;
-    const centerY = points.reduce((s, p) => s + p.y, 0) / points.length;
-
-    points.sort((a, b) => {
-      return Math.atan2(a.y - centerY, a.x - centerX) - Math.atan2(b.y - centerY, b.x - centerX);
-    });
-  }
-
-  return points;
-}
-
-export interface BoundaryBounds {
-  minX: number;
-  maxX: number;
-  minY: number;
-  maxY: number;
-  width: number;
-  height: number;
-}
-
-export function computeBoundaryBounds(points: Vec2[]): BoundaryBounds {
-  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-  points.forEach(p => {
-    if (p.x < minX) minX = p.x;
-    if (p.x > maxX) maxX = p.x;
-    if (p.y < minY) minY = p.y;
-    if (p.y > maxY) maxY = p.y;
-  });
-
-  // Handle empty case
-  if (points.length === 0) {
-    return { minX: 0, maxX: 0, minY: 0, maxY: 0, width: 0, height: 0 };
-  }
-
-  return {
-    minX, maxX, minY, maxY,
-    width: maxX - minX,
-    height: maxY - minY
-  };
 }

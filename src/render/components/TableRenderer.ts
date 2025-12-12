@@ -109,6 +109,7 @@ export class TableRenderer {
 
         this.initializeTable();
         this.refreshDerivedGeometry();
+        this.exposePlayBoundaryDebug();
 
         // Listen for appearance changes
         window.addEventListener('settings:appearance-changed', (e: Event) => {
@@ -168,10 +169,73 @@ export class TableRenderer {
         this.initializeFrame();
     }
 
+    /**
+     * Expose a debugging helper to inspect the play boundary polygon produced from the SVG/rails.
+     * Call `dumpPlayBoundary()` in the browser console to see the points, bounds, and a copyable SVG string.
+     */
+    private exposePlayBoundaryDebug(): void {
+        const win = window as unknown as { dumpPlayBoundary?: () => { points: Array<{ x: number; y: number }>; bounds: BoundaryBounds; svg: string } };
+        win.dumpPlayBoundary = () => {
+            const points = this.playBoundaryPoints
+                .filter((p) => Number.isFinite(p?.x) && Number.isFinite(p?.y))
+                .map((p) => ({ x: p.x, y: p.y }));
+            const bounds = this.playBounds;
+
+            const scale = 6; // px per inch for the preview
+            const pad = 32;
+            const width = Math.max(200, bounds.width * scale + pad * 2);
+            const height = Math.max(200, bounds.height * scale + pad * 2);
+
+            const toSvgCoord = (p: { x: number; y: number }) => {
+                // Flip Y for SVG (screen space)
+                const sx = (p.x * scale + width / 2).toFixed(2);
+                const sy = (-p.y * scale + height / 2).toFixed(2);
+                return `${sx},${sy}`;
+            };
+
+            const path =
+                points.length > 0
+                    ? points
+                          .map((p, i) => `${i === 0 ? 'M' : 'L'} ${toSvgCoord(p)}`)
+                          .join(' ') + ' Z'
+                    : '';
+
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <rect x="0" y="0" width="${width}" height="${height}" fill="#0b1220" />
+  <path d="${path}" fill="rgba(0,255,255,0.16)" stroke="#00e7ff" stroke-width="2" />
+</svg>`;
+
+            console.log('[TableRenderer] Play boundary points:', points);
+            console.log('[TableRenderer] Play boundary bounds:', bounds);
+            console.log('[TableRenderer] Inline SVG (copy to a file to view):\n', svg);
+            return { points, bounds, svg };
+        };
+    }
+
     private createPlayShape(): THREE.Shape {
         const shape = new THREE.Shape();
-        const points = this.playBoundaryPoints;
-        if (!points.length) {
+        const points = this.playBoundaryPoints.filter(
+            (p) => Number.isFinite(p?.x) && Number.isFinite(p?.y)
+        );
+        if (points.length < 3) {
+            const halfW = (CONFIG.TABLE_WIDTH ?? 100) * 0.5;
+            const halfH = (CONFIG.TABLE_HEIGHT ?? 50) * 0.5;
+            const fallback = [
+                { x: -halfW, y: -halfH },
+                { x: halfW, y: -halfH },
+                { x: halfW, y: halfH },
+                { x: -halfW, y: halfH },
+            ];
+            console.warn('[TableRenderer] Invalid play boundary (<3 points). Using fallback rectangle.', {
+                points,
+                fallback,
+            });
+            if (!fallback.length) return shape;
+            shape.moveTo(fallback[0].x, fallback[0].y);
+            for (let i = 1; i < fallback.length; i++) {
+                shape.lineTo(fallback[i].x, fallback[i].y);
+            }
+            shape.autoClose = true;
             return shape;
         }
 

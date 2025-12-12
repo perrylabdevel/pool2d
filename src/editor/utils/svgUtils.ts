@@ -6,6 +6,9 @@ export interface SVGScaleInfo {
     pixelsPerInch: number;
     offsetX: number;
     offsetY: number;
+    rotationRad?: number;
+    rotationCx?: number;
+    rotationCy?: number;
 }
 
 export interface RailDef {
@@ -18,12 +21,13 @@ export interface PocketDef {
     outline: { x: number; y: number }[]; // Visual/Physics outline from path
     center: { x: number; y: number }; // Center for game logic
     radius: number; // Approximate radius
+    sourceTag: string; // circle|path
 }
 
 export interface ParsedTableData {
     rails: RailDef[];
     pockets: PocketDef[];
-    playArea?: { x: number; y: number; width: number; height: number };
+    playArea?: { x: number; y: number; width: number; height: number; corners: { x: number; y: number }[] };
 }
 
 // ----------------------------------------------------------------------
@@ -193,9 +197,23 @@ class PathParser {
     }
 
     public transform(x: number, y: number, scale: SVGScaleInfo) {
+        // 0. Optional rotation around pivot (match play_area transform)
+        let rx = x;
+        let ry = y;
+        if (scale.rotationRad && Math.abs(scale.rotationRad) > 1e-6) {
+            const cx = scale.rotationCx ?? 0;
+            const cy = scale.rotationCy ?? 0;
+            const dx = x - cx;
+            const dy = y - cy;
+            const cos = Math.cos(scale.rotationRad);
+            const sin = Math.sin(scale.rotationRad);
+            rx = cx + dx * cos - dy * sin;
+            ry = cy + dx * sin + dy * cos;
+        }
+
         // 1. Translate so play_area center is 0,0
-        const localX = x - scale.offsetX;
-        const localY = y - scale.offsetY;
+        const localX = rx - scale.offsetX;
+        const localY = ry - scale.offsetY;
 
         // 2. Scale to inches
         const inchX = localX / scale.pixelsPerInch;
@@ -209,21 +227,31 @@ class PathParser {
 // ----------------------------------------------------------------------
 // 2. Helpers
 // ----------------------------------------------------------------------
+const rotatePoint = (x: number, y: number, cx: number, cy: number, angleRad: number) => {
+    const dx = x - cx;
+    const dy = y - cy;
+    const cos = Math.cos(angleRad);
+    const sin = Math.sin(angleRad);
+    return {
+        x: cx + dx * cos - dy * sin,
+        y: cy + dx * sin + dy * cos,
+    };
+};
 
 // Helper to find all elements matching a loose ID within the document or subtree
 function findElementsLoose(root: Element | Document, idKeyword: string): Element[] {
     const results: Element[] = [];
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+    const scope: Document | Element | null =
+        root instanceof Document ? root : root ?? null;
+    if (!scope) return results;
 
-    let currentNode = walker.currentNode as Element;
-    while (currentNode) {
-        const id = currentNode.id || '';
-        // Check if ID contains keyword (e.g. 'cushion_1' contains 'cushion')
-        if (id.includes(idKeyword)) {
-            results.push(currentNode);
-        }
-        currentNode = walker.nextNode() as Element;
+    // Include the root itself when it matches (querySelectorAll won't check the root node)
+    if (!(root instanceof Document) && (root as Element).id?.includes(idKeyword)) {
+        results.push(root as Element);
     }
+
+    const matches = Array.from(scope.querySelectorAll(`[id*="${idKeyword}"]`));
+    matches.forEach((el) => results.push(el as Element));
     return results;
 }
 
@@ -247,9 +275,10 @@ export const parseSVG = (svgString: string): ParsedTableData => {
     const doc = parser.parseFromString(svgString, 'image/svg+xml');
 
     // 1. Calculate Scale
-    let scale: SVGScaleInfo = { pixelsPerInch: 10, offsetX: 0, offsetY: 0 };
+    let scale: SVGScaleInfo = { pixelsPerInch: 10, offsetX: 0, offsetY: 0, rotationRad: 0, rotationCx: 0, rotationCy: 0 };
 
     const playArea = doc.querySelector('[id*="play_area"]');
+    let playAreaCorners: { x: number; y: number }[] = [];
     if (playArea) {
         const w = parseFloat(playArea.getAttribute('width') || '0');
         const h = parseFloat(playArea.getAttribute('height') || '0');
@@ -265,6 +294,27 @@ export const parseSVG = (svgString: string): ParsedTableData => {
 
         let cx = x + w / 2;
         let cy = y + h / 2;
+
+        // Handle rotate(angle cx cy) on the play_area to place the center correctly.
+        // The current asset uses rotate(180 831 426), which flips the rect around a pivot
+        // far from its own center, so we must rotate the center point as well.
+        const rotateMatch = transform.match(/rotate\(\s*([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)\s*(?:([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)\s+([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)\s*)?\)/);
+        let rotationPivotX = cx;
+        let rotationPivotY = cy;
+        let rotationRad = 0;
+        let rotatedCenter = { x: cx, y: cy };
+        if (rotateMatch) {
+            const angleDeg = parseFloat(rotateMatch[1]);
+            if (Number.isFinite(angleDeg)) {
+                rotationRad = angleDeg * Math.PI / 180;
+                const pivotXRaw = rotateMatch[2] !== undefined ? parseFloat(rotateMatch[2]) : cx;
+                const pivotYRaw = rotateMatch[3] !== undefined ? parseFloat(rotateMatch[3]) : cy;
+                rotatedCenter = rotatePoint(cx, cy, pivotXRaw, pivotYRaw, rotationRad);
+                // Keep original SVG pivot for rotation (so corners match true visual pose)
+                rotationPivotX = pivotXRaw;
+                rotationPivotY = pivotYRaw;
+            }
+        }
 
         // Naive transform check: if rotated 180 around a point, find that point?
         // Actually, if we just want to center the physics world on the visual center of the play area:
@@ -284,9 +334,23 @@ export const parseSVG = (svgString: string): ParsedTableData => {
 
         if (w > 0) {
             scale.pixelsPerInch = w / 100.0; // 100 inches standard width
-            scale.offsetX = cx;
-            scale.offsetY = cy;
+            scale.offsetX = rotatedCenter.x;
+            scale.offsetY = rotatedCenter.y;
+            // Do not rotate individual elements; only rotate corners for bounds.
+            scale.rotationRad = 0;
+            scale.rotationCx = 0;
+            scale.rotationCy = 0;
             console.log(`[svgUtils] Scale found: PPI=${scale.pixelsPerInch}, Offset=(${scale.offsetX}, ${scale.offsetY})`);
+
+            // Capture play_area corners (after rotation) for a canonical boundary reference
+            const cornersPx = [
+                { x, y },
+                { x: x + w, y },
+                { x: x + w, y: y + h },
+                { x, y: y + h },
+            ].map(pt => rotateMatch ? rotatePoint(pt.x, pt.y, rotationPivotX, rotationPivotY, rotationRad) : pt);
+
+            playAreaCorners = cornersPx.map(pt => applyTransform(pt.x, pt.y, scale));
         } else {
             console.warn('[svgUtils] play_area width is 0 or missing!');
         }
@@ -298,6 +362,15 @@ export const parseSVG = (svgString: string): ParsedTableData => {
     // Look for 'cushion' keyword. 
     // They might be <path> or <g>. If <g>, flatten all paths inside.
     const rails: RailDef[] = [];
+    // Seed rails with play_area rectangle to disambiguate boundary
+    if (playAreaCorners.length === 4) {
+        rails.push(
+            { id: 'play_area_north', points: [playAreaCorners[0], playAreaCorners[1]] },
+            { id: 'play_area_east', points: [playAreaCorners[1], playAreaCorners[2]] },
+            { id: 'play_area_south', points: [playAreaCorners[2], playAreaCorners[3]] },
+            { id: 'play_area_west', points: [playAreaCorners[3], playAreaCorners[0]] },
+        );
+    }
     const cushionNodes = findElementsLoose(doc, 'cushion');
     console.log(`[svgUtils] Found ${cushionNodes.length} cushion nodes.`);
 
@@ -310,8 +383,7 @@ export const parseSVG = (svgString: string): ParsedTableData => {
             paths = Array.from(node.querySelectorAll('path'));
         }
 
-        // Merge all points from all paths in this cushion group
-        let allPoints: { x: number; y: number }[] = [];
+        // For each path, pick only the segments closest to table center (inner rail face)
         paths.forEach(p => {
             const d = p.getAttribute('d') || '';
             const pathParser = new PathParser(d);
@@ -319,14 +391,23 @@ export const parseSVG = (svgString: string): ParsedTableData => {
             if (parsed.some(pt => isNaN(pt.x) || isNaN(pt.y))) {
                 console.error(`[svgUtils] NaN detected in cushion ${id} path!`);
             }
-            allPoints = allPoints.concat(parsed);
+            const segments: { from: { x: number; y: number }; to: { x: number; y: number }; dist: number }[] = [];
+            for (let i = 0; i < parsed.length; i++) {
+                const from = parsed[i];
+                const to = parsed[(i + 1) % parsed.length];
+                const midX = (from.x + to.x) * 0.5;
+                const midY = (from.y + to.y) * 0.5;
+                segments.push({ from, to, dist: Math.hypot(midX, midY) });
+            }
+            if (!segments.length) return;
+            const minDist = Math.min(...segments.map(s => s.dist));
+            const TOLERANCE_IN = 0.5; // accept near-inner faces
+            segments
+                .filter(s => s.dist <= minDist + TOLERANCE_IN)
+                .forEach((seg, segIdx) => {
+                    rails.push({ id: `${id}_seg${segIdx}`, points: [seg.from, seg.to] });
+                });
         });
-
-        if (allPoints.length > 0) {
-            rails.push({ id, points: allPoints });
-        } else {
-            console.warn(`[svgUtils] Cushion ${id} has no points!`);
-        }
     });
     console.log(`[svgUtils] Parsed ${rails.length} rails.`);
 
@@ -340,32 +421,18 @@ export const parseSVG = (svgString: string): ParsedTableData => {
         let points: { x: number, y: number }[] = [];
         let center = { x: 0, y: 0 };
         let radius = 2.25; // Default
+        let sourceTag = node.tagName;
 
-        // We primarily look for the visual hole (Circle) for position
-        // If strict path parsing is needed for complex pocket shapes:
-        if (node.tagName === 'path') {
-            const d = node.getAttribute('d') || '';
-            const pp = new PathParser(d);
-            points = pp.parse(scale);
-            // Estimate center from bounds
-            if (points.length > 0) {
-                let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-                points.forEach(p => {
-                    minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
-                    minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
-                });
-                center = { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
-                radius = Math.max(maxX - minX, maxY - minY) / 2;
-            }
-        } else if (node.tagName === 'circle') {
-            const cx = parseFloat(node.getAttribute('cx') || '0');
-            const cy = parseFloat(node.getAttribute('cy') || '0');
-            const r = parseFloat(node.getAttribute('r') || '0');
-
-            // Use PathParser.transform (public now) for consistency
-            const pp = new PathParser(''); // Empty path, just to use transform method
+        // Prefer circle center for pivot/radius; if a circle exists, ignore path for center/radius and outline.
+        const circleEl = node.tagName === 'circle' ? node : (node.querySelector?.('circle') as Element | null);
+        if (circleEl) {
+            const cx = parseFloat(circleEl.getAttribute('cx') || '0');
+            const cy = parseFloat(circleEl.getAttribute('cy') || '0');
+            const r = parseFloat(circleEl.getAttribute('r') || '0');
+            const pp = new PathParser('');
             center = pp.transform(cx, cy, scale);
             radius = r / scale.pixelsPerInch;
+            sourceTag = 'circle';
 
             const SEGMENTS = 16;
             for (let i = 0; i < SEGMENTS; i++) {
@@ -374,17 +441,68 @@ export const parseSVG = (svgString: string): ParsedTableData => {
                 const py = cy + Math.sin(theta) * r;
                 points.push(pp.transform(px, py, scale));
             }
+        } else if (node.tagName === 'path') {
+            // Fallback: path-only pocket (e.g., felt), use its outline for center/radius
+            const d = node.getAttribute('d') || '';
+            const pp = new PathParser(d);
+            const outline = pp.parse(scale);
+            if (outline.length) {
+                points = outline;
+                let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+                outline.forEach(p => {
+                    minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+                    minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+                });
+                center = { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
+                radius = Math.max(maxX - minX, maxY - minY) / 2;
+                sourceTag = 'path';
+            }
         }
 
         if (points.length > 0) {
-            pockets.push({ id, outline: points, center, radius });
+            pockets.push({ id, outline: points, center, radius, sourceTag });
         }
     });
 
-    return { rails, pockets };
+    const playAreaData = playArea && playAreaCorners.length === 4
+        ? (() => {
+            const xs = playAreaCorners.map(p => p.x);
+            const ys = playAreaCorners.map(p => p.y);
+            const minX = Math.min(...xs);
+            const maxX = Math.max(...xs);
+            const minY = Math.min(...ys);
+            const maxY = Math.max(...ys);
+            return {
+                x: scale.offsetX,
+                y: scale.offsetY,
+                width: maxX - minX,
+                height: maxY - minY,
+                corners: playAreaCorners,
+            };
+        })()
+        : undefined;
+
+    return { rails, pockets, playArea: playAreaData };
 };
 
 export const flattenPath = (d: string, scale: SVGScaleInfo) => {
     return new PathParser(d).parse(scale);
 }
-
+// Apply the same transform logic used by PathParser (rotation -> translate -> scale -> flip Y)
+const applyTransform = (x: number, y: number, scale: SVGScaleInfo) => {
+    let rx = x;
+    let ry = y;
+    if (scale.rotationRad && Math.abs(scale.rotationRad) > 1e-6) {
+        const cx = scale.rotationCx ?? 0;
+        const cy = scale.rotationCy ?? 0;
+        const dx = x - cx;
+        const dy = y - cy;
+        const cos = Math.cos(scale.rotationRad);
+        const sin = Math.sin(scale.rotationRad);
+        rx = cx + dx * cos - dy * sin;
+        ry = cy + dx * sin + dy * cos;
+    }
+    const localX = rx - scale.offsetX;
+    const localY = ry - scale.offsetY;
+    return { x: localX / scale.pixelsPerInch, y: -localY / scale.pixelsPerInch };
+};
