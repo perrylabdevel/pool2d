@@ -1,3 +1,5 @@
+import { CONFIG } from '../config';
+
 export const RENDER_LAYER_BOOLEAN_KEYS = [
   'showTable',
   'showFrame',
@@ -46,18 +48,21 @@ export interface RenderLayerSettings {
   orderUI: number;
 }
 
+// When using JSON geometry, default certain procedural layers to off (skin overlay replaces them)
+const useJsonDefaults = CONFIG.USE_JSON_GEOMETRY ?? false;
+
 export const defaultRenderLayerSettings: RenderLayerSettings = {
-  showTable: true,
-  showFrame: true,
+  showTable: !useJsonDefaults,
+  showFrame: !useJsonDefaults,
   showSkin: true,
-  showRails: true,
+  showRails: !useJsonDefaults,
   showPockets: true,
-  showCaps: true,
+  showCaps: !useJsonDefaults,
   showBalls: true,
   showUIOverlay: true,
   showMeasurementOverlay: false,
   showReferenceOverlay: false,
-  showTextures: true,
+  showTextures: !useJsonDefaults,
   orderTable: 0,
   orderFrame: 5,
   orderRails: 10,

@@ -35,10 +35,10 @@ export const CONFIG = {
 
   // Pockets (center-origin coordinates: see Geometry.ts for authoritative definitions)
   POCKET_RADIUS: 2.5,
-  POCKET_CAPTURE_RADIUS_CORNER: 2.5,
-  POCKET_CAPTURE_RADIUS_SIDE: 2.5,
-  POCKET_VISUAL_RADIUS_CORNER: 2.5,
-  POCKET_VISUAL_RADIUS_SIDE: 2.5,
+  POCKET_CAPTURE_RADIUS_CORNER: 2.8,
+  POCKET_CAPTURE_RADIUS_SIDE: 3.3,
+  POCKET_VISUAL_RADIUS_CORNER: 2.55,
+  POCKET_VISUAL_RADIUS_SIDE: 2.1,
   POCKET_SHELF_DEPTH_IN: 1.5, // Slider range 0-3, default at 50% depth
   POCKET_SHELF_DEPTH_SIDE_IN: 0.75, // Proportionally adjusted
 
@@ -59,7 +59,7 @@ export const CONFIG = {
   DISTANCE_AIM_MIN_SENSITIVITY: 0.35, // Sensitivity multiplier at max distance (0.35 = 35% of normal)
 
   // Control scheme
-  TOUCH_AIM_MODE: false, // When true, touch/drag aims only and power is set via the power bar
+  TOUCH_AIM_MODE: true, // When true, touch/drag aims only and power is set via the power bar
   // Debug and diagnostics
   DEBUG_BIH_LOG: false, // Verbose console logs for ball-in-hand clamping and drag
 
@@ -73,7 +73,7 @@ export const CONFIG = {
   OBJECT_PATH_PERCENTAGE: 1.0, // Multiplier for object ball path length (0.5 = 50% length)
   SHOW_AIM_INFO: true, // Display aim angle, distance, speed, and cut angle overlay
   AIM_INFO_SCALE: 1.0, // Scale multiplier for aim info indicators (0.5 = 50% size, 2.0 = 200% size)
-  SIDEBAR_DIAL_SIDE: 'left' as 'left' | 'right', // Which side the micro dial lives on (power bar goes opposite)
+  SIDEBAR_DIAL_SIDE: 'right' as 'right' | 'left', // Which side the micro dial lives on (power bar goes opposite)
   // Pocket visual animation tuning
   POCKET_ANIMATION_DROP_DURATION_MS: 300, // duration of drop phase
   POCKET_ANIMATION_ROLL_DURATION_MS: 500, // duration of roll phase
@@ -162,8 +162,8 @@ export const CONFIG = {
   FRAME_OFFSET_IN: 4.0, // Outer frame offset from play area (in)
   FRAME_CORNER_RADIUS_IN: 0.0, // Outer frame corner radius (0 = square)
   SIDE_FRAME_OFFSET_IN: 2.0, // Frame offset for side pocket tangent calculation (smaller = steeper jaws)
-  SIDE_POCKET_OUTWARD_OFFSET_IN: 0.25, // Side pocket center offset toward frame
-  CORNER_POCKET_OUTWARD_OFFSET_IN: 0.0, // Corner pocket center offset toward frame (diagonal)
+  SIDE_POCKET_OUTWARD_OFFSET_IN: -1.3, // Side pocket center offset toward frame
+  CORNER_POCKET_OUTWARD_OFFSET_IN: -1.0, // Corner pocket center offset toward frame (diagonal)
   CORNER_FRAME_OFFSET_IN: 4.0, // Frame offset used for corner jaw derivation (decoupled from FRAME_OFFSET_IN)
   SIDE_STRAIGHT_Y_IN: 23.5, // Y position of straight rail segment before side pocket (|Y|)
   SIDE_INNER_Y_IN: 24.6, // Inner throat Y position for side pockets (|Y|)
