@@ -2,6 +2,7 @@
 import { CONFIG } from '../config';
 import { RenderLayerSettings, defaultRenderLayerSettings } from '../render/RenderLayers';
 import type { ModernPocketGeometry } from '../geometry/ModernGeometry';
+import { resetTableGeometryCache } from '../geometry/Geometry';
 import { Capacitor } from '@capacitor/core';
 import iosSettings from '../config/ios-settings.json';
 import { TableAppearance, DEFAULT_TABLE_APPEARANCE, TABLE_THEMES } from '../textures/TableAppearance';
@@ -146,6 +147,7 @@ export interface GeometrySettings {
 export interface RenderSettings extends RenderLayerSettings {
   canvasScale: number;
   ballScale: number;
+  skinOpacity: number;
   ambientIntensity: number;
   directionalIntensity: number;
   accentIntensity: number;
@@ -857,6 +859,7 @@ export class SettingsManager {
       ...defaultRenderLayerSettings,
       canvasScale: 1,
       ballScale: 1,
+      skinOpacity: 1.0,
       ambientIntensity: CONFIG.AMBIENT_INTENSITY ?? 1.1,
       directionalIntensity: CONFIG.DIRECTIONAL_INTENSITY ?? 1.6,
       accentIntensity: CONFIG.ACCENT_INTENSITY ?? 0.5,
@@ -984,6 +987,7 @@ export class SettingsManager {
       ...defaultRenderLayerSettings,
       canvasScale: 1,
       ballScale: 1,
+      skinOpacity: 1.0,
       ambientIntensity: CONFIG.AMBIENT_INTENSITY ?? 1.1,
       directionalIntensity: CONFIG.DIRECTIONAL_INTENSITY ?? 1.6,
       accentIntensity: CONFIG.ACCENT_INTENSITY ?? 0.5,
@@ -1057,6 +1061,7 @@ export class SettingsManager {
     CONFIG.RAIL_THICKNESS_INNER = this.geometrySettings.RAIL_THICKNESS_INNER;
     CONFIG.RAIL_THICKNESS_OUTER = this.geometrySettings.RAIL_THICKNESS_OUTER;
     // Signal that geometry parameters changed (requires rebuild)
+    resetTableGeometryCache();
     try {
       console.info('[Settings] Geometry updated', this.geometrySettings);
     } catch { }

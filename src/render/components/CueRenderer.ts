@@ -1091,7 +1091,8 @@ export class CueRenderer {
         const frameHalfWidth = geom.frameOutline.outerHalfWidth;
         const frameWorldX = side === 'right' ? frameHalfWidth : -frameHalfWidth;
         const frameScreen = this.worldToScreen(frameWorldX, 0);
-        const offsetFromFrame = 16;
+        // Add generous gutter so sidebars don't hug the table frame
+        const offsetFromFrame = 40;
         const x = side === 'right' ? frameScreen.x + offsetFromFrame : frameScreen.x - offsetFromFrame - width;
         const bounds = this.getTableFrameScreenBounds();
 

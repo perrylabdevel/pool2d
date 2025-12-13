@@ -389,6 +389,10 @@
               <input id="layer-frame" type="checkbox" checked />
               <span>Frame</span>
             </label>
+            <label class="panel-toggle-row" for="layer-skin">
+              <input id="layer-skin" type="checkbox" checked />
+              <span>Skin</span>
+            </label>
             <label class="panel-toggle-row" for="layer-rails">
               <input id="layer-rails" type="checkbox" checked />
               <span>Rails</span>
@@ -421,6 +425,17 @@
               <input id="layer-textures" type="checkbox" checked />
               <span>Textures</span>
             </label>
+          </div>
+        </div>
+
+        <div class="settings-group">
+          <h4 class="settings-group-title">Skin</h4>
+          <div class="slider-group">
+            <label class="slider-label" for="skin-opacity">
+              <span class="slider-title">Opacity</span>
+              <span class="slider-value" id="skin-opacity-value">1.00</span>
+            </label>
+            <input type="range" id="skin-opacity" min="0" max="1" step="0.01" value="1.00" />
           </div>
         </div>
 

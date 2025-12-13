@@ -270,6 +270,114 @@ function computeInwardNormal(from: Vec2, to: Vec2): Vec2 {
   return { x: nx, y: ny };
 }
 
+/** Clamp a rail to cushion outlines (used before splitting rails near pockets). */
+function clampRailToCushions(rail: RailDef, cushions: RailDef[]): RailDef {
+  const dx = rail.to.x - rail.from.x;
+  const dy = rail.to.y - rail.from.y;
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-4) return rail;
+
+  const intersections: number[] = [];
+  const segmentIntersect = (a: Vec2, b: Vec2, c: Vec2, d: Vec2): number | null => {
+    const den = (a.x - b.x) * (c.y - d.y) - (a.y - b.y) * (c.x - d.x);
+    if (Math.abs(den) < 1e-8) return null; // parallel or colinear
+    const t = ((a.x - c.x) * (c.y - d.y) - (a.y - c.y) * (c.x - d.x)) / den;
+    const u = ((a.x - c.x) * (a.y - b.y) - (a.y - c.y) * (a.x - b.x)) / den;
+    if (t < -1e-4 || t > 1 + 1e-4 || u < -1e-4 || u > 1 + 1e-4) return null;
+    return t;
+  };
+
+  (cushions || []).forEach((c) => {
+    const outline = Array.isArray(c.outline) && c.outline.length > 1 ? c.outline : [c.from, c.to];
+    for (let i = 0; i < outline.length; i++) {
+      const p1 = outline[i];
+      const p2 = outline[(i + 1) % outline.length];
+      if (!isFiniteVec2(p1) || !isFiniteVec2(p2)) continue;
+      const t = segmentIntersect(rail.from, rail.to, p1, p2);
+      if (t != null) intersections.push(t);
+    }
+  });
+
+  if (intersections.length < 2) return rail;
+  const minT = Math.max(0, Math.min(...intersections));
+  const maxT = Math.min(1, Math.max(...intersections));
+  if (maxT - minT < 1e-4) return rail;
+  const lerpPoint = (t: number) => ({
+    x: rail.from.x + dx * t,
+    y: rail.from.y + dy * t,
+  });
+  return { ...rail, from: lerpPoint(minT), to: lerpPoint(maxT) };
+}
+
+/** Split a rail so it leaves gaps around pockets (prevents blocked pocket openings). */
+function splitRailByPockets(rail: RailDef, pockets: PocketDef[], cushions: RailDef[]): RailDef[] {
+  const clamped = clampRailToCushions(rail, cushions);
+  const dx = clamped.to.x - clamped.from.x;
+  const dy = clamped.to.y - clamped.from.y;
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-4) return [clamped];
+  const ux = dx / len;
+  const uy = dy / len;
+
+  const lerpPoint = (t: number) => ({
+    x: clamped.from.x + dx * t,
+    y: clamped.from.y + dy * t,
+  });
+
+  const gaps: [number, number][] = [];
+  (pockets || []).forEach((p: PocketDef) => {
+    if (!isFiniteVec2(p?.center) || !Number.isFinite(p.radius)) return;
+    const vx = p.center.x - clamped.from.x;
+    const vy = p.center.y - clamped.from.y;
+    const proj = vx * ux + vy * uy; // distance along rail to pocket center
+    const perp = Math.abs(vx * (-uy) + vy * ux); // perpendicular distance
+    const gapLen = Math.max(p.radius * 1.3, 1.0); // slightly larger gap
+    if (proj < -gapLen || proj > len + gapLen) return;
+    if (perp > p.radius * 1.2) return; // pocket not near this rail
+    const t0 = Math.max(0, (proj - gapLen) / len);
+    const t1 = Math.min(1, (proj + gapLen) / len);
+    gaps.push([t0, t1]);
+  });
+
+  if (!gaps.length) return [clamped];
+  gaps.sort((a, b) => a[0] - b[0]);
+  const merged: [number, number][] = [];
+  let cur = gaps[0];
+  for (let i = 1; i < gaps.length; i++) {
+    const g = gaps[i];
+    if (g[0] <= cur[1] + 1e-4) {
+      cur[1] = Math.max(cur[1], g[1]);
+    } else {
+      merged.push(cur);
+      cur = g;
+    }
+  }
+  merged.push(cur);
+
+  const segments: RailDef[] = [];
+  let cursor = 0;
+  merged.forEach(([s, e]) => {
+    if (s > cursor + 1e-4) {
+      segments.push({
+        ...clamped,
+        id: `${rail.id}_split_${segments.length}`,
+        from: lerpPoint(cursor),
+        to: lerpPoint(s),
+      });
+    }
+    cursor = Math.max(cursor, e);
+  });
+  if (cursor < 1 - 1e-4) {
+    segments.push({
+      ...clamped,
+      id: `${rail.id}_split_${segments.length}`,
+      from: lerpPoint(cursor),
+      to: lerpPoint(1),
+    });
+  }
+  return segments;
+}
+
 // 9-ft table geometry (100" x 50" play area)
 // --- Derived jaw geometry helpers (side pockets) ---
 const PLAY_HALF_W_IN = 100.0 / 2;
@@ -577,6 +685,10 @@ function computeBaseCoordinates(jawPositions: JawPositions): BaseCoordinates {
 
 let cachedGeometry: TableGeometry | null = null;
 
+export function resetTableGeometryCache(): void {
+  cachedGeometry = null;
+}
+
 export function getTableGeometry(): TableGeometry {
   if (cachedGeometry) return cachedGeometry;
 
@@ -585,15 +697,7 @@ export function getTableGeometry(): TableGeometry {
     try {
       console.log('[Geometry] Loading physics geometry from table.physics.json');
 
-      const rails: RailDef[] = (physicsJson.rails || []).map((r: any) => ({
-        id: r.id,
-        from: r.from,
-        to: r.to,
-        normal: r.normal,
-        outline: r.outline
-      }));
-
-      const pockets: PocketDef[] = (physicsJson.pockets || []).map((p: any) => ({
+      let pockets: PocketDef[] = (physicsJson.pockets || []).map((p: { id: string; center: Vec2; radius: number; outline?: Vec2[]; sourceTag?: string; source?: string }) => ({
         id: p.id,
         center: p.center,
         visualRadius: p.radius,
@@ -604,6 +708,44 @@ export function getTableGeometry(): TableGeometry {
         radius: p.radius,
         outline: p.outline // Keep outline for bounds calculation
       }));
+
+      const sidePocketOffsetDelta = CONFIG.SIDE_POCKET_OUTWARD_OFFSET_IN - 0.25;
+      if (Math.abs(sidePocketOffsetDelta) > 1e-6 && physicsJson.playArea) {
+        const halfW = physicsJson.playArea.width / 2;
+        const sideCandidates = pockets.filter((p) => Math.abs(p.center.x) <= halfW * 0.25);
+        if (sideCandidates.length >= 2) {
+          const north = sideCandidates.reduce((best, p) => (p.center.y > best.center.y ? p : best), sideCandidates[0]);
+          const south = sideCandidates.reduce((best, p) => (p.center.y < best.center.y ? p : best), sideCandidates[0]);
+          const shiftPocket = (p: PocketDef, dy: number): PocketDef => ({
+            ...p,
+            center: { x: p.center.x, y: p.center.y + dy },
+            outline: Array.isArray(p.outline) ? p.outline.map((pt) => ({ x: pt.x, y: pt.y + dy })) : p.outline,
+          });
+          pockets = pockets.map((p) => {
+            if (p.id === north.id) return shiftPocket(p, sidePocketOffsetDelta);
+            if (p.id === south.id) return shiftPocket(p, -sidePocketOffsetDelta);
+            return p;
+          });
+        }
+      }
+
+      const rawRails: RailDef[] = (physicsJson.rails || []).map((r: { id: string; from: Vec2; to: Vec2; normal: Vec2; outline?: Vec2[] }) => ({
+        id: r.id,
+        from: r.from,
+        to: r.to,
+        normal: r.normal,
+        outline: r.outline
+      }));
+
+      const cushionRails = rawRails.filter(r => r.id.includes('cushion'));
+
+      // Process rails: split 'play_area' rails around pockets to avoid blocking pocket openings
+      const rails: RailDef[] = rawRails.flatMap((r) => {
+        if (r.id.includes('play_area')) {
+          return splitRailByPockets(r, pockets, cushionRails);
+        }
+        return [r];
+      });
 
       const pixelsPerInch = physicsJson.meta?.pixelsPerInch || 7.68; // Default to 7.68 if missing
 
@@ -619,7 +761,7 @@ export function getTableGeometry(): TableGeometry {
         }
       };
 
-      rails.forEach(r => updateExtents(r.outline as any));
+      rawRails.forEach(r => updateExtents(r.outline as any));
       pockets.forEach(p => updateExtents((p as any).outline));
 
       // Fallback if no geometry found
@@ -629,6 +771,37 @@ export function getTableGeometry(): TableGeometry {
       const playArea = physicsJson.playArea || { width: 100, height: 50 };
       const halfW = playArea.width / 2;
       const halfH = playArea.height / 2;
+
+      const isInsidePlayArea = (p: Vec2): boolean => {
+        const eps = 1e-3;
+        return Math.abs(p.x) <= halfW + eps && Math.abs(p.y) <= halfH + eps;
+      };
+
+      const jawRails: RailDef[] = [];
+      cushionRails.forEach((c) => {
+        const outline = Array.isArray(c.outline) ? c.outline.filter(isFiniteVec2) : [];
+        if (outline.length < 2) return;
+
+        for (let i = 0; i < outline.length - 1; i++) {
+          const p1 = outline[i];
+          const p2 = outline[i + 1];
+          if (!isFiniteVec2(p1) || !isFiniteVec2(p2)) continue;
+          const dx = p2.x - p1.x;
+          const dy = p2.y - p1.y;
+          if (Math.hypot(dx, dy) < 1e-4) continue;
+
+          const in1 = isInsidePlayArea(p1);
+          const in2 = isInsidePlayArea(p2);
+          if ((in1 && !in2) || (!in1 && in2)) {
+            jawRails.push({
+              id: `${c.id}_jaw_${i}`,
+              from: p1,
+              to: p2,
+              normal: computeInwardNormal(p1, p2),
+            });
+          }
+        }
+      });
 
       console.log(`[Geometry] Calculated Frame Extents from Physics: +/- ${maxExtentX.toFixed(3)} x ${maxExtentY.toFixed(3)}`);
 
@@ -647,11 +820,13 @@ export function getTableGeometry(): TableGeometry {
         }
       };
 
+      const railsWithJaws: RailDef[] = [...rails, ...jawRails];
+
       cachedGeometry = {
         playWidthIn: playArea.width,
         playHeightIn: playArea.height,
         cushionProfileIn: 0,
-        rails: rails,
+        rails: railsWithJaws,
         pockets: pockets,
         frameOutline: defaultFrameOutline,
         pixelsPerInch,
@@ -673,7 +848,7 @@ export function getTableGeometry(): TableGeometry {
         sideJawRadiusIn: 0,
       };
 
-      console.log(`[Geometry] Loaded ${rails.length} rails and ${pockets.length} pockets from table.physics.json`);
+      console.log(`[Geometry] Loaded ${railsWithJaws.length} rails and ${pockets.length} pockets from table.physics.json`);
       return cachedGeometry;
 
     } catch (e) {

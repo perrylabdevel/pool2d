@@ -13,6 +13,7 @@ import { bindSliders, type SliderBindConfig } from './controls/SliderBinder';
 const LAYER_CHECKBOX_MAP: Record<string, RenderLayerBooleanKey> = {
   'layer-table': 'showTable',
   'layer-frame': 'showFrame',
+  'layer-skin': 'showSkin',
   'layer-rails': 'showRails',
   'layer-pockets': 'showPockets',
   'layer-caps': 'showCaps',
@@ -88,6 +89,7 @@ export class RenderLayerPanel {
           <div class="panel-toggle-list">
             <label class="panel-toggle-row" for="layer-table"><input id="layer-table" type="checkbox" checked /><span>Table</span></label>
             <label class="panel-toggle-row" for="layer-frame"><input id="layer-frame" type="checkbox" checked /><span>Frame</span></label>
+            <label class="panel-toggle-row" for="layer-skin"><input id="layer-skin" type="checkbox" checked /><span>Skin</span></label>
             <label class="panel-toggle-row" for="layer-rails"><input id="layer-rails" type="checkbox" checked /><span>Rails</span></label>
             <label class="panel-toggle-row" for="layer-pockets"><input id="layer-pockets" type="checkbox" checked /><span>Pockets</span></label>
             <label class="panel-toggle-row" for="layer-caps"><input id="layer-caps" type="checkbox" checked /><span>Caps</span></label>
@@ -97,6 +99,11 @@ export class RenderLayerPanel {
             <label class="panel-toggle-row" for="layer-reference"><input id="layer-reference" type="checkbox" /><span>Reference Overlay</span></label>
             <label class="panel-toggle-row" for="layer-textures"><input id="layer-textures" type="checkbox" checked /><span>Textures</span></label>
           </div>
+        </div>
+
+        <div class="settings-group">
+          <h4 class="settings-group-title">Skin</h4>
+          <div class="slider-group"><label class="slider-label" for="skin-opacity"><span class="slider-title">Opacity</span><span class="slider-value" id="skin-opacity-value">1.00</span></label><input type="range" id="skin-opacity" min="0" max="1" step="0.01" value="1.00" /></div>
         </div>
 
         <div class="settings-group">
@@ -191,6 +198,25 @@ export class RenderLayerPanel {
       });
     });
 
+    const skinOpacitySlider = document.getElementById('skin-opacity') as HTMLInputElement | null;
+    const skinOpacityLabel = document.getElementById('skin-opacity-value');
+    const applySkinOpacity = () => {
+      if (!skinOpacitySlider) return;
+      const val = parseFloat(skinOpacitySlider.value);
+      if (!Number.isFinite(val)) return;
+      const clamped = Math.max(0, Math.min(1, val));
+      this.settings.skinOpacity = clamped;
+      this.settingsManager.saveRenderSettings({ skinOpacity: clamped } as Partial<RenderSettings>);
+      this.renderer.setSkinOpacity(clamped);
+      if (skinOpacityLabel) {
+        skinOpacityLabel.textContent = clamped.toFixed(2);
+      }
+    };
+    if (skinOpacitySlider) {
+      skinOpacitySlider.addEventListener('input', applySkinOpacity);
+      skinOpacitySlider.addEventListener('change', applySkinOpacity);
+    }
+
     const resetBtn = document.getElementById('render-layer-reset');
     if (resetBtn) {
       resetBtn.addEventListener('click', () => {
@@ -231,6 +257,7 @@ export class RenderLayerPanel {
     const {
       canvasScale,
       ballScale,
+      skinOpacity,
       ambientIntensity,
       directionalIntensity,
       accentIntensity,
@@ -244,6 +271,9 @@ export class RenderLayerPanel {
     void canvasScale;
     if (typeof ballScale === 'number') {
       this.renderer.setBallScale(ballScale);
+    }
+    if (typeof skinOpacity === 'number') {
+      this.renderer.setSkinOpacity(skinOpacity);
     }
     this.renderer.applyRenderLayerSettings(layerSettings as RenderLayerSettings);
     this.renderer.setLightingIntensities({
@@ -304,6 +334,16 @@ export class RenderLayerPanel {
         checkbox.checked = this.settings[key];
       }
     });
+
+    const skinOpacitySlider = document.getElementById('skin-opacity') as HTMLInputElement | null;
+    if (skinOpacitySlider && typeof this.settings.skinOpacity === 'number') {
+      skinOpacitySlider.value = this.settings.skinOpacity.toString();
+    }
+    const skinOpacityLabel = document.getElementById('skin-opacity-value');
+    if (skinOpacityLabel && typeof this.settings.skinOpacity === 'number') {
+      skinOpacityLabel.textContent = this.settings.skinOpacity.toFixed(2);
+    }
+
     this.syncOrders();
     this.syncLightingSliders();
   }

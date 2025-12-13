@@ -51,6 +51,7 @@ export class Renderer3D extends BaseRenderer {
   private layerVisibility: Record<RenderLayerBooleanKey, boolean> = {
     showTable: defaultRenderLayerSettings.showTable,
     showFrame: defaultRenderLayerSettings.showFrame,
+    showSkin: defaultRenderLayerSettings.showSkin,
     showRails: defaultRenderLayerSettings.showRails,
     showPockets: defaultRenderLayerSettings.showPockets,
     showCaps: defaultRenderLayerSettings.showCaps,
@@ -338,6 +339,10 @@ export class Renderer3D extends BaseRenderer {
 
     if (typeof settings.pocketGradientStrength === 'number') {
       this.setPocketGradientStrength(settings.pocketGradientStrength);
+    }
+
+    if (typeof settings.skinOpacity === 'number') {
+      this.setSkinOpacity(settings.skinOpacity);
     }
   }
 
@@ -682,6 +687,7 @@ export class Renderer3D extends BaseRenderer {
     this.applyRenderOrder(settings);
     this.tableRenderer.setLayerVisibility('showTable', settings.showTable);
     this.tableRenderer.setLayerVisibility('showFrame', settings.showFrame);
+    this.tableRenderer.setLayerVisibility('showSkin', settings.showSkin);
     this.tableRenderer.setLayerVisibility('showRails', settings.showRails);
     this.tableRenderer.setLayerVisibility('showPockets', settings.showPockets);
     this.tableRenderer.setLayerVisibility('showCaps', settings.showCaps);
@@ -744,6 +750,7 @@ export class Renderer3D extends BaseRenderer {
     switch (layer) {
       case 'showTable':
       case 'showFrame':
+      case 'showSkin':
       case 'showRails':
       case 'showPockets':
       case 'showCaps':
@@ -785,6 +792,10 @@ export class Renderer3D extends BaseRenderer {
     this.tableRenderer.setPocketGradientStrength(value);
   }
 
+  setSkinOpacity(value: number) {
+    this.tableRenderer.setSkinOpacity(value);
+  }
+
   setPocketShadeColors(colors: {
     grooveColor?: string;
     rimColor?: string;
@@ -815,6 +826,7 @@ export class Renderer3D extends BaseRenderer {
     return {
       showTable: this.layerVisibility.showTable,
       showFrame: this.layerVisibility.showFrame,
+      showSkin: this.layerVisibility.showSkin,
       showRails: this.layerVisibility.showRails,
       showPockets: this.layerVisibility.showPockets,
       showCaps: this.layerVisibility.showCaps,

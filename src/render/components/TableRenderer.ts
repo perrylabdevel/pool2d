@@ -76,6 +76,8 @@ export class TableRenderer {
     private pocketHighlightIntensity = CONFIG.POCKET_HIGHLIGHT_INTENSITY ?? 1.0;
     private pocketShadowIntensity = CONFIG.POCKET_SHADOW_INTENSITY ?? 1.0;
 
+    private skinOpacity = 1.0;
+
     // Pocket settings
     private grooveInnerBase = 0.18;
     private grooveInnerDepthScale = 0.22;
@@ -102,6 +104,11 @@ export class TableRenderer {
         private layerOrder: Record<RenderLayerOrderKey, number>,
         private settingsManager: SettingsManager
     ) {
+        const initialRenderSettings = this.settingsManager.getRenderSettings();
+        if (typeof initialRenderSettings.skinOpacity === 'number') {
+            this.skinOpacity = Math.max(0, Math.min(1, initialRenderSettings.skinOpacity));
+        }
+
         // Initialize texture manager with saved appearance
         const appearance = settingsManager.getTableAppearance();
         this.textureManager = new TableTextureManager(appearance);
@@ -229,12 +236,18 @@ export class TableRenderer {
         const material = new THREE.MeshBasicMaterial({
             map: texture,
             transparent: true,
-            side: THREE.DoubleSide
+            opacity: this.skinOpacity,
+            side: THREE.DoubleSide,
+            alphaTest: 0.01,
+            depthWrite: true,
+            depthTest: true,
         });
 
         this.skinMesh = new THREE.Mesh(geometry, material);
-        this.skinMesh.position.set(0, 0, 0.6);
+        // Position skin above felt (z~0) but well below balls (z~1.125)
+        this.skinMesh.position.set(0, 0, 0.35);
         this.skinMesh.name = 'SkinOverlay';
+        this.skinMesh.visible = this.layerVisibility.showSkin;
         this.scene.add(this.skinMesh);
     }
 
@@ -1124,6 +1137,14 @@ export class TableRenderer {
                 (this.tableMesh.material as THREE.Material).dispose();
             }
             this.tableMesh = null;
+        }
+
+        if (this.skinMesh) {
+            this.scene.remove(this.skinMesh);
+            this.skinMesh.geometry.dispose();
+            const mat = this.skinMesh.material as THREE.Material | THREE.Material[];
+            if (Array.isArray(mat)) mat.forEach(m => m.dispose()); else mat.dispose();
+            this.skinMesh = null;
         }
         if (this.frameMesh) {
             this.scene.remove(this.frameMesh);
@@ -2031,6 +2052,9 @@ export class TableRenderer {
                 if (this.frameMesh) this.frameMesh.visible = visible;
                 this.applyFrameRenderOrder();
                 break;
+            case 'showSkin':
+                if (this.skinMesh) this.skinMesh.visible = visible;
+                break;
             case 'showRails':
                 this.railMeshes.forEach((m) => (m.visible = visible));
                 this.railHighlightMeshes.forEach((m) => (m.visible = visible));
@@ -2044,6 +2068,16 @@ export class TableRenderer {
                 this.pocketCapMeshes.forEach((m) => (m.visible = visible));
                 break;
         }
+    }
+
+    setSkinOpacity(value: number) {
+        const clamped = Math.max(0, Math.min(1, value));
+        this.skinOpacity = clamped;
+        if (!this.skinMesh) return;
+        const mat = this.skinMesh.material as THREE.MeshBasicMaterial;
+        mat.transparent = true;
+        mat.opacity = clamped;
+        mat.needsUpdate = true;
     }
 
     setPocketGradientStrength(value: number) {

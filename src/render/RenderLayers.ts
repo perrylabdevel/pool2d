@@ -1,6 +1,7 @@
 export const RENDER_LAYER_BOOLEAN_KEYS = [
   'showTable',
   'showFrame',
+  'showSkin',
   'showRails',
   'showPockets',
   'showCaps',
@@ -27,6 +28,7 @@ export type RenderLayerOrderKey = typeof RENDER_LAYER_ORDER_KEYS[number];
 export interface RenderLayerSettings {
   showTable: boolean;
   showFrame: boolean;
+  showSkin: boolean;
   showRails: boolean;
   showPockets: boolean;
   showCaps: boolean;
@@ -47,6 +49,7 @@ export interface RenderLayerSettings {
 export const defaultRenderLayerSettings: RenderLayerSettings = {
   showTable: true,
   showFrame: true,
+  showSkin: true,
   showRails: true,
   showPockets: true,
   showCaps: true,
