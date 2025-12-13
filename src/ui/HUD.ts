@@ -58,18 +58,6 @@ export class HUD {
       hotkeys: ['o', 'O'],
     });
 
-    this.registerPanel('game-settings', this.gameSettingsPanel.getController(), {
-      persistState: true,
-      hotkeys: ['o', 'O'],
-    });
-
-    // RecordingPanel removed - features merged into PlaybackPanel
-    // this.recordingPanel = new RecordingPanel();
-    // document.body.appendChild(this.recordingPanel.getElement());
-    // this.registerPanel('recording-panel', this.recordingPanel.getController(), { ... });
-
-    this.setupControls();
-
     this.setupControls();
     this.loadSettings();
 

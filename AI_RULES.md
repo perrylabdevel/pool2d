@@ -15,15 +15,24 @@
 - **Renderer**: Three.js top-down table, PBR felt, FBX ball meshes, cinematic UI.
 - **UI**: "Arcade" aesthetic (neon/glass), custom `ModalService`, `NotificationService`, and canvas-based scenes.
 
-## Current State (UI Overhaul)
-The project is undergoing a major UI overhaul to match a "Miniclip 8 Ball Pool" aesthetic.
-- **Completed**:
-  - Design System (`design-tokens.css`, `.btn-arcade`).
-  - Core Services (`ModalService`, `NotificationService`, `UISoundService`).
-  - Canvas Scenes: `LobbyScene`, `PlayModesScene`, `ShopScene`, `ProfileScene`, `SettingsScene`, `LeagueScene`.
-  - Components: `NavigationBar`, `SceneBackground`.
-- **In Progress**:
-  - Sunsetting legacy DOM Home Hub.
+## Current State (Post-Refactor)
+The project has undergone a major architectural refactor. See `docs/REFACTOR_PLAN.md` for details.
+
+### Completed Refactoring
+- **Event System**: Typed `EventBus` in `src/events/` with legacy bridge
+- **Settings**: New `StorageKeys` module with `RailRush_*` keys (migrated from `pool2d_*`)
+- **Controllers**: Extracted from `Game.ts` to `src/game/controllers/`:
+  - `ShootingController` - aim, power, shot execution
+  - `BallInHandController` - ball placement, kitchen restrictions
+  - `AIController` - AI turn orchestration, shot animation
+  - `MatchManager` - match lifecycle, rewards, trophy system
+- **Legacy Removal**: Deleted `src/editor/`, `editor.html`, `HubSettings.ts`, `DockBridge.ts`
+
+### UI System
+- Design System (`design-tokens.css`, `.btn-arcade`)
+- Core Services (`ModalService`, `NotificationService`, `UISoundService`)
+- Canvas Scenes: `LobbyScene`, `PlayModesScene`, `ShopScene`, `ProfileScene`, `SettingsScene`, `LeagueScene`
+- Components: `NavigationBar`, `SceneBackground`
 
 ## Active Todo List
 ### High Priority
@@ -41,7 +50,7 @@ The project is undergoing a major UI overhaul to match a "Miniclip 8 Ball Pool" 
 
 ### Documentation & Maintenance
 - [ ] Keep `docs/rules/eight-ball-rules.md` aligned with enforcement.
-- [ ] Rename storage keys from `pool2d` to `RailRush`.
+- [x] Rename storage keys from `pool2d` to `RailRush` (migration in `src/settings/StorageKeys.ts`).
 
 ## Agent Rules
 1.  **Context First**: Always check `AI_RULES.md` to understand the big picture before diving into specific files.

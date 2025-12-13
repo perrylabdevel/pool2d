@@ -6,6 +6,7 @@ import { resetTableGeometryCache } from '../geometry/Geometry';
 import { Capacitor } from '@capacitor/core';
 import iosSettings from '../config/ios-settings.json';
 import { TableAppearance, DEFAULT_TABLE_APPEARANCE, TABLE_THEMES } from '../textures/TableAppearance';
+import { STORAGE_KEYS } from '../settings/StorageKeys';
 
 export type { TableAppearance };
 export { DEFAULT_TABLE_APPEARANCE, TABLE_THEMES };
@@ -202,19 +203,7 @@ export interface TextureSettings {
   frameBaseColorMix: number;
 }
 
-const STORAGE_KEYS = {
-  GAME_SETTINGS: 'pool2d_game_settings',
-  UI_COLORS: 'pool2d_ui_colors',
-  PHYSICS_SETTINGS: 'pool2d_physics_settings',
-  GEOMETRY_SETTINGS: 'pool2d_geometry_settings',
-  RENDER_SETTINGS: 'pool2d_render_settings',
-  MODERN_GEOMETRY_SETTINGS: 'pool2d_modern_geometry_settings',
-  AUDIO_SETTINGS: 'pool2d_audio_settings',
-  GAME_STATS: 'pool2d_game_stats',
-  DEBUG_SETTINGS: 'pool2d_debug_settings',
-  TEXTURE_SETTINGS: 'pool2d_texture_settings',
-  TABLE_APPEARANCE: 'pool2d_table_appearance',
-};
+// STORAGE_KEYS imported from '../settings/StorageKeys'
 
 export const DEFAULT_GAME_SETTINGS: GameSettings = {
   aimAssist: true,

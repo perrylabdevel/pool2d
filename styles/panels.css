@@ -1,5 +1,19 @@
 /* Panel dock, settings, and floating tools */
 
+/* Legacy dock elements - hidden by default after refactor */
+#dock-left,
+#dock-right,
+.panel-launcher-toggle {
+  display: none !important;
+}
+
+/* Show legacy dock when explicitly enabled via class on body */
+body.show-legacy-dock #dock-left,
+body.show-legacy-dock #dock-right,
+body.show-legacy-dock .panel-launcher-toggle {
+  display: flex !important;
+}
+
 #panel-dock {
   display: flex;
   flex-direction: column;

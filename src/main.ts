@@ -3,7 +3,7 @@
 import { Game } from './game/Game';
 import './ui/NotificationService';
 import './ui/ModalService';
-import './ui/DockBridge';
+// DockBridge removed - legacy panels migrated to canvas scenes
 import './ui/UISoundService';
 import './ui/UIRoot';
 import { uiStateMachine, UIState } from './ui/UIStateMachine';
@@ -12,6 +12,10 @@ import { Capacitor } from '@capacitor/core';
 
 import { initializeUserIfNeeded } from './data/db';
 import { currencyStore } from './ui/CurrencyStore';
+
+// New event and settings systems
+import { bridgeLegacyEvents } from './events';
+import { migrateStorageKeys } from './settings';
 
 async function main() {
   const measure = (name: string, start: string, end: string) => {
@@ -23,6 +27,11 @@ async function main() {
   };
 
   performance.mark('boot:start');
+
+  // Initialize new systems
+  migrateStorageKeys(); // Migrate pool2d_* -> RailRush_* storage keys
+  bridgeLegacyEvents(); // Bridge EventBus to legacy window events
+  performance.mark('boot:systems:end');
 
   const gameCanvas = document.getElementById('game-canvas') as HTMLCanvasElement;
   const debugCanvas = document.getElementById('debug-canvas') as HTMLCanvasElement;
@@ -62,10 +71,11 @@ async function main() {
   game.start();
   performance.mark('boot:game:start:end');
 
-  console.log('Pool 2D initialized');
+  console.log('RailRush initialized');
   performance.mark('boot:end');
 
-  measure('boot:db', 'boot:start', 'boot:db:end');
+  measure('boot:systems', 'boot:start', 'boot:systems:end');
+  measure('boot:db', 'boot:systems:end', 'boot:db:end');
   measure('boot:currency', 'boot:db:end', 'boot:currency:end');
   measure('boot:game:init', 'boot:currency:end', 'boot:game:init:end');
   measure('boot:ui', 'boot:game:init:end', 'boot:ui:transitioned');

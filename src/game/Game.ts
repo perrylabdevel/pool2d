@@ -43,6 +43,17 @@ import { AssetRegistry } from '../assets/AssetRegistry';
 import { currencyStore } from '../ui/CurrencyStore';
 import { notificationService } from '../ui/NotificationService';
 
+// Extracted controllers (gradual adoption)
+import {
+  calculateAimSensitivity,
+  isTouchAimOnly,
+  applyMicroAimOffset,
+  getMicroAimOffsetDegrees,
+  isSpotOpen,
+  placeCueBall,
+  awardChestForWin,
+} from './controllers';
+
 export enum GameMode {
   PRACTICE,
   EIGHT_BALL,
@@ -747,6 +758,13 @@ export class Game {
         }
         this.syncDebugModeWithRenderer();
       }
+
+      // Shift+L: Toggle legacy dock panels (dev tools)
+      if ((e.key === 'l' || e.key === 'L') && e.shiftKey) {
+        document.body.classList.toggle('show-legacy-dock');
+        const isVisible = document.body.classList.contains('show-legacy-dock');
+        console.log(`🔧 Legacy dock ${isVisible ? 'shown' : 'hidden'} (Shift+L to toggle)`);
+      }
     });
 
     // React to AI difficulty changes from settings panel
@@ -1215,7 +1233,7 @@ export class Game {
 
           // Award chest for winning (Miniclip style)
           if (isWin) {
-            chestAwarded = await this.awardChestForWin(this.currentClubId || 'club_basement');
+            chestAwarded = await this.awardChestForWinInternal(this.currentClubId || 'club_basement');
           }
 
           // Sync currency store with database (including trophies)
@@ -2069,65 +2087,38 @@ export class Game {
 
   /**
    * Calculate aim sensitivity multiplier based on distance to nearest object ball
-   * Returns 1.0 for short shots, lower values (finer control) for long shots
+   * Delegates to ShootingController.calculateAimSensitivity
    */
   private calculateAimSensitivity(): number {
-    if (!CONFIG.DISTANCE_AIM_SCALING_ENABLED || !this.cueBall) {
-      return 1.0;
-    }
-
-    // Find nearest non-cue ball
-    let minDistance = Infinity;
-    for (const ball of this.world.balls) {
-      if (ball.id === 0 || ball.pocketed) continue; // Skip cue ball and pocketed balls
-      const dx = ball.x - this.cueBall.x;
-      const dy = ball.y - this.cueBall.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-      if (distance < minDistance) {
-        minDistance = distance;
-      }
-    }
-
-    // If no object balls found, use default sensitivity
-    if (minDistance === Infinity) {
-      return 1.0;
-    }
-
-    // Map distance to sensitivity using linear interpolation
-    // Short shots (< MIN_DISTANCE): full sensitivity (1.0)
-    // Long shots (> MAX_DISTANCE): minimum sensitivity (MIN_SENSITIVITY)
-    if (minDistance <= CONFIG.DISTANCE_AIM_MIN_DISTANCE) {
-      return 1.0;
-    } else if (minDistance >= CONFIG.DISTANCE_AIM_MAX_DISTANCE) {
-      return CONFIG.DISTANCE_AIM_MIN_SENSITIVITY;
-    } else {
-      // Linear interpolation between min and max distance
-      const t = (minDistance - CONFIG.DISTANCE_AIM_MIN_DISTANCE) /
-        (CONFIG.DISTANCE_AIM_MAX_DISTANCE - CONFIG.DISTANCE_AIM_MIN_DISTANCE);
-      return 1.0 - t * (1.0 - CONFIG.DISTANCE_AIM_MIN_SENSITIVITY);
-    }
+    return calculateAimSensitivity(this.cueBall, this.world);
   }
 
+  /**
+   * Check if touch-aim-only mode is enabled
+   * Delegates to ShootingController.isTouchAimOnly
+   */
   private isTouchAimOnly(): boolean {
-    return !!CONFIG.TOUCH_AIM_MODE;
+    return isTouchAimOnly();
   }
 
+  /**
+   * Get micro aim offset in degrees
+   * Delegates to ShootingController.getMicroAimOffsetDegrees
+   */
   private getMicroAimOffsetDegrees(): number {
-    const maxDegrees = CONFIG.MICRO_AIM_MAX_DEGREES ?? 0;
-    return maxDegrees * this.microAimDialValue;
+    return getMicroAimOffsetDegrees(this.microAimDialValue);
   }
 
   private getMicroAimOffsetRadians(): number {
     return this.getMicroAimOffsetDegrees() * Math.PI / 180;
   }
 
+  /**
+   * Apply micro aim offset to angle
+   * Delegates to ShootingController.applyMicroAimOffset
+   */
   private applyMicroAimOffset(angle: number): number {
-    if (!this.microAimDialValue) return angle;
-    let adjusted = angle + this.getMicroAimOffsetRadians();
-    const tau = Math.PI * 2;
-    while (adjusted <= -Math.PI) adjusted += tau;
-    while (adjusted > Math.PI) adjusted -= tau;
-    return adjusted;
+    return applyMicroAimOffset(angle, this.microAimDialValue);
   }
 
   startPlayback(data: MatchData) {
@@ -2884,48 +2875,10 @@ export class Game {
 
   /**
    * Award a chest for winning a match (Miniclip style)
-   * Chests are stored in slots and need to be unlocked with time or gold
-   * Returns the chest type awarded, or null if no slot available
+   * Delegates to MatchManager.awardChestForWin
    */
-  private async awardChestForWin(clubId: string): Promise<string | null> {
-    try {
-      // Get tier from club difficulty (1-10 maps to chest tiers 1-5)
-      const club = getClubById(clubId);
-      let tier = 1;
-      if (club) {
-        // Map difficulty 1-10 to tier 1-5
-        // difficulty 1-2 = tier 1, 3-4 = tier 2, 5-6 = tier 3, 7-8 = tier 4, 9-10 = tier 5
-        tier = Math.min(5, Math.ceil(club.difficulty / 2));
-      }
-
-      // Determine chest type based on league
-      const chestType = getChestForLeague(tier);
-      const chestDef = CHEST_DEFINITIONS[chestType];
-
-      // Get current chest slots
-      const slots = await getChestSlots();
-
-      // Find first empty slot
-      const emptySlot = slots.find(s => s.status === 'empty');
-      if (!emptySlot) {
-        console.log('📦 Chest earned but no empty slots! Player needs to open existing chests.');
-        return null;
-      }
-
-      // Award chest to empty slot
-      await updateChestSlot(emptySlot.slotIndex, {
-        chestType: chestType,
-        status: 'locked',
-        unlockStartTime: null,
-        unlockEndTime: null
-      });
-
-      console.log(`📦 ${chestDef.name} awarded to slot ${emptySlot.slotIndex}!`);
-      return chestType;
-    } catch (e) {
-      console.error('Failed to award chest:', e);
-      return null;
-    }
+  private async awardChestForWinInternal(clubId: string): Promise<string | null> {
+    return awardChestForWin(clubId);
   }
 
   private updateBallInHandAssistState(): void {
@@ -2990,16 +2943,12 @@ export class Game {
     return false;
   }
 
+  /**
+   * Commit AI ball placement using BallInHandController
+   */
   private commitAIBallPlacement(x: number, y: number) {
     if (!this.cueBall) return;
-    this.cueBall.x = x;
-    this.cueBall.y = y;
-    this.cueBall.vx = 0;
-    this.cueBall.vy = 0;
-    this.cueBall.angularVelocity = 0;
-    this.cueBall.sleeping = true;
-    this.cueBall.pocketed = false;
-    this.cueBall.lastPocketId = null;
+    placeCueBall(this.cueBall, x, y);
     this.pendingBallInHandForAI = false;
     console.log('[AI] Ball-in-hand placement', { x: x.toFixed(2), y: y.toFixed(2) });
   }
@@ -3027,17 +2976,12 @@ export class Game {
     return candidates;
   }
 
+  /**
+   * Check if a spot is open for cue ball placement
+   * Delegates to BallInHandController.isSpotOpen
+   */
   private isCueBallSpotOpen(x: number, y: number, radius: number): boolean {
-    const minClearance = radius * 2 + 0.1;
-    for (const ball of this.world.balls) {
-      if (ball === this.cueBall) continue;
-      if (ball.pocketed) continue;
-      const dist = Math.hypot(ball.x - x, ball.y - y);
-      if (dist < minClearance) {
-        return false;
-      }
-    }
-    return true;
+    return isSpotOpen(x, y, radius, this.world.balls, this.cueBall);
   }
 }
 // React to AI difficulty changes from settings panel
