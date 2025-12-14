@@ -126,6 +126,59 @@ export class TableRenderer {
                 console.error('Error applying appearance change:', err);
             }
         });
+
+        // Listen for table editor skin pushes
+        window.addEventListener('table-editor:apply-skin', (e: Event) => {
+            const event = e as CustomEvent<{ name: string; image: string }>;
+            if (event.detail?.image) {
+                this.applySkinFromBase64(event.detail.image, event.detail.name);
+            }
+        });
+    }
+
+    /**
+     * Apply a skin image from base64 data (used by table editor)
+     */
+    applySkinFromBase64(base64Image: string, skinName?: string): void {
+        if (!this.skinMesh) {
+            console.warn('[TableRenderer] No skin mesh to apply texture to');
+            return;
+        }
+
+        console.log(`[TableRenderer] Applying skin from table editor: ${skinName || 'unnamed'}`);
+
+        const loader = new THREE.TextureLoader();
+        const geom = getTableGeometry();
+        const PPI = geom.pixelsPerInch || 7.68;
+
+        loader.load(base64Image, (texture) => {
+            texture.colorSpace = THREE.SRGBColorSpace;
+
+            const image = texture.image;
+            if (image && image.width && image.height) {
+                const physicalWidth = image.width / PPI;
+                const physicalHeight = image.height / PPI;
+
+                console.log(`[TableRenderer] Skin loaded: ${image.width}x${image.height} px`);
+                console.log(`[TableRenderer] Applied Physical Size: ${physicalWidth.toFixed(2)}" x ${physicalHeight.toFixed(2)}"`);
+
+                if (this.skinMesh) {
+                    // Update material texture
+                    const material = this.skinMesh.material as THREE.MeshBasicMaterial;
+                    if (material.map) {
+                        material.map.dispose();
+                    }
+                    material.map = texture;
+                    material.needsUpdate = true;
+
+                    // Update scale
+                    this.skinMesh.scale.set(physicalWidth, physicalHeight, 1);
+                    this.skinMesh.updateMatrix();
+                }
+            }
+        }, undefined, (err) => {
+            console.error('[TableRenderer] Failed to load skin from base64:', err);
+        });
     }
 
     refreshDerivedGeometry(): void {

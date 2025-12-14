@@ -164,6 +164,10 @@ export const CONFIG = {
   SIDE_FRAME_OFFSET_IN: 2.0, // Frame offset for side pocket tangent calculation (smaller = steeper jaws)
   SIDE_POCKET_OUTWARD_OFFSET_IN: -1.3, // Side pocket center offset toward frame
   CORNER_POCKET_OUTWARD_OFFSET_IN: -1.0, // Corner pocket center offset toward frame (diagonal)
+  CORNER_POCKET_OFFSET_X_IN: 0, // Corner pocket X offset (from table editor)
+  CORNER_POCKET_OFFSET_Y_IN: 0, // Corner pocket Y offset (from table editor)
+  SIDE_POCKET_OFFSET_X_IN: 0, // Side pocket X offset (from table editor)
+  SIDE_POCKET_OFFSET_Y_IN: 0, // Side pocket Y offset (from table editor)
   CORNER_FRAME_OFFSET_IN: 4.0, // Frame offset used for corner jaw derivation (decoupled from FRAME_OFFSET_IN)
   SIDE_STRAIGHT_Y_IN: 23.5, // Y position of straight rail segment before side pocket (|Y|)
   SIDE_INNER_Y_IN: 24.6, // Inner throat Y position for side pockets (|Y|)

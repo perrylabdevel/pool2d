@@ -71,6 +71,15 @@ export class RemoteBridge {
     }
 
     private setupListeners() {
+        // Listen for game restart to apply pending skin
+        window.addEventListener('game:restarted', () => {
+            if (this.pendingSkin) {
+                // Longer delay to ensure default skin texture has finished loading
+                // before we override it with the pushed skin
+                setTimeout(() => this.applyPendingSkin(), 500);
+            }
+        });
+
         // Listen for local changes and broadcast them
         window.addEventListener('settings:geometry-changed', () => {
             this.sendMessage({
@@ -201,7 +210,72 @@ export class RemoteBridge {
             case 'command':
                 this.handleCommand(message.command, message.payload);
                 break;
+            case 'table-editor:push-config':
+                console.log('[RemoteBridge] Received table editor config', message.config);
+                this.handleTableEditorPush(message.config);
+                break;
         }
+    }
+
+    private pendingSkin: { name: string; image: string } | null = null;
+
+    private handleTableEditorPush(config: any) {
+        console.log('[RemoteBridge] handleTableEditorPush called with:', {
+            hasOffsets: !!config.offsets,
+            hasSkin: !!config.skin,
+            skinName: config.skin?.name,
+            hasImage: !!config.skin?.image,
+        });
+
+        // Store skin to apply after restart (if geometry changes trigger one)
+        if (config.skin?.image) {
+            this.pendingSkin = {
+                name: config.skin.name,
+                image: config.skin.image,
+            };
+        }
+
+        // Apply pocket offsets from table editor (X/Y for corner and side)
+        if (config.offsets) {
+            const currentGeom = this.settingsManager.getGeometrySettings();
+            
+            // Corner pocket offsets
+            if (config.offsets.cornerX !== undefined) {
+                currentGeom.CORNER_POCKET_OFFSET_X_IN = config.offsets.cornerX;
+            }
+            if (config.offsets.cornerY !== undefined) {
+                currentGeom.CORNER_POCKET_OFFSET_Y_IN = config.offsets.cornerY;
+            }
+            
+            // Side pocket offsets
+            if (config.offsets.sideX !== undefined) {
+                currentGeom.SIDE_POCKET_OFFSET_X_IN = config.offsets.sideX;
+            }
+            if (config.offsets.sideY !== undefined) {
+                currentGeom.SIDE_POCKET_OFFSET_Y_IN = config.offsets.sideY;
+            }
+            
+            this.settingsManager.saveGeometrySettings(currentGeom);
+            
+            // Trigger geometry rebuild - this will cause restart
+            window.dispatchEvent(new CustomEvent('settings:geometry-apply'));
+            console.log('[RemoteBridge] Applied table editor X/Y offsets, triggering rebuild');
+        } else if (this.pendingSkin) {
+            // No geometry changes, just apply skin directly
+            this.applyPendingSkin();
+        }
+    }
+
+    private applyPendingSkin() {
+        if (!this.pendingSkin) return;
+        
+        console.log('[RemoteBridge] Applying pending skin:', this.pendingSkin.name);
+        console.log('[RemoteBridge] Skin image data length:', this.pendingSkin.image?.length || 0);
+        
+        window.dispatchEvent(new CustomEvent('table-editor:apply-skin', {
+            detail: this.pendingSkin
+        }));
+        this.pendingSkin = null;
     }
 
     private handleCommand(command: string, payload?: any) {

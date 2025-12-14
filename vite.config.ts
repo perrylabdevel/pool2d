@@ -16,6 +16,8 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html'),
+        devtools: resolve(__dirname, 'devtools/index.html'),
+        'table-editor': resolve(__dirname, 'devtools/table-editor.html'),
       },
     },
   },

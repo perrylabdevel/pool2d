@@ -729,6 +729,44 @@ export function getTableGeometry(): TableGeometry {
         }
       }
 
+      // Apply corner pocket offset (diagonal shift outward from table center)
+      const cornerPocketOffset = CONFIG.CORNER_POCKET_OUTWARD_OFFSET_IN ?? 0;
+      // Apply X/Y offsets from table editor
+      const cornerOffsetX = CONFIG.CORNER_POCKET_OFFSET_X_IN ?? 0;
+      const cornerOffsetY = CONFIG.CORNER_POCKET_OFFSET_Y_IN ?? 0;
+      const sideOffsetX = CONFIG.SIDE_POCKET_OFFSET_X_IN ?? 0;
+      const sideOffsetY = CONFIG.SIDE_POCKET_OFFSET_Y_IN ?? 0;
+
+      if (physicsJson.playArea) {
+        const halfW = physicsJson.playArea.width / 2;
+        
+        const shiftPocket = (p: PocketDef, dx: number, dy: number): PocketDef => ({
+          ...p,
+          center: { x: p.center.x + dx, y: p.center.y + dy },
+          outline: Array.isArray(p.outline) ? p.outline.map((pt) => ({ x: pt.x + dx, y: pt.y + dy })) : p.outline,
+        });
+
+        pockets = pockets.map((p) => {
+          const isCorner = Math.abs(p.center.x) > halfW * 0.25;
+          
+          if (isCorner) {
+            // Corner pockets: apply diagonal offset + X/Y offsets
+            const signX = p.center.x > 0 ? 1 : -1;
+            const signY = p.center.y > 0 ? 1 : -1;
+            const totalDx = signX * cornerPocketOffset + signX * cornerOffsetX;
+            const totalDy = signY * cornerPocketOffset + signY * cornerOffsetY;
+            return shiftPocket(p, totalDx, totalDy);
+          } else {
+            // Side pockets: apply side offset + X/Y offsets
+            const signX = p.center.x > 0 ? 1 : (p.center.x < 0 ? -1 : 0);
+            const signY = p.center.y > 0 ? 1 : -1;
+            const totalDx = signX * sideOffsetX;
+            const totalDy = signY * (CONFIG.SIDE_POCKET_OUTWARD_OFFSET_IN ?? 0) + signY * sideOffsetY;
+            return shiftPocket(p, totalDx, totalDy);
+          }
+        });
+      }
+
       const rawRails: RailDef[] = (physicsJson.rails || []).map((r: { id: string; from: Vec2; to: Vec2; normal: Vec2; outline?: Vec2[] }) => ({
         id: r.id,
         from: r.from,

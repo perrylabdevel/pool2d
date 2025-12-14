@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RailRush Table Editor</title>
+  <link rel="stylesheet" href="/styles/design-tokens.css" />
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --sidebar-width: 320px;
+      --header-height: 48px;
+      --panel-bg: #1e1e2e;
+      --panel-border: #313244;
+      --accent: #89b4fa;
+      --accent-hover: #b4befe;
+      --text: #cdd6f4;
+      --text-muted: #6c7086;
+      --success: #a6e3a1;
+      --warning: #f9e2af;
+      --error: #f38ba8;
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      background: #11111b;
+      color: var(--text);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    .app-container {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    /* Header */
+    .header {
+      height: var(--header-height);
+      background: var(--panel-bg);
+      border-bottom: 1px solid var(--panel-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      flex-shrink: 0;
+    }
+
+    .header-title {
+      font-size: 16px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .header-title span {
+      color: var(--accent);
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn {
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--panel-border);
+      background: var(--panel-bg);
+      color: var(--text);
+      font-size: 13px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s;
+    }
+
+    .btn:hover {
+      background: #313244;
+      border-color: var(--accent);
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #11111b;
+      border-color: var(--accent);
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-hover);
+    }
+
+    .connection-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--error);
+    }
+
+    .status-dot.connected {
+      background: var(--success);
+    }
+
+    /* Main Layout */
+    .main-content {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    /* Left Sidebar - Skin Library */
+    .sidebar-left {
+      width: var(--sidebar-width);
+      background: var(--panel-bg);
+      border-right: 1px solid var(--panel-border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+
+    .panel-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--panel-border);
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .skin-grid {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      align-content: start;
+    }
+
+    .skin-card {
+      aspect-ratio: 1.5;
+      background: #181825;
+      border: 2px solid transparent;
+      border-radius: 8px;
+      cursor: pointer;
+      overflow: hidden;
+      position: relative;
+      transition: all 0.15s;
+    }
+
+    .skin-card:hover {
+      border-color: var(--panel-border);
+    }
+
+    .skin-card.active {
+      border-color: var(--accent);
+    }
+
+    .skin-card-preview {
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, #1a5f2a 0%, #0d3015 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .skin-card-name {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 6px 8px;
+      background: linear-gradient(transparent, rgba(0,0,0,0.8));
+      font-size: 11px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .skin-card-add {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px dashed var(--panel-border);
+      background: transparent;
+    }
+
+    .skin-card-add:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* Center - Preview */
+    .preview-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: #11111b;
+      position: relative;
+    }
+
+    .preview-canvas-wrapper {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #preview-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .preview-controls {
+      position: absolute;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 8px;
+      background: rgba(30, 30, 46, 0.9);
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--panel-border);
+    }
+
+    .preview-controls button {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      border: 1px solid var(--panel-border);
+      background: transparent;
+      color: var(--text);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+
+    .preview-controls button:hover {
+      background: #313244;
+    }
+
+    .preview-controls button.active {
+      background: var(--accent);
+      color: #11111b;
+    }
+
+    /* Right Sidebar - Properties */
+    .sidebar-right {
+      width: var(--sidebar-width);
+      background: var(--panel-bg);
+      border-left: 1px solid var(--panel-border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid var(--panel-border);
+    }
+
+    .tab {
+      flex: 1;
+      padding: 12px 8px;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-muted);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.15s;
+    }
+
+    .tab:hover {
+      color: var(--text);
+    }
+
+    .tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+
+    .tab-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+    }
+
+    .property-group {
+      margin-bottom: 20px;
+    }
+
+    .property-group-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+
+    .property-row {
+      display: flex;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .property-label {
+      flex: 1;
+      font-size: 13px;
+      color: var(--text);
+    }
+
+    .property-input {
+      width: 80px;
+      padding: 6px 8px;
+      border-radius: 4px;
+      border: 1px solid var(--panel-border);
+      background: #181825;
+      color: var(--text);
+      font-size: 13px;
+      text-align: right;
+    }
+
+    .property-input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .property-slider {
+      width: 120px;
+      accent-color: var(--accent);
+    }
+
+    .color-picker-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .color-swatch {
+      width: 32px;
+      height: 24px;
+      border-radius: 4px;
+      border: 1px solid var(--panel-border);
+      cursor: pointer;
+    }
+
+    /* Bottom Panel - JSON Editor */
+    .bottom-panel {
+      height: 200px;
+      background: var(--panel-bg);
+      border-top: 1px solid var(--panel-border);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .bottom-panel.collapsed {
+      height: 32px;
+    }
+
+    .bottom-panel-header {
+      padding: 8px 16px;
+      border-bottom: 1px solid var(--panel-border);
+      font-size: 12px;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+    }
+
+    .json-editor {
+      flex: 1;
+      overflow: auto;
+      padding: 12px;
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      white-space: pre;
+      color: var(--text);
+    }
+
+    /* Drop Zone */
+    .drop-zone {
+      position: absolute;
+      inset: 0;
+      background: rgba(137, 180, 250, 0.1);
+      border: 3px dashed var(--accent);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      color: var(--accent);
+      z-index: 100;
+    }
+
+    .drop-zone.active {
+      display: flex;
+    }
+
+    /* Loading */
+    .loading-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(17, 17, 27, 0.9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--panel-border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-title">
+        🎱 <span>Table Editor</span>
+      </div>
+      <div class="header-actions">
+        <div class="connection-status">
+          <div class="status-dot" id="status-dot"></div>
+          <span id="status-text">Disconnected</span>
+        </div>
+        <button class="btn" id="btn-import">📥 Import</button>
+        <button class="btn" id="btn-export">📤 Export</button>
+        <button class="btn btn-primary" id="btn-push">⬆️ Push to Game</button>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="main-content">
+      <!-- Left Sidebar - Skin Library -->
+      <aside class="sidebar-left">
+        <div class="panel-header">
+          Skin Library
+          <button class="btn" style="padding: 4px 8px; font-size: 11px;" id="btn-new-skin">+ New</button>
+        </div>
+        <div class="skin-grid" id="skin-grid">
+          <!-- Skins will be populated here -->
+          <div class="skin-card active">
+            <div class="skin-card-preview"></div>
+            <div class="skin-card-name">Default Green</div>
+          </div>
+          <div class="skin-card">
+            <div class="skin-card-preview" style="background: linear-gradient(135deg, #1a3f5f 0%, #0d1530 100%);"></div>
+            <div class="skin-card-name">Tournament Blue</div>
+          </div>
+          <div class="skin-card skin-card-add">
+            <span style="font-size: 24px;">+</span>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Center - Preview -->
+      <main class="preview-container">
+        <div class="preview-canvas-wrapper">
+          <canvas id="preview-canvas"></canvas>
+          <div class="drop-zone" id="drop-zone">Drop skin files here</div>
+        </div>
+        <div class="preview-controls">
+          <button title="Zoom In" id="btn-zoom-in">🔍+</button>
+          <button title="Zoom Out" id="btn-zoom-out">🔍−</button>
+          <button title="Reset View" id="btn-reset-view">⌂</button>
+          <button title="Toggle Balls" id="btn-toggle-balls" class="active">🎱</button>
+          <button title="Toggle Measurements" id="btn-toggle-measure">📏</button>
+          <button title="Rack Balls" id="btn-rack">△</button>
+        </div>
+      </main>
+
+      <!-- Right Sidebar - Properties -->
+      <aside class="sidebar-right">
+        <div class="tabs">
+          <div class="tab active" data-tab="geometry">Geometry</div>
+        </div>
+        <div class="tab-content" id="tab-content">
+          <!-- Geometry Tab -->
+          <div class="property-group">
+            <div class="property-group-title">Table Size <span style="font-size: 10px; opacity: 0.6;">(from physics.json)</span></div>
+            <div class="property-row">
+              <span class="property-label">Play Width (in)</span>
+              <input type="number" class="property-input" value="100" step="0.1" id="prop-play-width" readonly style="opacity: 0.7;">
+            </div>
+            <div class="property-row">
+              <span class="property-label">Play Height (in)</span>
+              <input type="number" class="property-input" value="50" step="0.1" id="prop-play-height" readonly style="opacity: 0.7;">
+            </div>
+          </div>
+          <div class="property-group">
+            <div class="property-group-title">Corner Pockets</div>
+            <div class="property-row">
+              <span class="property-label">Offset X (in)</span>
+              <input type="range" class="property-slider" min="-3" max="3" step="0.05" value="0" id="prop-corner-offset-x">
+              <input type="number" class="property-input" value="0" step="0.05" style="width: 60px;" id="prop-corner-offset-x-num">
+            </div>
+            <div class="property-row">
+              <span class="property-label">Offset Y (in)</span>
+              <input type="range" class="property-slider" min="-3" max="3" step="0.05" value="0" id="prop-corner-offset-y">
+              <input type="number" class="property-input" value="0" step="0.05" style="width: 60px;" id="prop-corner-offset-y-num">
+            </div>
+          </div>
+          <div class="property-group">
+            <div class="property-group-title">Side Pockets</div>
+            <div class="property-row">
+              <span class="property-label">Offset X (in)</span>
+              <input type="range" class="property-slider" min="-3" max="3" step="0.05" value="0" id="prop-side-offset-x">
+              <input type="number" class="property-input" value="0" step="0.05" style="width: 60px;" id="prop-side-offset-x-num">
+            </div>
+            <div class="property-row">
+              <span class="property-label">Offset Y (in)</span>
+              <input type="range" class="property-slider" min="-3" max="3" step="0.05" value="0" id="prop-side-offset-y">
+              <input type="number" class="property-input" value="0" step="0.05" style="width: 60px;" id="prop-side-offset-y-num">
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <!-- Bottom Panel - JSON (collapsed by default) -->
+    <div class="bottom-panel collapsed" id="bottom-panel">
+      <div class="bottom-panel-header" id="bottom-panel-toggle">
+        <span>📄 JSON Configuration</span>
+        <span>▼</span>
+      </div>
+      <div class="json-editor" id="json-editor">
+{
+  "version": "1.0",
+  "type": "table",
+  "name": "Default Green",
+  "geometry": {
+    "corner": { "throatWidth": 5.0, "jawAngle": 142 },
+    "side": { "throatWidth": 5.5 }
+  }
+}
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/devtools/table-editor/main.ts"></script>
+</body>
+</html>
