@@ -26,9 +26,10 @@ export {
   type BallInHandState,
   type BallInHandDependencies,
   type BallInHandPlacement,
+  type ScreenToWorldDeps,
   createInitialBallInHandState,
   isInKitchen,
-  applyKitchenLimit,
+  applyKitchenLimit as applyKitchenLimitBIH,
   clampToPlayArea,
   isSpotOpen,
   getAIPlacementCandidates,
@@ -39,6 +40,10 @@ export {
   setPendingForAI,
   setPlacement,
   resetBallInHandState,
+  screenToWorld,
+  isClickOnCueBall,
+  processDragPosition,
+  applyDragToCueBall,
 } from './BallInHandController';
 
 export {
@@ -69,3 +74,54 @@ export {
   getWinnerMessage,
   isMatchInProgress,
 } from './MatchManager';
+
+export {
+  type PocketCallState,
+  type PocketChoice,
+  type PocketCallDeps,
+  createInitialPocketCallState,
+  getPocketLabel,
+  getPocketChoices,
+  requiresPocketCall,
+  shouldPromptPocketCall,
+  shouldBlockShot,
+  pickNearestPocketId,
+  handlePocketClick,
+  setCalledPocket,
+  startWaitingForPocketCall,
+  clearPocketCallAfterShot,
+  resetPocketCallState,
+} from './PocketCallController';
+
+export {
+  type PowerBarState,
+  type MicroDialState,
+  type InputControllerDeps,
+  createInitialPowerBarState,
+  createInitialMicroDialState,
+  handlePowerBarMouseDown,
+  handlePowerBarMouseMove,
+  handlePowerBarMouseUp,
+  handleMicroDialMouseDown,
+  handleMicroDialMouseMove,
+  handleMicroDialMouseUp,
+  getMicroAimOffsetDegrees as getInputMicroAimOffsetDegrees,
+  getMicroAimOffsetRadians as getInputMicroAimOffsetRadians,
+  applyMicroAimOffset as applyInputMicroAimOffset,
+} from './InputController';
+
+export {
+  type TurnState,
+  type TurnControllerDeps,
+  createInitialTurnState,
+  switchToPlayer,
+  checkTurnChange,
+  handleBreakTransition,
+  isCurrentShooterAI,
+  getCurrentPlayer,
+  getRemainingBallsForGroup,
+  getAllRemainingBalls,
+  resetAIState as resetTurnAIState,
+  setAISelectedShot,
+  clearAISelectedShot,
+} from './TurnController';

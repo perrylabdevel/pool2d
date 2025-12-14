@@ -1,25 +1,27 @@
-
-import { UIScene } from '../SceneController';
+import { BaseScene, Button } from './BaseScene';
 import { uiStateMachine, UIState } from '../UIStateMachine';
 import { ColorTokens, SemanticColors } from '../theme/ColorTokens';
 import { LayoutConstants } from '../theme/LayoutConstants';
-import { drawGlossyButton, Rect } from '../components/UIComponents';
+import { drawGlossyButton } from '../components/UIComponents';
 
-interface MenuButton {
-    id: 'resume' | 'settings' | 'quit';
+interface MenuButton extends Button {
     text: string;
     icon: string;
     color: string;
-    rect: Rect;
 }
 
-export class InGameMenuScene implements UIScene {
-    private canvas: HTMLCanvasElement | null = null;
-    private buttons: MenuButton[] = [];
-    private hoveredButton: MenuButton | null = null;
+/**
+ * InGameMenuScene - Pause menu overlay
+ * Extends BaseScene for common mount/unmount/event handling
+ */
+export class InGameMenuScene extends BaseScene {
+    private menuButtons: MenuButton[] = [];
     private keyHandler: ((e: KeyboardEvent) => void) | null = null;
 
-    private setupButtons(width: number, height: number) {
+    protected setupLayout(width: number, height: number): void {
+        this.clearButtons();
+        this.menuButtons = [];
+
         const buttonWidth = 280;
         const buttonHeight = 70;
         const gap = 20;
@@ -27,40 +29,40 @@ export class InGameMenuScene implements UIScene {
         const centerY = height / 2;
         const startY = centerY - (buttonHeight * 1.5 + gap);
 
-        this.buttons = [
-            {
-                id: 'resume',
-                text: 'Resume Game',
-                icon: '▶',
-                color: ColorTokens.action.success,
-                rect: { x: startX, y: startY, width: buttonWidth, height: buttonHeight }
-            },
-            {
-                id: 'settings',
-                text: 'Settings',
-                icon: '⚙',
-                color: ColorTokens.action.info,
-                rect: { x: startX, y: startY + buttonHeight + gap, width: buttonWidth, height: buttonHeight }
-            },
-            {
-                id: 'quit',
-                text: 'Quit to Menu',
-                icon: '⏻',
-                color: ColorTokens.action.danger,
-                rect: { x: startX, y: startY + (buttonHeight + gap) * 2, width: buttonWidth, height: buttonHeight }
-            }
-        ];
+        const resumeBtn: MenuButton = {
+            id: 'resume',
+            text: 'Resume Game',
+            icon: '▶',
+            color: ColorTokens.action.success,
+            rect: { x: startX, y: startY, width: buttonWidth, height: buttonHeight },
+            action: () => this.handleButtonClick('resume')
+        };
+
+        const settingsBtn: MenuButton = {
+            id: 'settings',
+            text: 'Settings',
+            icon: '⚙',
+            color: ColorTokens.action.info,
+            rect: { x: startX, y: startY + buttonHeight + gap, width: buttonWidth, height: buttonHeight },
+            action: () => this.handleButtonClick('settings')
+        };
+
+        const quitBtn: MenuButton = {
+            id: 'quit',
+            text: 'Quit to Menu',
+            icon: '⏻',
+            color: ColorTokens.action.danger,
+            rect: { x: startX, y: startY + (buttonHeight + gap) * 2, width: buttonWidth, height: buttonHeight },
+            action: () => this.handleButtonClick('quit')
+        };
+
+        this.menuButtons = [resumeBtn, settingsBtn, quitBtn];
+        for (const btn of this.menuButtons) {
+            this.registerButton(btn);
+        }
     }
 
-    mount(): void {
-        this.canvas = document.getElementById('ui-stage') as HTMLCanvasElement;
-        if (!this.canvas) return;
-
-        this.setupButtons(this.canvas.width, this.canvas.height);
-        this.canvas.addEventListener('mousemove', this.onMouseMove);
-        this.canvas.addEventListener('click', this.onClick);
-
-
+    protected onMount(): void {
         // ESC key to resume game
         this.keyHandler = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
@@ -73,46 +75,10 @@ export class InGameMenuScene implements UIScene {
         window.dispatchEvent(new CustomEvent('game:pause'));
     }
 
-    unmount(): void {
-        if (!this.canvas) return;
-        this.canvas.removeEventListener('mousemove', this.onMouseMove);
-        this.canvas.removeEventListener('click', this.onClick);
-
-
+    protected onUnmount(): void {
         if (this.keyHandler) {
             window.removeEventListener('keydown', this.keyHandler);
             this.keyHandler = null;
-        }
-
-        this.canvas.style.cursor = 'default';
-        this.canvas = null;
-    }
-
-    public onResize(width: number, height: number) {
-        this.setupButtons(width, height);
-    }
-
-    private onMouseMove = (e: MouseEvent) => {
-        if (!this.canvas) return;
-        const rect = this.canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-
-        this.hoveredButton = null;
-        for (const btn of this.buttons) {
-            const { x: bx, y: by, width, height } = btn.rect;
-            if (x >= bx && x <= bx + width && y >= by && y <= by + height) {
-                this.hoveredButton = btn;
-                this.canvas.style.cursor = 'pointer';
-                return;
-            }
-        }
-        this.canvas.style.cursor = 'default';
-    }
-
-    private onClick = (_e: MouseEvent) => {
-        if (this.hoveredButton) {
-            this.handleButtonClick(this.hoveredButton.id);
         }
     }
 
@@ -134,8 +100,7 @@ export class InGameMenuScene implements UIScene {
         }
     }
 
-    update(_dt: number): void {
-    }
+    update(_dt: number): void { }
 
     render(ctx: CanvasRenderingContext2D): void {
         const width = ctx.canvas.width;
@@ -173,8 +138,8 @@ export class InGameMenuScene implements UIScene {
     }
 
     private renderButtons(ctx: CanvasRenderingContext2D) {
-        for (const btn of this.buttons) {
-            const isHovered = btn === this.hoveredButton;
+        for (const btn of this.menuButtons) {
+            const isHovered = this.isButtonHovered(btn.id);
             drawGlossyButton(ctx, btn.rect, btn.text, btn.color, isHovered);
         }
     }

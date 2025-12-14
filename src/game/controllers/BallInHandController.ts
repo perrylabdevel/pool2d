@@ -259,3 +259,101 @@ export function setPlacement(
 export function resetBallInHandState(): BallInHandState {
   return createInitialBallInHandState();
 }
+
+// ============================================================
+// Ball Drag Handling - Screen to World Coordinate Conversion
+// ============================================================
+
+export interface ScreenToWorldDeps {
+  canvasRect: DOMRect;
+  canvasWidth: number;
+  canvasHeight: number;
+  scale: number;
+}
+
+/**
+ * Convert screen coordinates to world coordinates
+ */
+export function screenToWorld(
+  screenX: number,
+  screenY: number,
+  deps: ScreenToWorldDeps
+): { x: number; y: number } {
+  const canvasCenterX = deps.canvasWidth / 2;
+  const canvasCenterY = deps.canvasHeight / 2;
+  
+  const localX = screenX - deps.canvasRect.left;
+  const localY = screenY - deps.canvasRect.top;
+  
+  const worldX = (localX - canvasCenterX) / deps.scale;
+  const worldY = -(localY - canvasCenterY) / deps.scale; // Flip Y
+  
+  return { x: worldX, y: worldY };
+}
+
+/**
+ * Check if click is on cue ball
+ */
+export function isClickOnCueBall(
+  worldX: number,
+  worldY: number,
+  cueBall: Ball
+): boolean {
+  const dx = worldX - cueBall.x;
+  const dy = worldY - cueBall.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  return dist <= cueBall.radius;
+}
+
+/**
+ * Process ball drag position - clamps and applies kitchen limit
+ */
+export function processDragPosition(
+  worldX: number,
+  worldY: number,
+  radius: number,
+  rails: Rail[],
+  pockets: Pocket[],
+  shouldRestrictToKitchen: boolean
+): { x: number; y: number; hits: number } {
+  const result = clampBallInHand(
+    { x: worldX, y: worldY },
+    radius,
+    rails,
+    pockets,
+    {
+      iterations: CONFIG.BALL_IN_HAND_ITERATIONS,
+      pocketMargin: CONFIG.BALL_IN_HAND_POCKET_MARGIN_IN,
+    }
+  );
+  
+  const geom = getTableGeometry();
+  const halfW = (geom.playWidthIn ?? CONFIG.TABLE_WIDTH) / 2;
+  const halfH = (geom.playHeightIn ?? CONFIG.TABLE_HEIGHT) / 2;
+  
+  const clampedX = Math.max(-halfW + radius, Math.min(halfW - radius, result.x));
+  const clampedY = Math.max(-halfH + radius, Math.min(halfH - radius, result.y));
+  const kitchenLimitedX = applyKitchenLimit(clampedX, radius, shouldRestrictToKitchen);
+  
+  return { x: kitchenLimitedX, y: clampedY, hits: result.hits.length };
+}
+
+/**
+ * Apply drag position to cue ball
+ */
+export function applyDragToCueBall(
+  cueBall: Ball,
+  x: number,
+  y: number
+): void {
+  // Un-pocket if needed
+  if (cueBall.pocketed) {
+    cueBall.pocketed = false;
+    cueBall.vx = 0;
+    cueBall.vy = 0;
+    cueBall.sleeping = true;
+  }
+  
+  cueBall.x = x;
+  cueBall.y = y;
+}

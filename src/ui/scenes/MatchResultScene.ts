@@ -1,11 +1,12 @@
 /**
  * MatchResultScene - Post-game results screen
  * Shows win/loss, earnings, trophies, chest earned, and options to play again or return to lobby
+ * Extends BaseScene for common mount/unmount/event handling
  */
 
-import { UIScene } from '../SceneController';
+import { BaseScene, Button } from './BaseScene';
 import { uiStateMachine, UIState } from '../UIStateMachine';
-import { drawRoundedRect, Rect } from '../components/UIComponents';
+import { drawRoundedRect } from '../components/UIComponents';
 import { ColorTokens } from '../theme/ColorTokens';
 import { LayoutConstants } from '../theme/LayoutConstants';
 import { drawSceneBackground } from '../components/SceneBackground';
@@ -22,116 +23,56 @@ interface MatchResultData {
     clubId: string | null;
 }
 
-interface ResultButton extends Rect {
+interface ResultButton extends Button {
     label: string;
-    action: () => void;
     primary?: boolean;
 }
 
-export class MatchResultScene implements UIScene {
-    private canvas: HTMLCanvasElement | null = null;
-    private buttons: ResultButton[] = [];
-    private hoveredButton: ResultButton | null = null;
+export class MatchResultScene extends BaseScene {
+    private resultButtons: ResultButton[] = [];
     private resultData: MatchResultData | null = null;
     private animationProgress: number = 0;
     private animationStartTime: number = 0;
 
-    mount(): void {
-        this.canvas = document.getElementById('ui-stage') as HTMLCanvasElement;
-        if (!this.canvas) return;
-
+    protected onMount(): void {
         // Get match result data
         this.resultData = (window as unknown as { __lastMatchResult?: MatchResultData }).__lastMatchResult || null;
         console.log('MatchResultScene mounted with data:', this.resultData);
 
         this.animationProgress = 0;
         this.animationStartTime = Date.now();
-        this.setupLayout();
-
-        this.canvas.addEventListener('mousemove', this.onMouseMove);
-        this.canvas.addEventListener('click', this.onClick);
-
     }
 
-    unmount(): void {
-        if (!this.canvas) return;
-        this.canvas.removeEventListener('mousemove', this.onMouseMove);
-        this.canvas.removeEventListener('click', this.onClick);
+    protected setupLayout(width: number, height: number): void {
+        this.clearButtons();
+        this.resultButtons = [];
 
-        this.canvas.style.cursor = 'default';
-    }
-
-    private setupLayout = () => {
-        if (!this.canvas) return;
-        const width = this.canvas.width;
-        const height = this.canvas.height;
         const centerX = width / 2;
-
         const buttonWidth = 200;
         const buttonHeight = 50;
         const buttonGap = 20;
         const buttonY = height - 120;
 
-        this.buttons = [
-            {
-                x: centerX - buttonWidth - buttonGap / 2,
-                y: buttonY,
-                width: buttonWidth,
-                height: buttonHeight,
-                label: 'LOBBY',
-                action: () => uiStateMachine.transitionTo(UIState.LOBBY),
-            },
-            {
-                x: centerX + buttonGap / 2,
-                y: buttonY,
-                width: buttonWidth,
-                height: buttonHeight,
-                label: 'PLAY AGAIN',
-                primary: true,
-                action: () => uiStateMachine.transitionTo(UIState.CLUB_SELECTION),
-            },
-        ];
-    };
+        const lobbyBtn: ResultButton = {
+            id: 'lobby',
+            rect: { x: centerX - buttonWidth - buttonGap / 2, y: buttonY, width: buttonWidth, height: buttonHeight },
+            label: 'LOBBY',
+            action: () => uiStateMachine.transitionTo(UIState.LOBBY),
+        };
 
-    public onResize(_width: number, _height: number) {
-        this.setupLayout();
+        const playAgainBtn: ResultButton = {
+            id: 'play-again',
+            rect: { x: centerX + buttonGap / 2, y: buttonY, width: buttonWidth, height: buttonHeight },
+            label: 'PLAY AGAIN',
+            primary: true,
+            action: () => uiStateMachine.transitionTo(UIState.CLUB_SELECTION),
+        };
+
+        this.resultButtons = [lobbyBtn, playAgainBtn];
+        for (const btn of this.resultButtons) {
+            this.registerButton(btn);
+        }
     }
-
-    private onMouseMove = (e: MouseEvent) => {
-        if (!this.canvas) return;
-        const rect = this.canvas.getBoundingClientRect();
-        const scaleX = this.canvas.width / rect.width;
-        const scaleY = this.canvas.height / rect.height;
-        const x = (e.clientX - rect.left) * scaleX;
-        const y = (e.clientY - rect.top) * scaleY;
-
-        this.hoveredButton = null;
-        for (const btn of this.buttons) {
-            if (x >= btn.x && x <= btn.x + btn.width &&
-                y >= btn.y && y <= btn.y + btn.height) {
-                this.hoveredButton = btn;
-                break;
-            }
-        }
-        this.canvas.style.cursor = this.hoveredButton ? 'pointer' : 'default';
-    };
-
-    private onClick = (e: MouseEvent) => {
-        if (!this.canvas) return;
-        const rect = this.canvas.getBoundingClientRect();
-        const scaleX = this.canvas.width / rect.width;
-        const scaleY = this.canvas.height / rect.height;
-        const x = (e.clientX - rect.left) * scaleX;
-        const y = (e.clientY - rect.top) * scaleY;
-
-        for (const btn of this.buttons) {
-            if (x >= btn.x && x <= btn.x + btn.width &&
-                y >= btn.y && y <= btn.y + btn.height) {
-                btn.action();
-                return;
-            }
-        }
-    };
 
     update(_dt: number): void {
         // Animate in over 0.8 seconds
@@ -307,14 +248,15 @@ export class MatchResultScene implements UIScene {
     }
 
     private renderButtons(ctx: CanvasRenderingContext2D) {
-        for (const btn of this.buttons) {
-            const isHovered = this.hoveredButton === btn;
+        for (const btn of this.resultButtons) {
+            const isHovered = this.isButtonHovered(btn.id);
+            const { x, y, width, height } = btn.rect;
 
             // Button background
-            drawRoundedRect(ctx, btn.x, btn.y, btn.width, btn.height, 25);
+            drawRoundedRect(ctx, x, y, width, height, 25);
 
             if (btn.primary) {
-                const grad = ctx.createLinearGradient(btn.x, btn.y, btn.x, btn.y + btn.height);
+                const grad = ctx.createLinearGradient(x, y, x, y + height);
                 grad.addColorStop(0, isHovered ? ColorTokens.action.success : '#00CC66');
                 grad.addColorStop(1, isHovered ? '#00CC66' : '#009944');
                 ctx.fillStyle = grad;
@@ -333,7 +275,7 @@ export class MatchResultScene implements UIScene {
             ctx.font = `bold 18px ${LayoutConstants.Fonts.Family.Heading}`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(btn.label, btn.x + btn.width / 2, btn.y + btn.height / 2);
+            ctx.fillText(btn.label, x + width / 2, y + height / 2);
         }
     }
 

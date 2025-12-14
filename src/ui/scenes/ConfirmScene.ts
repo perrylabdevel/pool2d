@@ -1,20 +1,20 @@
-import { UIScene } from '../SceneController';
+import { BaseScene, Button } from './BaseScene';
 import { uiStateMachine, UIState } from '../UIStateMachine';
-import { drawGlossyButton, drawPanel, Rect, UIColors } from '../components/UIComponents';
+import { drawGlossyButton, drawPanel, UIColors } from '../components/UIComponents';
 import { ColorTokens, SemanticColors } from '../theme/ColorTokens';
 import { LayoutConstants } from '../theme/LayoutConstants';
 
-type ConfirmButton = {
-    id: 'confirm' | 'cancel';
+interface ConfirmButton extends Button {
     label: string;
     color: string;
-    rect: Rect;
-};
+}
 
-export class ConfirmScene implements UIScene {
-    private canvas: HTMLCanvasElement | null = null;
-    private buttons: ConfirmButton[] = [];
-    private hoveredButton: ConfirmButton | null = null;
+/**
+ * ConfirmScene - Modal confirmation dialog
+ * Extends BaseScene for common mount/unmount/event handling
+ */
+export class ConfirmScene extends BaseScene {
+    private confirmButtons: ConfirmButton[] = [];
 
     // Configuration
     private title: string = 'Confirm Action?';
@@ -22,26 +22,11 @@ export class ConfirmScene implements UIScene {
     private confirmLabel: string = 'Confirm';
     private cancelLabel: string = 'Cancel';
     private returnState: UIState = UIState.LOBBY;
-    private onConfirm: (() => void) | null = null;
+    private onConfirmCallback: (() => void) | null = null;
 
-    mount(): void {
-        this.canvas = document.getElementById('ui-stage') as HTMLCanvasElement;
-        if (!this.canvas) return;
-        this.onResize(this.canvas.width, this.canvas.height);
-        this.canvas.addEventListener('mousemove', this.onMouseMove);
-        this.canvas.addEventListener('click', this.onClick);
-    }
-
-    unmount(): void {
-        if (!this.canvas) return;
-        this.canvas.removeEventListener('mousemove', this.onMouseMove);
-        this.canvas.removeEventListener('click', this.onClick);
-
-        this.canvas.style.cursor = 'default';
-    }
-
-    public onResize(width: number, height: number) {
-        if (!this.canvas) return;
+    protected setupLayout(width: number, height: number): void {
+        this.clearButtons();
+        this.confirmButtons = [];
 
         const buttonWidth = 140;
         const buttonHeight = 50;
@@ -50,52 +35,30 @@ export class ConfirmScene implements UIScene {
         const startX = (width - totalWidth) / 2;
         const startY = height / 2 + 40;
 
-        this.buttons = [
-            {
-                id: 'cancel',
-                label: this.cancelLabel,
-                color: UIColors.danger,
-                rect: { x: startX, y: startY, width: buttonWidth, height: buttonHeight }
-            },
-            {
-                id: 'confirm',
-                label: this.confirmLabel,
-                color: UIColors.secondary,
-                rect: { x: startX + buttonWidth + gap, y: startY, width: buttonWidth, height: buttonHeight }
+        const cancelBtn: ConfirmButton = {
+            id: 'cancel',
+            label: this.cancelLabel,
+            color: UIColors.danger,
+            rect: { x: startX, y: startY, width: buttonWidth, height: buttonHeight },
+            action: () => uiStateMachine.transitionTo(this.returnState)
+        };
+
+        const confirmBtn: ConfirmButton = {
+            id: 'confirm',
+            label: this.confirmLabel,
+            color: UIColors.secondary,
+            rect: { x: startX + buttonWidth + gap, y: startY, width: buttonWidth, height: buttonHeight },
+            action: () => {
+                if (this.onConfirmCallback) {
+                    this.onConfirmCallback();
+                }
             }
-        ];
+        };
+
+        this.confirmButtons = [cancelBtn, confirmBtn];
+        this.registerButton(cancelBtn);
+        this.registerButton(confirmBtn);
     }
-
-    private onMouseMove = (e: MouseEvent) => {
-        if (!this.canvas) return;
-        const rect = this.canvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-
-        this.hoveredButton = null;
-        for (const btn of this.buttons) {
-            const { x: bx, y: by, width, height } = btn.rect;
-            if (x >= bx && x <= bx + width && y >= by && y <= by + height) {
-                this.hoveredButton = btn;
-                break;
-            }
-        }
-        this.canvas.style.cursor = this.hoveredButton ? 'pointer' : 'default';
-    };
-
-    private onClick = () => {
-        if (!this.hoveredButton) return;
-
-        if (this.hoveredButton.id === 'confirm') {
-            if (this.onConfirm) {
-                this.onConfirm();
-            }
-            // Don't transition here - let the onConfirm callback handle it
-        } else {
-            // Cancel - return to previous scene
-            uiStateMachine.transitionTo(this.returnState);
-        }
-    };
 
     update(_dt: number): void { }
 
@@ -138,13 +101,13 @@ export class ConfirmScene implements UIScene {
         ctx.fillText(this.title, width / 2, panelY + 50);
 
         // Message
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'; // Slightly transparent white for subtitle
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
         ctx.font = `${LayoutConstants.Fonts.Size.Medium}px ${LayoutConstants.Fonts.Family.Default}`;
         ctx.fillText(this.message, width / 2, panelY + 85);
 
         // Buttons
-        for (const btn of this.buttons) {
-            const isHovered = btn === this.hoveredButton;
+        for (const btn of this.confirmButtons) {
+            const isHovered = this.isButtonHovered(btn.id);
             drawGlossyButton(ctx, btn.rect, btn.label, btn.color, isHovered);
         }
 
@@ -165,7 +128,7 @@ export class ConfirmScene implements UIScene {
         if (options.confirmLabel !== undefined) this.confirmLabel = options.confirmLabel;
         if (options.cancelLabel !== undefined) this.cancelLabel = options.cancelLabel;
         if (options.returnState !== undefined) this.returnState = options.returnState;
-        if (options.onConfirm !== undefined) this.onConfirm = options.onConfirm;
+        if (options.onConfirm !== undefined) this.onConfirmCallback = options.onConfirm;
 
         // Update button labels
         if (this.canvas) {

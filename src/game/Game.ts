@@ -52,6 +52,22 @@ import {
   isSpotOpen,
   placeCueBall,
   awardChestForWin,
+  getPocketLabel as getPocketLabelFromController,
+  getPocketChoices as getPocketChoicesFromController,
+  pickNearestPocketId as pickNearestPocketIdFromController,
+  // TurnController
+  getRemainingBallsForGroup,
+  getAllRemainingBalls,
+  isCurrentShooterAI as isCurrentShooterAIFromController,
+  // AIController
+  updateAITurn,
+  type AIState,
+  createInitialAIState,
+  // BallInHandController - drag handling
+  screenToWorld,
+  isClickOnCueBall,
+  processDragPosition,
+  applyDragToCueBall,
 } from './controllers';
 
 export enum GameMode {
@@ -1744,6 +1760,7 @@ export class Game {
 
   /**
    * Compute and push remaining group balls per player to HUD.
+   * Delegates to TurnController for ball group calculations.
    */
   private updateHUDPlayerBalls() {
     if (!this.hud) return;
@@ -1751,49 +1768,32 @@ export class Game {
 
     // In practice mode or arcade modes, show all remaining balls on the table
     if (this.mode !== GameMode.EIGHT_BALL) {
-      const allRemainingIds = balls
-        .filter(b => b.id > 0 && !b.pocketed) // Exclude cue ball (id=0) and pocketed balls
-        .map(b => b.id);
-
-      // Show all balls in player 1's panel only (player 2 panel is hidden)
-      this.hud.updateAllBalls(1, allRemainingIds);
+      this.hud.updateAllBalls(1, getAllRemainingBalls(balls));
       return;
     }
 
     // 8-Ball mode: show grouped balls
-    const remainingForGroup = (group: BallGroup | null): number[] | null => {
-      if (group === null) return null;
-      const targetIds = group === BallGroup.SOLIDS
-        ? [1, 2, 3, 4, 5, 6, 7]
-        : [9, 10, 11, 12, 13, 14, 15];
-      const remaining = targetIds.filter(id => {
-        const b = balls.find(x => x.id === id);
-        return b && !b.pocketed;
-      });
-
-      // If player has cleared all their group balls, add the 8-ball
-      if (remaining.length === 0) {
-        const eightBall = balls.find(b => b.id === 8);
-        if (eightBall && !eightBall.pocketed) {
-          remaining.push(8);
-        }
-      }
-
-      return remaining;
-    };
-
-    const p1 = this.players && this.players.length > 0 ? this.players[0] : undefined;
-    const p2 = this.players && this.players.length > 1 ? this.players[1] : undefined;
+    const p1 = this.players?.[0];
+    const p2 = this.players?.[1];
 
     if (!p1 || !p2) {
-      // Players not initialized yet – show placeholders
       this.hud.updatePlayerBalls(1, null);
       this.hud.updatePlayerBalls(2, null);
       return;
     }
 
-    this.hud.updatePlayerBalls(1, remainingForGroup(p1.group ?? null));
-    this.hud.updatePlayerBalls(2, remainingForGroup(p2.group ?? null));
+    // Get remaining balls for each player's group, add 8-ball if group cleared
+    const getGroupBalls = (group: BallGroup | null): number[] | null => {
+      const remaining = getRemainingBallsForGroup(group, balls);
+      if (remaining && remaining.length === 0) {
+        const eightBall = balls.find(b => b.id === 8 && !b.pocketed);
+        if (eightBall) remaining.push(8);
+      }
+      return remaining;
+    };
+
+    this.hud.updatePlayerBalls(1, getGroupBalls(p1.group ?? null));
+    this.hud.updatePlayerBalls(2, getGroupBalls(p2.group ?? null));
   }
 
   private handleBallPocketed(details: PocketCaptureDetails) {
@@ -1913,7 +1913,7 @@ export class Game {
   }
 
   /**
-   * Handle AI turn logic
+   * Handle AI turn logic - delegates to AIController.updateAITurn
    */
   handleAITurn(dt: number) {
     if (!this.ai || !this.stateMachine) return;
@@ -1923,165 +1923,73 @@ export class Game {
     const currentPlayer = this.players[this.currentPlayerIndex];
     if (!currentPlayer.isAI()) return;
 
+    // Handle ball-in-hand placement for AI
     if (this.pendingBallInHandForAI) {
-      const placed = this.placeCueBallForAI();
-      if (!placed) {
-        return;
+      if (!this.placeCueBallForAI()) return;
+    }
+
+    // Delegate to AIController
+    const aiState: AIState = {
+      thinkingStartTime: this.aiThinkingStartTime,
+      selectedShot: this.aiSelectedShot,
+      shotAnimation: this.aiShotAnim,
+    };
+
+    const result = updateAITurn(
+      aiState,
+      dt,
+      this.ai,
+      this.world,
+      currentPlayer,
+      this.lockedAngle,
+      this.currentPower
+    );
+
+    // Apply state updates
+    this.aiThinkingStartTime = result.state.thinkingStartTime;
+    this.aiSelectedShot = result.state.selectedShot;
+    this.aiShotAnim = result.state.shotAnimation;
+
+    if (result.lockedAngle !== undefined) this.lockedAngle = result.lockedAngle;
+    if (result.currentPower !== undefined) this.currentPower = result.currentPower;
+    if (result.clearPredictionCache) {
+      this.cachedPrediction = null;
+      this.cachedDirection = null;
+    }
+
+    // Handle pocket calling for 8-ball
+    if (result.calledPocketId && !this.currentCalledPocketId) {
+      const config = this.rules.config;
+      const requiresCall = config.requireCalled8Ball || config.requireCalledShots;
+      if (requiresCall) {
+        const hasCleared = this.rules.hasPlayerClearedGroup(currentPlayer.id, this.world.balls);
+        if (hasCleared && this.aiSelectedShot?.targetBall?.id === BALL_8) {
+          this.setCalledPocket(result.calledPocketId, false);
+          console.log(`🤖 AI called pocket: ${this.getPocketLabel(result.calledPocketId)}`);
+        }
       }
     }
 
-    // If AI hasn't selected a shot yet, wait for thinking time
-    if (!this.aiSelectedShot) {
-      const elapsed = performance.now() - this.aiThinkingStartTime;
+    // Handle turn switch (no valid shot)
+    if (result.shouldSwitchTurn) {
+      this.rules.switchPlayer();
+      this.switchToPlayer((this.currentPlayerIndex + 1) % this.players.length);
+      return;
+    }
 
-      if (elapsed >= this.ai.getThinkingTime()) {
-        // Select shot
-        console.log('[AI] Selecting shot for player', currentPlayer.id, 'group:', currentPlayer.group);
+    // Handle shot execution
+    if (result.shouldShoot && result.shotAngle !== undefined && result.shotPower !== undefined) {
+      this.canShoot = true;
+      this.isAimMode = false;
+      this.shoot(result.shotAngle, result.shotPower);
+      this.isAimMode = true;
+      this.currentPower = 0;
+    }
 
-        this.aiSelectedShot = this.ai.selectShot(this.world, currentPlayer);
-
-        if (!this.aiSelectedShot) {
-          // No valid shot found - should play safety or pass
-          console.warn('[AI] Could not find a valid shot, switching turn');
-          // Sync rules engine before switching game state
-          this.rules.switchPlayer();
-          this.switchToPlayer((this.currentPlayerIndex + 1) % this.players.length);
-          return;
-        }
-        console.log('[AI] Selected shot:', this.aiSelectedShot);
-
-        // Check if AI needs to call pocket for 8-ball AFTER selecting shot
-        const config = this.rules.config;
-        const requiresCall = config.requireCalled8Ball || config.requireCalledShots;
-        if (requiresCall && !this.currentCalledPocketId) {
-          const hasCleared = this.rules.hasPlayerClearedGroup(currentPlayer.id, this.world.balls);
-          if (hasCleared) {
-            const eightBall = this.world.balls.find((ball) => ball.id === BALL_8);
-            if (eightBall && !eightBall.pocketed && this.aiSelectedShot.targetBall.id === BALL_8) {
-              // Call the pocket the AI is actually aiming for
-              const targetPocketId = this.aiSelectedShot.pocket.id;
-              if (targetPocketId) {
-                this.setCalledPocket(targetPocketId, false);
-                console.log(`🤖 AI called pocket: ${this.getPocketLabel(targetPocketId)}`);
-              }
-            }
-          }
-        }
-      }
-    } else {
-      // Animate cue like a real player, then execute the shot
-      if (!this.aiShotAnim) {
-        const r = Math.random;
-        const stats = this.ai?.getOpponentDef().stats;
-        const accuracy = stats?.accuracy ?? 0.5;
-
-        // Per-shot randomized dynamics
-        const baseW1 = 1.0 + r() * 1.5; // cycles/sec
-        const baseW2 = 2.0 + r() * 2.0;
-
-        // Angle waggle amplitude in degrees based on accuracy (inverse relationship)
-        // High accuracy (1.0) -> low waggle (~0.15 deg)
-        // Low accuracy (0.0) -> high waggle (~2.5 deg)
-        const aAmpDeg = (2.5 - (accuracy * 2.35)) + r() * (1 - accuracy) * 0.5;
-        const pAmp = Math.min(this.aiSelectedShot.power * (0.10 + r() * 0.08), 3.2);
-        const warmupDur = 0.45 + r() * 0.35; // 0.45-0.8s
-        const approachDur = 0.35 + r() * 0.25; // 0.35-0.6s
-        const pauseDur = 0.12 + r() * 0.15; // 0.12-0.27s
-        const strikeDur = 0.16 + r() * 0.10; // 0.16-0.26s
-
-        this.aiShotAnim = {
-          phase: 'warmup',
-          elapsed: 0,
-          aimAngle: this.aiSelectedShot.aimAngle,
-          targetPower: this.aiSelectedShot.power,
-          seed: r(),
-          w1: baseW1 * 2 * Math.PI,
-          w2: baseW2 * 2 * Math.PI,
-          aAmpDeg,
-          pAmp,
-          warmupDur,
-          approachDur,
-          pauseDur,
-          strikeDur,
-        };
-        // Drive UI state to show cue/power bar for AI
-        this.canShoot = true;
-        this.isAimMode = false;
-        this.lockedAngle = this.aiSelectedShot.aimAngle;
-        this.currentPower = 0;
-        // Ensure prediction recalculates each frame for AI animation
-        this.cachedPrediction = null;
-        this.cachedDirection = null;
-      }
-
-      if (this.aiShotAnim) {
-        this.aiShotAnim.elapsed += dt;
-        const p = this.aiShotAnim;
-        const warmupDuration = p.warmupDur;
-        const approachDuration = p.approachDur;
-        const pauseDuration = p.pauseDur;
-        const strikeDuration = p.strikeDur;
-
-        if (p.phase === 'warmup') {
-          // Gentle oscillation in power and slight angle waggle
-          // Two-frequency LFO with random seed phases and gentle decay envelope
-          const phase1 = p.w1 * p.elapsed + p.seed * Math.PI * 2;
-          const phase2 = p.w2 * p.elapsed + (1 - p.seed) * Math.PI * 2;
-          const env = 0.85 + 0.15 * Math.cos(Math.min(1, p.elapsed / warmupDuration) * Math.PI); // subtle decay
-          const waggle = (p.aAmpDeg * Math.PI / 180) * env * (Math.sin(phase1) * 0.7 + Math.sin(phase2) * 0.3);
-          const base = Math.min(p.targetPower * 0.22, 3.6);
-          this.lockedAngle = p.aimAngle + waggle;
-          this.currentPower = base + p.pAmp * (0.5 + 0.5 * Math.sin(phase1 * 0.85 + 0.3 * Math.sin(phase2)));
-          // force fresh prediction (align aim line with cue)
-          this.cachedPrediction = null;
-          this.cachedDirection = null;
-          if (p.elapsed >= warmupDuration) {
-            p.phase = 'approach';
-            p.elapsed = 0;
-          }
-        } else if (p.phase === 'approach') {
-          const t = Math.min(1, p.elapsed / approachDuration);
-          const eased = t * t * (3 - 2 * t); // smoothstep
-          this.lockedAngle = p.aimAngle; // keep aligning
-          this.currentPower = p.targetPower * 0.7 * eased; // approach to 70%
-          // force fresh prediction (align aim line with cue)
-          this.cachedPrediction = null;
-          this.cachedDirection = null;
-          if (t >= 1) {
-            p.phase = 'pause';
-            p.elapsed = 0;
-          }
-        } else if (p.phase === 'pause') {
-          if (p.elapsed >= pauseDuration) {
-            p.phase = 'strike';
-            p.elapsed = 0;
-          }
-        } else if (p.phase === 'strike') {
-          const t = Math.min(1, p.elapsed / strikeDuration);
-          const eased = t * t; // accelerate in
-          // Final micro-refinement on high accuracy: ease angle back to precise aim
-          const stats = this.ai?.getOpponentDef().stats;
-          const isHighSkill = (stats?.accuracy ?? 0) > 0.7;
-          const refine = isHighSkill ? (1 - (1 - eased) * 0.5) : eased;
-          this.currentPower = p.targetPower * (0.7 + 0.3 * eased);
-          this.lockedAngle = p.aimAngle * refine + this.lockedAngle * (1 - refine);
-          // force fresh prediction (align aim line with cue)
-          this.cachedPrediction = null;
-          this.cachedDirection = null;
-          if (t >= 1) {
-            // Fire the shot
-            console.log('[AI] Executing shot');
-            const finalAngle = this.lockedAngle;
-            const finalPower = Math.max(p.targetPower, this.currentPower);
-            this.shoot(finalAngle, finalPower);
-            this.aiSelectedShot = null;
-            this.aiShotAnim = null;
-            // Reset UI shot controls
-            this.isAimMode = true;
-            this.currentPower = 0;
-          }
-        }
-      }
+    // Set UI state when animation starts
+    if (result.state.shotAnimation && !aiState.shotAnimation) {
+      this.canShoot = true;
+      this.isAimMode = false;
     }
   }
 
@@ -2538,134 +2446,63 @@ export class Game {
     }
   }
 
+  /**
+   * Handle ball drag start - delegates to BallInHandController
+   */
   handleBallDragStart(e: MouseEvent) {
     const isBallInHandPhase = this.isBallInHandPhase();
-    // Allow drag during official ball-in-hand or practice mode when balls are at rest
     if (!this.canShoot && !isBallInHandPhase) return;
     if (!e.shiftKey && !isBallInHandPhase) return;
     if (!this.cueBall || this.cueBall.pocketed) return;
 
-    // Convert screen coords to game coords (same transform as renderer)
-    const rect = this.input.canvas.getBoundingClientRect();
-    const canvasCenterX = this.renderer.canvas.width / 2;
-    const canvasCenterY = this.renderer.canvas.height / 2;
+    const deps = {
+      canvasRect: this.input.canvas.getBoundingClientRect(),
+      canvasWidth: this.renderer.canvas.width,
+      canvasHeight: this.renderer.canvas.height,
+      scale: this.renderer.scale,
+    };
+    const world = screenToWorld(e.clientX, e.clientY, deps);
 
-    const screenX = e.clientX - rect.left;
-    const screenY = e.clientY - rect.top;
-
-    const geom = getTableGeometry();
-    const halfW = (geom.playWidthIn ?? CONFIG.TABLE_WIDTH) / 2;
-    const halfH = (geom.playHeightIn ?? CONFIG.TABLE_HEIGHT) / 2;
-    const mouseX = Math.max(
-      -halfW,
-      Math.min(halfW, (screenX - canvasCenterX) / this.renderer.scale)
-    );
-    const mouseY = Math.max(
-      -halfH,
-      Math.min(halfH, -(screenY - canvasCenterY) / this.renderer.scale) // Flip Y
-    );
-
-    // Check if clicking on cue ball - must click directly on the ball
-    const dx = mouseX - this.cueBall.x;
-    const dy = mouseY - this.cueBall.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-
-    // Only allow drag if clicking within the ball radius (not extended radius)
-    if (dist <= this.cueBall.radius) {
-      const allowBallInHandDrag = isBallInHandPhase;
-      const allowFreeDrag =
-        allowBallInHandDrag || CONFIG.DEBUG_BIH_LOG || this.debug.isBallInHandOverlayEnabled();
+    if (isClickOnCueBall(world.x, world.y, this.cueBall)) {
       this.isDraggingBall = true;
       this.input.canvas.style.cursor = 'move';
-      // Suppress cue pocketing while dragging
       this.world.skipCuePocketCheck = true;
-      if (allowFreeDrag) {
-        // Immediately place once at start so we can see initial clamp
-        const result = clampBallInHand(
-          { x: mouseX, y: mouseY },
-          this.cueBall.radius,
-          this.world.rails,
-          this.world.pockets,
-          { iterations: CONFIG.BALL_IN_HAND_ITERATIONS, pocketMargin: CONFIG.BALL_IN_HAND_POCKET_MARGIN_IN }
-        );
-        const geom = getTableGeometry();
-        const halfW = (geom.playWidthIn ?? CONFIG.TABLE_WIDTH) / 2;
-        const halfH = (geom.playHeightIn ?? CONFIG.TABLE_HEIGHT) / 2;
-        const margin = this.cueBall.radius;
-        const clampedX = Math.max(-halfW + margin, Math.min(halfW - margin, result.x));
-        const clampedY = Math.max(-halfH + margin, Math.min(halfH - margin, result.y));
-        const kitchenLimitedX = this.applyKitchenLimit(clampedX, margin);
-        this.cueBall.x = kitchenLimitedX;
-        this.cueBall.y = clampedY;
 
-        if (CONFIG.DEBUG_BIH_LOG) {
-          // eslint-disable-next-line no-console
-          console.log('BIH drag start', {
-            raw: { x: mouseX, y: mouseY },
-            clamped: { x: kitchenLimitedX, y: clampedY },
-          });
-        }
+      const allowFreeDrag = isBallInHandPhase || CONFIG.DEBUG_BIH_LOG || this.debug.isBallInHandOverlayEnabled();
+      if (allowFreeDrag) {
+        const pos = processDragPosition(world.x, world.y, this.cueBall.radius, this.world.rails, this.world.pockets, this.shouldRestrictToKitchen());
+        applyDragToCueBall(this.cueBall, pos.x, pos.y);
+        if (CONFIG.DEBUG_BIH_LOG) console.log('BIH drag start', { raw: world, clamped: pos });
       }
     }
   }
 
+  /**
+   * Handle ball drag - delegates to BallInHandController
+   */
   handleBallDrag(e: MouseEvent) {
     if (!this.isDraggingBall || !this.cueBall) return;
 
-    const rect = this.input.canvas.getBoundingClientRect();
-    const canvasCenterX = this.renderer.canvas.width / 2;
-    const canvasCenterY = this.renderer.canvas.height / 2;
+    const deps = {
+      canvasRect: this.input.canvas.getBoundingClientRect(),
+      canvasWidth: this.renderer.canvas.width,
+      canvasHeight: this.renderer.canvas.height,
+      scale: this.renderer.scale,
+    };
+    const world = screenToWorld(e.clientX, e.clientY, deps);
+    const pos = processDragPosition(world.x, world.y, this.cueBall.radius, this.world.rails, this.world.pockets, this.shouldRestrictToKitchen());
+    applyDragToCueBall(this.cueBall, pos.x, pos.y);
 
-    const screenX = e.clientX - rect.left;
-    const screenY = e.clientY - rect.top;
-
-    const mouseX = (screenX - canvasCenterX) / this.renderer.scale;
-    const mouseY = -(screenY - canvasCenterY) / this.renderer.scale; // Flip Y
-
-    // If it was flagged pocketed due to a previous step, un-pocket during manual placement
-    // and zero motion so it renders and stays put.
-    if (this.cueBall.pocketed) {
-      this.cueBall.pocketed = false;
-      this.cueBall.vx = 0;
-      this.cueBall.vy = 0;
-      this.cueBall.sleeping = true;
-    }
-
-    // Compute clamped position using authoritative placement helper
-    const result = clampBallInHand(
-      { x: mouseX, y: mouseY },
-      this.cueBall.radius,
-      this.world.rails,
-      this.world.pockets,
-      { iterations: CONFIG.BALL_IN_HAND_ITERATIONS, pocketMargin: CONFIG.BALL_IN_HAND_POCKET_MARGIN_IN }
-    );
-    // Final safety clamp to rectangular play bounds
-    const geom = getTableGeometry();
-    const halfW = (geom.playWidthIn ?? CONFIG.TABLE_WIDTH) / 2;
-    const halfH = (geom.playHeightIn ?? CONFIG.TABLE_HEIGHT) / 2;
-    const margin = this.cueBall.radius;
-    const clampedX = Math.max(-halfW + margin, Math.min(halfW - margin, result.x));
-    const clampedY = Math.max(-halfH + margin, Math.min(halfH - margin, result.y));
-    const kitchenLimitedX = this.applyKitchenLimit(clampedX, margin);
-    this.cueBall.x = kitchenLimitedX;
-    this.cueBall.y = clampedY;
-
-    // Round-trip coordinate check (screen->world->screen)
-    // screenX/screenY defined above; compare with renderer's projection
-    const re = this.renderer.worldToScreen(mouseX, mouseY);
-    const rtErrorPx = Math.hypot(re.x - screenX, re.y - screenY);
-    this.debug.setBallInHandData({
-      raw: { x: mouseX, y: mouseY },
-      clamped: { x: kitchenLimitedX, y: clampedY },
-      radius: this.cueBall.radius,
-      hits: result.hits.length,
-      rtErrorPx,
-    });
-    if (CONFIG.DEBUG_BIH_LOG) {
-      // eslint-disable-next-line no-console
-    }
+    // Debug overlay data
+    const re = this.renderer.worldToScreen(world.x, world.y);
+    const rect = deps.canvasRect;
+    const rtErrorPx = Math.hypot(re.x - (e.clientX - rect.left), re.y - (e.clientY - rect.top));
+    this.debug.setBallInHandData({ raw: world, clamped: pos, radius: this.cueBall.radius, hits: pos.hits, rtErrorPx });
   }
 
+  /**
+   * Handle ball drag end
+   */
   handleBallDragEnd(_e: MouseEvent) {
     if (!this.isDraggingBall) return;
     this.isDraggingBall = false;
@@ -2756,19 +2593,18 @@ export class Game {
     return false;
   }
 
+  /**
+   * Get pocket choices - delegates to PocketCallController
+   */
   private getPocketChoices() {
-    const geom = getTableGeometry();
-    return geom.pockets
-      .filter((pocket) => pocket.id && POCKET_LABELS[pocket.id])
-      .map((pocket) => ({
-        id: pocket.id,
-        label: this.getPocketLabel(pocket.id),
-        center: { x: pocket.center.x, y: pocket.center.y },
-      }));
+    return getPocketChoicesFromController();
   }
 
+  /**
+   * Get pocket label - delegates to PocketCallController
+   */
   private getPocketLabel(pocketId: string): string {
-    return POCKET_LABELS[pocketId] ?? pocketId ?? 'Unknown pocket';
+    return getPocketLabelFromController(pocketId);
   }
 
   private setCalledPocket(pocketId: string | null, silent: boolean = false) {
@@ -2812,32 +2648,23 @@ export class Game {
     return false; // Click was not on a pocket
   }
 
+  /**
+   * Pick nearest pocket to 8-ball for AI auto-call
+   * Delegates to PocketCallController
+   */
   private pickNearestPocketId(eightBall: Ball): string | null {
-    const choices = this.getPocketChoices();
-    if (choices.length === 0) return null;
-    let nearest: { id: string; distance: number } | null = null;
-    for (const choice of choices) {
-      const dx = eightBall.x - choice.center.x;
-      const dy = eightBall.y - choice.center.y;
-      const distance = Math.hypot(dx, dy);
-      if (!nearest || distance < nearest.distance) {
-        nearest = { id: choice.id, distance };
-      }
-    }
-    return nearest ? nearest.id : null;
+    return pickNearestPocketIdFromController(eightBall);
   }
 
+  /**
+   * Check if current shooter is AI - delegates to TurnController
+   */
   private isCurrentShooterAI(): boolean {
     if (this.mode !== GameMode.EIGHT_BALL) return false;
-    if (
-      this.players.length === 0 ||
-      this.currentPlayerIndex < 0 ||
-      this.currentPlayerIndex >= this.players.length
-    ) {
-      return false;
-    }
-    const player = this.players[this.currentPlayerIndex];
-    return player ? player.isAI() : false;
+    return isCurrentShooterAIFromController(
+      { currentPlayerIndex: this.currentPlayerIndex, aiThinkingStartTime: 0, aiSelectedShot: null },
+      { players: this.players, stateMachine: this.stateMachine }
+    );
   }
 
   private isBallInHandPhase(): boolean {

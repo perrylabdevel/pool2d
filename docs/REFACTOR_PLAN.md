@@ -13,7 +13,7 @@ This document outlines a comprehensive refactoring strategy for the RailRush cod
 **Key Metrics (Current State):**
 | File | Lines | Size | Concern |
 |------|-------|------|---------|
-| `src/game/Game.ts` | ~3,044 | 110KB | God class - orchestrates everything |
+| `src/game/Game.ts` | ~2,815 | 100KB | Reduced from ~3,044 via controller extraction |
 | `src/ui/SettingsManager.ts` | ~1,220 | 46KB | Monolithic settings blob |
 | `src/render/Renderer.ts` | ~1,800 | 58KB | Legacy 2D renderer (mostly debug) |
 | `src/geometry/Geometry.ts` | ~1,200 | 43KB | Complex derived geometry |
@@ -64,7 +64,21 @@ This document outlines a comprehensive refactoring strategy for the RailRush cod
   - `placeCueBall()` → BallInHandController
   - `isSpotOpen()` → BallInHandController
   - `awardChestForWin()` → MatchManager
-- [ ] Slim `Game.ts` to <500 lines (future - requires more wiring)
+- [ ] Slim `Game.ts` to <500 lines (currently **2815 lines** - saved ~172 lines)
+  - **New Controllers Created:**
+    - [x] `PocketCallController` - pocket calling, labels, AI auto-call
+    - [x] `InputController` - power bar, micro dial handling  
+    - [x] `TurnController` - player switching, turn state, AI state management
+  - **Extractions Completed:**
+    - [x] `handleAITurn` → delegates to `AIController.updateAITurn` (~90 lines saved)
+    - [x] `handleBallDrag*` → delegates to `BallInHandController` (~66 lines saved)
+    - [x] `updateHUDPlayerBalls` → uses `TurnController` functions (~15 lines saved)
+    - [x] `getPocketChoices/Label/pickNearest` → delegates to `PocketCallController`
+  - **Remaining Work (future phases):**
+    - [ ] Extract `initializeGame` (~170 lines) → GameInitController
+    - [ ] Extract `setupCallbacks` (~170 lines) → EventSetupController
+    - [ ] Extract `render` UI overlays (~100 lines) → RenderController
+  - **Note:** Reaching <500 lines requires major architectural changes with risk of regressions
 
 ### Phase 3: Legacy Removal
 - [x] Delete `src/editor/` directory
@@ -82,7 +96,17 @@ This document outlines a comprehensive refactoring strategy for the RailRush cod
 - [x] Create `BaseScene` for common scene functionality (`src/ui/scenes/BaseScene.ts`)
 - [x] Hide legacy dock by default (CSS in `panels.css`)
 - [x] Add `Shift+L` shortcut to toggle legacy dock for dev access
-- [ ] Migrate existing scenes to extend `BaseScene` (future)
+- [x] Migrate `ConfirmScene` to extend `BaseScene`
+- [x] Migrate `InGameMenuScene` to extend `BaseScene`
+- [x] Migrate `MatchResultScene` to extend `BaseScene`
+- [~] Migrate remaining scenes to extend `BaseScene` - **Evaluated, most not suitable:**
+  - `SettingsScene` - sliders, toggles, color pickers, scroll (63KB)
+  - `ShopScene` - tabs, grids, purchase flows (48KB)
+  - `LobbyScene` - cards, navigation bar, chest bar (34KB)
+  - `ClubSelectionScene` - horizontal scroll, card selection (21KB)
+  - `OpponentPreviewScene` - async mount, NavigationBar (14KB)
+  - `MatchmakingScene` - no buttons, just animated loading (7KB)
+  - ✅ Simple button-based scenes already migrated (3 of 3)
 - [ ] Verify all features still work (user testing)
 
 ---
