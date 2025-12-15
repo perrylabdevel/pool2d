@@ -1,5 +1,6 @@
 import { SettingsManager } from '../ui/SettingsManager';
 import { Renderer3D } from '../render/Renderer3D';
+import { setPhysicsJsonOverride } from '../geometry/Geometry';
 
 export class RemoteBridge {
     private ws!: WebSocket;
@@ -225,6 +226,8 @@ export class RemoteBridge {
             hasSkin: !!config.skin,
             skinName: config.skin?.name,
             hasImage: !!config.skin?.image,
+            hasPhysicsJson: !!config.physicsJson,
+            mode: config.mode,
         });
 
         // Store skin to apply after restart (if geometry changes trigger one)
@@ -235,7 +238,21 @@ export class RemoteBridge {
             };
         }
 
-        // Apply pocket offsets from table editor (X/Y for corner and side)
+        const mode = config.mode === 'persist' ? 'persist' : 'live';
+
+        // Apply full physics.json override from table editor (null clears override)
+        if (Object.prototype.hasOwnProperty.call(config, 'physicsJson')) {
+            try {
+                setPhysicsJsonOverride(config.physicsJson, { persist: mode === 'persist' });
+                window.dispatchEvent(new CustomEvent('settings:geometry-apply'));
+                console.log('[RemoteBridge] Applied physics.json override from table editor, triggering rebuild');
+            } catch (err) {
+                console.error('[RemoteBridge] Failed to apply physics.json override:', err);
+            }
+            return;
+        }
+
+        // Back-compat: Apply pocket offsets from table editor (X/Y for corner and side)
         if (config.offsets) {
             const currentGeom = this.settingsManager.getGeometrySettings();
             

@@ -84,7 +84,12 @@ export class PhysicsWorld {
   
   initializeRails() {
     const GEOM = getTableGeometry();
+    const hasPlayAreaRails = GEOM.rails.some((r) => typeof r.id === 'string' && r.id.includes('play_area'));
     GEOM.rails.forEach((railDef) => {
+      // When SVG/JSON geometry is enabled, cushion_* rails are primarily visual outlines.
+      // Collisions should use play_area_* rails (split around pockets) plus derived jaw rails.
+      if (hasPlayAreaRails && railDef.id.includes('cushion') && !railDef.id.includes('_jaw_')) return;
+
       const rail = new Rail(railDef.from.x, railDef.from.y, railDef.to.x, railDef.to.y, railDef.id);
       const dot = rail.nx * railDef.normal.x + rail.ny * railDef.normal.y;
       if (dot < 0) {

@@ -174,15 +174,17 @@ This loop keeps physics tuning reproducible and easy to share across machines.
 
 ## Documentation
 
-- `docs/display-architecture.md` – canvas framing, hub overlays, scaling strategy
-- `docs/audio/*` – setup/status plus prompt banks for replacing placeholder sounds
-- `docs/geometry/*.md` – coordinate conventions and derived jaw math
-- `docs/rules/eight-ball-rules.md` – rule coverage and remaining gaps
-- `docs/ui-overhaul-plan.md` – Home Hub / modal architecture and roadmap
-- `docs/ui-overhaul-status.md` – live UI checklist & follow-ups
-- `docs/specs.md` – high-level component specs/backlog
-- `docs/pocket-animation-plan.md` – pocket animation system + tuning
-- `docs/todo.md` – active engineering checklist
+- `docs/display-architecture.md` - canvas framing, hub overlays, scaling strategy
+- `docs/audio/*` - setup/status plus prompt banks for replacing placeholder sounds
+- `docs/geometry/*.md` - coordinate conventions and derived jaw math
+- `docs/table-editor-usage.md` - how to use the Table Editor devtool
+- `docs/table-editor-plan.md` - current Table Editor design notes
+- `docs/rules/eight-ball-rules.md` - rule coverage and remaining gaps
+- `docs/ui-overhaul-plan.md` - Home Hub / modal architecture and roadmap
+- `docs/ui-overhaul-status.md` - live UI checklist & follow-ups
+- `docs/specs.md` - high-level component specs/backlog
+- `docs/pocket-animation-plan.md` - pocket animation system + tuning
+- `docs/todo.md` - active engineering checklist
 
 ## License
 

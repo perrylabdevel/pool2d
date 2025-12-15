@@ -6,6 +6,7 @@
     "dev": "node scripts/dev-server.js",
     "dev:vite": "vite --host 0.0.0.0",
     "dev:relay": "node scripts/relay-server.js",
+    "dev:table-save": "node scripts/table-editor-save-server.js",
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",

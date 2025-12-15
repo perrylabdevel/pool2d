@@ -3,6 +3,8 @@
  * Skins are actual images (not procedural colors)
  */
 
+import { openEditorDb, STORE_SKINS } from './EditorDb';
+
 export interface TableSkin {
   id: string;
   name: string;
@@ -38,44 +40,22 @@ export interface TableSkin {
 
 export type SkinCreateInput = Omit<TableSkin, 'id' | 'createdAt' | 'updatedAt'>;
 
-const DB_NAME = 'RailRush_TableEditor';
-const DB_VERSION = 1;
-const STORE_NAME = 'skins';
-
 export class SkinStore {
   private db: IDBDatabase | null = null;
   private skins: Map<string, TableSkin> = new Map();
   private listeners: Set<() => void> = new Set();
 
   async init(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-      request.onerror = () => reject(request.error);
-
-      request.onsuccess = () => {
-        this.db = request.result;
-        this.loadAll().then(resolve);
-      };
-
-      request.onupgradeneeded = (event) => {
-        const db = (event.target as IDBOpenDBRequest).result;
-
-        if (!db.objectStoreNames.contains(STORE_NAME)) {
-          const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
-          store.createIndex('name', 'name', { unique: false });
-          store.createIndex('createdAt', 'createdAt', { unique: false });
-        }
-      };
-    });
+    this.db = await openEditorDb();
+    await this.loadAll();
   }
 
   private async loadAll(): Promise<void> {
     if (!this.db) return;
 
     return new Promise((resolve, reject) => {
-      const tx = this.db!.transaction(STORE_NAME, 'readonly');
-      const store = tx.objectStore(STORE_NAME);
+      const tx = this.db!.transaction(STORE_SKINS, 'readonly');
+      const store = tx.objectStore(STORE_SKINS);
       const request = store.getAll();
 
       request.onsuccess = async () => {
@@ -162,22 +142,6 @@ export class SkinStore {
     return id ? this.get(id) : undefined;
   }
 
-  save(skin: TableSkin): void {
-    if (!this.db) return;
-    
-    skin.updatedAt = Date.now();
-    
-    const transaction = this.db.transaction([STORE_NAME], 'readwrite');
-    const store = transaction.objectStore(STORE_NAME);
-    store.put(skin);
-    
-    // Update local cache
-    const index = this.skins.findIndex(s => s.id === skin.id);
-    if (index >= 0) {
-      this.skins[index] = skin;
-    }
-  }
-
   private blobToBase64(blob: Blob): Promise<string> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -222,8 +186,8 @@ export class SkinStore {
     skin.updatedAt = new Date();
 
     return new Promise((resolve, reject) => {
-      const tx = this.db!.transaction(STORE_NAME, 'readwrite');
-      const store = tx.objectStore(STORE_NAME);
+      const tx = this.db!.transaction(STORE_SKINS, 'readwrite');
+      const store = tx.objectStore(STORE_SKINS);
       const request = store.put(skin);
 
       request.onsuccess = () => {
@@ -240,8 +204,8 @@ export class SkinStore {
     if (!this.db) throw new Error('Database not initialized');
 
     return new Promise((resolve, reject) => {
-      const tx = this.db!.transaction(STORE_NAME, 'readwrite');
-      const store = tx.objectStore(STORE_NAME);
+      const tx = this.db!.transaction(STORE_SKINS, 'readwrite');
+      const store = tx.objectStore(STORE_SKINS);
       const request = store.delete(id);
 
       request.onsuccess = () => {
@@ -270,12 +234,29 @@ export class SkinStore {
 
     const copy: SkinCreateInput = {
       name: `${original.name} (Copy)`,
-      textures: { ...original.textures },
-      colors: { ...original.colors },
+      images: { ...original.images },
+      thumbnail: original.thumbnail,
+      sourceFile: original.sourceFile ? { ...original.sourceFile } : undefined,
       geometry: { ...original.geometry },
     };
 
     return this.create(copy);
+  }
+
+  async clearAll(): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    await new Promise<void>((resolve, reject) => {
+      const tx = this.db!.transaction(STORE_SKINS, 'readwrite');
+      const store = tx.objectStore(STORE_SKINS);
+      const request = store.clear();
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+
+    this.skins.clear();
+    this.setActiveSkinId(null);
+    this.notify();
   }
 
   subscribe(listener: () => void): () => void {

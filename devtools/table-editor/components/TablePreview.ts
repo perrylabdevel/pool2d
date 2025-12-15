@@ -7,6 +7,8 @@ import * as THREE from 'three';
 import { TableGeometry } from '../stores/TableStore';
 import { TableSkin } from '../stores/SkinStore';
 import { PhysicsJson, jsonLoader } from '../utils/JsonLoader';
+import { isDerivedPlayAreaRailId } from '../utils/TableGeometryUtils';
+import type { GeometryEdit, GeometrySelection } from '../utils/TableGeometryUtils';
 
 export class TablePreview {
   private canvas: HTMLCanvasElement;
@@ -19,6 +21,7 @@ export class TablePreview {
   private tableMesh: THREE.Mesh | null = null;  // Full table with skin texture
   private pocketMeshes: THREE.Mesh[] = [];
   private railOutlineMeshes: THREE.Line[] = [];
+  private playAreaOutlineMesh: THREE.Line | null = null;
   private ballMeshes: THREE.Mesh[] = [];
 
   // Skin texture
@@ -33,6 +36,7 @@ export class TablePreview {
 
   // JSON geometry (the only source of truth)
   private physicsJson: PhysicsJson | null = null;
+  private selection: GeometrySelection | null = null;
   
   // Skin physical dimensions (calculated from texture size / PPI)
   private skinPhysicalWidth: number = 0;
@@ -43,20 +47,17 @@ export class TablePreview {
   private cornerOffsetY: number = 0;
   private sideOffsetX: number = 0;
   private sideOffsetY: number = 0;
-  // Legacy diagonal outward offsets to better match in-game geometry defaults
-  private cornerPocketOutwardOffset: number = -1.0;
-  private sidePocketOutwardOffset: number = -1.3;
+  // Legacy outward offsets (kept for compatibility; editor preview renders raw physicsJson)
+  private cornerPocketOutwardOffset: number = 0.0;
+  private sidePocketOutwardOffset: number = 0.0;
 
   // Editing state
   private editingEnabled: boolean = false;
 
   // Dragging state
   private draggingHandle: {
-    type: 'pocket' | 'rail';
-    pocketIndex?: number;
-    railIndex?: number;
-    pointIndex?: number;
-    original: { x: number; y: number };
+    selection: GeometrySelection;
+    last: { x: number; y: number };
   } | null = null;
 
   // Handle meshes
@@ -65,8 +66,19 @@ export class TablePreview {
   private dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); // y=0 plane
   private planeIntersect = new THREE.Vector3();
 
+  private onEdit: ((edit: GeometryEdit) => void) | null = null;
+  private onSelect: ((selection: GeometrySelection | null) => void) | null = null;
+
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
+  }
+
+  setCallbacks(callbacks: {
+    onEdit?: (edit: GeometryEdit) => void;
+    onSelect?: (selection: GeometrySelection | null) => void;
+  }): void {
+    this.onEdit = callbacks.onEdit ?? null;
+    this.onSelect = callbacks.onSelect ?? null;
   }
 
   async init(): Promise<void> {
@@ -151,26 +163,105 @@ export class TablePreview {
     this.handleMeshes = [];
 
     const handleMatPocket = new THREE.MeshBasicMaterial({ color: 0x00bcd4 }); // cyan
+    const handleMatPocketSelected = new THREE.MeshBasicMaterial({ color: 0x89b4fa }); // blue
     const handleMatRail = new THREE.MeshBasicMaterial({ color: 0xffc107 }); // amber
+    const handleMatRailSelected = new THREE.MeshBasicMaterial({ color: 0xb4befe }); // light blue
+    const handleMatRailMove = new THREE.MeshBasicMaterial({ color: 0xf38ba8 }); // pink/red
+    const handleMatRailMoveSelected = new THREE.MeshBasicMaterial({ color: 0xfae3b0 }); // pale yellow
     const pocketGeom = new THREE.SphereGeometry(0.8, 12, 12);
     const railGeom = new THREE.BoxGeometry(0.8, 0.8, 0.8);
 
-    // Pocket centers
-    this.physicsJson.pockets.forEach((pocket, idx) => {
-      const mesh = new THREE.Mesh(pocketGeom, handleMatPocket);
-      mesh.position.set(pocket.center.x, 0.4, -pocket.center.y);
-      mesh.userData = { type: 'pocket', pocketIndex: idx };
-      this.scene!.add(mesh);
-      this.handleMeshes.push(mesh);
+    const sameSelection = (a: GeometrySelection, b: GeometrySelection | null) => {
+      if (!b) return false;
+      return JSON.stringify(a) === JSON.stringify(b);
+    };
+
+    const isFiniteNumber = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+    const isFinitePoint = (p: any): p is { x: number; y: number } => !!p && isFiniteNumber(p.x) && isFiniteNumber(p.y);
+
+    const selectedPocketIndex = (() => {
+      if (!this.selection) return null;
+      if (this.selection.kind === 'pocket') return this.selection.pocketIndex;
+      if (this.selection.kind === 'pocket-outline') return this.selection.pocketIndex;
+      if (this.selection.kind === 'pocket-radius') return this.selection.pocketIndex;
+      return null;
+    })();
+
+    const selectedRailIndex = (() => {
+      if (!this.selection) return null;
+      if (this.selection.kind === 'rail') return this.selection.railIndex;
+      if (this.selection.kind === 'rail-end') return this.selection.railIndex;
+      if (this.selection.kind === 'rail-outline') return this.selection.railIndex;
+      return null;
+    })();
+
+    // Pocket center handles (always visible), plus detail handles only for selected pocket.
+    this.physicsJson.pockets.forEach((pocket, pocketIndex) => {
+      if (!isFinitePoint(pocket.center) || !isFiniteNumber(pocket.radius)) return;
+      const centerSel: GeometrySelection = { kind: 'pocket', pocketIndex };
+      const centerMesh = new THREE.Mesh(pocketGeom, sameSelection(centerSel, this.selection) ? handleMatPocketSelected : handleMatPocket);
+      centerMesh.position.set(pocket.center.x, 0.4, -pocket.center.y);
+      (centerMesh as any).userData = { selection: centerSel };
+      this.scene!.add(centerMesh);
+      this.handleMeshes.push(centerMesh);
+
+      if (selectedPocketIndex !== pocketIndex) return;
+
+      if (pocket.outline) {
+        pocket.outline.forEach((pt, pointIndex) => {
+          if (!isFinitePoint(pt)) return;
+          const sel: GeometrySelection = { kind: 'pocket-outline', pocketIndex, pointIndex };
+          const mesh = new THREE.Mesh(railGeom, sameSelection(sel, this.selection) ? handleMatPocketSelected : handleMatPocket);
+          mesh.position.set(pt.x, 0.4, -pt.y);
+          (mesh as any).userData = { selection: sel };
+          this.scene!.add(mesh);
+          this.handleMeshes.push(mesh);
+        });
+      }
+
+      const radiusSel: GeometrySelection = { kind: 'pocket-radius', pocketIndex };
+      const radiusMesh = new THREE.Mesh(railGeom, sameSelection(radiusSel, this.selection) ? handleMatPocketSelected : handleMatPocket);
+      radiusMesh.position.set(pocket.center.x + pocket.radius, 0.4, -pocket.center.y);
+      (radiusMesh as any).userData = { selection: radiusSel };
+      this.scene!.add(radiusMesh);
+      this.handleMeshes.push(radiusMesh);
     });
 
-    // Rail outline points
+    // Rail midpoint handles (always visible), plus detail handles only for selected rail.
     this.physicsJson.rails.forEach((rail, railIndex) => {
+      if (isDerivedPlayAreaRailId(rail.id)) return;
+      if (!isFinitePoint(rail.from) || !isFinitePoint(rail.to)) return;
+      const midSel: GeometrySelection = { kind: 'rail', railIndex };
+      const midMesh = new THREE.Mesh(railGeom, sameSelection(midSel, this.selection) ? handleMatRailMoveSelected : handleMatRailMove);
+      midMesh.position.set((rail.from.x + rail.to.x) / 2, 0.4, -((rail.from.y + rail.to.y) / 2));
+      (midMesh as any).userData = { selection: midSel };
+      this.scene!.add(midMesh);
+      this.handleMeshes.push(midMesh);
+
+      if (selectedRailIndex !== railIndex) return;
+
+      const fromSel: GeometrySelection = { kind: 'rail-end', railIndex, endpoint: 'from' };
+      const toSel: GeometrySelection = { kind: 'rail-end', railIndex, endpoint: 'to' };
+
+      const fromMesh = new THREE.Mesh(railGeom, sameSelection(fromSel, this.selection) ? handleMatRailSelected : handleMatRail);
+      fromMesh.position.set(rail.from.x, 0.4, -rail.from.y);
+      (fromMesh as any).userData = { selection: fromSel };
+      this.scene!.add(fromMesh);
+      this.handleMeshes.push(fromMesh);
+
+      const toMesh = new THREE.Mesh(railGeom, sameSelection(toSel, this.selection) ? handleMatRailSelected : handleMatRail);
+      toMesh.position.set(rail.to.x, 0.4, -rail.to.y);
+      (toMesh as any).userData = { selection: toSel };
+      this.scene!.add(toMesh);
+      this.handleMeshes.push(toMesh);
+
       if (!rail.outline || rail.outline.length === 0) return;
       rail.outline.forEach((pt, pointIndex) => {
-        const mesh = new THREE.Mesh(railGeom, handleMatRail);
+        if (!isFinitePoint(pt)) return;
+        const sel: GeometrySelection = { kind: 'rail-outline', railIndex, pointIndex };
+        const mesh = new THREE.Mesh(railGeom, sameSelection(sel, this.selection) ? handleMatRailSelected : handleMatRail);
         mesh.position.set(pt.x, 0.4, -pt.y);
-        mesh.userData = { type: 'rail', railIndex, pointIndex };
+        (mesh as any).userData = { selection: sel };
         this.scene!.add(mesh);
         this.handleMeshes.push(mesh);
       });
@@ -183,53 +274,93 @@ export class TablePreview {
     this.raycaster.setFromCamera(ndc, this.camera);
     const intersects = this.raycaster.intersectObjects(this.handleMeshes, false);
     if (intersects.length === 0) return null;
-    const hit = intersects[0].object;
-    const data = hit.userData || {};
-    if (data.type === 'pocket') {
-      const pocket = this.physicsJson!.pockets[data.pocketIndex];
-      return {
-        type: 'pocket' as const,
-        pocketIndex: data.pocketIndex,
-        original: { x: pocket.center.x, y: pocket.center.y },
-      };
-    } else if (data.type === 'rail') {
-      const rail = this.physicsJson!.rails[data.railIndex];
-      const pt = rail.outline?.[data.pointIndex];
-      if (!pt) return null;
-      return {
-        type: 'rail' as const,
-        railIndex: data.railIndex,
-        pointIndex: data.pointIndex,
-        original: { x: pt.x, y: pt.y },
-      };
-    }
-    return null;
+
+    const selectionPriority = (sel: GeometrySelection | undefined): number => {
+      if (!sel) return 99;
+      // Prefer rails when overlapping; rail move-handle first.
+      if (sel.kind === 'rail') return 0;
+      if (sel.kind === 'rail-end') return 1;
+      if (sel.kind === 'rail-outline') return 2;
+      if (sel.kind === 'pocket') return 3;
+      if (sel.kind === 'pocket-radius') return 4;
+      if (sel.kind === 'pocket-outline') return 5;
+      return 99;
+    };
+
+    const best = intersects
+      .map((i) => ({ obj: i.object, sel: ((i.object as any).userData || {}).selection as GeometrySelection | undefined }))
+      .sort((a, b) => selectionPriority(a.sel) - selectionPriority(b.sel))[0];
+
+    const hit = best.obj;
+    const data = (hit as any).userData || {};
+    const selection = data.selection as GeometrySelection | undefined;
+    if (!selection || !this.physicsJson) return null;
+
+    const getSelectionAnchor = (sel: GeometrySelection): { x: number; y: number } | null => {
+      if (!this.physicsJson) return null;
+      if (sel.kind === 'pocket') return this.physicsJson.pockets[sel.pocketIndex]?.center ?? null;
+      if (sel.kind === 'pocket-outline') return this.physicsJson.pockets[sel.pocketIndex]?.outline?.[sel.pointIndex] ?? null;
+      if (sel.kind === 'pocket-radius') {
+        const p = this.physicsJson.pockets[sel.pocketIndex];
+        if (!p) return null;
+        return { x: p.center.x + p.radius, y: p.center.y };
+      }
+      if (sel.kind === 'rail') {
+        const r = this.physicsJson.rails[sel.railIndex];
+        if (!r) return null;
+        return { x: (r.from.x + r.to.x) / 2, y: (r.from.y + r.to.y) / 2 };
+      }
+      if (sel.kind === 'rail-end') return this.physicsJson.rails[sel.railIndex]?.[sel.endpoint] ?? null;
+      if (sel.kind === 'rail-outline') return this.physicsJson.rails[sel.railIndex]?.outline?.[sel.pointIndex] ?? null;
+      return null;
+    };
+
+    const anchor = getSelectionAnchor(selection);
+    if (!anchor) return null;
+    return { selection, last: { x: anchor.x, y: anchor.y } };
   }
 
   private applyDragUpdate(newX: number, newY: number): void {
     if (!this.physicsJson || !this.draggingHandle) return;
 
-    if (this.draggingHandle.type === 'pocket' && this.draggingHandle.pocketIndex !== undefined) {
-      const pocket = this.physicsJson.pockets[this.draggingHandle.pocketIndex];
-      const dx = newX - this.draggingHandle.original.x;
-      const dy = newY - this.draggingHandle.original.y;
-      pocket.center.x = newX;
-      pocket.center.y = newY;
-      if (pocket.outline) {
-        pocket.outline = pocket.outline.map(pt => ({ x: pt.x + dx, y: pt.y + dy }));
-      }
-    } else if (this.draggingHandle.type === 'rail' && this.draggingHandle.railIndex !== undefined && this.draggingHandle.pointIndex !== undefined) {
-      const rail = this.physicsJson.rails[this.draggingHandle.railIndex];
-      if (rail.outline && rail.outline[this.draggingHandle.pointIndex]) {
-        rail.outline[this.draggingHandle.pointIndex] = { x: newX, y: newY };
-      }
+    const sel = this.draggingHandle.selection;
+
+    if (sel.kind === 'pocket') {
+      this.onEdit?.({ type: 'move-pocket-center', pocketIndex: sel.pocketIndex, x: newX, y: newY });
+      return;
     }
 
-    // Rebuild table and handles to reflect changes
-    this.buildTable();
+    if (sel.kind === 'pocket-outline') {
+      this.onEdit?.({ type: 'move-pocket-outline', pocketIndex: sel.pocketIndex, pointIndex: sel.pointIndex, x: newX, y: newY });
+      return;
+    }
 
-    // Persist edited geometry locally so reload keeps changes
-    jsonLoader.setCached(this.physicsJson, true);
+    if (sel.kind === 'pocket-radius') {
+      const pocket = this.physicsJson.pockets[sel.pocketIndex];
+      if (!pocket) return;
+      const dx = newX - pocket.center.x;
+      const dy = newY - pocket.center.y;
+      const radius = Math.max(0.25, Math.sqrt(dx * dx + dy * dy));
+      this.onEdit?.({ type: 'set-pocket-radius', pocketIndex: sel.pocketIndex, radius, scaleOutline: true });
+      return;
+    }
+
+    if (sel.kind === 'rail-end') {
+      this.onEdit?.({ type: 'move-rail-end', railIndex: sel.railIndex, endpoint: sel.endpoint, x: newX, y: newY });
+      return;
+    }
+
+    if (sel.kind === 'rail-outline') {
+      this.onEdit?.({ type: 'move-rail-outline', railIndex: sel.railIndex, pointIndex: sel.pointIndex, x: newX, y: newY });
+      return;
+    }
+
+    if (sel.kind === 'rail') {
+      const dx = newX - this.draggingHandle.last.x;
+      const dy = newY - this.draggingHandle.last.y;
+      this.draggingHandle.last = { x: newX, y: newY };
+      this.onEdit?.({ type: 'move-rail', railIndex: sel.railIndex, dx, dy });
+    }
   }
 
   private handleResize(): void {
@@ -276,6 +407,9 @@ export class TablePreview {
         const hit = this.pickHandle(e.clientX, e.clientY, getMouseNDC);
         if (hit) {
           this.draggingHandle = hit;
+          this.selection = hit.selection;
+          this.onSelect?.(this.selection);
+          this.rebuildHandles();
           this.canvas.style.cursor = 'grabbing';
           e.preventDefault();
           return;
@@ -340,9 +474,11 @@ export class TablePreview {
     if (this.tableMesh) this.scene.remove(this.tableMesh);
     this.pocketMeshes.forEach(m => this.scene!.remove(m));
     this.railOutlineMeshes.forEach(m => this.scene!.remove(m));
+    if (this.playAreaOutlineMesh) this.scene.remove(this.playAreaOutlineMesh);
     this.handleMeshes.forEach(m => this.scene!.remove(m));
     this.pocketMeshes = [];
     this.railOutlineMeshes = [];
+    this.playAreaOutlineMesh = null;
     this.handleMeshes = [];
 
     // Use JSON geometry if available
@@ -388,6 +524,11 @@ export class TablePreview {
       this.buildRailOutlinesFromJson();
     }
 
+    // Derived play area outline (toggle via Measurements)
+    if (this.showMeasurements) {
+      this.buildPlayAreaOutline();
+    }
+
     // Rebuild handles if editing
     if (this.editingEnabled) {
       this.rebuildHandles();
@@ -397,6 +538,9 @@ export class TablePreview {
   private buildPocketsFromJson(): void {
     if (!this.scene || !this.physicsJson) return;
 
+    const isFiniteNumber = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+    const isFinitePoint = (p: any): p is { x: number; y: number } => !!p && isFiniteNumber(p.x) && isFiniteNumber(p.y);
+
     const pocketMat = new THREE.MeshStandardMaterial({
       color: 0x111111,
       roughness: 0.9,
@@ -404,29 +548,11 @@ export class TablePreview {
       opacity: 0.8,
     });
 
-    const halfW = this.physicsJson.playArea.width / 2;
-
     for (const pocket of this.physicsJson.pockets) {
-      // Determine if corner or side pocket
-      const isCorner = Math.abs(pocket.center.x) > halfW * 0.25;
-      
-      // Apply offset based on pocket type
-      let offsetX = 0;
-      let offsetY = 0;
-      
-      if (isCorner) {
-        // Corner pockets: apply X/Y offsets with sign based on quadrant
-        const signX = pocket.center.x > 0 ? 1 : -1;
-        const signY = pocket.center.y > 0 ? 1 : -1;
-        offsetX = signX * (this.cornerOffsetX + this.cornerPocketOutwardOffset);
-        offsetY = signY * (this.cornerOffsetY + this.cornerPocketOutwardOffset);
-      } else {
-        // Side pockets: apply X/Y offsets with sign based on position
-        const signX = pocket.center.x > 0 ? 1 : (pocket.center.x < 0 ? -1 : 0);
-        const signY = pocket.center.y > 0 ? 1 : -1;
-        offsetX = signX * this.sideOffsetX;
-        offsetY = signY * (this.sideOffsetY + this.sidePocketOutwardOffset);
-      }
+      if (!isFinitePoint(pocket.center) || !isFiniteNumber(pocket.radius)) continue;
+      // Editor preview renders raw physicsJson (no additional offsets)
+      const offsetX = 0;
+      const offsetY = 0;
 
       const pocketGeom = new THREE.CircleGeometry(pocket.radius, 32);
       const pocketMesh = new THREE.Mesh(pocketGeom, pocketMat);
@@ -443,9 +569,10 @@ export class TablePreview {
 
       // Draw pocket outline if available
       if (pocket.outline && pocket.outline.length > 0) {
-        const points = pocket.outline.map(p => 
-          new THREE.Vector3(p.x + offsetX, 0.15, -(p.y + offsetY))
-        );
+        const points = pocket.outline
+          .filter((p) => isFinitePoint(p))
+          .map((p) => new THREE.Vector3(p.x + offsetX, 0.15, -(p.y + offsetY)));
+        if (points.length < 2) continue;
         points.push(points[0]); // Close the loop
 
         const outlineGeom = new THREE.BufferGeometry().setFromPoints(points);
@@ -460,17 +587,30 @@ export class TablePreview {
   private buildRailOutlinesFromJson(): void {
     if (!this.scene || !this.physicsJson) return;
 
+    const isFiniteNumber = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+    const isFinitePoint = (p: any): p is { x: number; y: number } => !!p && isFiniteNumber(p.x) && isFiniteNumber(p.y);
+
     const railMat = new THREE.LineBasicMaterial({ color: 0x888888, linewidth: 2 });
 
     for (const rail of this.physicsJson.rails) {
-      // Only draw cushion outlines (skip play_area rails as they're just boundaries)
-      if (!rail.id.includes('cushion')) continue;
-      
-      // Draw rail outline if available
+      if (isDerivedPlayAreaRailId(rail.id)) continue;
       if (rail.outline && rail.outline.length > 0) {
-        const points = rail.outline.map(p => 
-          new THREE.Vector3(p.x, 0.2, -p.y)  // Flip Y to Z (Three.js Y is up)
-        );
+        const points = rail.outline
+          .filter((p) => isFinitePoint(p))
+          .map((p) => new THREE.Vector3(p.x, 0.2, -p.y)); // Flip Y to Z (Three.js Y is up)
+        if (points.length < 2) {
+          // Outline is present but invalid/degenerate; fall back to from->to so the rail stays visible/editable.
+          if (!isFinitePoint(rail.from) || !isFinitePoint(rail.to)) continue;
+          const fallback = [
+            new THREE.Vector3(rail.from.x, 0.2, -rail.from.y),
+            new THREE.Vector3(rail.to.x, 0.2, -rail.to.y),
+          ];
+          const outlineGeom = new THREE.BufferGeometry().setFromPoints(fallback);
+          const outlineLine = new THREE.Line(outlineGeom, railMat);
+          this.scene.add(outlineLine);
+          this.railOutlineMeshes.push(outlineLine);
+          continue;
+        }
         // Close the loop
         if (points.length > 2) {
           points.push(points[0].clone());
@@ -480,8 +620,38 @@ export class TablePreview {
         const outlineLine = new THREE.Line(outlineGeom, railMat);
         this.scene.add(outlineLine);
         this.railOutlineMeshes.push(outlineLine);
+      } else {
+        if (!isFinitePoint(rail.from) || !isFinitePoint(rail.to)) continue;
+        const points = [
+          new THREE.Vector3(rail.from.x, 0.2, -rail.from.y),
+          new THREE.Vector3(rail.to.x, 0.2, -rail.to.y),
+        ];
+        const outlineGeom = new THREE.BufferGeometry().setFromPoints(points);
+        const outlineLine = new THREE.Line(outlineGeom, railMat);
+        this.scene.add(outlineLine);
+        this.railOutlineMeshes.push(outlineLine);
       }
     }
+  }
+
+  private buildPlayAreaOutline(): void {
+    if (!this.scene || !this.physicsJson) return;
+    const playWidth = this.physicsJson?.playArea?.width ?? 100;
+    const playHeight = this.physicsJson?.playArea?.height ?? 50;
+    const halfW = playWidth / 2;
+    const halfH = playHeight / 2;
+
+    const points = [
+      new THREE.Vector3(-halfW, 0.25, -halfH),
+      new THREE.Vector3(halfW, 0.25, -halfH),
+      new THREE.Vector3(halfW, 0.25, halfH),
+      new THREE.Vector3(-halfW, 0.25, halfH),
+      new THREE.Vector3(-halfW, 0.25, -halfH),
+    ];
+    const geom = new THREE.BufferGeometry().setFromPoints(points);
+    const mat = new THREE.LineBasicMaterial({ color: 0x45475a });
+    this.playAreaOutlineMesh = new THREE.Line(geom, mat);
+    this.scene.add(this.playAreaOutlineMesh);
   }
 
   private buildBalls(): void {
@@ -649,6 +819,17 @@ export class TablePreview {
     this.rebuildHandles();
   }
 
+  setSelection(selection: GeometrySelection | null): void {
+    this.selection = selection;
+    if (this.editingEnabled) this.rebuildHandles();
+  }
+
+  setPhysicsJson(json: PhysicsJson): void {
+    this.physicsJson = json;
+    this.buildTable();
+    if (this.editingEnabled) this.rebuildHandles();
+  }
+
   toggleBalls(show: boolean): void {
     this.showBalls = show;
     this.buildBalls();
@@ -656,7 +837,7 @@ export class TablePreview {
 
   toggleMeasurements(show: boolean): void {
     this.showMeasurements = show;
-    // TODO: Add measurement overlay
+    this.buildTable();
   }
 
   rackBalls(): void {

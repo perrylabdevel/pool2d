@@ -3,7 +3,44 @@
 // Origin (0,0) at play-area center; +X right (East), +Y up (North/head)
 
 import { CONFIG } from '../config';
-import physicsJson from './table.physics.json'; // Import Pre-processed Physics JSON
+import basePhysicsJson from './table.physics.json'; // Import Pre-processed Physics JSON
+
+const PHYSICS_JSON_OVERRIDE_KEY = 'railrush.physicsJsonOverride';
+let storedPhysicsJsonOverride: any | null = null;
+let sessionPhysicsJsonOverride: any | null = null;
+let overrideLoaded = false;
+
+function loadPhysicsJsonOverrideFromStorage(): void {
+  if (overrideLoaded) return;
+  overrideLoaded = true;
+  try {
+    const raw = localStorage.getItem(PHYSICS_JSON_OVERRIDE_KEY);
+    if (raw) storedPhysicsJsonOverride = JSON.parse(raw);
+  } catch {
+    // ignore
+  }
+}
+
+export function setPhysicsJsonOverride(override: any | null, options?: { persist?: boolean }): void {
+  sessionPhysicsJsonOverride = override;
+
+  try {
+    if (options?.persist) {
+      storedPhysicsJsonOverride = override;
+      if (override) localStorage.setItem(PHYSICS_JSON_OVERRIDE_KEY, JSON.stringify(override));
+      else localStorage.removeItem(PHYSICS_JSON_OVERRIDE_KEY);
+    }
+  } catch {
+    // ignore
+  }
+
+  resetTableGeometryCache();
+}
+
+export function getPhysicsJsonOverride(): any | null {
+  loadPhysicsJsonOverrideFromStorage();
+  return sessionPhysicsJsonOverride ?? storedPhysicsJsonOverride;
+}
 
 
 export interface Vec2 {
@@ -697,6 +734,9 @@ export function getTableGeometry(): TableGeometry {
     try {
       console.log('[Geometry] Loading physics geometry from table.physics.json');
 
+      loadPhysicsJsonOverrideFromStorage();
+      const physicsJson = (sessionPhysicsJsonOverride ?? storedPhysicsJsonOverride ?? basePhysicsJson) as any;
+
       let pockets: PocketDef[] = (physicsJson.pockets || []).map((p: { id: string; center: Vec2; radius: number; outline?: Vec2[]; sourceTag?: string; source?: string }) => ({
         id: p.id,
         center: p.center,
@@ -815,6 +855,22 @@ export function getTableGeometry(): TableGeometry {
         return Math.abs(p.x) <= halfW + eps && Math.abs(p.y) <= halfH + eps;
       };
 
+      const distSq = (a: Vec2, b: Vec2) => {
+        const dx = a.x - b.x;
+        const dy = a.y - b.y;
+        return dx * dx + dy * dy;
+      };
+
+      const nearestPocketDistSq = (p: Vec2): number => {
+        let best = Number.POSITIVE_INFINITY;
+        for (const pocket of pockets) {
+          if (!isFiniteVec2(pocket?.center) || !Number.isFinite(pocket.radius)) continue;
+          const d = distSq(p, pocket.center);
+          if (d < best) best = d;
+        }
+        return best;
+      };
+
       const jawRails: RailDef[] = [];
       cushionRails.forEach((c) => {
         const outline = Array.isArray(c.outline) ? c.outline.filter(isFiniteVec2) : [];
@@ -831,6 +887,22 @@ export function getTableGeometry(): TableGeometry {
           const in1 = isInsidePlayArea(p1);
           const in2 = isInsidePlayArea(p2);
           if ((in1 && !in2) || (!in1 && in2)) {
+            // Only accept jaw segments near a pocket opening. If the cushion outline accidentally
+            // crosses into the play area elsewhere, this prevents long "jet" rails through the felt.
+            const mid: Vec2 = { x: (p1.x + p2.x) * 0.5, y: (p1.y + p2.y) * 0.5 };
+            const dSq = nearestPocketDistSq(mid);
+            const maxJawDist = 14; // inches; generous to keep true pocket-jaw segments
+            if (dSq > maxJawDist * maxJawDist) continue;
+
+            // The inside endpoint should be near the play-area boundary; if an outline point gets dragged
+            // deep into the play field, don't generate a jaw rail from that segment.
+            const insidePt = in1 ? p1 : p2;
+            const distToBoundaryIn = Math.min(halfW - Math.abs(insidePt.x), halfH - Math.abs(insidePt.y));
+            if (distToBoundaryIn > 3) continue; // >3" inside the field => not a jaw edge
+
+            // Also reject unusually long jaw segments.
+            if (Math.hypot(dx, dy) > 10) continue;
+
             jawRails.push({
               id: `${c.id}_jaw_${i}`,
               from: p1,

@@ -58,3 +58,4 @@ const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
 spawnProcess(npmCommand, ['run', 'dev:relay'], 'relay');
 spawnProcess(npmCommand, ['run', 'dev:vite'], 'vite');
+spawnProcess('node', ['scripts/table-editor-save-server.js'], 'table-editor-save-server');

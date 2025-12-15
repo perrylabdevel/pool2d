@@ -211,6 +211,40 @@
       color: var(--accent);
     }
 
+    .table-item {
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      padding: 10px 10px;
+      background: #181825;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      transition: border-color 0.15s, background 0.15s;
+      margin-bottom: 8px;
+    }
+
+    .table-item:hover {
+      border-color: var(--accent);
+      background: #1e1e2e;
+    }
+
+    .table-item.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(137, 180, 250, 0.25);
+    }
+
+    .table-item-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .table-item-meta {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
     /* Center - Preview */
     .preview-container {
       flex: 1;
@@ -246,8 +280,9 @@
     }
 
     .preview-controls button {
-      width: 32px;
       height: 32px;
+      min-width: 32px;
+      padding: 0 10px;
       border-radius: 6px;
       border: 1px solid var(--panel-border);
       background: transparent;
@@ -396,13 +431,49 @@
 
     .json-editor {
       flex: 1;
-      overflow: auto;
+      overflow: hidden;
       padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .json-toolbar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .json-toolbar-left {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .json-status {
+      font-size: 11px;
+      color: var(--text-muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 50%;
+      text-align: right;
+    }
+
+    .json-textarea {
+      flex: 1;
+      width: 100%;
+      resize: none;
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      background: #11111b;
+      color: var(--text);
+      padding: 10px 12px;
       font-family: 'JetBrains Mono', 'Fira Code', monospace;
       font-size: 12px;
       line-height: 1.5;
-      white-space: pre;
-      color: var(--text);
+      outline: none;
     }
 
     /* Drop Zone */
@@ -453,40 +524,53 @@
     <!-- Header -->
     <header class="header">
       <div class="header-title">
-        🎱 <span>Table Editor</span>
+        <span style="color: var(--accent); font-weight: 700;">RailRush</span>
+        <span>Table Editor</span>
+        <span style="opacity: 0.6; font-weight: 500;" id="active-table-name"></span>
       </div>
       <div class="header-actions">
         <div class="connection-status">
           <div class="status-dot" id="status-dot"></div>
           <span id="status-text">Disconnected</span>
         </div>
-        <button class="btn" id="btn-import">📥 Import</button>
-        <button class="btn" id="btn-export">📤 Export</button>
-        <button class="btn btn-primary" id="btn-push">⬆️ Push to Game</button>
+        <button class="btn" id="btn-import">Import</button>
+        <button class="btn" id="btn-export">Export</button>
+        <button class="btn" id="btn-save-disk">Save to Disk</button>
+        <button class="btn btn-primary" id="btn-push-live">Push Live</button>
+        <button class="btn btn-primary" id="btn-push-persist">Push (Persist)</button>
       </div>
     </header>
 
     <!-- Main Content -->
     <div class="main-content">
-      <!-- Left Sidebar - Skin Library -->
+      <!-- Left Sidebar - Tables + Skins -->
       <aside class="sidebar-left">
-        <div class="panel-header">
-          Skin Library
-          <button class="btn" style="padding: 4px 8px; font-size: 11px;" id="btn-new-skin">+ New</button>
+        <div class="tabs" style="border-bottom: 1px solid var(--panel-border);">
+          <div class="tab active" data-left-tab="tables">Tables</div>
+          <div class="tab" data-left-tab="skins">Skins</div>
         </div>
-        <div class="skin-grid" id="skin-grid">
-          <!-- Skins will be populated here -->
-          <div class="skin-card active">
-            <div class="skin-card-preview"></div>
-            <div class="skin-card-name">Default Green</div>
+
+        <div id="left-tab-tables" style="display:flex; flex-direction:column; height: 100%;">
+          <div class="panel-header">
+            <span>Table Library</span>
+            <div style="display:flex; gap:6px;">
+              <button class="btn" style="padding: 4px 8px; font-size: 11px;" id="btn-new-table">+ New</button>
+              <button class="btn" style="padding: 4px 8px; font-size: 11px;" id="btn-dup-table">Duplicate</button>
+            </div>
           </div>
-          <div class="skin-card">
-            <div class="skin-card-preview" style="background: linear-gradient(135deg, #1a3f5f 0%, #0d1530 100%);"></div>
-            <div class="skin-card-name">Tournament Blue</div>
+          <div id="table-list" style="flex:1; overflow:auto; padding: 8px;"></div>
+          <div style="padding: 10px 12px; border-top: 1px solid var(--panel-border); display:flex; gap:8px;">
+            <button class="btn" style="flex:1;" id="btn-delete-table">Delete</button>
+            <button class="btn btn-primary" style="flex:1;" id="btn-set-active-table">Set Active</button>
           </div>
-          <div class="skin-card skin-card-add">
-            <span style="font-size: 24px;">+</span>
+        </div>
+
+        <div id="left-tab-skins" style="display:none; flex-direction:column; height: 100%;">
+          <div class="panel-header">
+            Skin Library
+            <button class="btn" style="padding: 4px 8px; font-size: 11px;" id="btn-new-skin">+ New</button>
           </div>
+          <div class="skin-grid" id="skin-grid"></div>
         </div>
       </aside>
 
@@ -497,60 +581,29 @@
           <div class="drop-zone" id="drop-zone">Drop skin files here</div>
         </div>
         <div class="preview-controls">
-          <button title="Zoom In" id="btn-zoom-in">🔍+</button>
-          <button title="Zoom Out" id="btn-zoom-out">🔍−</button>
-          <button title="Reset View" id="btn-reset-view">⌂</button>
-          <button title="Edit Points (pockets/rails)" id="btn-edit-points">✎</button>
-          <button title="Toggle Balls" id="btn-toggle-balls" class="active">🎱</button>
-          <button title="Toggle Measurements" id="btn-toggle-measure">📏</button>
-          <button title="Rack Balls" id="btn-rack">△</button>
+          <button title="Zoom In" id="btn-zoom-in">+</button>
+          <button title="Zoom Out" id="btn-zoom-out">-</button>
+          <button title="Reset View" id="btn-reset-view">Reset</button>
+          <button title="Edit Geometry" id="btn-edit-points">Edit</button>
+          <button title="Mirror (default on)" id="btn-toggle-mirror" class="active">Mirror</button>
+          <button title="Reset symmetry (mirror pockets/rails)" id="btn-reset-symmetry">Resym</button>
+          <button title="Toggle Balls" id="btn-toggle-balls" class="active">Balls</button>
+          <button title="Toggle Measurements" id="btn-toggle-measure">Measure</button>
+          <button title="Rack Balls" id="btn-rack">Rack</button>
         </div>
       </main>
 
       <!-- Right Sidebar - Properties -->
       <aside class="sidebar-right">
         <div class="tabs">
-          <div class="tab active" data-tab="geometry">Geometry</div>
+          <div class="tab active" data-tab="selection">Selection</div>
+          <div class="tab" data-tab="pockets">Pockets</div>
+          <div class="tab" data-tab="rails">Rails</div>
+          <div class="tab" data-tab="resize">Resize</div>
+          <div class="tab" data-tab="save">Save</div>
         </div>
         <div class="tab-content" id="tab-content">
-          <!-- Geometry Tab -->
-          <div class="property-group">
-            <div class="property-group-title">Table Size <span style="font-size: 10px; opacity: 0.6;">(from physics.json)</span></div>
-            <div class="property-row">
-              <span class="property-label">Play Width (in)</span>
-              <input type="number" class="property-input" value="100" step="0.1" id="prop-play-width" readonly style="opacity: 0.7;">
-            </div>
-            <div class="property-row">
-              <span class="property-label">Play Height (in)</span>
-              <input type="number" class="property-input" value="50" step="0.1" id="prop-play-height" readonly style="opacity: 0.7;">
-            </div>
-          </div>
-          <div class="property-group">
-            <div class="property-group-title">Corner Pockets</div>
-            <div class="property-row">
-              <span class="property-label">Offset X (in)</span>
-              <input type="range" class="property-slider" min="-3" max="3" step="0.05" value="0" id="prop-corner-offset-x">
-              <input type="number" class="property-input" value="0" step="0.05" style="width: 60px;" id="prop-corner-offset-x-num">
-            </div>
-            <div class="property-row">
-              <span class="property-label">Offset Y (in)</span>
-              <input type="range" class="property-slider" min="-3" max="3" step="0.05" value="0" id="prop-corner-offset-y">
-              <input type="number" class="property-input" value="0" step="0.05" style="width: 60px;" id="prop-corner-offset-y-num">
-            </div>
-          </div>
-          <div class="property-group">
-            <div class="property-group-title">Side Pockets</div>
-            <div class="property-row">
-              <span class="property-label">Offset X (in)</span>
-              <input type="range" class="property-slider" min="-3" max="3" step="0.05" value="0" id="prop-side-offset-x">
-              <input type="number" class="property-input" value="0" step="0.05" style="width: 60px;" id="prop-side-offset-x-num">
-            </div>
-            <div class="property-row">
-              <span class="property-label">Offset Y (in)</span>
-              <input type="range" class="property-slider" min="-3" max="3" step="0.05" value="0" id="prop-side-offset-y">
-              <input type="number" class="property-input" value="0" step="0.05" style="width: 60px;" id="prop-side-offset-y-num">
-            </div>
-          </div>
+          <!-- Rendered by TableEditorApp -->
         </div>
       </aside>
     </div>
@@ -558,20 +611,10 @@
     <!-- Bottom Panel - JSON (collapsed by default) -->
     <div class="bottom-panel collapsed" id="bottom-panel">
       <div class="bottom-panel-header" id="bottom-panel-toggle">
-        <span>📄 JSON Configuration</span>
+        <span>JSON</span>
         <span>▼</span>
       </div>
-      <div class="json-editor" id="json-editor">
-{
-  "version": "1.0",
-  "type": "table",
-  "name": "Default Green",
-  "geometry": {
-    "corner": { "throatWidth": 5.0, "jawAngle": 142 },
-    "side": { "throatWidth": 5.5 }
-  }
-}
-      </div>
+      <div class="json-editor" id="json-editor"></div>
     </div>
   </div>
 
