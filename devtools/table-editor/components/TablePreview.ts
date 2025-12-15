@@ -164,12 +164,15 @@ export class TablePreview {
 
     const handleMatPocket = new THREE.MeshBasicMaterial({ color: 0x00bcd4 }); // cyan
     const handleMatPocketSelected = new THREE.MeshBasicMaterial({ color: 0x89b4fa }); // blue
+    const handleMatPocketRadius = new THREE.MeshBasicMaterial({ color: 0xa6e3a1 }); // green
+    const handleMatPocketRadiusSelected = new THREE.MeshBasicMaterial({ color: 0xf9e2af }); // yellow
     const handleMatRail = new THREE.MeshBasicMaterial({ color: 0xffc107 }); // amber
     const handleMatRailSelected = new THREE.MeshBasicMaterial({ color: 0xb4befe }); // light blue
     const handleMatRailMove = new THREE.MeshBasicMaterial({ color: 0xf38ba8 }); // pink/red
     const handleMatRailMoveSelected = new THREE.MeshBasicMaterial({ color: 0xfae3b0 }); // pale yellow
     const pocketGeom = new THREE.SphereGeometry(0.8, 12, 12);
     const railGeom = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+    const radiusGeom = new THREE.BoxGeometry(1.2, 1.2, 1.2);
 
     const sameSelection = (a: GeometrySelection, b: GeometrySelection | null) => {
       if (!b) return false;
@@ -207,9 +210,29 @@ export class TablePreview {
 
       if (selectedPocketIndex !== pocketIndex) return;
 
+      const radiusSel: GeometrySelection = { kind: 'pocket-radius', pocketIndex };
+      const radiusPos = { x: pocket.center.x + pocket.radius, y: pocket.center.y };
+
+      // Avoid a confusing overlap: many outlines include a point exactly at (center.x + radius, center.y).
+      // Skip the nearest outline handle to the radius handle so dragging scales the whole pocket reliably.
+      let skipOutlineIndex: number | null = null;
+      if (pocket.outline && pocket.outline.length) {
+        let best: { i: number; d: number } | null = null;
+        for (let i = 0; i < pocket.outline.length; i++) {
+          const pt = pocket.outline[i];
+          if (!isFinitePoint(pt)) continue;
+          const dx = pt.x - radiusPos.x;
+          const dy = pt.y - radiusPos.y;
+          const d = dx * dx + dy * dy;
+          if (!best || d < best.d) best = { i, d };
+        }
+        if (best && best.d <= 1e-6) skipOutlineIndex = best.i;
+      }
+
       if (pocket.outline) {
         pocket.outline.forEach((pt, pointIndex) => {
           if (!isFinitePoint(pt)) return;
+          if (skipOutlineIndex === pointIndex) return;
           const sel: GeometrySelection = { kind: 'pocket-outline', pocketIndex, pointIndex };
           const mesh = new THREE.Mesh(railGeom, sameSelection(sel, this.selection) ? handleMatPocketSelected : handleMatPocket);
           mesh.position.set(pt.x, 0.4, -pt.y);
@@ -219,9 +242,11 @@ export class TablePreview {
         });
       }
 
-      const radiusSel: GeometrySelection = { kind: 'pocket-radius', pocketIndex };
-      const radiusMesh = new THREE.Mesh(railGeom, sameSelection(radiusSel, this.selection) ? handleMatPocketSelected : handleMatPocket);
-      radiusMesh.position.set(pocket.center.x + pocket.radius, 0.4, -pocket.center.y);
+      const radiusMesh = new THREE.Mesh(
+        radiusGeom,
+        sameSelection(radiusSel, this.selection) ? handleMatPocketRadiusSelected : handleMatPocketRadius
+      );
+      radiusMesh.position.set(radiusPos.x, 0.4, -radiusPos.y);
       (radiusMesh as any).userData = { selection: radiusSel };
       this.scene!.add(radiusMesh);
       this.handleMeshes.push(radiusMesh);
@@ -283,7 +308,7 @@ export class TablePreview {
       if (sel.kind === 'rail-outline') return 2;
       if (sel.kind === 'pocket') return 3;
       if (sel.kind === 'pocket-radius') return 4;
-      if (sel.kind === 'pocket-outline') return 5;
+      if (sel.kind === 'pocket-outline') return 6;
       return 99;
     };
 

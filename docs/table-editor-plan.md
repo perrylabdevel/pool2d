@@ -37,6 +37,7 @@
 - Game receives in `src/debug/RemoteBridge.ts` and calls `setPhysicsJsonOverride(...)` in `src/geometry/Geometry.ts`.
 - `Push Live` sets a session-only override (wins over any stored override for that session).
 - `Push (Persist)` stores the override and triggers a rebuild.
+- When an override is active, the game treats the physics JSON as authoritative and does not apply legacy pocket-offset CONFIG tweaks.
 
 ## Collision model (important)
 
@@ -50,4 +51,3 @@
 - Writes:
   - `src/geometry/tables/<name>.physics.json`
   - optionally overwrites `src/geometry/table.physics.json` (“Set Active”)
-

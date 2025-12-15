@@ -338,6 +338,7 @@ export class TableEditorApp {
 
     document.getElementById('btn-import')?.addEventListener('click', () => this.importFile());
     document.getElementById('btn-export')?.addEventListener('click', () => this.exportCurrent());
+    document.getElementById('btn-create-prompt')?.addEventListener('click', () => void this.createPromptForVisionLlm());
     document.getElementById('btn-save-disk')?.addEventListener('click', () => void this.saveToDisk({ setActive: false }));
     document.getElementById('btn-push-live')?.addEventListener('click', () => this.pushToGame('live'));
     document.getElementById('btn-push-persist')?.addEventListener('click', () => this.pushToGame('persist'));
@@ -352,7 +353,80 @@ export class TableEditorApp {
     document.getElementById('btn-set-active-table')?.addEventListener('click', () => void this.saveToDisk({ setActive: true }));
     document.getElementById('btn-new-skin')?.addEventListener('click', () => void this.createNewSkin());
 
+    const isTypingTarget = (el: EventTarget | null): boolean => {
+      const node = el as HTMLElement | null;
+      if (!node) return false;
+      const tag = node.tagName?.toLowerCase?.() ?? '';
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+      if ((node as any).isContentEditable) return true;
+      return false;
+    };
+
+    const tryNudgeSelection = (e: KeyboardEvent): boolean => {
+      if (!this.activeTable) return false;
+      if (!this.editMode) return false;
+      if (!this.selection) return false;
+      if (e.ctrlKey || e.metaKey) return false;
+      if (isTypingTarget(e.target)) return false;
+
+      const key = e.key;
+      if (key !== 'ArrowUp' && key !== 'ArrowDown' && key !== 'ArrowLeft' && key !== 'ArrowRight') return false;
+
+      const json = this.getActivePhysics();
+      if (!json) return false;
+
+      const ppi = this.getPixelsPerInch(json);
+      const baseStep = this.playAreaUnits === 'px' ? 1 / ppi : 0.05; // 1px or 0.05in
+      const mult = e.shiftKey ? 5 : e.altKey ? 0.2 : 1;
+      const step = baseStep * mult;
+
+      const dx = key === 'ArrowLeft' ? -step : key === 'ArrowRight' ? step : 0;
+      const dy = key === 'ArrowDown' ? -step : key === 'ArrowUp' ? step : 0;
+
+      const sel = this.selection;
+      const getPocket = (idx: number) => json.pockets[idx];
+      const getRail = (idx: number) => json.rails[idx];
+
+      let edit: GeometryEdit | null = null;
+
+      if (sel.kind === 'pocket') {
+        const p = getPocket(sel.pocketIndex);
+        if (!p) return false;
+        edit = { type: 'move-pocket-center', pocketIndex: sel.pocketIndex, x: p.center.x + dx, y: p.center.y + dy };
+      } else if (sel.kind === 'pocket-outline') {
+        const p = getPocket(sel.pocketIndex);
+        const pt = p?.outline?.[sel.pointIndex];
+        if (!p || !pt) return false;
+        edit = { type: 'move-pocket-outline', pocketIndex: sel.pocketIndex, pointIndex: sel.pointIndex, x: pt.x + dx, y: pt.y + dy };
+      } else if (sel.kind === 'pocket-radius') {
+        const p = getPocket(sel.pocketIndex);
+        if (!p) return false;
+        const delta = (key === 'ArrowLeft' || key === 'ArrowDown') ? -step : step;
+        edit = { type: 'set-pocket-radius', pocketIndex: sel.pocketIndex, radius: Math.max(0.25, p.radius + delta), scaleOutline: true };
+      } else if (sel.kind === 'rail') {
+        edit = { type: 'move-rail', railIndex: sel.railIndex, dx, dy };
+      } else if (sel.kind === 'rail-end') {
+        const r = getRail(sel.railIndex);
+        const pt = r?.[sel.endpoint];
+        if (!r || !pt) return false;
+        edit = { type: 'move-rail-end', railIndex: sel.railIndex, endpoint: sel.endpoint, x: pt.x + dx, y: pt.y + dy };
+      } else if (sel.kind === 'rail-outline') {
+        const r = getRail(sel.railIndex);
+        const pt = r?.outline?.[sel.pointIndex];
+        if (!r || !pt) return false;
+        edit = { type: 'move-rail-outline', railIndex: sel.railIndex, pointIndex: sel.pointIndex, x: pt.x + dx, y: pt.y + dy };
+      }
+
+      if (!edit) return false;
+      e.preventDefault();
+      this.pushUndoSnapshot();
+      const next = applyGeometryEdit({ json, edit, mirrorEnabled: this.mirrorEnabled });
+      void this.applyPhysicsUpdate(next, true);
+      return true;
+    };
+
     window.addEventListener('keydown', (e) => {
+      if (tryNudgeSelection(e)) return;
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 'z' || e.key === 'Z')) {
         e.preventDefault();
         void this.undo();
@@ -824,6 +898,133 @@ export class TableEditorApp {
         },
       })
     );
+  }
+
+  private getPromptUnitsLabel(): string {
+    return this.playAreaUnits === 'px' ? 'pixels (px) where applicable; geometry in inches' : 'inches';
+  }
+
+  private buildVisionPromptText(): string {
+    if (!this.activeTable) throw new Error('No active table');
+    const json = this.activeTable.physicsJson;
+    const ppi = this.getPixelsPerInch(json);
+    const rects = (json.meta as any)?.pixelRects;
+
+    const fmt = (n: number) => (Number.isFinite(n) ? n.toFixed(6).replace(/\.?0+$/, '') : String(n));
+    const pt = (p: { x: number; y: number }) => `(${fmt(p.x)}, ${fmt(p.y)})`;
+
+    const bbox = (points: { x: number; y: number }[]) => {
+      let minX = Number.POSITIVE_INFINITY;
+      let minY = Number.POSITIVE_INFINITY;
+      let maxX = Number.NEGATIVE_INFINITY;
+      let maxY = Number.NEGATIVE_INFINITY;
+      for (const p of points) {
+        if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
+        minX = Math.min(minX, p.x);
+        minY = Math.min(minY, p.y);
+        maxX = Math.max(maxX, p.x);
+        maxY = Math.max(maxY, p.y);
+      }
+      if (!Number.isFinite(minX)) return null;
+      return { minX, minY, maxX, maxY };
+    };
+
+    const pocketLines = json.pockets.map((p) => {
+      const box = Array.isArray(p.outline) ? bbox(p.outline) : null;
+      const boxText = box ? ` bbox=[${fmt(box.minX)}, ${fmt(box.minY)} .. ${fmt(box.maxX)}, ${fmt(box.maxY)}]` : '';
+      return `- ${p.id}: center=${pt(p.center)} radius=${fmt(p.radius)} outlinePts=${p.outline?.length ?? 0}${boxText}`;
+    });
+
+    const railLines = json.rails.map((r) => {
+      const outlinePts = Array.isArray(r.outline) ? r.outline : [];
+      const box = outlinePts.length ? bbox(outlinePts) : null;
+      const boxText = box ? ` bbox=[${fmt(box.minX)}, ${fmt(box.minY)} .. ${fmt(box.maxX)}, ${fmt(box.maxY)}]` : '';
+      return `- ${r.id}: from=${pt(r.from)} to=${pt(r.to)} normal=${pt(r.normal)} outlinePts=${outlinePts.length}${boxText}`;
+    });
+
+    const pxInfo =
+      rects?.inner?.width && rects?.inner?.height
+        ? `pixelRects: inner=${rects.inner.width}x${rects.inner.height}px outer=${rects?.outer?.width ?? '?'}x${rects?.outer?.height ?? '?'}px full=${rects?.full?.width ?? '?'}x${rects?.full?.height ?? '?'}px`
+        : 'pixelRects: (not set)';
+
+    const offsetX = (json.meta as any)?.offset?.x;
+    const offsetY = (json.meta as any)?.offset?.y;
+    const hasOffset = Number.isFinite(offsetX) && Number.isFinite(offsetY);
+
+    return `You are a vision-capable image generator. I am designing a pool/billiards TABLE SKIN (image), not doing code review.
+
+I will provide:
+1) A screenshot/reference image of the current table art, and
+2) The table physics geometry JSON below (inches + rails/pockets).
+
+Your task:
+- Generate a clean, high-quality table skin image that aligns perfectly to the physics geometry.
+- Keep pockets/cushions consistent with the provided rails/pocket outlines.
+
+Coordinate systems / mapping:
+- Physics geometry units: inches (origin at play-area center; +X right/East, +Y up/North)
+- Pixels are derived via pixelsPerInch (PPI) for skin alignment.
+- pixelsPerInch (PPI): ${fmt(ppi)}
+- ${pxInfo}
+- ${hasOffset ? `The play-area origin (0,0) maps to pixel (${fmt(offsetX)}, ${fmt(offsetY)}) in the FULL image.` : 'meta.offset is not provided; assume the play-area origin maps to the center of the inner rect.'}
+- Convert inches -> pixels using:
+  - px = originPxX + x_in * PPI
+  - py = originPxY - y_in * PPI   (because +Y is up in physics, but down in image pixels)
+
+Deliverables (as text output describing what you generated):
+- A single PNG for the FULL table at fullPx size (or the closest available size without distortion).
+- Optional: separate transparent PNG layers: felt / rails / frame / pockets (same pixel dimensions).
+- Optional but helpful: an SVG overlay (in pixel coordinates) that draws:
+  - play-area rectangle
+  - pocket circles/outlines
+  - rail outlines
+
+Table summary:
+- name: ${this.activeTable.name}
+- playArea: width=${fmt(json.playArea.width)}in height=${fmt(json.playArea.height)}in
+- editor display units: ${this.getPromptUnitsLabel()}
+
+Pockets (${json.pockets.length}):
+${pocketLines.join('\n')}
+
+Rails (${json.rails.length}):
+${railLines.join('\n')}
+
+Full physics JSON:
+\`\`\`json
+${JSON.stringify(json, null, 2)}
+\`\`\`
+`;
+  }
+
+  private async createPromptForVisionLlm(): Promise<void> {
+    if (!this.activeTable) return;
+    const text = this.buildVisionPromptText();
+
+    const tryClipboard = async (): Promise<boolean> => {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
+    const copied = await tryClipboard();
+    if (copied) {
+      alert('Prompt copied to clipboard.');
+      return;
+    }
+
+    // Fallback: download a text file.
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${this.activeTable.name.replace(/[^\w\-]+/g, '_')}.vision-prompt.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+    alert('Could not access clipboard; downloaded prompt as a .txt file.');
   }
 
   private async resetFromTemplate(): Promise<void> {

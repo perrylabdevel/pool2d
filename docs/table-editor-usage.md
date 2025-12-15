@@ -22,6 +22,13 @@ This starts:
 - **Resize**: use the `Resize` tab (non-uniform supported)
 - **JSON**: open bottom panel, edit JSON, `Apply`
 
+## Keyboard nudges
+
+- With `Edit` enabled and something selected, use arrow keys to nudge geometry.
+- Step size: `0.05 in` (or `1 px` when Units are `px`)
+  - Hold `Shift` for 5× step, `Alt` for 0.2× step
+- Pocket radius handle: left/down decreases radius, right/up increases
+
 ## Derived play-area rails
 
 - The editor treats `play_area_*` rails as **derived/locked**.
@@ -38,6 +45,11 @@ This starts:
 - `Push Live` sends a runtime-only geometry override (wins for the current session even if a persisted override exists)
 - `Push (Persist)` persists the override in the game's localStorage key `railrush.physicsJsonOverride` and triggers a rebuild
 - `Clear Game Override (Persisted)` clears `railrush.physicsJsonOverride` and rebuilds
+
+## Vision prompt
+
+- `Create Prompt` generates a copy/paste prompt containing a full geometry summary + the full physics JSON.
+- It copies to clipboard when possible; otherwise it downloads a `.vision-prompt.txt` file.
 
 ## Recovery / safety
 

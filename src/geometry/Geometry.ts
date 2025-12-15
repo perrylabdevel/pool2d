@@ -736,6 +736,7 @@ export function getTableGeometry(): TableGeometry {
 
       loadPhysicsJsonOverrideFromStorage();
       const physicsJson = (sessionPhysicsJsonOverride ?? storedPhysicsJsonOverride ?? basePhysicsJson) as any;
+      const hasActivePhysicsOverride = sessionPhysicsJsonOverride != null || storedPhysicsJsonOverride != null;
 
       let pockets: PocketDef[] = (physicsJson.pockets || []).map((p: { id: string; center: Vec2; radius: number; outline?: Vec2[]; sourceTag?: string; source?: string }) => ({
         id: p.id,
@@ -749,33 +750,35 @@ export function getTableGeometry(): TableGeometry {
         outline: p.outline // Keep outline for bounds calculation
       }));
 
-      const sidePocketOffsetDelta = CONFIG.SIDE_POCKET_OUTWARD_OFFSET_IN - 0.25;
-      if (Math.abs(sidePocketOffsetDelta) > 1e-6 && physicsJson.playArea) {
-        const halfW = physicsJson.playArea.width / 2;
-        const sideCandidates = pockets.filter((p) => Math.abs(p.center.x) <= halfW * 0.25);
-        if (sideCandidates.length >= 2) {
-          const north = sideCandidates.reduce((best, p) => (p.center.y > best.center.y ? p : best), sideCandidates[0]);
-          const south = sideCandidates.reduce((best, p) => (p.center.y < best.center.y ? p : best), sideCandidates[0]);
-          const shiftPocket = (p: PocketDef, dy: number): PocketDef => ({
-            ...p,
-            center: { x: p.center.x, y: p.center.y + dy },
-            outline: Array.isArray(p.outline) ? p.outline.map((pt) => ({ x: pt.x, y: pt.y + dy })) : p.outline,
-          });
-          pockets = pockets.map((p) => {
-            if (p.id === north.id) return shiftPocket(p, sidePocketOffsetDelta);
-            if (p.id === south.id) return shiftPocket(p, -sidePocketOffsetDelta);
-            return p;
-          });
+      // If a physicsJson override is active, treat JSON as authoritative and do not apply legacy pocket offsets.
+      if (!hasActivePhysicsOverride) {
+        const sidePocketOffsetDelta = CONFIG.SIDE_POCKET_OUTWARD_OFFSET_IN - 0.25;
+        if (Math.abs(sidePocketOffsetDelta) > 1e-6 && physicsJson.playArea) {
+          const halfW = physicsJson.playArea.width / 2;
+          const sideCandidates = pockets.filter((p) => Math.abs(p.center.x) <= halfW * 0.25);
+          if (sideCandidates.length >= 2) {
+            const north = sideCandidates.reduce((best, p) => (p.center.y > best.center.y ? p : best), sideCandidates[0]);
+            const south = sideCandidates.reduce((best, p) => (p.center.y < best.center.y ? p : best), sideCandidates[0]);
+            const shiftPocket = (p: PocketDef, dy: number): PocketDef => ({
+              ...p,
+              center: { x: p.center.x, y: p.center.y + dy },
+              outline: Array.isArray(p.outline) ? p.outline.map((pt) => ({ x: pt.x, y: pt.y + dy })) : p.outline,
+            });
+            pockets = pockets.map((p) => {
+              if (p.id === north.id) return shiftPocket(p, sidePocketOffsetDelta);
+              if (p.id === south.id) return shiftPocket(p, -sidePocketOffsetDelta);
+              return p;
+            });
+          }
         }
       }
 
-      // Apply corner pocket offset (diagonal shift outward from table center)
-      const cornerPocketOffset = CONFIG.CORNER_POCKET_OUTWARD_OFFSET_IN ?? 0;
-      // Apply X/Y offsets from table editor
-      const cornerOffsetX = CONFIG.CORNER_POCKET_OFFSET_X_IN ?? 0;
-      const cornerOffsetY = CONFIG.CORNER_POCKET_OFFSET_Y_IN ?? 0;
-      const sideOffsetX = CONFIG.SIDE_POCKET_OFFSET_X_IN ?? 0;
-      const sideOffsetY = CONFIG.SIDE_POCKET_OFFSET_Y_IN ?? 0;
+      // Apply legacy pocket offsets only when no physicsJson override is active.
+      const cornerPocketOffset = !hasActivePhysicsOverride ? (CONFIG.CORNER_POCKET_OUTWARD_OFFSET_IN ?? 0) : 0;
+      const cornerOffsetX = !hasActivePhysicsOverride ? (CONFIG.CORNER_POCKET_OFFSET_X_IN ?? 0) : 0;
+      const cornerOffsetY = !hasActivePhysicsOverride ? (CONFIG.CORNER_POCKET_OFFSET_Y_IN ?? 0) : 0;
+      const sideOffsetX = !hasActivePhysicsOverride ? (CONFIG.SIDE_POCKET_OFFSET_X_IN ?? 0) : 0;
+      const sideOffsetY = !hasActivePhysicsOverride ? (CONFIG.SIDE_POCKET_OFFSET_Y_IN ?? 0) : 0;
 
       if (physicsJson.playArea) {
         const halfW = physicsJson.playArea.width / 2;
@@ -801,7 +804,7 @@ export function getTableGeometry(): TableGeometry {
             const signX = p.center.x > 0 ? 1 : (p.center.x < 0 ? -1 : 0);
             const signY = p.center.y > 0 ? 1 : -1;
             const totalDx = signX * sideOffsetX;
-            const totalDy = signY * (CONFIG.SIDE_POCKET_OUTWARD_OFFSET_IN ?? 0) + signY * sideOffsetY;
+            const totalDy = signY * (!hasActivePhysicsOverride ? (CONFIG.SIDE_POCKET_OUTWARD_OFFSET_IN ?? 0) : 0) + signY * sideOffsetY;
             return shiftPocket(p, totalDx, totalDy);
           }
         });
