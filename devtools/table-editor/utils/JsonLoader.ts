@@ -22,6 +22,7 @@ export interface PhysicsJson {
   meta?: {
     pixelsPerInch?: number;
     source?: string;
+    lastModified?: number;
   };
   playArea: {
     width: number;
@@ -32,6 +33,7 @@ export interface PhysicsJson {
 }
 
 const PHYSICS_JSON_PATH = '/src/geometry/table.physics.json';
+const LOCAL_STORAGE_KEY = 'tableEditor.physicsOverride';
 
 export class JsonLoader {
   private cachedJson: PhysicsJson | null = null;
@@ -44,15 +46,29 @@ export class JsonLoader {
       }
       
       const json = await response.json();
-      this.cachedJson = json;
+      let merged = json as PhysicsJson;
+
+      // Apply local override if present
+      const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (stored) {
+        try {
+          const override = JSON.parse(stored) as PhysicsJson;
+          merged = { ...json, ...override, meta: { ...json.meta, ...override.meta } };
+          console.log('📄 Loaded physics.json override from localStorage');
+        } catch (e) {
+          console.warn('Failed to parse physics override in localStorage', e);
+        }
+      }
+
+      this.cachedJson = merged;
       
       console.log('📄 Loaded physics.json:', {
-        playArea: json.playArea,
-        pockets: json.pockets?.length,
-        rails: json.rails?.length,
+        playArea: merged.playArea,
+        pockets: merged.pockets?.length,
+        rails: merged.rails?.length,
       });
       
-      return json;
+      return merged;
     } catch (err) {
       console.error('Failed to load physics.json:', err);
       throw err;
@@ -61,6 +77,13 @@ export class JsonLoader {
 
   getCached(): PhysicsJson | null {
     return this.cachedJson;
+  }
+
+  setCached(json: PhysicsJson, persist: boolean = false): void {
+    this.cachedJson = json;
+    if (persist) {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(json));
+    }
   }
 
   /**

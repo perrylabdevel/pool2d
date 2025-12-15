@@ -17,6 +17,8 @@ export class TableEditorApp {
   private isConnected: boolean = false;
   private ws: WebSocket | null = null;
   private activeSkinId: string | null = null;
+  private activeSkin: TableSkin | null = null;
+  private editMode: boolean = false;
 
   constructor() {
     this.tableStore = new TableStore();
@@ -39,8 +41,7 @@ export class TableEditorApp {
     // Set up UI event listeners
     this.setupEventListeners();
 
-    // Load active skin and its settings
-    await this.loadActiveSkin();
+    this.loadActiveSkin();
 
     // Render initial skin grid
     this.renderSkinGrid();
@@ -138,6 +139,16 @@ export class TableEditorApp {
 
     document.getElementById('btn-reset-view')?.addEventListener('click', () => {
       this.preview?.resetView();
+    });
+
+    // Toggle edit mode for point manipulation
+    document.getElementById('btn-edit-points')?.addEventListener('click', () => {
+      this.editMode = !this.editMode;
+      const btn = document.getElementById('btn-edit-points');
+      if (btn) {
+        btn.classList.toggle('active', this.editMode);
+      }
+      this.preview?.setEditingEnabled(this.editMode);
     });
 
     document.getElementById('btn-toggle-balls')?.addEventListener('click', (e) => {

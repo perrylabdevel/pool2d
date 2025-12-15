@@ -47,6 +47,24 @@ export class TablePreview {
   private cornerPocketOutwardOffset: number = -1.0;
   private sidePocketOutwardOffset: number = -1.3;
 
+  // Editing state
+  private editingEnabled: boolean = false;
+
+  // Dragging state
+  private draggingHandle: {
+    type: 'pocket' | 'rail';
+    pocketIndex?: number;
+    railIndex?: number;
+    pointIndex?: number;
+    original: { x: number; y: number };
+  } | null = null;
+
+  // Handle meshes
+  private handleMeshes: THREE.Mesh[] = [];
+  private raycaster = new THREE.Raycaster();
+  private dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); // y=0 plane
+  private planeIntersect = new THREE.Vector3();
+
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
   }
@@ -99,6 +117,9 @@ export class TablePreview {
     // Build table from JSON
     this.buildTable();
     this.buildBalls();
+    if (this.editingEnabled) {
+      this.rebuildHandles();
+    }
 
     // Handle resize
     window.addEventListener('resize', () => this.handleResize());
@@ -122,6 +143,95 @@ export class TablePreview {
     }
   }
 
+  private rebuildHandles(): void {
+    if (!this.scene || !this.physicsJson) return;
+
+    // Remove existing handles
+    this.handleMeshes.forEach(m => this.scene!.remove(m));
+    this.handleMeshes = [];
+
+    const handleMatPocket = new THREE.MeshBasicMaterial({ color: 0x00bcd4 }); // cyan
+    const handleMatRail = new THREE.MeshBasicMaterial({ color: 0xffc107 }); // amber
+    const pocketGeom = new THREE.SphereGeometry(0.8, 12, 12);
+    const railGeom = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+
+    // Pocket centers
+    this.physicsJson.pockets.forEach((pocket, idx) => {
+      const mesh = new THREE.Mesh(pocketGeom, handleMatPocket);
+      mesh.position.set(pocket.center.x, 0.4, -pocket.center.y);
+      mesh.userData = { type: 'pocket', pocketIndex: idx };
+      this.scene!.add(mesh);
+      this.handleMeshes.push(mesh);
+    });
+
+    // Rail outline points
+    this.physicsJson.rails.forEach((rail, railIndex) => {
+      if (!rail.outline || rail.outline.length === 0) return;
+      rail.outline.forEach((pt, pointIndex) => {
+        const mesh = new THREE.Mesh(railGeom, handleMatRail);
+        mesh.position.set(pt.x, 0.4, -pt.y);
+        mesh.userData = { type: 'rail', railIndex, pointIndex };
+        this.scene!.add(mesh);
+        this.handleMeshes.push(mesh);
+      });
+    });
+  }
+
+  private pickHandle(clientX: number, clientY: number, getMouseNDC: (x: number, y: number) => { x: number; y: number }) {
+    if (!this.camera) return null;
+    const ndc = getMouseNDC(clientX, clientY);
+    this.raycaster.setFromCamera(ndc, this.camera);
+    const intersects = this.raycaster.intersectObjects(this.handleMeshes, false);
+    if (intersects.length === 0) return null;
+    const hit = intersects[0].object;
+    const data = hit.userData || {};
+    if (data.type === 'pocket') {
+      const pocket = this.physicsJson!.pockets[data.pocketIndex];
+      return {
+        type: 'pocket' as const,
+        pocketIndex: data.pocketIndex,
+        original: { x: pocket.center.x, y: pocket.center.y },
+      };
+    } else if (data.type === 'rail') {
+      const rail = this.physicsJson!.rails[data.railIndex];
+      const pt = rail.outline?.[data.pointIndex];
+      if (!pt) return null;
+      return {
+        type: 'rail' as const,
+        railIndex: data.railIndex,
+        pointIndex: data.pointIndex,
+        original: { x: pt.x, y: pt.y },
+      };
+    }
+    return null;
+  }
+
+  private applyDragUpdate(newX: number, newY: number): void {
+    if (!this.physicsJson || !this.draggingHandle) return;
+
+    if (this.draggingHandle.type === 'pocket' && this.draggingHandle.pocketIndex !== undefined) {
+      const pocket = this.physicsJson.pockets[this.draggingHandle.pocketIndex];
+      const dx = newX - this.draggingHandle.original.x;
+      const dy = newY - this.draggingHandle.original.y;
+      pocket.center.x = newX;
+      pocket.center.y = newY;
+      if (pocket.outline) {
+        pocket.outline = pocket.outline.map(pt => ({ x: pt.x + dx, y: pt.y + dy }));
+      }
+    } else if (this.draggingHandle.type === 'rail' && this.draggingHandle.railIndex !== undefined && this.draggingHandle.pointIndex !== undefined) {
+      const rail = this.physicsJson.rails[this.draggingHandle.railIndex];
+      if (rail.outline && rail.outline[this.draggingHandle.pointIndex]) {
+        rail.outline[this.draggingHandle.pointIndex] = { x: newX, y: newY };
+      }
+    }
+
+    // Rebuild table and handles to reflect changes
+    this.buildTable();
+
+    // Persist edited geometry locally so reload keeps changes
+    jsonLoader.setCached(this.physicsJson, true);
+  }
+
   private handleResize(): void {
     if (!this.renderer || !this.camera) return;
 
@@ -141,9 +251,17 @@ export class TablePreview {
   }
 
   private setupMouseControls(): void {
-    let isDragging = false;
+    let isPanning = false;
     let lastX = 0;
     let lastY = 0;
+
+    const getMouseNDC = (clientX: number, clientY: number) => {
+      const rect = this.canvas.getBoundingClientRect();
+      return {
+        x: ((clientX - rect.left) / rect.width) * 2 - 1,
+        y: -((clientY - rect.top) / rect.height) * 2 + 1,
+      };
+    };
 
     this.canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
@@ -153,9 +271,20 @@ export class TablePreview {
     });
 
     this.canvas.addEventListener('mousedown', (e) => {
-      // Left-click, middle-click, or shift+left-click all enable panning
+      if (e.button === 0 && this.editingEnabled) {
+        // Try to pick a handle first
+        const hit = this.pickHandle(e.clientX, e.clientY, getMouseNDC);
+        if (hit) {
+          this.draggingHandle = hit;
+          this.canvas.style.cursor = 'grabbing';
+          e.preventDefault();
+          return;
+        }
+      }
+
+      // Fall back to panning
       if (e.button === 0 || e.button === 1) {
-        isDragging = true;
+        isPanning = true;
         lastX = e.clientX;
         lastY = e.clientY;
         this.canvas.style.cursor = 'grabbing';
@@ -164,7 +293,19 @@ export class TablePreview {
     });
 
     window.addEventListener('mousemove', (e) => {
-      if (!isDragging) return;
+      // Dragging a handle?
+      if (this.draggingHandle && this.camera) {
+        const ndc = getMouseNDC(e.clientX, e.clientY);
+        this.raycaster.setFromCamera(ndc, this.camera);
+        if (this.raycaster.ray.intersectPlane(this.dragPlane, this.planeIntersect)) {
+          const newX = this.planeIntersect.x;
+          const newY = -this.planeIntersect.z; // flip back to JSON Y
+          this.applyDragUpdate(newX, newY);
+        }
+        return;
+      }
+
+      if (!isPanning) return;
 
       const dx = e.clientX - lastX;
       const dy = e.clientY - lastY;
@@ -178,7 +319,8 @@ export class TablePreview {
     });
 
     window.addEventListener('mouseup', () => {
-      isDragging = false;
+      this.draggingHandle = null;
+      isPanning = false;
       this.canvas.style.cursor = 'default';
     });
   }
@@ -198,8 +340,10 @@ export class TablePreview {
     if (this.tableMesh) this.scene.remove(this.tableMesh);
     this.pocketMeshes.forEach(m => this.scene!.remove(m));
     this.railOutlineMeshes.forEach(m => this.scene!.remove(m));
+    this.handleMeshes.forEach(m => this.scene!.remove(m));
     this.pocketMeshes = [];
     this.railOutlineMeshes = [];
+    this.handleMeshes = [];
 
     // Use JSON geometry if available
     const playWidth = this.physicsJson?.playArea?.width ?? 100;
@@ -242,6 +386,11 @@ export class TablePreview {
     // Build rail outlines from JSON
     if (this.physicsJson?.rails) {
       this.buildRailOutlinesFromJson();
+    }
+
+    // Rebuild handles if editing
+    if (this.editingEnabled) {
+      this.rebuildHandles();
     }
   }
 
@@ -493,6 +642,11 @@ export class TablePreview {
     this.panX = 0;
     this.panY = 0;
     this.handleResize();
+  }
+
+  setEditingEnabled(enabled: boolean): void {
+    this.editingEnabled = enabled;
+    this.rebuildHandles();
   }
 
   toggleBalls(show: boolean): void {
