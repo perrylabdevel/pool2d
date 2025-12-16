@@ -113,7 +113,8 @@ export class RemoteSettingsManager extends EventTarget {
     }
 
     private connect() {
-        this.ws = new WebSocket('ws://localhost:8080');
+        const host = window.location.hostname || 'localhost';
+        this.ws = new WebSocket(`ws://${host}:8080`);
 
         this.ws.onopen = () => {
             console.log('Connected to relay server');

@@ -738,17 +738,38 @@ export function getTableGeometry(): TableGeometry {
       const physicsJson = (sessionPhysicsJsonOverride ?? storedPhysicsJsonOverride ?? basePhysicsJson) as any;
       const hasActivePhysicsOverride = sessionPhysicsJsonOverride != null || storedPhysicsJsonOverride != null;
 
-      let pockets: PocketDef[] = (physicsJson.pockets || []).map((p: { id: string; center: Vec2; radius: number; outline?: Vec2[]; sourceTag?: string; source?: string }) => ({
-        id: p.id,
-        center: p.center,
-        visualRadius: p.radius,
-        captureRadius: p.radius * 1.1,
-        cutNormalHint: { x: 0, y: 0 },
-        cutAngleDeg: 0,
-        shelfDepth: 0,
-        radius: p.radius,
-        outline: p.outline // Keep outline for bounds calculation
-      }));
+      const pocketTypeHalfW = Number.isFinite(physicsJson.playArea?.width) ? physicsJson.playArea.width / 2 : null;
+      const isCornerPocketJson = (center: Vec2): boolean => {
+        if (pocketTypeHalfW == null) return true;
+        return Math.abs(center.x) > pocketTypeHalfW * 0.25;
+      };
+
+      let pockets: PocketDef[] = (physicsJson.pockets || []).map(
+        (p: { id: string; center: Vec2; radius: number; captureRadius?: number; outline?: Vec2[]; sourceTag?: string; source?: string }) => {
+          const isCorner = isCornerPocketJson(p.center);
+          const shelfDepth = isCorner
+            ? CONFIG.POCKET_SHELF_DEPTH_IN
+            : ((CONFIG as any).POCKET_SHELF_DEPTH_SIDE_IN ?? CONFIG.POCKET_SHELF_DEPTH_IN);
+          const fallbackCapture = isCorner ? CONFIG.POCKET_CAPTURE_RADIUS_CORNER : CONFIG.POCKET_CAPTURE_RADIUS_SIDE;
+          const captureRadius =
+            typeof p.captureRadius === 'number' && Number.isFinite(p.captureRadius) && p.captureRadius > 0.05
+              ? p.captureRadius
+              : fallbackCapture;
+          const cutAngleDeg = isCorner ? CONFIG.CORNER_CUT_ANGLE_DEG : CONFIG.SIDE_CUT_ANGLE_DEG;
+
+          return {
+            id: p.id,
+            center: p.center,
+            visualRadius: p.radius,
+            captureRadius,
+            cutNormalHint: { x: 0, y: 0 },
+            cutAngleDeg,
+            shelfDepth,
+            radius: p.radius,
+            outline: p.outline, // Keep outline for bounds calculation
+          };
+        }
+      );
 
       // If a physicsJson override is active, treat JSON as authoritative and do not apply legacy pocket offsets.
       if (!hasActivePhysicsOverride) {

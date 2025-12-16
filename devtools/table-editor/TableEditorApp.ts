@@ -33,6 +33,8 @@ export class TableEditorApp {
 
   private isConnected: boolean = false;
   private ws: WebSocket | null = null;
+  private pocketCaptureCornerIn: number = this.loadPocketCaptureRadius('corner', 2.8);
+  private pocketCaptureSideIn: number = this.loadPocketCaptureRadius('side', 3.3);
 
   private editMode: boolean = false;
   private mirrorEnabled: boolean = true;
@@ -93,6 +95,28 @@ export class TableEditorApp {
       // ignore
     }
     return 'in';
+  }
+
+  private loadPocketCaptureRadius(kind: 'corner' | 'side', fallback: number): number {
+    try {
+      const raw = localStorage.getItem(`table-editor-pocket-capture-${kind}`);
+      const v = raw ? parseFloat(raw) : NaN;
+      if (Number.isFinite(v) && v > 0) return v;
+    } catch {
+      // ignore
+    }
+    return fallback;
+  }
+
+  private setPocketCaptureRadius(kind: 'corner' | 'side', value: number): void {
+    if (!Number.isFinite(value) || value <= 0) return;
+    if (kind === 'corner') this.pocketCaptureCornerIn = value;
+    else this.pocketCaptureSideIn = value;
+    try {
+      localStorage.setItem(`table-editor-pocket-capture-${kind}`, String(value));
+    } catch {
+      // ignore
+    }
   }
 
   private setPlayAreaUnits(units: 'in' | 'px'): void {
@@ -586,6 +610,23 @@ export class TableEditorApp {
     if (this.activeRightTab === 'pockets') {
       container.innerHTML = `
         <div class="property-group">
+          <div class="property-group-title">Capture Radius</div>
+          <div style="padding: 8px 0; font-size: 12px; color: var(--text-muted);">
+            Live physics setting (ball capture disk). Syncs with <code>devtools/index.html</code>.
+          </div>
+          <div class="property-row" style="gap: 10px;">
+            <span class="property-label">Corner (in)</span>
+            <input class="property-slider" id="pocket-capture-corner" type="range" min="1.5" max="4.0" step="0.05" value="${this.pocketCaptureCornerIn.toFixed(2)}" />
+            <input class="property-input" id="pocket-capture-corner-num" type="number" min="0.5" step="0.01" value="${this.pocketCaptureCornerIn.toFixed(2)}" />
+          </div>
+          <div class="property-row" style="gap: 10px;">
+            <span class="property-label">Side (in)</span>
+            <input class="property-slider" id="pocket-capture-side" type="range" min="1.5" max="4.0" step="0.05" value="${this.pocketCaptureSideIn.toFixed(2)}" />
+            <input class="property-input" id="pocket-capture-side-num" type="number" min="0.5" step="0.01" value="${this.pocketCaptureSideIn.toFixed(2)}" />
+          </div>
+        </div>
+
+        <div class="property-group">
           <div class="property-group-title">Pockets</div>
           <div style="padding: 8px 0; font-size: 12px; color: var(--text-muted);">
             Drag handles in Edit mode: center (sphere), outline points (small boxes), radius handle (box to the right).
@@ -604,6 +645,46 @@ export class TableEditorApp {
           </div>
         </div>
       `;
+
+      const cornerRange = container.querySelector('#pocket-capture-corner') as HTMLInputElement | null;
+      const cornerNum = container.querySelector('#pocket-capture-corner-num') as HTMLInputElement | null;
+      const sideRange = container.querySelector('#pocket-capture-side') as HTMLInputElement | null;
+      const sideNum = container.querySelector('#pocket-capture-side-num') as HTMLInputElement | null;
+
+      const clamp = (v: number) => Math.min(4.0, Math.max(1.5, v));
+
+      const previewCorner = (raw: string) => {
+        const v = clamp(parseFloat(raw));
+        if (!Number.isFinite(v)) return;
+        this.setPocketCaptureRadius('corner', v);
+        if (cornerRange) cornerRange.value = v.toFixed(2);
+        if (cornerNum) cornerNum.value = v.toFixed(2);
+      };
+
+      const previewSide = (raw: string) => {
+        const v = clamp(parseFloat(raw));
+        if (!Number.isFinite(v)) return;
+        this.setPocketCaptureRadius('side', v);
+        if (sideRange) sideRange.value = v.toFixed(2);
+        if (sideNum) sideNum.value = v.toFixed(2);
+      };
+
+      const commitCorner = () => this.sendGeometryPatch({ CORNER_POCKET_CAPTURE_RADIUS_IN: this.pocketCaptureCornerIn });
+      const commitSide = () => this.sendGeometryPatch({ SIDE_POCKET_CAPTURE_RADIUS_IN: this.pocketCaptureSideIn });
+
+      cornerRange?.addEventListener('input', (e) => previewCorner((e.currentTarget as HTMLInputElement).value));
+      cornerRange?.addEventListener('change', commitCorner);
+      cornerNum?.addEventListener('change', (e) => {
+        previewCorner((e.currentTarget as HTMLInputElement).value);
+        commitCorner();
+      });
+
+      sideRange?.addEventListener('input', (e) => previewSide((e.currentTarget as HTMLInputElement).value));
+      sideRange?.addEventListener('change', commitSide);
+      sideNum?.addEventListener('change', (e) => {
+        previewSide((e.currentTarget as HTMLInputElement).value);
+        commitSide();
+      });
       return;
     }
 
@@ -1412,6 +1493,17 @@ ${JSON.stringify(json, null, 2)}
       this.ws.onopen = () => {
         this.isConnected = true;
         this.updateConnectionStatus(true);
+        this.ws?.send(JSON.stringify({ type: 'requestState' }));
+      };
+      this.ws.onmessage = async (event) => {
+        let data: any = event.data;
+        if (data instanceof Blob) data = await data.text();
+        try {
+          const message = JSON.parse(data);
+          this.handleRemoteMessage(message);
+        } catch {
+          // ignore
+        }
       };
       this.ws.onclose = () => {
         this.isConnected = false;
@@ -1423,11 +1515,42 @@ ${JSON.stringify(json, null, 2)}
     }
   }
 
+  private handleRemoteMessage(message: any): void {
+    if (!message || typeof message !== 'object') return;
+
+    if (message.type === 'state') {
+      const geom = message.payload?.geometry;
+      const corner = geom?.CORNER_POCKET_CAPTURE_RADIUS_IN;
+      const side = geom?.SIDE_POCKET_CAPTURE_RADIUS_IN;
+      if (typeof corner === 'number' && Number.isFinite(corner)) this.setPocketCaptureRadius('corner', corner);
+      if (typeof side === 'number' && Number.isFinite(side)) this.setPocketCaptureRadius('side', side);
+      if (this.activeRightTab === 'pockets') this.renderRightSidebar();
+      return;
+    }
+
+    if (message.type === 'settings:geometry-changed') {
+      const corner = message.payload?.CORNER_POCKET_CAPTURE_RADIUS_IN;
+      const side = message.payload?.SIDE_POCKET_CAPTURE_RADIUS_IN;
+      if (typeof corner === 'number' && Number.isFinite(corner)) this.setPocketCaptureRadius('corner', corner);
+      if (typeof side === 'number' && Number.isFinite(side)) this.setPocketCaptureRadius('side', side);
+      if (this.activeRightTab === 'pockets') this.renderRightSidebar();
+      return;
+    }
+  }
+
   private updateConnectionStatus(connected: boolean): void {
     const dot = document.getElementById('status-dot');
     const text = document.getElementById('status-text');
     if (dot) dot.classList.toggle('connected', connected);
     if (text) text.textContent = connected ? 'Connected' : 'Disconnected';
+  }
+
+  private sendGeometryPatch(patch: Record<string, unknown>): void {
+    if (!this.ws || !this.isConnected) {
+      alert('Not connected to game. Start `npm run dev` (relay on :8080).');
+      return;
+    }
+    this.ws.send(JSON.stringify({ type: 'updateGeometry', payload: patch }));
   }
 
   private pushToGame(mode: 'live' | 'persist'): void {
