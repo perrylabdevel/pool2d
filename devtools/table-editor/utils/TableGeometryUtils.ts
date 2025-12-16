@@ -219,10 +219,17 @@ function roundKey(x: number, decimals = 2): string {
   return String(Math.round(x * f) / f);
 }
 
+function signWithEps(v: number, eps = 1e-6): -1 | 0 | 1 {
+  if (!Number.isFinite(v)) return 0;
+  if (Math.abs(v) <= eps) return 0;
+  return v < 0 ? -1 : 1;
+}
+
 function mirrorAxesForTarget(source: { x: number; y: number }, target: { x: number; y: number }): { x: boolean; y: boolean } {
+  // axes.x => mirror across X axis (flip y), axes.y => mirror across Y axis (flip x)
   return {
-    x: Math.sign(source.y) !== Math.sign(target.y),
-    y: Math.sign(source.x) !== Math.sign(target.x),
+    x: signWithEps(source.y) !== signWithEps(target.y),
+    y: signWithEps(source.x) !== signWithEps(target.x),
   };
 }
 
@@ -533,6 +540,39 @@ function findNearestRailIndex(json: PhysicsJson, targetMid: { x: number; y: numb
   return best.d <= 25 ? best.idx : null; // ~5 inches tolerance
 }
 
+function findMirroredRailPartners(json: PhysicsJson, sourceRailIndex: number): Array<{ otherIndex: number; axes: { x: boolean; y: boolean } }> {
+  const source = json.rails[sourceRailIndex];
+  if (!source || isDerivedPlayAreaRailId(source.id)) return [];
+
+  const sourceMid = railMidpoint(source);
+
+  const sameAbsMid = (a: { x: number; y: number }, b: { x: number; y: number }) => {
+    const tol = 0.25; // inches; keep tight so we don't "jump" to neighboring cushion segments
+    return Math.abs(Math.abs(a.x) - Math.abs(b.x)) <= tol && Math.abs(Math.abs(a.y) - Math.abs(b.y)) <= tol;
+  };
+
+  const byAxesKey = new Map<string, { otherIndex: number; axes: { x: boolean; y: boolean }; d: number }>();
+
+  for (let i = 0; i < json.rails.length; i++) {
+    if (i === sourceRailIndex) continue;
+    const r = json.rails[i];
+    if (!r || isDerivedPlayAreaRailId(r.id)) continue;
+    const mid = railMidpoint(r);
+    if (!sameAbsMid(sourceMid, mid)) continue;
+
+    const axes = mirrorAxesForTarget(sourceMid, mid);
+    if (!axes.x && !axes.y) continue;
+
+    const targetMid = mirrorPoint(sourceMid, axes);
+    const d = distanceSq(mid, targetMid);
+    const key = `${axes.x ? 1 : 0}${axes.y ? 1 : 0}`;
+    const best = byAxesKey.get(key);
+    if (!best || d < best.d) byAxesKey.set(key, { otherIndex: i, axes, d });
+  }
+
+  return [...byAxesKey.values()].map(({ otherIndex, axes }) => ({ otherIndex, axes }));
+}
+
 function pickPointIndexForMirroredOutline(options: {
   outline: { x: number; y: number }[];
   originalPointIndex: number;
@@ -671,67 +711,61 @@ export function applyGeometryEdit(options: {
         }
       }
 
-      if (options.edit.type === 'move-rail-end') {
-        const sourceRail = next.rails[options.edit.railIndex];
-        if (!sourceRail) continue;
-        if (isDerivedPlayAreaRailId(sourceRail.id)) continue;
-        const mid = railMidpoint(sourceRail);
-        const otherIndex = findNearestRailIndex(next, mirrorPoint(mid, axes), options.edit.railIndex);
-        if (otherIndex === null) continue;
-        const otherRail = next.rails[otherIndex];
+    }
 
-        const sourceEndpoint = sourceRail[options.edit.endpoint];
-        const targetEndpoint = mirrorPoint(sourceEndpoint, axes);
+    // Rails: do NOT brute-force all axes against "nearest rail" (it can latch to neighboring cushion segments).
+    // Instead, mirror only to rails that share the same absolute midpoint (i.e., true symmetric counterpart).
+    if (options.edit.type === 'move-rail-end' || options.edit.type === 'move-rail' || options.edit.type === 'move-rail-outline') {
+      const partners = findMirroredRailPartners(options.json, options.edit.railIndex);
+      for (const { otherIndex, axes } of partners) {
+        if (options.edit.type === 'move-rail-end') {
+          const sourceRail = next.rails[options.edit.railIndex];
+          if (!sourceRail) continue;
+          if (isDerivedPlayAreaRailId(sourceRail.id)) continue;
+          const otherRail = next.rails[otherIndex];
+          if (!otherRail) continue;
 
-        const currentFrom = mirrorPoint(sourceRail.from, axes);
-        const currentTo = mirrorPoint(sourceRail.to, axes);
-        const dSame = distanceSq(otherRail.from, currentFrom) + distanceSq(otherRail.to, currentTo);
-        const dSwap = distanceSq(otherRail.from, currentTo) + distanceSq(otherRail.to, currentFrom);
+          const sourceEndpoint = sourceRail[options.edit.endpoint];
+          const targetEndpoint = mirrorPoint(sourceEndpoint, axes);
 
-        const endpointOnOther = dSwap < dSame ? (options.edit.endpoint === 'from' ? 'to' : 'from') : options.edit.endpoint;
-        (otherRail as any)[endpointOnOther] = targetEndpoint;
+          const currentFrom = mirrorPoint(sourceRail.from, axes);
+          const currentTo = mirrorPoint(sourceRail.to, axes);
+          const dSame = distanceSq(otherRail.from, currentFrom) + distanceSq(otherRail.to, currentTo);
+          const dSwap = distanceSq(otherRail.from, currentTo) + distanceSq(otherRail.to, currentFrom);
 
-        otherRail.normal = mirrorPoint(sourceRail.normal, axes);
-      }
-
-      if (options.edit.type === 'move-rail') {
-        const sourceRail = next.rails[options.edit.railIndex];
-        if (!sourceRail) continue;
-        if (isDerivedPlayAreaRailId(sourceRail.id)) continue;
-        const mid = railMidpoint(sourceRail);
-        const otherIndex = findNearestRailIndex(next, mirrorPoint(mid, axes), options.edit.railIndex);
-        if (otherIndex === null) continue;
-
-        const dx = axes.y ? -options.edit.dx : options.edit.dx;
-        const dy = axes.x ? -options.edit.dy : options.edit.dy;
-
-        const otherRail = next.rails[otherIndex];
-        otherRail.from = { x: otherRail.from.x + dx, y: otherRail.from.y + dy };
-        otherRail.to = { x: otherRail.to.x + dx, y: otherRail.to.y + dy };
-        if (otherRail.outline) {
-          otherRail.outline = otherRail.outline.map((pt) => ({ x: pt.x + dx, y: pt.y + dy }));
+          const endpointOnOther = dSwap < dSame ? (options.edit.endpoint === 'from' ? 'to' : 'from') : options.edit.endpoint;
+          (otherRail as any)[endpointOnOther] = targetEndpoint;
+          otherRail.normal = mirrorPoint(sourceRail.normal, axes);
         }
-      }
 
-      if (options.edit.type === 'move-rail-outline') {
-        const sourceRail = next.rails[options.edit.railIndex];
-        if (!sourceRail?.outline?.[options.edit.pointIndex]) continue;
-        if (isDerivedPlayAreaRailId(sourceRail.id)) continue;
-        const sourcePoint = sourceRail.outline[options.edit.pointIndex];
-        const mid = railMidpoint(sourceRail);
-        const otherIndex = findNearestRailIndex(next, mirrorPoint(mid, axes), options.edit.railIndex);
-        if (otherIndex === null) continue;
-        const otherRail = next.rails[otherIndex];
-        if (!otherRail.outline) continue;
+        if (options.edit.type === 'move-rail') {
+          const otherRail = next.rails[otherIndex];
+          if (!otherRail) continue;
+          const dx = axes.y ? -options.edit.dx : options.edit.dx;
+          const dy = axes.x ? -options.edit.dy : options.edit.dy;
 
-        const targetPoint = mirrorPoint(sourcePoint, axes);
-        const targetIndex = pickPointIndexForMirroredOutline({
-          outline: otherRail.outline,
-          originalPointIndex: options.edit.pointIndex,
-          target: targetPoint,
-        });
-        if (!otherRail.outline[targetIndex]) continue;
-        otherRail.outline[targetIndex] = targetPoint;
+          otherRail.from = { x: otherRail.from.x + dx, y: otherRail.from.y + dy };
+          otherRail.to = { x: otherRail.to.x + dx, y: otherRail.to.y + dy };
+          if (otherRail.outline) otherRail.outline = otherRail.outline.map((pt) => ({ x: pt.x + dx, y: pt.y + dy }));
+        }
+
+        if (options.edit.type === 'move-rail-outline') {
+          const sourceRail = next.rails[options.edit.railIndex];
+          if (!sourceRail?.outline?.[options.edit.pointIndex]) continue;
+          if (isDerivedPlayAreaRailId(sourceRail.id)) continue;
+          const otherRail = next.rails[otherIndex];
+          if (!otherRail?.outline) continue;
+
+          const sourcePoint = sourceRail.outline[options.edit.pointIndex];
+          const targetPoint = mirrorPoint(sourcePoint, axes);
+          const targetIndex = pickPointIndexForMirroredOutline({
+            outline: otherRail.outline,
+            originalPointIndex: options.edit.pointIndex,
+            target: targetPoint,
+          });
+          if (!otherRail.outline[targetIndex]) continue;
+          otherRail.outline[targetIndex] = targetPoint;
+        }
       }
     }
   }

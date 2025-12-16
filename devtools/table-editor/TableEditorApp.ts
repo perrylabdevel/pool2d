@@ -11,6 +11,11 @@ import { SkinStore } from './stores/SkinStore';
 import { TableLibraryStore, type TableDocument } from './stores/TableLibraryStore';
 import { jsonLoader, type PhysicsJson } from './utils/JsonLoader';
 import {
+  DEFAULT_EDITOR_ASSIST_SETTINGS,
+  sanitizeEditorAssistSettings,
+  type EditorAssistSettings,
+} from './utils/EditorAssistSettings';
+import {
   applyGeometryEdit,
   ensureDerivedPlayAreaRails,
   getSemanticGeometryWarnings,
@@ -39,6 +44,7 @@ export class TableEditorApp {
   private editMode: boolean = false;
   private mirrorEnabled: boolean = true;
   private selection: GeometrySelection | null = null;
+  private assistSettings: EditorAssistSettings = this.loadAssistSettings();
 
   private activeTableId: string | null = null;
   private activeTable: TableDocument | null = null;
@@ -70,6 +76,7 @@ export class TableEditorApp {
         onSelect: (sel) => this.setSelection(sel),
       });
       await this.preview.init();
+      this.preview.setAssistSettings(this.assistSettings);
     }
 
     this.setupEventListeners();
@@ -85,6 +92,44 @@ export class TableEditorApp {
     this.connectToGame();
     this.updateHeader();
     this.updateJsonEditorText();
+
+    this.syncToolbarTogglesFromSettings();
+  }
+
+  private loadAssistSettings(): EditorAssistSettings {
+    try {
+      const raw = localStorage.getItem('table-editor-assist');
+      if (!raw) return structuredClone(DEFAULT_EDITOR_ASSIST_SETTINGS);
+      return sanitizeEditorAssistSettings(JSON.parse(raw));
+    } catch {
+      return structuredClone(DEFAULT_EDITOR_ASSIST_SETTINGS);
+    }
+  }
+
+  private persistAssistSettings(): void {
+    try {
+      localStorage.setItem('table-editor-assist', JSON.stringify(this.assistSettings));
+    } catch {
+      // ignore
+    }
+  }
+
+  private setAssistSettings(patch: Partial<EditorAssistSettings>): void {
+    this.assistSettings = sanitizeEditorAssistSettings({ ...this.assistSettings, ...patch });
+    this.persistAssistSettings();
+    this.preview?.setAssistSettings(this.assistSettings);
+    if (this.activeRightTab === 'selection') this.renderRightSidebar();
+  }
+
+  private syncToolbarTogglesFromSettings(): void {
+    document.getElementById('btn-toggle-snap')?.classList.toggle('active', this.assistSettings.snapEnabled);
+    document.getElementById('btn-toggle-grid')?.classList.toggle('active', this.assistSettings.gridEnabled);
+
+    const ballsBtn = document.getElementById('btn-toggle-balls');
+    if (ballsBtn) this.preview?.toggleBalls(ballsBtn.classList.contains('active'));
+
+    const measureBtn = document.getElementById('btn-toggle-measure');
+    if (measureBtn) this.preview?.toggleMeasurements(measureBtn.classList.contains('active'));
   }
 
   private loadPlayAreaUnits(): 'in' | 'px' {
@@ -370,6 +415,20 @@ export class TableEditorApp {
       this.preview?.toggleMeasurements(btn.classList.contains('active'));
     });
 
+    document.getElementById('btn-toggle-snap')?.addEventListener('click', (e) => {
+      const btn = e.currentTarget as HTMLElement;
+      const next = !btn.classList.contains('active');
+      btn.classList.toggle('active', next);
+      this.setAssistSettings({ snapEnabled: next });
+    });
+
+    document.getElementById('btn-toggle-grid')?.addEventListener('click', (e) => {
+      const btn = e.currentTarget as HTMLElement;
+      const next = !btn.classList.contains('active');
+      btn.classList.toggle('active', next);
+      this.setAssistSettings({ gridEnabled: next });
+    });
+
     document.getElementById('btn-rack')?.addEventListener('click', () => this.preview?.rackBalls());
 
     document.getElementById('btn-import')?.addEventListener('click', () => this.importFile());
@@ -543,6 +602,32 @@ export class TableEditorApp {
           </div>
         </div>
         <div class="property-group">
+          <div class="property-group-title">Assist</div>
+          <div class="property-row" style="justify-content: space-between;">
+            <span class="property-label">Snap</span>
+            <input id="assist-snap" type="checkbox" ${this.assistSettings.snapEnabled ? 'checked' : ''} />
+          </div>
+          <div class="property-row">
+            <span class="property-label">Tolerance (px)</span>
+            <input class="property-input" id="assist-snap-tol" type="number" min="1" max="64" step="1" value="${this.assistSettings.snapTolerancePx}">
+          </div>
+          <div class="property-row" style="justify-content: space-between;">
+            <span class="property-label">Grid</span>
+            <input id="assist-grid" type="checkbox" ${this.assistSettings.gridEnabled ? 'checked' : ''} />
+          </div>
+          <div class="property-row">
+            <span class="property-label">Grid Spacing (in)</span>
+            <input class="property-input" id="assist-grid-spacing" type="number" min="0.01" step="0.01" value="${this.assistSettings.gridSpacingIn}">
+          </div>
+          <div class="property-row">
+            <span class="property-label">Major Every</span>
+            <input class="property-input" id="assist-grid-major" type="number" min="1" step="1" value="${this.assistSettings.gridMajorEvery}">
+          </div>
+          <div style="padding: 6px 0 0; font-size: 12px; color: var(--text-muted);">
+            Tip: hold <code>Alt</code> to bypass snapping; hold <code>Shift</code> for axis-lock while dragging.
+          </div>
+        </div>
+        <div class="property-group">
           <div class="property-group-title">Play Area</div>
           <div class="property-row">
             <span class="property-label">Units</span>
@@ -572,6 +657,36 @@ export class TableEditorApp {
       container.querySelector('#play-units')?.addEventListener('change', (e) => {
         const v = (e.currentTarget as HTMLSelectElement).value;
         if (v === 'px' || v === 'in') this.setPlayAreaUnits(v);
+      });
+
+      container.querySelector('#assist-snap')?.addEventListener('change', (e) => {
+        const enabled = (e.currentTarget as HTMLInputElement).checked;
+        document.getElementById('btn-toggle-snap')?.classList.toggle('active', enabled);
+        this.setAssistSettings({ snapEnabled: enabled });
+      });
+
+      container.querySelector('#assist-snap-tol')?.addEventListener('change', (e) => {
+        const v = parseFloat((e.currentTarget as HTMLInputElement).value);
+        if (!Number.isFinite(v)) return;
+        this.setAssistSettings({ snapTolerancePx: v });
+      });
+
+      container.querySelector('#assist-grid')?.addEventListener('change', (e) => {
+        const enabled = (e.currentTarget as HTMLInputElement).checked;
+        document.getElementById('btn-toggle-grid')?.classList.toggle('active', enabled);
+        this.setAssistSettings({ gridEnabled: enabled });
+      });
+
+      container.querySelector('#assist-grid-spacing')?.addEventListener('change', (e) => {
+        const v = parseFloat((e.currentTarget as HTMLInputElement).value);
+        if (!Number.isFinite(v)) return;
+        this.setAssistSettings({ gridSpacingIn: v });
+      });
+
+      container.querySelector('#assist-grid-major')?.addEventListener('change', (e) => {
+        const v = parseFloat((e.currentTarget as HTMLInputElement).value);
+        if (!Number.isFinite(v)) return;
+        this.setAssistSettings({ gridMajorEvery: v });
       });
 
       container.querySelector('#btn-mirror-toggle-panel')?.addEventListener('click', () => {

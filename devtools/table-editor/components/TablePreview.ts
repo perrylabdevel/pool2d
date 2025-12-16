@@ -9,6 +9,7 @@ import { TableSkin } from '../stores/SkinStore';
 import { PhysicsJson, jsonLoader } from '../utils/JsonLoader';
 import { isDerivedPlayAreaRailId } from '../utils/TableGeometryUtils';
 import type { GeometryEdit, GeometrySelection } from '../utils/TableGeometryUtils';
+import { DEFAULT_EDITOR_ASSIST_SETTINGS, type EditorAssistSettings } from '../utils/EditorAssistSettings';
 
 export class TablePreview {
   private canvas: HTMLCanvasElement;
@@ -22,7 +23,10 @@ export class TablePreview {
   private pocketMeshes: THREE.Mesh[] = [];
   private railOutlineMeshes: THREE.Line[] = [];
   private playAreaOutlineMesh: THREE.Line | null = null;
+  private measurementMeshes: THREE.Object3D[] = [];
   private ballMeshes: THREE.Mesh[] = [];
+  private gridMinorMesh: THREE.LineSegments | null = null;
+  private gridMajorMesh: THREE.LineSegments | null = null;
 
   // Skin texture
   private skinTexture: THREE.Texture | null = null;
@@ -33,6 +37,7 @@ export class TablePreview {
   private zoom: number = 1;
   private panX: number = 0;
   private panY: number = 0;
+  private assistSettings: EditorAssistSettings = structuredClone(DEFAULT_EDITOR_ASSIST_SETTINGS);
 
   // JSON geometry (the only source of truth)
   private physicsJson: PhysicsJson | null = null;
@@ -58,6 +63,10 @@ export class TablePreview {
   private draggingHandle: {
     selection: GeometrySelection;
     last: { x: number; y: number };
+    start: { x: number; y: number };
+    axisLock: 'x' | 'y' | null;
+    railStartMid?: { x: number; y: number };
+    railLastApplied?: { dx: number; dy: number };
   } | null = null;
 
   // Handle meshes
@@ -79,6 +88,12 @@ export class TablePreview {
   }): void {
     this.onEdit = callbacks.onEdit ?? null;
     this.onSelect = callbacks.onSelect ?? null;
+  }
+
+  setAssistSettings(settings: EditorAssistSettings): void {
+    this.assistSettings = structuredClone(settings);
+    this.updateGrid();
+    if (this.editingEnabled) this.rebuildHandles();
   }
 
   async init(): Promise<void> {
@@ -174,6 +189,12 @@ export class TablePreview {
     const railGeom = new THREE.BoxGeometry(0.8, 0.8, 0.8);
     const radiusGeom = new THREE.BoxGeometry(1.2, 1.2, 1.2);
 
+    const handleScale = (() => {
+      // Ortho zoom makes handles visually larger as you zoom in; damp that and make them smaller at high zoom.
+      const s = 0.95 * Math.pow(this.zoom, -1.15);
+      return Math.max(0.12, Math.min(1.1, s));
+    })();
+
     const sameSelection = (a: GeometrySelection, b: GeometrySelection | null) => {
       if (!b) return false;
       return JSON.stringify(a) === JSON.stringify(b);
@@ -204,6 +225,7 @@ export class TablePreview {
       const centerSel: GeometrySelection = { kind: 'pocket', pocketIndex };
       const centerMesh = new THREE.Mesh(pocketGeom, sameSelection(centerSel, this.selection) ? handleMatPocketSelected : handleMatPocket);
       centerMesh.position.set(pocket.center.x, 0.4, -pocket.center.y);
+      centerMesh.scale.setScalar(handleScale);
       (centerMesh as any).userData = { selection: centerSel };
       this.scene!.add(centerMesh);
       this.handleMeshes.push(centerMesh);
@@ -236,6 +258,7 @@ export class TablePreview {
           const sel: GeometrySelection = { kind: 'pocket-outline', pocketIndex, pointIndex };
           const mesh = new THREE.Mesh(railGeom, sameSelection(sel, this.selection) ? handleMatPocketSelected : handleMatPocket);
           mesh.position.set(pt.x, 0.4, -pt.y);
+          mesh.scale.setScalar(handleScale);
           (mesh as any).userData = { selection: sel };
           this.scene!.add(mesh);
           this.handleMeshes.push(mesh);
@@ -247,6 +270,7 @@ export class TablePreview {
         sameSelection(radiusSel, this.selection) ? handleMatPocketRadiusSelected : handleMatPocketRadius
       );
       radiusMesh.position.set(radiusPos.x, 0.4, -radiusPos.y);
+      radiusMesh.scale.setScalar(handleScale);
       (radiusMesh as any).userData = { selection: radiusSel };
       this.scene!.add(radiusMesh);
       this.handleMeshes.push(radiusMesh);
@@ -259,6 +283,7 @@ export class TablePreview {
       const midSel: GeometrySelection = { kind: 'rail', railIndex };
       const midMesh = new THREE.Mesh(railGeom, sameSelection(midSel, this.selection) ? handleMatRailMoveSelected : handleMatRailMove);
       midMesh.position.set((rail.from.x + rail.to.x) / 2, 0.4, -((rail.from.y + rail.to.y) / 2));
+      midMesh.scale.setScalar(handleScale);
       (midMesh as any).userData = { selection: midSel };
       this.scene!.add(midMesh);
       this.handleMeshes.push(midMesh);
@@ -270,12 +295,14 @@ export class TablePreview {
 
       const fromMesh = new THREE.Mesh(railGeom, sameSelection(fromSel, this.selection) ? handleMatRailSelected : handleMatRail);
       fromMesh.position.set(rail.from.x, 0.4, -rail.from.y);
+      fromMesh.scale.setScalar(handleScale);
       (fromMesh as any).userData = { selection: fromSel };
       this.scene!.add(fromMesh);
       this.handleMeshes.push(fromMesh);
 
       const toMesh = new THREE.Mesh(railGeom, sameSelection(toSel, this.selection) ? handleMatRailSelected : handleMatRail);
       toMesh.position.set(rail.to.x, 0.4, -rail.to.y);
+      toMesh.scale.setScalar(handleScale);
       (toMesh as any).userData = { selection: toSel };
       this.scene!.add(toMesh);
       this.handleMeshes.push(toMesh);
@@ -286,6 +313,7 @@ export class TablePreview {
         const sel: GeometrySelection = { kind: 'rail-outline', railIndex, pointIndex };
         const mesh = new THREE.Mesh(railGeom, sameSelection(sel, this.selection) ? handleMatRailSelected : handleMatRail);
         mesh.position.set(pt.x, 0.4, -pt.y);
+        mesh.scale.setScalar(handleScale);
         (mesh as any).userData = { selection: sel };
         this.scene!.add(mesh);
         this.handleMeshes.push(mesh);
@@ -293,7 +321,18 @@ export class TablePreview {
     });
   }
 
-  private pickHandle(clientX: number, clientY: number, getMouseNDC: (x: number, y: number) => { x: number; y: number }) {
+  private pickHandle(
+    clientX: number,
+    clientY: number,
+    getMouseNDC: (x: number, y: number) => { x: number; y: number }
+  ): {
+    selection: GeometrySelection;
+    last: { x: number; y: number };
+    start: { x: number; y: number };
+    axisLock: 'x' | 'y' | null;
+    railStartMid?: { x: number; y: number };
+    railLastApplied?: { dx: number; dy: number };
+  } | null {
     if (!this.camera) return null;
     const ndc = getMouseNDC(clientX, clientY);
     this.raycaster.setFromCamera(ndc, this.camera);
@@ -316,8 +355,8 @@ export class TablePreview {
       .map((i) => ({ obj: i.object, sel: ((i.object as any).userData || {}).selection as GeometrySelection | undefined }))
       .sort((a, b) => selectionPriority(a.sel) - selectionPriority(b.sel))[0];
 
-    const hit = best.obj;
-    const data = (hit as any).userData || {};
+    const hitObj = best.obj;
+    const data = (hitObj as any).userData || {};
     const selection = data.selection as GeometrySelection | undefined;
     if (!selection || !this.physicsJson) return null;
 
@@ -342,49 +381,193 @@ export class TablePreview {
 
     const anchor = getSelectionAnchor(selection);
     if (!anchor) return null;
-    return { selection, last: { x: anchor.x, y: anchor.y } };
+    const dragHit: {
+      selection: GeometrySelection;
+      last: { x: number; y: number };
+      start: { x: number; y: number };
+      axisLock: 'x' | 'y' | null;
+      railStartMid?: { x: number; y: number };
+      railLastApplied?: { dx: number; dy: number };
+    } = { selection, last: { x: anchor.x, y: anchor.y }, start: { x: anchor.x, y: anchor.y }, axisLock: null };
+
+    if (selection.kind === 'rail') {
+      dragHit.railStartMid = { x: anchor.x, y: anchor.y };
+      dragHit.railLastApplied = { dx: 0, dy: 0 };
+    }
+
+    return dragHit;
   }
 
-  private applyDragUpdate(newX: number, newY: number): void {
+  private getSnapToleranceWorld(): number {
+    if (!this.camera) return 0;
+    const viewH = Math.abs(this.camera.top - this.camera.bottom);
+    const worldPerPx = viewH / Math.max(1, this.canvas.clientHeight);
+    return worldPerPx * this.assistSettings.snapTolerancePx;
+  }
+
+  private snapAxis(v: number, candidates: number[], tolerance: number): number {
+    let best: { d: number; v: number } | null = null;
+    for (const c of candidates) {
+      const d = Math.abs(v - c);
+      if (d > tolerance) continue;
+      if (!best || d < best.d) best = { d, v: c };
+    }
+    return best ? best.v : v;
+  }
+
+  private getAlignmentCandidates(exclude?: GeometrySelection): { xs: number[]; ys: number[] } {
+    const xs: number[] = [];
+    const ys: number[] = [];
+    if (!this.physicsJson) return { xs, ys };
+
+    const isFiniteNumber = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+    const pushPoint = (p: any) => {
+      if (!p || !isFiniteNumber(p.x) || !isFiniteNumber(p.y)) return;
+      xs.push(p.x);
+      ys.push(p.y);
+    };
+
+    for (let i = 0; i < this.physicsJson.pockets.length; i++) {
+      const p = this.physicsJson.pockets[i];
+      pushPoint(p.center);
+      if (Array.isArray(p.outline)) {
+        for (let j = 0; j < p.outline.length; j++) {
+          if (exclude?.kind === 'pocket-outline' && exclude.pocketIndex === i && exclude.pointIndex === j) continue;
+          pushPoint(p.outline[j]);
+        }
+      }
+    }
+
+    for (let i = 0; i < this.physicsJson.rails.length; i++) {
+      const r = this.physicsJson.rails[i];
+      if (isDerivedPlayAreaRailId(r.id)) continue;
+      if (!(exclude?.kind === 'rail-end' && exclude.railIndex === i && exclude.endpoint === 'from')) pushPoint(r.from);
+      if (!(exclude?.kind === 'rail-end' && exclude.railIndex === i && exclude.endpoint === 'to')) pushPoint(r.to);
+      if (Array.isArray(r.outline)) {
+        for (let j = 0; j < r.outline.length; j++) {
+          if (exclude?.kind === 'rail-outline' && exclude.railIndex === i && exclude.pointIndex === j) continue;
+          pushPoint(r.outline[j]);
+        }
+      }
+    }
+
+    return { xs, ys };
+  }
+
+  private applyAssistToPoint(
+    input: { x: number; y: number },
+    modifiers: { shiftKey: boolean; altKey: boolean },
+    sel: GeometrySelection
+  ): { x: number; y: number } {
+    let x = input.x;
+    let y = input.y;
+
+    if (this.draggingHandle?.start && modifiers.shiftKey) {
+      if (!this.draggingHandle.axisLock) {
+        const dx = x - this.draggingHandle.start.x;
+        const dy = y - this.draggingHandle.start.y;
+        this.draggingHandle.axisLock = Math.abs(dx) >= Math.abs(dy) ? 'y' : 'x';
+      }
+      if (this.draggingHandle.axisLock === 'x') x = this.draggingHandle.start.x;
+      if (this.draggingHandle.axisLock === 'y') y = this.draggingHandle.start.y;
+    } else if (this.draggingHandle) {
+      this.draggingHandle.axisLock = null;
+    }
+
+    if (!this.assistSettings.snapEnabled || modifiers.altKey) return { x, y };
+
+    const tol = this.getSnapToleranceWorld();
+    const halfW = (this.physicsJson?.playArea?.width ?? 100) / 2;
+    const halfH = (this.physicsJson?.playArea?.height ?? 50) / 2;
+
+    if (this.assistSettings.snapToGrid) {
+      const s = this.assistSettings.gridSpacingIn;
+      const gx = Math.round(x / s) * s;
+      const gy = Math.round(y / s) * s;
+      if (Math.abs(gx - x) <= tol) x = gx;
+      if (Math.abs(gy - y) <= tol) y = gy;
+    }
+
+    const candidates = this.assistSettings.snapToAlign ? this.getAlignmentCandidates(sel) : { xs: [], ys: [] };
+
+    if (this.assistSettings.snapToPlayArea) {
+      candidates.xs.push(-halfW, 0, halfW);
+      candidates.ys.push(-halfH, 0, halfH);
+    }
+
+    x = this.snapAxis(x, candidates.xs, tol);
+    y = this.snapAxis(y, candidates.ys, tol);
+
+    return { x, y };
+  }
+
+  private applyDragUpdate(newX: number, newY: number, modifiers: { shiftKey: boolean; altKey: boolean }): void {
     if (!this.physicsJson || !this.draggingHandle) return;
 
     const sel = this.draggingHandle.selection;
 
     if (sel.kind === 'pocket') {
-      this.onEdit?.({ type: 'move-pocket-center', pocketIndex: sel.pocketIndex, x: newX, y: newY });
+      const p = this.applyAssistToPoint({ x: newX, y: newY }, modifiers, sel);
+      this.onEdit?.({ type: 'move-pocket-center', pocketIndex: sel.pocketIndex, x: p.x, y: p.y });
       return;
     }
 
     if (sel.kind === 'pocket-outline') {
-      this.onEdit?.({ type: 'move-pocket-outline', pocketIndex: sel.pocketIndex, pointIndex: sel.pointIndex, x: newX, y: newY });
+      const p = this.applyAssistToPoint({ x: newX, y: newY }, modifiers, sel);
+      this.onEdit?.({ type: 'move-pocket-outline', pocketIndex: sel.pocketIndex, pointIndex: sel.pointIndex, x: p.x, y: p.y });
       return;
     }
 
     if (sel.kind === 'pocket-radius') {
       const pocket = this.physicsJson.pockets[sel.pocketIndex];
       if (!pocket) return;
-      const dx = newX - pocket.center.x;
-      const dy = newY - pocket.center.y;
+      const p = this.applyAssistToPoint({ x: newX, y: newY }, modifiers, sel);
+      const dx = p.x - pocket.center.x;
+      const dy = p.y - pocket.center.y;
       const radius = Math.max(0.25, Math.sqrt(dx * dx + dy * dy));
       this.onEdit?.({ type: 'set-pocket-radius', pocketIndex: sel.pocketIndex, radius, scaleOutline: true });
       return;
     }
 
     if (sel.kind === 'rail-end') {
-      this.onEdit?.({ type: 'move-rail-end', railIndex: sel.railIndex, endpoint: sel.endpoint, x: newX, y: newY });
+      const p = this.applyAssistToPoint({ x: newX, y: newY }, modifiers, sel);
+      this.onEdit?.({ type: 'move-rail-end', railIndex: sel.railIndex, endpoint: sel.endpoint, x: p.x, y: p.y });
       return;
     }
 
     if (sel.kind === 'rail-outline') {
-      this.onEdit?.({ type: 'move-rail-outline', railIndex: sel.railIndex, pointIndex: sel.pointIndex, x: newX, y: newY });
+      const p = this.applyAssistToPoint({ x: newX, y: newY }, modifiers, sel);
+      this.onEdit?.({ type: 'move-rail-outline', railIndex: sel.railIndex, pointIndex: sel.pointIndex, x: p.x, y: p.y });
       return;
     }
 
     if (sel.kind === 'rail') {
-      const dx = newX - this.draggingHandle.last.x;
-      const dy = newY - this.draggingHandle.last.y;
-      this.draggingHandle.last = { x: newX, y: newY };
-      this.onEdit?.({ type: 'move-rail', railIndex: sel.railIndex, dx, dy });
+      const start = this.draggingHandle.start;
+      const railStartMid = this.draggingHandle.railStartMid ?? start;
+      const lastApplied = this.draggingHandle.railLastApplied ?? { dx: 0, dy: 0 };
+
+      let totalDx = newX - start.x;
+      let totalDy = newY - start.y;
+
+      if (modifiers.shiftKey) {
+        if (!this.draggingHandle.axisLock) {
+          this.draggingHandle.axisLock = Math.abs(totalDx) >= Math.abs(totalDy) ? 'y' : 'x';
+        }
+        if (this.draggingHandle.axisLock === 'x') totalDx = 0;
+        if (this.draggingHandle.axisLock === 'y') totalDy = 0;
+      } else {
+        this.draggingHandle.axisLock = null;
+      }
+
+      const mid = this.applyAssistToPoint({ x: railStartMid.x + totalDx, y: railStartMid.y + totalDy }, modifiers, sel);
+      const snappedTotalDx = mid.x - railStartMid.x;
+      const snappedTotalDy = mid.y - railStartMid.y;
+
+      const dx = snappedTotalDx - lastApplied.dx;
+      const dy = snappedTotalDy - lastApplied.dy;
+      this.draggingHandle.railLastApplied = { dx: snappedTotalDx, dy: snappedTotalDy };
+
+      if (dx !== 0 || dy !== 0) this.onEdit?.({ type: 'move-rail', railIndex: sel.railIndex, dx, dy });
     }
   }
 
@@ -424,6 +607,7 @@ export class TablePreview {
       const delta = e.deltaY > 0 ? 0.9 : 1.1;
       this.zoom = Math.max(0.5, Math.min(5, this.zoom * delta));
       this.handleResize();
+      if (this.editingEnabled) this.rebuildHandles();
     });
 
     this.canvas.addEventListener('mousedown', (e) => {
@@ -459,7 +643,7 @@ export class TablePreview {
         if (this.raycaster.ray.intersectPlane(this.dragPlane, this.planeIntersect)) {
           const newX = this.planeIntersect.x;
           const newY = -this.planeIntersect.z; // flip back to JSON Y
-          this.applyDragUpdate(newX, newY);
+          this.applyDragUpdate(newX, newY, { shiftKey: e.shiftKey, altKey: e.altKey });
         }
         return;
       }
@@ -500,11 +684,17 @@ export class TablePreview {
     this.pocketMeshes.forEach(m => this.scene!.remove(m));
     this.railOutlineMeshes.forEach(m => this.scene!.remove(m));
     if (this.playAreaOutlineMesh) this.scene.remove(this.playAreaOutlineMesh);
+    this.measurementMeshes.forEach((m) => this.scene!.remove(m));
     this.handleMeshes.forEach(m => this.scene!.remove(m));
+    if (this.gridMinorMesh) this.scene.remove(this.gridMinorMesh);
+    if (this.gridMajorMesh) this.scene.remove(this.gridMajorMesh);
     this.pocketMeshes = [];
     this.railOutlineMeshes = [];
     this.playAreaOutlineMesh = null;
+    this.measurementMeshes = [];
     this.handleMeshes = [];
+    this.gridMinorMesh = null;
+    this.gridMajorMesh = null;
 
     // Use JSON geometry if available
     const playWidth = this.physicsJson?.playArea?.width ?? 100;
@@ -548,6 +738,9 @@ export class TablePreview {
     if (this.physicsJson?.rails) {
       this.buildRailOutlinesFromJson();
     }
+
+    // Configurable grid overlay (assist feature)
+    this.updateGrid();
 
     // Derived play area outline (toggle via Measurements)
     if (this.showMeasurements) {
@@ -677,6 +870,115 @@ export class TablePreview {
     const mat = new THREE.LineBasicMaterial({ color: 0x45475a });
     this.playAreaOutlineMesh = new THREE.Line(geom, mat);
     this.scene.add(this.playAreaOutlineMesh);
+
+    const makeLabelSprite = (text: string) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+
+      const fontSize = 28;
+      const pad = 10;
+      ctx.font = `${fontSize}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial`;
+      const metrics = ctx.measureText(text);
+
+      canvas.width = Math.ceil(metrics.width + pad * 2);
+      canvas.height = fontSize + pad * 2;
+
+      const ctx2 = canvas.getContext('2d');
+      if (!ctx2) return null;
+      ctx2.font = ctx.font;
+      ctx2.fillStyle = 'rgba(17, 17, 27, 0.7)';
+      ctx2.fillRect(0, 0, canvas.width, canvas.height);
+      ctx2.fillStyle = 'rgba(205, 214, 244, 0.95)';
+      ctx2.textBaseline = 'middle';
+      ctx2.fillText(text, pad, canvas.height / 2);
+
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false });
+      const sprite = new THREE.Sprite(mat);
+
+      const worldH = 2.2;
+      const worldW = worldH * (canvas.width / canvas.height);
+      sprite.scale.set(worldW, worldH, 1);
+      return sprite;
+    };
+
+    const wLabel = makeLabelSprite(`W ${playWidth.toFixed(2)} in`);
+    if (wLabel) {
+      wLabel.position.set(0, 0.35, -(halfH + 2.2));
+      this.scene.add(wLabel);
+      this.measurementMeshes.push(wLabel);
+    }
+
+    const hLabel = makeLabelSprite(`H ${playHeight.toFixed(2)} in`);
+    if (hLabel) {
+      hLabel.position.set(halfW + 3.5, 0.35, 0);
+      this.scene.add(hLabel);
+      this.measurementMeshes.push(hLabel);
+    }
+  }
+
+  private updateGrid(): void {
+    if (!this.scene || !this.physicsJson) return;
+
+    if (!this.assistSettings.gridEnabled) {
+      if (this.gridMinorMesh) this.scene.remove(this.gridMinorMesh);
+      if (this.gridMajorMesh) this.scene.remove(this.gridMajorMesh);
+      this.gridMinorMesh = null;
+      this.gridMajorMesh = null;
+      return;
+    }
+
+    const playWidth = this.physicsJson?.playArea?.width ?? 100;
+    const playHeight = this.physicsJson?.playArea?.height ?? 50;
+    const halfW = playWidth / 2;
+    const halfH = playHeight / 2;
+
+    const spacing = this.assistSettings.gridSpacingIn;
+    const majorEvery = Math.max(1, Math.round(this.assistSettings.gridMajorEvery));
+
+    const minor: number[] = [];
+    const major: number[] = [];
+
+    const pushLine = (arr: number[], ax: number, ay: number, bx: number, by: number) => {
+      arr.push(ax, 0.16, -ay, bx, 0.16, -by);
+    };
+
+    const minX = -halfW;
+    const maxX = halfW;
+    const minY = -halfH;
+    const maxY = halfH;
+
+    const stepsX = Math.floor((maxX - minX) / spacing);
+    const stepsY = Math.floor((maxY - minY) / spacing);
+
+    for (let i = 0; i <= stepsX; i++) {
+      const x = minX + i * spacing;
+      const isMajor = i % majorEvery === 0;
+      pushLine(isMajor ? major : minor, x, minY, x, maxY);
+    }
+
+    for (let i = 0; i <= stepsY; i++) {
+      const y = minY + i * spacing;
+      const isMajor = i % majorEvery === 0;
+      pushLine(isMajor ? major : minor, minX, y, maxX, y);
+    }
+
+    const build = (positions: number[], color: number, opacity: number) => {
+      const geom = new THREE.BufferGeometry();
+      geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity, depthTest: false, depthWrite: false });
+      return new THREE.LineSegments(geom, mat);
+    };
+
+    if (this.gridMinorMesh) this.scene.remove(this.gridMinorMesh);
+    if (this.gridMajorMesh) this.scene.remove(this.gridMajorMesh);
+
+    this.gridMinorMesh = build(minor, 0x313244, 0.28);
+    this.gridMajorMesh = build(major, 0x45475a, 0.48);
+    this.scene.add(this.gridMinorMesh);
+    this.scene.add(this.gridMajorMesh);
   }
 
   private buildBalls(): void {
@@ -825,11 +1127,13 @@ export class TablePreview {
   zoomIn(): void {
     this.zoom = Math.min(5, this.zoom * 1.2);
     this.handleResize();
+    if (this.editingEnabled) this.rebuildHandles();
   }
 
   zoomOut(): void {
     this.zoom = Math.max(0.5, this.zoom / 1.2);
     this.handleResize();
+    if (this.editingEnabled) this.rebuildHandles();
   }
 
   resetView(): void {
@@ -837,6 +1141,7 @@ export class TablePreview {
     this.panX = 0;
     this.panY = 0;
     this.handleResize();
+    if (this.editingEnabled) this.rebuildHandles();
   }
 
   setEditingEnabled(enabled: boolean): void {
