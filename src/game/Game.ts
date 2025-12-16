@@ -161,6 +161,7 @@ export class Game {
   canShoot: boolean = true;
   cueBall: Ball | null = null;
   aimAssist: boolean = true;
+  renderedAimAngle: number = 0; // Smoothed aim angle for rendering
   currentPower: number = 0;
   isDraggingPower: boolean = false;
   isAimMode: boolean = true; // true = aim, false = power
@@ -2133,7 +2134,16 @@ export class Game {
         this.latestAimAngle = baseAngle;
         this.currentAimAngle = baseAngle;
       }
-      const angle = this.applyMicroAimOffset(baseAngle);
+      const targetAngle = this.applyMicroAimOffset(baseAngle);
+
+      // Smooth the rendered angle to reduce flicker during fast movement
+      if (!Number.isFinite(this.renderedAimAngle)) {
+        this.renderedAimAngle = targetAngle;
+      }
+      const lerp = CONFIG.AIM_LINE_LERP ?? 0.2;
+      const angleDiff = Math.atan2(Math.sin(targetAngle - this.renderedAimAngle), Math.cos(targetAngle - this.renderedAimAngle));
+      this.renderedAimAngle += angleDiff * lerp;
+      const angle = this.renderedAimAngle;
 
       // Predict first contact (always run to clip aim line at rails/balls)
       const direction = {
@@ -2176,10 +2186,9 @@ export class Game {
         }
       }
 
-      // Use physics simulation for aim assist, fall back to ray-cast for cue line clipping
+      // Use physics simulation for aim assist when enabled (short preview), fall back to ray-cast
       let shotPaths = null;
-      if (this.aimAssist && this.debug.isEnabled()) {
-        // Debug mode: always run physics simulation
+      if (this.aimAssist && (this.debug.isEnabled() || CONFIG.AIM_ASSIST_PHYSICS_PREVIEW)) {
         shotPaths = this.predictor.simulateShotPaths(
           this.world,
           this.cueBall,
@@ -2190,9 +2199,17 @@ export class Game {
 
       // Draw trajectory lines if aim assist is enabled
       if (this.aimAssist) {
-        if (this.debug.isEnabled() && shotPaths) {
-          // Debug mode: use full physics simulation with colored styling
-          this.renderer.drawPhysicsTrajectoryLines(shotPaths, { x: this.cueBall.x, y: this.cueBall.y }, true);
+        if (shotPaths && (this.debug.isEnabled() || CONFIG.AIM_ASSIST_PHYSICS_PREVIEW)) {
+          // Physics-based preview (short) with same styling as math version
+          // Use simple math styling for consistency; skip if no first contact
+          if (shotPaths.firstContact) {
+            this.renderer.drawSimpleMathTrajectoryLines(
+              shotPaths.firstContact,
+              { x: this.cueBall.x, y: this.cueBall.y },
+              useCachedPrediction && this.cachedDirection ? this.cachedDirection : direction,
+              this.predictor
+            );
+          }
         } else if (prediction) {
           // Normal mode: use simple straight-line math with white/black glow
           // Use cached direction in power mode

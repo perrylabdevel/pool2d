@@ -265,7 +265,7 @@ export class SettingsScene implements UIScene {
                     label: 'Ball Scale',
                     value: renderSettings.ballScale ?? 1,
                     min: 0.8,
-                    max: 1.2,
+                    max: 1.30,
                     step: 0.01,
                     rect: { x: startX, y: y += controlHeight + gap, width: controlWidth, height: controlHeight },
                     formatValue: (v) => `${v.toFixed(2)}x`

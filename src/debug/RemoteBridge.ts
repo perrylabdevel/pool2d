@@ -12,8 +12,11 @@ export class RemoteBridge {
     constructor(settingsManager: SettingsManager, renderer: Renderer3D) {
         this.settingsManager = settingsManager;
         this.renderer = renderer;
+        this.loadPendingSkinFromStorage();
         this.connect();
         this.setupListeners();
+        // Note: TableRenderer now loads pending skin directly from localStorage on init,
+        // so we don't need to apply it here anymore
     }
 
     private connect() {
@@ -72,13 +75,10 @@ export class RemoteBridge {
     }
 
     private setupListeners() {
-        // Listen for game restart to apply pending skin
+        // Listen for game restart - TableRenderer now loads pending skin directly from localStorage,
+        // so we just need to clear tracking to allow future pushes
         window.addEventListener('game:restarted', () => {
-            if (this.pendingSkin) {
-                // Longer delay to ensure default skin texture has finished loading
-                // before we override it with the pushed skin
-                setTimeout(() => this.applyPendingSkin(), 500);
-            }
+            this.lastAppliedSkinName = null;
         });
 
         // Listen for local changes and broadcast them
@@ -219,6 +219,25 @@ export class RemoteBridge {
     }
 
     private pendingSkin: { name: string; image: string } | null = null;
+    private lastAppliedSkinName: string | null = null;
+    private applySkinTimer: number | null = null;
+    private static readonly PENDING_SKIN_STORAGE_KEY = 'table-editor-pending-skin';
+
+    private loadPendingSkinFromStorage() {
+        try {
+            const raw = localStorage.getItem(RemoteBridge.PENDING_SKIN_STORAGE_KEY);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed?.image) {
+                    this.pendingSkin = parsed;
+                } else {
+                    localStorage.removeItem(RemoteBridge.PENDING_SKIN_STORAGE_KEY);
+                }
+            }
+        } catch (e) {
+            console.warn('[RemoteBridge] Failed to load pending skin from storage', e);
+        }
+    }
 
     private handleTableEditorPush(config: any) {
         console.log('[RemoteBridge] handleTableEditorPush called with:', {
@@ -236,9 +255,17 @@ export class RemoteBridge {
                 name: config.skin.name,
                 image: config.skin.image,
             };
+            // Clear last applied so the new skin can be applied even if same name
+            this.lastAppliedSkinName = null;
+            try {
+                localStorage.setItem(RemoteBridge.PENDING_SKIN_STORAGE_KEY, JSON.stringify(this.pendingSkin));
+            } catch (e) {
+                console.warn('[RemoteBridge] Failed to persist pending skin', e);
+            }
         }
 
         const mode = config.mode === 'persist' ? 'persist' : 'live';
+        const hasGeometryChange = Object.prototype.hasOwnProperty.call(config, 'physicsJson') || !!config.offsets;
 
         // Apply full physics.json override from table editor (null clears override)
         if (Object.prototype.hasOwnProperty.call(config, 'physicsJson')) {
@@ -248,6 +275,10 @@ export class RemoteBridge {
                 console.log('[RemoteBridge] Applied physics.json override from table editor, triggering rebuild');
             } catch (err) {
                 console.error('[RemoteBridge] Failed to apply physics.json override:', err);
+            }
+            // If no restart happens (e.g., live push), still apply skin immediately
+            if (this.pendingSkin && (mode === 'live' || !config.physicsJson)) {
+                setTimeout(() => this.applyPendingSkin(), 50);
             }
             return;
         }
@@ -277,81 +308,49 @@ export class RemoteBridge {
             // Trigger geometry rebuild - this will cause restart
             window.dispatchEvent(new CustomEvent('settings:geometry-apply'));
             console.log('[RemoteBridge] Applied table editor X/Y offsets, triggering rebuild');
-        } else if (this.pendingSkin) {
-            // No geometry changes, just apply skin directly
-            this.applyPendingSkin();
         }
+
+        // If we have a skin and no geometry changes (or live mode), apply immediately.
+        // Also apply in persist mode to update current session, while still keeping pending for restart.
+        if (this.pendingSkin && (!hasGeometryChange || mode === 'live')) {
+            // Apply right away to avoid showing the old skin
+            this.applyPendingSkinDebounced(0);
+            // Quick retry to ensure texture swap after load
+            this.applyPendingSkinDebounced(100);
+        }
+
+        // Failsafe: if a pending skin exists, attempt to apply again shortly after any push.
+        if (this.pendingSkin) {
+            this.applyPendingSkinDebounced(500);
+        }
+    }
+
+    /**
+     * Apply the pending skin to the table renderer and clear storage.
+     */
+    private applyPendingSkinDebounced(delayMs: number) {
+        if (delayMs <= 0) {
+            this.applyPendingSkin();
+            return;
+        }
+        window.setTimeout(() => this.applyPendingSkin(), delayMs);
     }
 
     private applyPendingSkin() {
         if (!this.pendingSkin) return;
-        
+        // Skip if we already applied this exact skin (by name) to prevent layering
+        if (this.lastAppliedSkinName === this.pendingSkin.name) {
+            console.log('[RemoteBridge] Skin already applied, skipping:', this.pendingSkin.name);
+            return;
+        }
+
         console.log('[RemoteBridge] Applying pending skin:', this.pendingSkin.name);
         console.log('[RemoteBridge] Skin image data length:', this.pendingSkin.image?.length || 0);
-        
+
+        this.lastAppliedSkinName = this.pendingSkin.name;
+
         window.dispatchEvent(new CustomEvent('table-editor:apply-skin', {
             detail: this.pendingSkin
         }));
-        this.pendingSkin = null;
-    }
-
-    private handleCommand(command: string, payload?: any) {
-        this.isProcessingRemoteCommand = true;
-        try {
-            switch (command) {
-                case 'resetGeometry':
-                    this.settingsManager.resetGeometrySettings();
-                    // Trigger table rebuild for remote geometry reset
-                    window.dispatchEvent(new CustomEvent('settings:geometry-apply'));
-                    break;
-                case 'resetRender':
-                    this.settingsManager.resetRenderSettings();
-                    break;
-                case 'resetAudio':
-                    this.settingsManager.resetAudioSettings();
-                    break;
-                case 'resetUIColors':
-                    this.settingsManager.resetUIColors();
-                    break;
-                case 'resetTableAppearance':
-                    this.settingsManager.resetTableAppearance();
-                    break;
-                case 'resetPhysics':
-                    this.settingsManager.resetPhysicsSettings();
-                    break;
-                case 'regenerateTextures':
-                    if (this.renderer && this.renderer.tableRenderer) {
-                        this.renderer.tableRenderer.regenerateTextures();
-                    }
-                    break;
-                // Playback commands - dispatch to local game
-                case 'playback:play':
-                    window.dispatchEvent(new CustomEvent('playback:play'));
-                    break;
-                case 'playback:pause':
-                    window.dispatchEvent(new CustomEvent('playback:pause'));
-                    break;
-                case 'playback:toggle':
-                    window.dispatchEvent(new CustomEvent('playback:toggle'));
-                    break;
-                case 'playback:seek':
-                    window.dispatchEvent(new CustomEvent('playback:seek', { detail: payload }));
-                    break;
-                case 'playback:nextShot':
-                    window.dispatchEvent(new CustomEvent('playback:nextShot'));
-                    break;
-                case 'playback:prevShot':
-                    window.dispatchEvent(new CustomEvent('playback:prevShot'));
-                    break;
-                case 'playback:speed':
-                    window.dispatchEvent(new CustomEvent('playback:speed', { detail: payload }));
-                    break;
-                case 'playback:load':
-                    window.dispatchEvent(new CustomEvent('playback:load', { detail: payload }));
-                    break;
-            }
-        } finally {
-            this.isProcessingRemoteCommand = false;
-        }
     }
 }

@@ -61,6 +61,7 @@ export class TableRenderer {
     private frameMaterial: THREE.MeshStandardMaterial | null = null;
     private feltTexture: THREE.Texture | null = null;
     private frameTexture: THREE.CanvasTexture | null = null;
+    private skinLoadToken: number = 0;
 
     // Texture Manager (new unified system)
     private textureManager: TableTextureManager;
@@ -150,8 +151,26 @@ export class TableRenderer {
         const loader = new THREE.TextureLoader();
         const geom = getTableGeometry();
         const PPI = geom.pixelsPerInch || 7.68;
+        const material = this.skinMesh.material as THREE.MeshBasicMaterial;
+        const previousOpacity = material.opacity;
+        const loadToken = ++this.skinLoadToken;
+
+        // Hide old skin immediately to prevent a visible flash while new texture loads
+        if (material.map) {
+            material.map.dispose();
+        }
+        material.map = null;
+        material.opacity = 0;
+        material.transparent = true;
+        this.skinMesh.visible = false;
 
         loader.load(base64Image, (texture) => {
+            // Ignore stale loads if a newer one started
+            if (loadToken !== this.skinLoadToken) {
+                texture.dispose();
+                return;
+            }
+
             texture.colorSpace = THREE.SRGBColorSpace;
 
             const image = texture.image;
@@ -164,12 +183,11 @@ export class TableRenderer {
 
                 if (this.skinMesh) {
                     // Update material texture
-                    const material = this.skinMesh.material as THREE.MeshBasicMaterial;
-                    if (material.map) {
-                        material.map.dispose();
-                    }
                     material.map = texture;
+                    material.opacity = previousOpacity > 0 ? previousOpacity : 1.0;
+                    material.transparent = material.opacity < 1.0;
                     material.needsUpdate = true;
+                    this.skinMesh.visible = true;
 
                     // Update scale
                     this.skinMesh.scale.set(physicalWidth, physicalHeight, 1);
@@ -266,8 +284,28 @@ export class TableRenderer {
         // Start with a 1x1 plane that we will scale dynamically
         const geometry = new THREE.PlaneGeometry(1, 1);
 
+        // Check if there's a pending skin from table editor - load it directly instead of default
+        let pendingSkinImage: string | null = null;
+        try {
+            const raw = localStorage.getItem('table-editor-pending-skin');
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed?.image) {
+                    pendingSkinImage = parsed.image;
+                }
+            }
+        } catch {
+            // ignore
+        }
+
         const loader = new THREE.TextureLoader();
-        const texture = loader.load(skinUrl, (tex) => {
+        const skinToLoad = pendingSkinImage || skinUrl;
+
+        if (pendingSkinImage) {
+            console.log('[TableRenderer] Loading pending skin directly');
+        }
+
+        const texture = loader.load(skinToLoad, (tex) => {
             const image = tex.image;
             if (image && image.width && image.height) {
                 // Calculate physical dimensions from pixels

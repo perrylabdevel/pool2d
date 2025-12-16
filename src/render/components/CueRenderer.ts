@@ -203,19 +203,59 @@ export class CueRenderer {
             aimEndY = clipped.y;
         }
 
+        // Pull back slightly from the contact point to avoid overlap/flicker
+        const aimStartDistance = ball.radius + CONFIG.AIM_LINE_OFFSET;
+        let aimStartX = ball.x + Math.cos(angle) * aimStartDistance;
+        let aimStartY = ball.y + Math.sin(angle) * aimStartDistance;
+
+        const aimDirX = aimEndX - aimStartX;
+        const aimDirY = aimEndY - aimStartY;
+        const aimLen = Math.hypot(aimDirX, aimDirY);
+        if (aimLen > 1e-4) {
+            const backoff = Math.min(CONFIG.AIM_LINE_BACKOFF ?? 0, Math.max(0, aimLen - 0.01));
+            if (backoff > 0) {
+                const normX = aimDirX / aimLen;
+                const normY = aimDirY / aimLen;
+                aimEndX -= normX * backoff;
+                aimEndY -= normY * backoff;
+            }
+            // Recompute start to ensure consistency when aimLineOffset changes mid-frame
+            aimStartX = ball.x + Math.cos(angle) * aimStartDistance;
+            aimStartY = ball.y + Math.sin(angle) * aimStartDistance;
+        }
+
         const aimEnd = this.worldToScreen(aimEndX, aimEndY);
 
         // Start aim line at configured distance from the edge of the cue ball
-        const offsetDistance = ball.radius + CONFIG.AIM_LINE_OFFSET;
-        const aimStartX = ball.x + Math.cos(angle) * offsetDistance;
-        const aimStartY = ball.y + Math.sin(angle) * offsetDistance;
         const aimStart = this.worldToScreen(aimStartX, aimStartY);
+
+        const zoomScale = Math.max(0.75, Math.min(1.5, this.getScale() / 8));
+        const glowWidth = 7 * zoomScale;
+        const aimLineWidth = 3 * zoomScale;
+        const dashedWidth = 1.2 * zoomScale;
+
+        const drawDot = (at: { x: number; y: number }) => {
+            const outerRadius = aimLineWidth * 1.6;
+            const innerRadius = aimLineWidth * 0.9;
+
+            // Outer glow
+            this.uiCtx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+            this.uiCtx.beginPath();
+            this.uiCtx.arc(at.x, at.y, outerRadius, 0, Math.PI * 2);
+            this.uiCtx.fill();
+
+            // Inner core
+            this.uiCtx.fillStyle = 'rgba(255, 255, 255, 0.96)';
+            this.uiCtx.beginPath();
+            this.uiCtx.arc(at.x, at.y, innerRadius, 0, Math.PI * 2);
+            this.uiCtx.fill();
+        };
 
         if (showGhost) {
             // Aim assist enabled: solid white with black glow
             // Draw black glow (outer)
-            this.uiCtx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
-            this.uiCtx.lineWidth = 7;
+            this.uiCtx.strokeStyle = `rgba(0, 0, 0, ${CONFIG.GHOST_BALL_GLOW ?? 0.75})`;
+            this.uiCtx.lineWidth = glowWidth;
             this.uiCtx.lineCap = 'round';
             this.uiCtx.beginPath();
             this.uiCtx.moveTo(aimStart.x, aimStart.y);
@@ -224,16 +264,18 @@ export class CueRenderer {
 
             // Draw solid white line (inner)
             this.uiCtx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
-            this.uiCtx.lineWidth = 3;
+            this.uiCtx.lineWidth = aimLineWidth;
             this.uiCtx.lineCap = 'round';
             this.uiCtx.beginPath();
             this.uiCtx.moveTo(aimStart.x, aimStart.y);
             this.uiCtx.lineTo(aimEnd.x, aimEnd.y);
             this.uiCtx.stroke();
+
+            drawDot(aimEnd);
         } else {
             // No aim assist: simple dashed line
             this.uiCtx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-            this.uiCtx.lineWidth = 1;
+            this.uiCtx.lineWidth = dashedWidth;
             this.uiCtx.setLineDash([5, 5]);
             this.uiCtx.beginPath();
             this.uiCtx.moveTo(aimStart.x, aimStart.y);
@@ -256,8 +298,8 @@ export class CueRenderer {
 
             // Draw ghost ball with black glow + white outline (matching path styling)
             // Draw black glow (outer)
-            this.uiCtx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
-            this.uiCtx.lineWidth = 4;
+            this.uiCtx.strokeStyle = `rgba(0, 0, 0, ${CONFIG.GHOST_BALL_GLOW ?? 0.8})`;
+            this.uiCtx.lineWidth = 4 * zoomScale;
             this.uiCtx.lineCap = 'round';
             const ghostRadius = Math.abs(ball.radius * scale);
             if (ghostRadius > 0) {

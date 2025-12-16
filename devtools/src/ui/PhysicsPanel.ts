@@ -87,7 +87,7 @@ export class PhysicsPanel {
       <div class="panel-content">
         <div class="settings-group">
           <h4 class="settings-group-title">🖥 Display</h4>
-          ${this.sliderRow('BALL_SCALE', 'Ball Scale', 0.8, 1.2, 0.01, this.renderConfig.ballScale ?? 1)}
+          ${this.sliderRow('BALL_SCALE', 'Ball Scale', 0.8, 1.30, 0.01, this.renderConfig.ballScale ?? 1)}
           ${this.sliderRow('CANVAS_SCALE_MULTIPLIER', 'Table Scale', 0.6, 1.6, 0.05, this.renderConfig.canvasScale ?? 1)}
         </div>
         <div class="settings-group">

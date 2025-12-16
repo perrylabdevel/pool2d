@@ -158,7 +158,7 @@ export class SettingsPanel {
         </div>
         <div class="settings-group">
           <h4 class="settings-group-title">🖥 Display</h4>
-          ${this.sliderRow('BALL_SCALE', 'Ball Scale', 0.8, 1.2, 0.01, CONFIG.BALL_SCALE ?? 1)}
+          ${this.sliderRow('BALL_SCALE', 'Ball Scale', 0.8, 1.30, 0.01, CONFIG.BALL_SCALE ?? 1)}
           ${this.sliderRow('CANVAS_SCALE_MULTIPLIER', 'Table Scale', 0.6, 1.6, 0.05, CONFIG.CANVAS_SCALE_MULTIPLIER)}
         </div>
         <div class="panel-actions">

@@ -211,6 +211,18 @@ export class TableEditorApp {
     this.activeTable = table;
     this.tableLibrary.setActiveTableId(id);
 
+    // Restore linked skin for this table if available; otherwise keep current selection
+    if (table.linkedSkinId) {
+      const linked = this.skinStore.get(table.linkedSkinId);
+      if (linked) {
+        this.activeSkinId = linked.id;
+        this.skinStore.setActiveSkinId(linked.id);
+        if (linked.images.full) {
+          await this.preview?.loadSkinFromBase64(linked.images.full);
+        }
+      }
+    }
+
     this.undoStack = [];
     this.redoStack = [];
     this.setDirty(false);
@@ -1285,6 +1297,10 @@ ${JSON.stringify(json, null, 2)}
     if (!skin) return;
     this.activeSkinId = id;
     this.skinStore.setActiveSkinId(id);
+    if (this.activeTable) {
+      this.activeTable.linkedSkinId = id;
+      void this.tableLibrary.save(this.activeTable);
+    }
     this.renderSkinGrid();
     if (skin.images.full) await this.preview?.loadSkinFromBase64(skin.images.full);
   }

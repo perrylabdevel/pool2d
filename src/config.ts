@@ -69,8 +69,13 @@ export const CONFIG = {
 
   // Aim assist visual settings
   AIM_LINE_OFFSET: 0.2, // Distance from cue ball edge to aim line start
+  AIM_LINE_BACKOFF: 0.06, // Pull end of aim line slightly off the contact point to avoid overlap/flicker
+  AIM_LINE_LERP: 0.22, // How quickly the rendered aim angle eases toward input (0..1)
   GHOST_BALL_OFFSET: 0.0, // Offset of ghost ball from contact point (negative = toward cue)
+  GHOST_BALL_GLOW: 0.75, // Outer glow alpha for ghost ball
+  AIM_LINE_ARROW_SIZE: 9, // Base arrowhead size in px (scales with zoom)
   OBJECT_PATH_PERCENTAGE: 1.0, // Multiplier for object ball path length (0.5 = 50% length)
+  AIM_ASSIST_PHYSICS_PREVIEW: true, // Run a short physics sim for aim assist even outside debug
   SHOW_AIM_INFO: true, // Display aim angle, distance, speed, and cut angle overlay
   AIM_INFO_SCALE: 1.0, // Scale multiplier for aim info indicators (0.5 = 50% size, 2.0 = 200% size)
   SIDEBAR_DIAL_SIDE: 'right' as 'right' | 'left', // Which side the micro dial lives on (power bar goes opposite)
