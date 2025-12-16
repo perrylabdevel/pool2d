@@ -126,6 +126,8 @@ export class PhysicsPanel {
           ${this.sliderRow('POCKET_ANIMATION_SHRINK_FACTOR', 'Ball Shrink Factor', 0.0, 0.6, 0.01, config.POCKET_ANIMATION_SHRINK_FACTOR ?? 0.2)}
           ${this.sliderRow('POCKET_ANIMATION_UNDERFELT_PX', 'Under-Felt Roll Distance (px)', 0, 50, 1, config.POCKET_ANIMATION_UNDERFELT_PX ?? 10)}
           ${this.sliderRow('POCKET_ANIMATION_FADE_START', 'Fade Start (0-1)', 0.7, 1.0, 0.01, config.POCKET_ANIMATION_FADE_START ?? 0.9)}
+          ${this.sliderRow('POCKET_ANIMATION_FADE_DURATION', 'Fade Duration (0-1)', 0.0, 0.5, 0.01, (config as any).POCKET_ANIMATION_FADE_DURATION ?? 0.12)}
+          ${this.sliderRow('POCKET_ANIMATION_CLIP_START', 'Clip Start (0-1)', 0.0, 1.0, 0.01, (config as any).POCKET_ANIMATION_CLIP_START ?? 0.45)}
           ${this.sliderRow('POCKET_ANIMATION_CLIP_RADIUS_SCALE', 'Clip Radius Scale', 1.0, 3.0, 0.1, config.POCKET_ANIMATION_CLIP_RADIUS_SCALE ?? 1.4)}
         </div>
         <div class="panel-actions">
@@ -174,6 +176,8 @@ export class PhysicsPanel {
       { sliderId: 'POCKET_ANIMATION_SHRINK_FACTOR', labelId: 'POCKET_ANIMATION_SHRINK_FACTOR-value', onChange: (v) => this.updatePhysicsSetting('POCKET_ANIMATION_SHRINK_FACTOR', v!) },
       { sliderId: 'POCKET_ANIMATION_UNDERFELT_PX', labelId: 'POCKET_ANIMATION_UNDERFELT_PX-value', onChange: (v) => this.updatePhysicsSetting('POCKET_ANIMATION_UNDERFELT_PX', v!), formatDigits: 0 },
       { sliderId: 'POCKET_ANIMATION_FADE_START', labelId: 'POCKET_ANIMATION_FADE_START-value', onChange: (v) => this.updatePhysicsSetting('POCKET_ANIMATION_FADE_START', v!) },
+      { sliderId: 'POCKET_ANIMATION_FADE_DURATION', labelId: 'POCKET_ANIMATION_FADE_DURATION-value', onChange: (v) => this.updatePhysicsSetting('POCKET_ANIMATION_FADE_DURATION', v!) },
+      { sliderId: 'POCKET_ANIMATION_CLIP_START', labelId: 'POCKET_ANIMATION_CLIP_START-value', onChange: (v) => this.updatePhysicsSetting('POCKET_ANIMATION_CLIP_START', v!) },
       { sliderId: 'POCKET_ANIMATION_CLIP_RADIUS_SCALE', labelId: 'POCKET_ANIMATION_CLIP_RADIUS_SCALE-value', onChange: (v) => this.updatePhysicsSetting('POCKET_ANIMATION_CLIP_RADIUS_SCALE', v!) },
     ];
 
@@ -225,6 +229,8 @@ export class PhysicsPanel {
     setValue('POCKET_ANIMATION_SHRINK_FACTOR', config.POCKET_ANIMATION_SHRINK_FACTOR);
     setValue('POCKET_ANIMATION_UNDERFELT_PX', config.POCKET_ANIMATION_UNDERFELT_PX);
     setValue('POCKET_ANIMATION_FADE_START', config.POCKET_ANIMATION_FADE_START);
+    setValue('POCKET_ANIMATION_FADE_DURATION', (config as any).POCKET_ANIMATION_FADE_DURATION ?? 0.12);
+    setValue('POCKET_ANIMATION_CLIP_START', (config as any).POCKET_ANIMATION_CLIP_START ?? 0.45);
     setValue('POCKET_ANIMATION_CLIP_RADIUS_SCALE', config.POCKET_ANIMATION_CLIP_RADIUS_SCALE);
   }
 

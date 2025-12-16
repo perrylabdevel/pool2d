@@ -148,6 +148,22 @@ export class SettingsPanel {
             CONFIG.POCKET_ANIMATION_FADE_START ?? 0.9
           )}
           ${this.sliderRow(
+            'POCKET_ANIMATION_FADE_DURATION',
+            'Fade Duration (0-1)',
+            0.0,
+            0.5,
+            0.01,
+            (CONFIG as any).POCKET_ANIMATION_FADE_DURATION ?? 0.12
+          )}
+          ${this.sliderRow(
+            'POCKET_ANIMATION_CLIP_START',
+            'Clip Start (0-1)',
+            0.0,
+            1.0,
+            0.01,
+            (CONFIG as any).POCKET_ANIMATION_CLIP_START ?? 0.45
+          )}
+          ${this.sliderRow(
             'POCKET_ANIMATION_CLIP_RADIUS_SCALE',
             'Clip Radius Scale',
             1.0,
@@ -209,6 +225,8 @@ export class SettingsPanel {
       { sliderId: 'POCKET_ANIMATION_SHRINK_FACTOR', labelId: 'POCKET_ANIMATION_SHRINK_FACTOR-value', onChange: (v) => this.updatePhysicsSetting('POCKET_ANIMATION_SHRINK_FACTOR', v!) },
       { sliderId: 'POCKET_ANIMATION_UNDERFELT_PX', labelId: 'POCKET_ANIMATION_UNDERFELT_PX-value', onChange: (v) => this.updatePhysicsSetting('POCKET_ANIMATION_UNDERFELT_PX', v!), formatDigits: 0 },
       { sliderId: 'POCKET_ANIMATION_FADE_START', labelId: 'POCKET_ANIMATION_FADE_START-value', onChange: (v) => this.updatePhysicsSetting('POCKET_ANIMATION_FADE_START', v!) },
+      { sliderId: 'POCKET_ANIMATION_FADE_DURATION', labelId: 'POCKET_ANIMATION_FADE_DURATION-value', onChange: (v) => this.updatePhysicsSetting('POCKET_ANIMATION_FADE_DURATION', v!) },
+      { sliderId: 'POCKET_ANIMATION_CLIP_START', labelId: 'POCKET_ANIMATION_CLIP_START-value', onChange: (v) => this.updatePhysicsSetting('POCKET_ANIMATION_CLIP_START', v!) },
       { sliderId: 'POCKET_ANIMATION_CLIP_RADIUS_SCALE', labelId: 'POCKET_ANIMATION_CLIP_RADIUS_SCALE-value', onChange: (v) => this.updatePhysicsSetting('POCKET_ANIMATION_CLIP_RADIUS_SCALE', v!) },
     ];
 
@@ -284,6 +302,8 @@ export class SettingsPanel {
     setValue('POCKET_ANIMATION_SHRINK_FACTOR', physicsSettings.POCKET_ANIMATION_SHRINK_FACTOR);
     setValue('POCKET_ANIMATION_UNDERFELT_PX', physicsSettings.POCKET_ANIMATION_UNDERFELT_PX);
     setValue('POCKET_ANIMATION_FADE_START', physicsSettings.POCKET_ANIMATION_FADE_START);
+    setValue('POCKET_ANIMATION_FADE_DURATION', physicsSettings.POCKET_ANIMATION_FADE_DURATION);
+    setValue('POCKET_ANIMATION_CLIP_START', physicsSettings.POCKET_ANIMATION_CLIP_START);
     setValue('POCKET_ANIMATION_CLIP_RADIUS_SCALE', physicsSettings.POCKET_ANIMATION_CLIP_RADIUS_SCALE);
 
     // Render

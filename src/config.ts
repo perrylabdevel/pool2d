@@ -85,8 +85,10 @@ export const CONFIG = {
   POCKET_ANIMATION_DROP_DEPTH: 0.35, // visual drop depth in inches ~ depth perception
   POCKET_ANIMATION_SHRINK_FACTOR: 0.2, // 0..1 fraction of radius shrink at max depth
   POCKET_ANIMATION_FADE_START: 0.9, // fraction of timeline where fade-out begins
+  POCKET_ANIMATION_FADE_DURATION: 0.12, // fraction of timeline spent fading to 0 alpha
   POCKET_ANIMATION_CLIP_START: 0.45, // fraction where pocket clipping begins (to avoid early pop)
   POCKET_ANIMATION_CLIP_RADIUS_SCALE: 1.4, // scale factor for pocket clip radius
+  POCKET_ANIMATION_ICON_SCALE: 1.45, // scale applied when drawing icon-based pocket animation balls
   POCKET_ANIMATION_UNDERFELT_PX: 10, // how far ball rolls under felt (in screen px, scaled)
   POCKET_CAPTURE_SPEED_THRESHOLD: 45, // in/s speed above which we damp pocket entry
   POCKET_CAPTURE_DAMPING: 0.25, // velocity multiplier applied in pocket throat

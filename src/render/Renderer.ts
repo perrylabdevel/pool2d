@@ -1433,8 +1433,12 @@ export class Renderer extends BaseRenderer {
     const endScreenX = centerX + event.pocket.x * this.scale;
     const endScreenY = centerY - event.pocket.y * this.scale;
 
-    const baseRadius = event.radius * this.scale;
-    const shrink = (CONFIG as any).POCKET_ANIMATION_SHRINK_FACTOR ?? 0.2;
+    const smoothstep = (t: number) => t * t * (3 - 2 * t);
+    const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+
+    const spriteScale = Math.max(0.1, (CONFIG as any).POCKET_ANIMATION_ICON_SCALE ?? 1.45);
+    const baseRadius = (event.radius ?? CONFIG.BALL_RADIUS) * this.scale * spriteScale;
+    const shrinkFactor = Math.max(0, Math.min(1, (CONFIG as any).POCKET_ANIMATION_SHRINK_FACTOR ?? 0.2));
 
     // Get separate durations for drop and roll phases
     const dropDuration = CONFIG.POCKET_ANIMATION_DROP_DURATION_MS ?? 300;
@@ -1442,28 +1446,31 @@ export class Renderer extends BaseRenderer {
     const totalDuration = dropDuration + rollDuration;
     const dropPhaseEnd = dropDuration / totalDuration;
 
-    const dropDepth = (CONFIG.POCKET_ANIMATION_DROP_DEPTH ?? 0.35) * this.scale;
     const rollDistance = (CONFIG.POCKET_ANIMATION_UNDERFELT_PX ?? 10) * this.scale;
 
-    // Pocket opening radius for clipping
-    const pocketOpeningRadius = (CONFIG.POCKET_VISUAL_RADIUS_SIDE ?? 2.5) * this.scale;
+    // Pocket opening radius for clipping (use pocket-specific visual radius when available)
+    const tableGeom = getTableGeometry();
+    const pocketDef = event.pocket.id ? tableGeom.pockets.find(p => p.id === event.pocket.id) : undefined;
+    const pocketVisualRadiusIn = pocketDef?.visualRadius ?? pocketDef?.radius ?? (CONFIG.POCKET_VISUAL_RADIUS_SIDE ?? 2.1);
+    const pocketOpeningRadius = pocketVisualRadiusIn * this.scale;
 
     let x: number, y: number, radius: number;
 
-    // Ball stays full size always - no shrinking
-    radius = baseRadius;
+    const depthT = progress < dropPhaseEnd ? clamp01(progress / Math.max(dropPhaseEnd, 1e-6)) : 1;
+    const depth = smoothstep(depthT);
+    radius = Math.max(1, baseRadius * (1 - shrinkFactor * depth));
 
     if (progress < dropPhaseEnd) {
       // Phase 1: Ball drops into pocket (visible while dropping)
       const dropT = progress / dropPhaseEnd;
-      const eased = dropT * dropT * (3 - 2 * dropT);
+      const eased = smoothstep(dropT);
 
       x = startScreenX + (endScreenX - startScreenX) * eased;
       y = startScreenY + (endScreenY - startScreenY) * eased;
     } else {
       // Phase 2: Ball rolls underneath felt from pocket center inward toward table center
       const rollT = (progress - dropPhaseEnd) / (1 - dropPhaseEnd);
-      const eased = rollT * rollT * (3 - 2 * rollT);
+      const eased = smoothstep(rollT);
 
       // Direction from pocket toward table center (inward)
       const dirX = centerX - endScreenX;
@@ -1475,11 +1482,28 @@ export class Renderer extends BaseRenderer {
       y = endScreenY + (dirY / len) * rollDistance * eased;
     }
 
-    // Clip to circular pocket opening - ball only visible through the "hole"
+    const fadeStart = clamp01(CONFIG.POCKET_ANIMATION_FADE_START ?? 0.9);
+    const fadeDuration = clamp01((CONFIG as any).POCKET_ANIMATION_FADE_DURATION ?? 0.12);
+    const fadeT = fadeDuration <= 1e-6 ? 0 : clamp01((progress - fadeStart) / fadeDuration);
+    const alpha = progress < fadeStart ? 1 : 1 - smoothstep(fadeT);
+
+    const clipStart = clamp01((CONFIG as any).POCKET_ANIMATION_CLIP_START ?? 0.45);
+    const clipRadiusScale = Math.max(0.1, CONFIG.POCKET_ANIMATION_CLIP_RADIUS_SCALE ?? 1.4);
+    const applyClip = progress >= clipStart || progress >= dropPhaseEnd;
+
+    // Clip to circular pocket opening (late) - avoids "shrinking" illusion before the ball reaches the pocket
     this.ctx.save();
-    this.ctx.beginPath();
-    this.ctx.arc(endScreenX, endScreenY, pocketOpeningRadius, 0, Math.PI * 2);
-    this.ctx.clip();
+    this.ctx.globalAlpha *= alpha;
+    if (applyClip) {
+      const clipT = clamp01((progress - clipStart) / Math.max(1e-6, 1 - clipStart));
+      const easedClip = smoothstep(clipT);
+      const startClipRadius = Math.max(pocketOpeningRadius * clipRadiusScale * 3.0, radius * 3.0);
+      const endClipRadius = Math.max(pocketOpeningRadius * clipRadiusScale, radius * 1.02);
+      const clipRadius = startClipRadius + (endClipRadius - startClipRadius) * easedClip;
+      this.ctx.beginPath();
+      this.ctx.arc(endScreenX, endScreenY, clipRadius, 0, Math.PI * 2);
+      this.ctx.clip();
+    }
 
     const fill = this.getBallColor(event.ballId);
     const gradient = this.ctx.createRadialGradient(
@@ -1500,7 +1524,7 @@ export class Renderer extends BaseRenderer {
     const iconImage = this.getPocketIconImage(event.icon);
     if (iconImage) {
       const size = radius * 2;
-      this.ctx.drawImage(iconImage, x - radius, y - radius, size, size);
+      this.ctx.drawImage(iconImage, x - size / 2, y - size / 2, size, size);
     }
 
     this.ctx.lineWidth = 1.2;

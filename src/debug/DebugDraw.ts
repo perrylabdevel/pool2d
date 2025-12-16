@@ -50,6 +50,17 @@ export class DebugDraw {
   toggle() {
     this.enabled = !this.enabled;
     this.updateVisibility();
+    if (!this.shouldBeVisible()) {
+      this.clear();
+    }
+  }
+
+  disableAll() {
+    this.enabled = false;
+    this.bihEnabled = false;
+    this.bihData = null;
+    this.updateVisibility();
+    this.clear();
   }
 
   isEnabled(): boolean {

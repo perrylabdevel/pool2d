@@ -648,7 +648,11 @@ export class Game {
 
       // Require Shift+D to toggle debug mode (prevents accidental triggers)
       if ((e.key === 'd' || e.key === 'D') && e.shiftKey) {
-        this.debug.toggle();
+        if (this.debug.isEnabled() || this.debug.isBallInHandOverlayEnabled()) {
+          this.debug.disableAll();
+        } else {
+          this.debug.toggle();
+        }
         this.syncDebugModeWithRenderer();
       }
       if (e.key === 's' || e.key === 'S') {
@@ -802,7 +806,11 @@ export class Game {
     const debugBtn = document.getElementById('debug-toggle');
     if (debugBtn) {
       debugBtn.addEventListener('click', () => {
-        this.debug.toggle();
+        if (this.debug.isEnabled() || this.debug.isBallInHandOverlayEnabled()) {
+          this.debug.disableAll();
+        } else {
+          this.debug.toggle();
+        }
         this.syncDebugModeWithRenderer();
       });
     }
