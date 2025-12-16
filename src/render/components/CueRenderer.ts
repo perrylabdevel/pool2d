@@ -11,6 +11,7 @@ import {
     darkenColor,
     classifyAxisAlignmentFromVector,
     getAxisPalette,
+    willRideRail,
     type AxisAlignment
 } from '../RenderUtils';
 import { ColorTokens } from '../../ui/theme/ColorTokens';
@@ -744,7 +745,12 @@ export class CueRenderer {
                 const endRaw = { x: start.x + normX * adjustedLength, y: start.y + normY * adjustedLength };
                 const end = this.clipLineAtRails(start, endRaw);
 
-                const orientation = classifyAxisAlignmentFromVector(normX, normY);
+                // Check if path ends at a rail and will ride it
+                let orientation: AxisAlignment = classifyAxisAlignmentFromVector(normX, normY);
+                const railInfo = this.detectRailAtPoint(end, normX, normY);
+                if (railInfo && willRideRail(normX, normY, railInfo.nx, railInfo.ny)) {
+                    orientation = 'rail-riding';
+                }
                 const palette = getAxisPalette(orientation);
 
                 drawLineWithGlow(
@@ -1086,6 +1092,39 @@ export class CueRenderer {
             x: start.x + dirX * minT,
             y: start.y + dirY * minT
         };
+    }
+
+    /**
+     * Detect if a point is at/near a rail boundary and return the rail normal
+     * Used for rail riding visual feedback
+     */
+    private detectRailAtPoint(point: { x: number; y: number }, dirX: number, dirY: number): { nx: number; ny: number } | null {
+        const geom = getTableGeometry();
+        const halfWidth = geom.playWidthIn / 2;
+        const halfHeight = geom.playHeightIn / 2;
+        const margin = CONFIG.BALL_RADIUS;
+        const tolerance = 0.1; // Detection tolerance
+
+        const maxX = halfWidth - margin;
+        const maxY = halfHeight - margin;
+        const minX = -maxX;
+        const minY = -maxY;
+
+        // Check if point is at a rail boundary and moving toward it
+        if (Math.abs(point.x - maxX) < tolerance && dirX > 0) {
+            return { nx: -1, ny: 0 }; // Right rail, normal points left
+        }
+        if (Math.abs(point.x - minX) < tolerance && dirX < 0) {
+            return { nx: 1, ny: 0 }; // Left rail, normal points right
+        }
+        if (Math.abs(point.y - maxY) < tolerance && dirY > 0) {
+            return { nx: 0, ny: -1 }; // Top rail, normal points down
+        }
+        if (Math.abs(point.y - minY) < tolerance && dirY < 0) {
+            return { nx: 0, ny: 1 }; // Bottom rail, normal points up
+        }
+
+        return null;
     }
 
     private classifyAxisAlignmentFromPath(path: Vec2[]): AxisAlignment {

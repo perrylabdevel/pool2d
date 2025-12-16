@@ -419,7 +419,7 @@ export function resolveBallRail(contact: Contact) {
 
   // For very shallow angles, aggressively clamp normal velocity to enable rail riding
   // Gradually reduce clamping threshold as angle gets steeper
-  const shallowAngle = 0.08;  // ~4.6° - full rail riding
+  const shallowAngle = 0.14;  // ~8° - full rail riding (widened for consistency)
   const steepAngle = 0.25;     // ~14.5° - no rail riding
 
   let clampThreshold = 0;

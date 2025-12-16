@@ -56,7 +56,7 @@ export const CONFIG = {
   DISTANCE_AIM_SCALING_ENABLED: true,
   DISTANCE_AIM_MIN_DISTANCE: 15, // Distance (in) below which no scaling is applied
   DISTANCE_AIM_MAX_DISTANCE: 60, // Distance (in) at which maximum scaling is applied
-  DISTANCE_AIM_MIN_SENSITIVITY: 0.35, // Sensitivity multiplier at max distance (0.35 = 35% of normal)
+  DISTANCE_AIM_MIN_SENSITIVITY: 0.6, // Sensitivity multiplier at max distance (0.6 = 60% of normal, more fluid)
 
   // Control scheme
   TOUCH_AIM_MODE: true, // When true, touch/drag aims only and power is set via the power bar

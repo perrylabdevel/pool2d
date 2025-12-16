@@ -179,6 +179,11 @@ export class Game {
   // Cached prediction for frozen paths in power mode (normal mode only)
   cachedPrediction: ReturnType<Predictor['predictFirstContact']> | null = null;
   cachedDirection: { x: number; y: number } | null = null;
+
+  // Cached physics simulation for aim assist (avoids running 240-step sim every frame)
+  cachedShotPaths: ReturnType<Predictor['simulateShotPaths']> | null = null;
+  cachedShotPathsAngle: number = 0;
+  cachedShotPathsCueBallPos: { x: number; y: number } | null = null;
   pocketAnimationEvents: PocketAnimationEvent[] = [];
 
   // Ball dragging (practice mode only)
@@ -1544,6 +1549,9 @@ export class Game {
     // Clear cached prediction and aim angle smoothing state
     this.cachedPrediction = null;
     this.cachedDirection = null;
+    this.cachedShotPaths = null;
+    this.cachedShotPathsCueBallPos = null;
+    this.microAimDialValue = 0;
     this.input.resetAimAngle();
     this.isAimMode = false;
 
@@ -2136,14 +2144,9 @@ export class Game {
       }
       const targetAngle = this.applyMicroAimOffset(baseAngle);
 
-      // Smooth the rendered angle to reduce flicker during fast movement
-      if (!Number.isFinite(this.renderedAimAngle)) {
-        this.renderedAimAngle = targetAngle;
-      }
-      const lerp = CONFIG.AIM_LINE_LERP ?? 0.2;
-      const angleDiff = Math.atan2(Math.sin(targetAngle - this.renderedAimAngle), Math.cos(targetAngle - this.renderedAimAngle));
-      this.renderedAimAngle += angleDiff * lerp;
-      const angle = this.renderedAimAngle;
+      // Use target angle directly (lerp smoothing disabled)
+      this.renderedAimAngle = targetAngle;
+      const angle = targetAngle;
 
       // Predict first contact (always run to clip aim line at rails/balls)
       const direction = {
@@ -2187,14 +2190,32 @@ export class Game {
       }
 
       // Use physics simulation for aim assist when enabled (short preview), fall back to ray-cast
+      // Cache the simulation and only recalculate when angle changes beyond threshold
       let shotPaths = null;
       if (this.aimAssist && (this.debug.isEnabled() || CONFIG.AIM_ASSIST_PHYSICS_PREVIEW)) {
-        shotPaths = this.predictor.simulateShotPaths(
-          this.world,
-          this.cueBall,
-          angle,
-          this.currentPower
-        );
+        const angleThreshold = 0.0005; // ~0.03 degrees in radians (super resolution for extreme cuts)
+        const posThreshold = 0.01; // position change threshold in inches
+        
+        const angleDelta = Math.abs(Math.atan2(
+          Math.sin(angle - this.cachedShotPathsAngle),
+          Math.cos(angle - this.cachedShotPathsAngle)
+        ));
+        
+        const posChanged = !this.cachedShotPathsCueBallPos ||
+          Math.abs(this.cueBall.x - this.cachedShotPathsCueBallPos.x) > posThreshold ||
+          Math.abs(this.cueBall.y - this.cachedShotPathsCueBallPos.y) > posThreshold;
+        
+        if (!this.cachedShotPaths || angleDelta > angleThreshold || posChanged) {
+          this.cachedShotPaths = this.predictor.simulateShotPaths(
+            this.world,
+            this.cueBall,
+            angle,
+            this.currentPower
+          );
+          this.cachedShotPathsAngle = angle;
+          this.cachedShotPathsCueBallPos = { x: this.cueBall.x, y: this.cueBall.y };
+        }
+        shotPaths = this.cachedShotPaths;
       }
 
       // Draw trajectory lines if aim assist is enabled

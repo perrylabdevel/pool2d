@@ -100,7 +100,7 @@ export function darkenHexColor(hex: string, amount: number): string {
 
 // Trajectory rendering utilities
 
-export type AxisAlignment = 'horizontal' | 'vertical' | null;
+export type AxisAlignment = 'horizontal' | 'vertical' | 'rail-riding' | null;
 
 export interface AxisColorPalette {
   line: string;
@@ -133,23 +133,16 @@ export function classifyAxisAlignmentFromVector(
 
 /**
  * Get color palette for trajectory lines based on axis alignment
- * Horizontal: cyan/teal, Vertical: orange, Diagonal: yellow/white
+ * Rail-riding: magenta/pink, All others: white/black
  */
 export function getAxisPalette(alignment: AxisAlignment): AxisColorPalette {
   switch (alignment) {
-    case 'horizontal':
+    case 'rail-riding':
       return {
-        line: 'rgba(80, 255, 180, 0.95)',
-        glow: 'rgba(0, 120, 90, 0.85)',
-        debugStroke: 'rgba(80, 255, 180, 0.7)',
-        debugFill: 'rgba(80, 255, 180, 0.9)',
-      };
-    case 'vertical':
-      return {
-        line: 'rgba(255, 170, 80, 0.95)',
-        glow: 'rgba(140, 70, 0, 0.85)',
-        debugStroke: 'rgba(255, 170, 80, 0.7)',
-        debugFill: 'rgba(255, 170, 80, 0.9)',
+        line: 'rgba(255, 100, 220, 0.95)',
+        glow: 'rgba(150, 0, 100, 0.85)',
+        debugStroke: 'rgba(255, 100, 220, 0.7)',
+        debugFill: 'rgba(255, 100, 220, 0.9)',
       };
     default:
       return {
@@ -159,4 +152,19 @@ export function getAxisPalette(alignment: AxisAlignment): AxisColorPalette {
         debugFill: 'rgba(255, 230, 120, 0.9)',
       };
   }
+}
+
+/**
+ * Check if an object ball path will ride the rail based on approach angle
+ * Uses same thresholds as physics (shallowAngle = 0.14 = ~8°)
+ */
+export function willRideRail(pathDirX: number, pathDirY: number, railNormalX: number, railNormalY: number): boolean {
+  const len = Math.hypot(pathDirX, pathDirY);
+  if (len < 1e-6) return false;
+  const nx = pathDirX / len;
+  const ny = pathDirY / len;
+  // Approach ratio = |dot(velocity, rail_normal)|
+  const approachRatio = Math.abs(nx * railNormalX + ny * railNormalY);
+  // Match physics threshold: shallowAngle = 0.14 (~8°)
+  return approachRatio <= 0.14;
 }
