@@ -203,8 +203,15 @@ export class CueRenderer {
             aimEndY = clipped.y;
         }
 
+        // Calculate total distance from ball center to aim end
+        const totalDist = Math.hypot(aimEndX - ball.x, aimEndY - ball.y);
+        
         // Pull back slightly from the contact point to avoid overlap/flicker
-        const aimStartDistance = ball.radius + CONFIG.AIM_LINE_OFFSET;
+        // Reduce offset if the target is close (e.g., ball on rail) to ensure visible line
+        const minLineLength = ball.radius * 0.5; // Minimum visible aim line length
+        const maxStartOffset = Math.max(0, totalDist - minLineLength - (CONFIG.AIM_LINE_BACKOFF ?? 0));
+        const aimStartDistance = Math.min(ball.radius + CONFIG.AIM_LINE_OFFSET, ball.radius + maxStartOffset);
+        
         let aimStartX = ball.x + Math.cos(angle) * aimStartDistance;
         let aimStartY = ball.y + Math.sin(angle) * aimStartDistance;
 
@@ -219,9 +226,6 @@ export class CueRenderer {
                 aimEndX -= normX * backoff;
                 aimEndY -= normY * backoff;
             }
-            // Recompute start to ensure consistency when aimLineOffset changes mid-frame
-            aimStartX = ball.x + Math.cos(angle) * aimStartDistance;
-            aimStartY = ball.y + Math.sin(angle) * aimStartDistance;
         }
 
         const aimEnd = this.worldToScreen(aimEndX, aimEndY);
