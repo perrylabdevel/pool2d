@@ -665,9 +665,18 @@ export class Renderer3D extends BaseRenderer {
   /**
    * Generate ball icon thumbnails using the same geometry/materials as the 3D balls.
    * Returns a map of ballId -> dataURL (PNG). Cached after first generation.
+   * @param sizePx - Size in pixels
+   * @param iconScale - Scale of ball within icon (0.7 for HUD chips, 1.0 for pocket animations)
    */
-  async generateBallIcons(sizePx: number = 64): Promise<Map<number, string>> {
-    return this.ballRenderer.generateBallIcons(sizePx, this.renderer);
+  async generateBallIcons(sizePx: number = 64, iconScale: number = 0.7): Promise<Map<number, string>> {
+    return this.ballRenderer.generateBallIcons(sizePx, this.renderer, iconScale);
+  }
+
+  /**
+   * Generate full-scale ball icons for pocket animations (ball fills the icon).
+   */
+  async generatePocketAnimationIcons(sizePx: number = 64): Promise<Map<number, string>> {
+    return this.ballRenderer.generateBallIcons(sizePx, this.renderer, 1.0);
   }
 
   toggleMeasurementOverlay(force?: boolean) {
@@ -785,6 +794,7 @@ export class Renderer3D extends BaseRenderer {
     this.debugMode = enabled;
     this.tableRenderer.setDebugMode(enabled);
     this.ballRenderer.setDebugMode(enabled);
+    this.cueRenderer.setDebugMode(enabled);
   }
 
   setPocketGradientStrength(value: number) {
@@ -886,21 +896,21 @@ export class Renderer3D extends BaseRenderer {
   }
 
   /**
-   * Draw simple math-based trajectory lines (for non-debug mode)
-   * Uses predictTrajectories method for simple collision math
-   * Styled with solid white lines + black glow (like ball appearance)
-   * @param prediction - Ray-cast prediction result
-   * @param cueBallPos - Current cue ball position
+   * Draw simple math trajectory lines (ray-cast based prediction)
+   * @param prediction - Prediction result from Predictor
+   * @param cueBallPos - Current cue ball position (interpolated)
    * @param shotDirection - Normalized shot direction vector
    * @param predictor - Predictor instance for trajectory calculation
+   * @param interpOffset - Offset from physics to interpolated position
    */
   drawSimpleMathTrajectoryLines(
     prediction: PredictionResult,
     cueBallPos: { x: number; y: number },
     shotDirection: { x: number; y: number },
-    predictor: any
+    predictor: any,
+    interpOffset: { x: number; y: number } = { x: 0, y: 0 }
   ) {
-    this.cueRenderer.drawSimpleMathTrajectoryLines(prediction, cueBallPos, shotDirection, predictor);
+    this.cueRenderer.drawSimpleMathTrajectoryLines(prediction, cueBallPos, shotDirection, predictor, interpOffset);
   }
 
   getPowerBarBounds() {
@@ -912,6 +922,8 @@ export class Renderer3D extends BaseRenderer {
   }
 
   queuePocketAnimation(event: PocketAnimationEvent) {
+    // Immediately hide 3D ball mesh to prevent visual overlap with FX animation
+    this.ballRenderer.hideBall(event.ballId);
     this.fxRenderer.queuePocketAnimation(event);
   }
 

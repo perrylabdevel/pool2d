@@ -114,10 +114,10 @@ export class FXRenderer {
         ctx.save();
         ctx.globalAlpha *= alpha;
 
-        // Only clip during fade phase (when ball is at pocket center)
+        // Clip during fade phase (when ball is at pocket center)
         if (progress >= dropPhaseEnd) {
             const clipRadiusScale = Math.max(0.1, CONFIG.POCKET_ANIMATION_CLIP_RADIUS_SCALE ?? 1.4);
-            const clipRadius = pocketOpeningRadius * clipRadiusScale;
+            const clipRadius = Math.max(pocketOpeningRadius * clipRadiusScale, radius * 1.05);
             ctx.beginPath();
             ctx.arc(endScreen.x, endScreen.y, clipRadius, 0, Math.PI * 2);
             ctx.clip();
@@ -125,7 +125,12 @@ export class FXRenderer {
 
         const iconImage = this.getPocketIconImage(event.icon);
         
-        if (!iconImage) {
+        if (iconImage) {
+            // Pocket animation icons are generated at 100% scale (ball fills the icon)
+            const size = radius * 2;
+            ctx.drawImage(iconImage, x - size / 2, y - size / 2, size, size);
+        } else {
+            // Fallback to gradient if icon not available
             const colors = this.getBallColor(event.ballId);
             const gradient = ctx.createRadialGradient(x - radius * 0.3, y - radius * 0.3, radius * 0.15, x, y, radius);
             gradient.addColorStop(0, colors.light);
@@ -135,9 +140,6 @@ export class FXRenderer {
             ctx.beginPath();
             ctx.arc(x, y, radius, 0, Math.PI * 2);
             ctx.fill();
-        } else {
-            const size = radius * 2;
-            ctx.drawImage(iconImage, x - size / 2, y - size / 2, size, size);
         }
 
         ctx.lineWidth = 1.2;

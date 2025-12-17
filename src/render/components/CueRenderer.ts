@@ -26,6 +26,8 @@ export class CueRenderer {
     private ghostBall: THREE.Mesh | null = null;
     private trajectoryLines: THREE.Line[] = [];
 
+    private debugMode: boolean = false;
+
     constructor(
         private uiCtx: CanvasRenderingContext2D,
         private scene: THREE.Scene,
@@ -33,6 +35,10 @@ export class CueRenderer {
         private getScale: () => number,
         private getUiCanvas: () => HTMLCanvasElement
     ) { }
+
+    setDebugMode(enabled: boolean) {
+        this.debugMode = enabled;
+    }
 
     drawCueAndPowerBar(
         ball: Ball,
@@ -102,6 +108,47 @@ export class CueRenderer {
         // Get cue colors from settings
         const cueStickColor = (CONFIG as any).CUE_STICK_COLOR || ColorTokens.cue.defaultStick;
         const cueTipColor = (CONFIG as any).CUE_TIP_COLOR || ColorTokens.cue.defaultTip;
+
+        if (this.debugMode) {
+            // DEBUG: Draw a crosshair at the interpolated ball center to verify alignment
+            const ballCenterScreen = this.worldToScreen(ballX, ballY);
+            this.uiCtx.strokeStyle = 'rgba(255, 0, 255, 0.8)';
+            this.uiCtx.lineWidth = 2;
+            this.uiCtx.beginPath();
+            this.uiCtx.moveTo(ballCenterScreen.x - 15, ballCenterScreen.y);
+            this.uiCtx.lineTo(ballCenterScreen.x + 15, ballCenterScreen.y);
+            this.uiCtx.moveTo(ballCenterScreen.x, ballCenterScreen.y - 15);
+            this.uiCtx.lineTo(ballCenterScreen.x, ballCenterScreen.y + 15);
+            this.uiCtx.stroke();
+            // DEBUG: Draw line from ball center in BOTH directions (aim and cue)
+            const debugAimEnd = this.worldToScreen(
+                ballX + Math.cos(angle) * 20,
+                ballY + Math.sin(angle) * 20
+            );
+            const debugCueEnd = this.worldToScreen(
+                ballX - Math.cos(angle) * 20,
+                ballY - Math.sin(angle) * 20
+            );
+            // Green = aim direction
+            this.uiCtx.strokeStyle = 'rgba(0, 255, 0, 0.8)';
+            this.uiCtx.lineWidth = 2;
+            this.uiCtx.beginPath();
+            this.uiCtx.moveTo(ballCenterScreen.x, ballCenterScreen.y);
+            this.uiCtx.lineTo(debugAimEnd.x, debugAimEnd.y);
+            this.uiCtx.stroke();
+            // Cyan = cue direction (should match cue stick)
+            this.uiCtx.strokeStyle = 'rgba(0, 255, 255, 0.8)';
+            this.uiCtx.lineWidth = 2;
+            this.uiCtx.beginPath();
+            this.uiCtx.moveTo(ballCenterScreen.x, ballCenterScreen.y);
+            this.uiCtx.lineTo(debugCueEnd.x, debugCueEnd.y);
+            this.uiCtx.stroke();
+            // DEBUG: Also draw where tipEnd is (should be on the crosshair)
+            this.uiCtx.fillStyle = 'rgba(255, 255, 0, 0.8)';
+            this.uiCtx.beginPath();
+            this.uiCtx.arc(tipEndScreen.x, tipEndScreen.y, 5, 0, Math.PI * 2);
+            this.uiCtx.fill();
+        }
 
         // Draw main cue stick with gradient shading for 3D effect
         const lineWidth = Math.max(LayoutConstants.Cue.MinThicknessPixels, cueThicknessPixels);
@@ -181,31 +228,38 @@ export class CueRenderer {
         this.uiCtx.stroke();
 
         // Draw aim line in 2D - clipped to contact point or rails
-        let aimEndX = ball.x + Math.cos(angle) * CONFIG.AIM_LINE_LENGTH;
-        let aimEndY = ball.y + Math.sin(angle) * CONFIG.AIM_LINE_LENGTH;
+        // Use interpolated ball position (ballX, ballY) to match cue stick alignment
+        let aimEndX = ballX + Math.cos(angle) * CONFIG.AIM_LINE_LENGTH;
+        let aimEndY = ballY + Math.sin(angle) * CONFIG.AIM_LINE_LENGTH;
+
+        // The prediction contactPoint is relative to physics position (ball.x/y).
+        // Shift it by the interpolation offset so it aligns with the rendered cue ball.
+        const interpOffsetX = ballX - ball.x;
+        const interpOffsetY = ballY - ball.y;
 
         // If we have a prediction, stop at the ghost ball center (includes offset)
         if (prediction && prediction.type === 'ball') {
-            // Calculate ghost ball position with offset
-            const offsetDir = Math.atan2(
-                prediction.contactPoint.y - ball.y,
-                prediction.contactPoint.x - ball.x
-            );
-            aimEndX = prediction.contactPoint.x + Math.cos(offsetDir) * CONFIG.GHOST_BALL_OFFSET;
-            aimEndY = prediction.contactPoint.y + Math.sin(offsetDir) * CONFIG.GHOST_BALL_OFFSET;
+            // Adjust contactPoint to interpolated coordinate system
+            const adjustedContactX = prediction.contactPoint.x + interpOffsetX;
+            const adjustedContactY = prediction.contactPoint.y + interpOffsetY;
+            // contactPoint is on the cue ball surface; ghost ball should be at the cue ball center at impact
+            const ghostBaseX = adjustedContactX - prediction.contactNormal.x * ball.radius;
+            const ghostBaseY = adjustedContactY - prediction.contactNormal.y * ball.radius;
+            aimEndX = ghostBaseX + Math.cos(angle) * CONFIG.GHOST_BALL_OFFSET;
+            aimEndY = ghostBaseY + Math.sin(angle) * CONFIG.GHOST_BALL_OFFSET;
         } else if (prediction && prediction.type === 'rail') {
-            aimEndX = prediction.contactPoint.x;
-            aimEndY = prediction.contactPoint.y;
+            aimEndX = prediction.contactPoint.x + interpOffsetX;
+            aimEndY = prediction.contactPoint.y + interpOffsetY;
         } else {
             // Clip to rails if no prediction
             const aimEndRaw = { x: aimEndX, y: aimEndY };
-            const clipped = this.clipLineAtRails({ x: ball.x, y: ball.y }, aimEndRaw);
+            const clipped = this.clipLineAtRails({ x: ballX, y: ballY }, aimEndRaw);
             aimEndX = clipped.x;
             aimEndY = clipped.y;
         }
 
         // Calculate total distance from ball center to aim end
-        const totalDist = Math.hypot(aimEndX - ball.x, aimEndY - ball.y);
+        const totalDist = Math.hypot(aimEndX - ballX, aimEndY - ballY);
         
         // Pull back slightly from the contact point to avoid overlap/flicker
         // Reduce offset if the target is close (e.g., ball on rail) to ensure visible line
@@ -213,8 +267,8 @@ export class CueRenderer {
         const maxStartOffset = Math.max(0, totalDist - minLineLength - (CONFIG.AIM_LINE_BACKOFF ?? 0));
         const aimStartDistance = Math.min(ball.radius + CONFIG.AIM_LINE_OFFSET, ball.radius + maxStartOffset);
         
-        let aimStartX = ball.x + Math.cos(angle) * aimStartDistance;
-        let aimStartY = ball.y + Math.sin(angle) * aimStartDistance;
+        let aimStartX = ballX + Math.cos(angle) * aimStartDistance;
+        let aimStartY = ballY + Math.sin(angle) * aimStartDistance;
 
         const aimDirX = aimEndX - aimStartX;
         const aimDirY = aimEndY - aimStartY;
@@ -291,14 +345,14 @@ export class CueRenderer {
 
         // Draw ghost ball in 2D if prediction exists
         if (showGhost && prediction && prediction.type === 'ball' && prediction.hitBall) {
-            // Ghost ball center with configurable offset from contact point
-            // Positive offset = away from cue ball, negative = toward cue ball
-            const offsetDir = Math.atan2(
-                prediction.contactPoint.y - ball.y,
-                prediction.contactPoint.x - ball.x
-            );
-            const ghostX = prediction.contactPoint.x + Math.cos(offsetDir) * CONFIG.GHOST_BALL_OFFSET;
-            const ghostY = prediction.contactPoint.y + Math.sin(offsetDir) * CONFIG.GHOST_BALL_OFFSET;
+            // Ghost ball center (cue ball center at impact)
+            // contactPoint is on the cue ball surface; shift to center using contactNormal * cue radius
+            const adjustedContactX = prediction.contactPoint.x + interpOffsetX;
+            const adjustedContactY = prediction.contactPoint.y + interpOffsetY;
+            const ghostBaseX = adjustedContactX - prediction.contactNormal.x * ball.radius;
+            const ghostBaseY = adjustedContactY - prediction.contactNormal.y * ball.radius;
+            const ghostX = ghostBaseX + Math.cos(angle) * CONFIG.GHOST_BALL_OFFSET;
+            const ghostY = ghostBaseY + Math.sin(angle) * CONFIG.GHOST_BALL_OFFSET;
             const ghostScreen = this.worldToScreen(ghostX, ghostY);
 
             // Draw ghost ball with black glow + white outline (matching path styling)
@@ -681,7 +735,8 @@ export class CueRenderer {
         prediction: PredictionResult,
         cueBallPos: { x: number; y: number },
         shotDirection: { x: number; y: number },
-        predictor: any
+        predictor: any,
+        interpOffset: { x: number; y: number } = { x: 0, y: 0 }
     ) {
         if (prediction.type === 'none') return;
 
@@ -772,16 +827,21 @@ export class CueRenderer {
                 const normX = dirX / length;
                 const normY = dirY / length;
                 let startX, startY;
+                // Adjust contactPoint by interpolation offset to align with rendered cue ball
+                const adjContactX = prediction.contactPoint.x + interpOffset.x;
+                const adjContactY = prediction.contactPoint.y + interpOffset.y;
+                // contactPoint is on cue ball surface; shift to cue ball center at impact
+                const cueRadius = CONFIG.BALL_RADIUS;
+                const centerAtImpactX = adjContactX - prediction.contactNormal.x * cueRadius;
+                const centerAtImpactY = adjContactY - prediction.contactNormal.y * cueRadius;
                 if (prediction.type === 'ball') {
-                    const offsetDir = Math.atan2(
-                        prediction.contactPoint.y - cueBallPos.y,
-                        prediction.contactPoint.x - cueBallPos.x
-                    );
-                    startX = prediction.contactPoint.x + Math.cos(offsetDir) * CONFIG.GHOST_BALL_OFFSET;
-                    startY = prediction.contactPoint.y + Math.sin(offsetDir) * CONFIG.GHOST_BALL_OFFSET;
+                    // Use shot direction for offset
+                    const shotAngle = Math.atan2(shotDirection.y, shotDirection.x);
+                    startX = centerAtImpactX + Math.cos(shotAngle) * CONFIG.GHOST_BALL_OFFSET;
+                    startY = centerAtImpactY + Math.sin(shotAngle) * CONFIG.GHOST_BALL_OFFSET;
                 } else {
-                    startX = prediction.contactPoint.x;
-                    startY = prediction.contactPoint.y;
+                    startX = centerAtImpactX;
+                    startY = centerAtImpactY;
                 }
                 const start = { x: startX, y: startY };
                 const cueBallLength = adjustedLength * 0.25;

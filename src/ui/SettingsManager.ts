@@ -755,15 +755,57 @@ export class SettingsManager {
 
   // Physics Settings
   loadPhysicsSettings(): PhysicsSettings {
+    const defaults = { ...DEFAULT_PHYSICS_SETTINGS };
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.PHYSICS_SETTINGS);
       if (stored) {
-        return { ...DEFAULT_PHYSICS_SETTINGS, ...JSON.parse(stored) };
+        let parsed: Record<string, any>;
+        try {
+          parsed = JSON.parse(stored);
+        } catch (parseErr) {
+          console.warn('Failed to parse physics settings JSON, falling back to defaults', parseErr);
+          return defaults;
+        }
+
+        // Targeted reset for simplified pocket animation tuning
+        const pocketAnimResetKey = 'RailRush_physics_pocket_anim_reset_v2';
+        if (!localStorage.getItem(pocketAnimResetKey)) {
+          const fieldsToStrip = [
+            'POCKET_ANIMATION_DROP_DURATION_MS',
+            'POCKET_ANIMATION_ROLL_DURATION_MS',
+            'POCKET_ANIMATION_DROP_DEPTH',
+            'POCKET_ANIMATION_SHRINK_FACTOR',
+            'POCKET_ANIMATION_UNDERFELT_PX',
+            'POCKET_ANIMATION_FADE_START',
+            'POCKET_ANIMATION_FADE_DURATION',
+            'POCKET_ANIMATION_CLIP_START',
+            'POCKET_ANIMATION_CLIP_RADIUS_SCALE',
+            'POCKET_ANIMATION_ICON_SCALE',
+            'POCKET_ANIMATION_DURATION_MS',
+            'POCKET_ANIMATION_ROLL_START',
+          ];
+
+          let stripped = false;
+          fieldsToStrip.forEach((field) => {
+            if (field in parsed) {
+              delete parsed[field];
+              stripped = true;
+            }
+          });
+
+          if (stripped) {
+            console.log('[Settings] Reset physics pocket animation overrides to new defaults');
+            localStorage.setItem(STORAGE_KEYS.PHYSICS_SETTINGS, JSON.stringify(parsed));
+          }
+          localStorage.setItem(pocketAnimResetKey, '1');
+        }
+
+        return { ...defaults, ...parsed };
       }
     } catch (e) {
       console.warn('Failed to load physics settings:', e);
     }
-    return { ...DEFAULT_PHYSICS_SETTINGS };
+    return defaults;
   }
 
   savePhysicsSettings(settings: Partial<PhysicsSettings>) {

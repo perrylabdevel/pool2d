@@ -1015,14 +1015,21 @@ export class Game {
       // Initialize HUD player balls at game start
       this.updateHUDPlayerBalls();
 
-      // Generate ball icon thumbnails for HUD and update once ready
+      // Generate ball icon thumbnails for HUD and pocket animations once ready
       if ((this.renderer as any).generateBallIcons) {
         const tryGenerate = () => {
           const iconSizePx = this.getHudChipIconSizePx();
+          // HUD chip icons (70% scale for breathing room)
           (this.renderer as any).generateBallIcons(iconSizePx).then((map: Map<number, string>) => {
             (window as any).__BALL_ICONS__ = map;
             this.updateHUDPlayerBalls();
           }).catch(() => {/* ignore icon errors */ });
+          // Full-scale pocket animation icons (100% scale)
+          if ((this.renderer as any).generatePocketAnimationIcons) {
+            (this.renderer as any).generatePocketAnimationIcons(64).then((map: Map<number, string>) => {
+              (window as any).__POCKET_ANIM_ICONS__ = map;
+            }).catch(() => {/* ignore icon errors */ });
+          }
         };
 
         // Defer until ball models/textures are loaded to ensure real textures are used
@@ -1044,9 +1051,6 @@ export class Game {
           (this as any)._chipPollTimer = setInterval(poll, 120);
         }
       }
-
-      this.resize();
-      this.rules.startGame();
 
       this.currentCalledPocketId = null;
       this.rules.setCalledPocket(null);
@@ -1815,8 +1819,9 @@ export class Game {
 
   private handleBallPocketed(details: PocketCaptureDetails) {
     const { ball, pocket, position, velocity } = details;
-    const iconMap: Map<number, string> | undefined = (window as any).__BALL_ICONS__;
-    const iconSrc = iconMap?.get(ball.id);
+    // Use full-scale pocket animation icons (not HUD chip icons which are scaled to 70%)
+    const pocketAnimIcons: Map<number, string> | undefined = (window as any).__POCKET_ANIM_ICONS__;
+    const iconSrc = pocketAnimIcons?.get(ball.id);
     const event: PocketAnimationEvent = {
       ballId: ball.id,
       position: { x: position.x, y: position.y },
@@ -2116,6 +2121,16 @@ export class Game {
         const angle = cueState.angle;
         const direction = { x: Math.cos(angle), y: Math.sin(angle) };
 
+        // Use interpolated ball position to match cue stick rendering
+        const interpBallPos = {
+          x: this.cueBall.prevX + (this.cueBall.x - this.cueBall.prevX) * alpha,
+          y: this.cueBall.prevY + (this.cueBall.y - this.cueBall.prevY) * alpha
+        };
+        const interpOffset = {
+          x: interpBallPos.x - this.cueBall.x,
+          y: interpBallPos.y - this.cueBall.y
+        };
+
         // Re-calculate prediction for visualization
         const prediction = this.predictor.predictFirstContact(
           { x: this.cueBall.x, y: this.cueBall.y },
@@ -2125,7 +2140,7 @@ export class Game {
         );
 
         if (cueState.guideLineVisible) {
-          this.renderer.drawSimpleMathTrajectoryLines(prediction, { x: this.cueBall.x, y: this.cueBall.y }, direction, this.predictor);
+          this.renderer.drawSimpleMathTrajectoryLines(prediction, interpBallPos, direction, this.predictor, interpOffset);
         }
 
         this.renderer.drawCueAndPowerBar(
@@ -2227,23 +2242,37 @@ export class Game {
       }
 
       // Draw trajectory lines if aim assist is enabled
+      // IMPORTANT: Use consistent prediction for both trajectory lines AND ghost ball
+      // Use interpolated ball position to match cue stick rendering
+      const interpBallPos = {
+        x: this.cueBall.prevX + (this.cueBall.x - this.cueBall.prevX) * alpha,
+        y: this.cueBall.prevY + (this.cueBall.y - this.cueBall.prevY) * alpha
+      };
+      // Calculate offset from physics position to interpolated position
+      // This is needed to shift prediction contactPoint to align with rendered ball
+      const interpOffset = {
+        x: interpBallPos.x - this.cueBall.x,
+        y: interpBallPos.y - this.cueBall.y
+      };
+      let drawPrediction = prediction;
       if (this.aimAssist) {
         if (shotPaths && (this.debug.isEnabled() || CONFIG.AIM_ASSIST_PHYSICS_PREVIEW)) {
-          // Physics-based preview (short) with same styling as math version
-          // Use simple math styling for consistency; skip if no first contact
+          // Physics-based preview - use shotPaths.firstContact for BOTH trajectory lines AND ghost ball
           if (shotPaths.firstContact) {
+            drawPrediction = shotPaths.firstContact;
             this.renderer.drawSimpleMathTrajectoryLines(
               shotPaths.firstContact,
-              { x: this.cueBall.x, y: this.cueBall.y },
+              interpBallPos,
               useCachedPrediction && this.cachedDirection ? this.cachedDirection : direction,
-              this.predictor
+              this.predictor,
+              interpOffset
             );
           }
         } else if (prediction) {
           // Normal mode: use simple straight-line math with white/black glow
           // Use cached direction in power mode
           const drawDirection = useCachedPrediction && this.cachedDirection ? this.cachedDirection : direction;
-          this.renderer.drawSimpleMathTrajectoryLines(prediction, { x: this.cueBall.x, y: this.cueBall.y }, drawDirection, this.predictor);
+          this.renderer.drawSimpleMathTrajectoryLines(prediction, interpBallPos, drawDirection, this.predictor, interpOffset);
         }
       }
 
@@ -2252,7 +2281,7 @@ export class Game {
         degrees: this.getMicroAimOffsetDegrees(),
         isActive: this.isDraggingMicroDial,
       };
-      this.renderer.drawCueAndPowerBar(this.cueBall, angle, this.currentPower, this.aimAssist, true, this.isAimMode, prediction, microDialState, alpha);
+      this.renderer.drawCueAndPowerBar(this.cueBall, angle, this.currentPower, this.aimAssist, true, this.isAimMode, drawPrediction, microDialState, alpha);
     }
 
     // Highlight pockets when waiting for pocket call

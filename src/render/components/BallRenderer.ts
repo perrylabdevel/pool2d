@@ -361,6 +361,14 @@ export class BallRenderer {
         });
     }
 
+    /** Immediately hide a specific ball mesh (used when pocket animation starts) */
+    hideBall(ballId: number) {
+        const mesh = this.ballMeshes.get(ballId);
+        if (mesh) {
+            mesh.visible = false;
+        }
+    }
+
     updateBalls(balls: Ball[], alpha: number) {
         balls.forEach((ball) => {
             if (ball.pocketed) {
@@ -663,18 +671,26 @@ export class BallRenderer {
         }
     }
 
-    async generateBallIcons(sizePx: number, renderer: THREE.WebGLRenderer): Promise<Map<number, string>> {
-        if (this.ballIconCaches.has(sizePx)) {
-            return this.ballIconCaches.get(sizePx)!;
+    async generateBallIcons(sizePx: number, renderer: THREE.WebGLRenderer, iconScale: number = 0.7): Promise<Map<number, string>> {
+        // Use a composite cache key that includes both size and scale
+        const cacheKey = iconScale === 0.7 ? sizePx : sizePx + iconScale * 10000;
+        if (this.ballIconCaches.has(cacheKey)) {
+            return this.ballIconCaches.get(cacheKey)!;
         }
-
-        // Slightly shrink the ball in chip renders so the numbers/stripes have breathing room
-        const iconScale = 0.7;
 
         const icons = new Map<number, string>();
         const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
-        camera.position.set(0, 0, 3.5 * CONFIG.BALL_RADIUS);
+
+        // Frame the icon so a 1.0-scale ball nearly fills the image.
+        // Previously, the camera distance implicitly shrunk the ball (even at iconScale=1.0),
+        // which made pocket animation sprites look like they were shrinking.
+        const fovDeg = 45;
+        const fillNdc = 0.98; // 1.0 would touch edges; keep a tiny margin to avoid clipping/AA artifacts.
+        const halfFovRad = THREE.MathUtils.degToRad(fovDeg * 0.5);
+        const fullScaleCameraZ = CONFIG.BALL_RADIUS / (Math.tan(halfFovRad) * fillNdc);
+
+        const camera = new THREE.PerspectiveCamera(fovDeg, 1, 0.1, 100);
+        camera.position.set(0, 0, fullScaleCameraZ);
         camera.lookAt(0, 0, 0);
 
         const light = new THREE.DirectionalLight(0xffffff, 1.2);
@@ -757,9 +773,10 @@ export class BallRenderer {
         renderer.setClearColor(originalClearColor, originalClearAlpha);
         renderTarget.dispose();
 
-        this.ballIconCaches.set(sizePx, icons);
+        this.ballIconCaches.set(cacheKey, icons);
         return icons;
     }
+
     setLayerVisibility(layer: RenderLayerBooleanKey, visible: boolean) {
         this.layerVisibility[layer] = visible;
         if (layer === 'showBalls') {

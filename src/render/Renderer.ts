@@ -1479,7 +1479,23 @@ export class Renderer extends BaseRenderer {
     // Only clip during fade phase (when ball is at pocket center)
     if (progress >= dropPhaseEnd) {
       const clipRadiusScale = Math.max(0.1, CONFIG.POCKET_ANIMATION_CLIP_RADIUS_SCALE ?? 1.4);
-      const clipRadius = pocketOpeningRadius * clipRadiusScale;
+      const clipRadius = Math.max(pocketOpeningRadius * clipRadiusScale, radius * 1.05);
+
+      if (!(event as any).__pocketDebugLogged) {
+        (event as any).__pocketDebugLogged = true;
+        console.log('[PocketAnim][2D] fade phase snapshot', {
+          ballId: event.ballId,
+          spriteScale,
+          baseRadius,
+          canvasScale: this.scale,
+          clipRadius,
+          pocketOpeningRadius,
+          clipRadiusScale,
+          shrinkFactorConfig: (CONFIG as any).POCKET_ANIMATION_SHRINK_FACTOR,
+          iconScaleConfig: (CONFIG as any).POCKET_ANIMATION_ICON_SCALE,
+        });
+      }
+
       this.ctx.beginPath();
       this.ctx.arc(endScreenX, endScreenY, clipRadius, 0, Math.PI * 2);
       this.ctx.clip();
