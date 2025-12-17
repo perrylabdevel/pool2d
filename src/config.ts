@@ -80,16 +80,16 @@ export const CONFIG = {
   AIM_INFO_SCALE: 1.0, // Scale multiplier for aim info indicators (0.5 = 50% size, 2.0 = 200% size)
   SIDEBAR_DIAL_SIDE: 'right' as 'right' | 'left', // Which side the micro dial lives on (power bar goes opposite)
   // Pocket visual animation tuning
-  POCKET_ANIMATION_DROP_DURATION_MS: 300, // duration of drop phase
-  POCKET_ANIMATION_ROLL_DURATION_MS: 500, // duration of roll phase
-  POCKET_ANIMATION_DROP_DEPTH: 0.35, // visual drop depth in inches ~ depth perception
-  POCKET_ANIMATION_SHRINK_FACTOR: 0.2, // 0..1 fraction of radius shrink at max depth
-  POCKET_ANIMATION_FADE_START: 0.9, // fraction of timeline where fade-out begins
-  POCKET_ANIMATION_FADE_DURATION: 0.12, // fraction of timeline spent fading to 0 alpha
-  POCKET_ANIMATION_CLIP_START: 0.45, // fraction where pocket clipping begins (to avoid early pop)
-  POCKET_ANIMATION_CLIP_RADIUS_SCALE: 1.4, // scale factor for pocket clip radius
-  POCKET_ANIMATION_ICON_SCALE: 1.45, // scale applied when drawing icon-based pocket animation balls
-  POCKET_ANIMATION_UNDERFELT_PX: 10, // how far ball rolls under felt (in screen px, scaled)
+  POCKET_ANIMATION_DROP_DURATION_MS: 180, // duration of drop phase (ball moving to pocket)
+  POCKET_ANIMATION_ROLL_DURATION_MS: 250, // duration of fade phase
+  POCKET_ANIMATION_DROP_DEPTH: 0.35, // visual drop depth in inches ~ depth perception (legacy)
+  POCKET_ANIMATION_SHRINK_FACTOR: 0.0, // (legacy - shrinking removed for cleaner visuals)
+  POCKET_ANIMATION_FADE_START: 0.9, // (legacy - fade now starts at dropPhaseEnd automatically)
+  POCKET_ANIMATION_FADE_DURATION: 0.12, // (legacy - fade duration now spans entire fade phase)
+  POCKET_ANIMATION_CLIP_START: 0.2, // (legacy - clip only applied during fade phase now)
+  POCKET_ANIMATION_CLIP_RADIUS_SCALE: 1.05, // scale factor for pocket clip radius
+  POCKET_ANIMATION_ICON_SCALE: 1.0, // scale applied when drawing pocket animation balls (1.0 = actual size)
+  POCKET_ANIMATION_UNDERFELT_PX: 10, // (legacy - roll movement removed)
   POCKET_CAPTURE_SPEED_THRESHOLD: 45, // in/s speed above which we damp pocket entry
   POCKET_CAPTURE_DAMPING: 0.25, // velocity multiplier applied in pocket throat
   POCKET_CAPTURE_PULL_DISTANCE: 0.8, // additional inches pulled toward pocket center before removal
