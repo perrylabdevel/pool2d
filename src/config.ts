@@ -62,6 +62,9 @@ export const CONFIG = {
   TOUCH_AIM_MODE: true, // When true, touch/drag aims only and power is set via the power bar
   // Debug and diagnostics
   DEBUG_BIH_LOG: false, // Verbose console logs for ball-in-hand clamping and drag
+  DEBUG_AIM_GUARD_LOG: false, // Logs aim center-guard metrics (can be spammy; throttled)
+  DEBUG_MICRO_DIAL_LOG: false, // Logs micro aim dial updates (throttled)
+  DEBUG_PREDICTOR_LOG: false, // Logs prediction contact stats (DEV only; can be spammy)
 
   // Ball-in-hand placement
   BALL_IN_HAND_POCKET_MARGIN_IN: 0.1, // Extra clearance outside pocket capture radius while dragging
@@ -75,9 +78,20 @@ export const CONFIG = {
   GHOST_BALL_GLOW: 0.75, // Outer glow alpha for ghost ball
   AIM_LINE_ARROW_SIZE: 9, // Base arrowhead size in px (scales with zoom)
   OBJECT_PATH_PERCENTAGE: 1.0, // Multiplier for object ball path length (0.5 = 50% length)
-  AIM_ASSIST_PHYSICS_PREVIEW: true, // Run a short physics sim for aim assist even outside debug
+  AIM_ASSIST_PHYSICS_PREVIEW: false, // Run a short physics sim for aim assist even outside debug
   SHOW_AIM_INFO: true, // Display aim angle, distance, speed, and cut angle overlay
   AIM_INFO_SCALE: 1.0, // Scale multiplier for aim info indicators (0.5 = 50% size, 2.0 = 200% size)
+
+  // Free-cursor aiming can become numerically unstable when the cursor is very close to the cue ball.
+  // These thresholds (in CSS pixels) dampen angle changes near the center without "sticking".
+  AIM_CENTER_GUARD_ENTER_PX: 14,
+  AIM_CENTER_GUARD_EXIT_PX: 22,
+  AIM_CENTER_GUARD_ENTER_RADII: 6, // also scale guard by ball radius on screen
+  AIM_CENTER_GUARD_EXIT_RADII: 10, // also scale guard by ball radius on screen
+
+  // Aim assist physics preview throttling (to prevent frame hitches while aiming)
+  AIM_ASSIST_SIM_THROTTLE_MS: 33, // max update rate ~30Hz
+  AIM_ASSIST_SIM_ANGLE_THRESHOLD_RAD: 0.004, // ~0.23° change before recompute
   SIDEBAR_DIAL_SIDE: 'right' as 'right' | 'left', // Which side the micro dial lives on (power bar goes opposite)
   // Pocket visual animation tuning
   POCKET_ANIMATION_DROP_DURATION_MS: 180, // duration of drop phase (ball moving to pocket)

@@ -184,6 +184,7 @@ export class Game {
   cachedShotPaths: ReturnType<Predictor['simulateShotPaths']> | null = null;
   cachedShotPathsAngle: number = 0;
   cachedShotPathsCueBallPos: { x: number; y: number } | null = null;
+  cachedShotPathsTimeMs: number = 0;
   pocketAnimationEvents: PocketAnimationEvent[] = [];
 
   // Ball dragging (practice mode only)
@@ -2086,19 +2087,36 @@ export class Game {
     this.hud.panelManager.closePanel('playback-panel');
   }
 
-  private setMicroAimDialValue(value: number) {
+  private setMicroAimDialValue(value: number, opts?: { snapToZero?: boolean }) {
     const clamped = Math.max(-1, Math.min(1, value));
-    const snapped = Math.abs(clamped) < 0.01 ? 0 : clamped;
+    const snapToZero = opts?.snapToZero ?? true;
+    const snapped = snapToZero && Math.abs(clamped) < 0.01 ? 0 : clamped;
     if (Math.abs(snapped - this.microAimDialValue) < 1e-4) return;
     this.microAimDialValue = snapped;
     this.cachedPrediction = null;
     this.cachedDirection = null;
+    this.cachedShotPaths = null;
+    this.cachedShotPathsTimeMs = 0;
+
+    if (CONFIG.DEBUG_MICRO_DIAL_LOG) {
+      const now = Date.now();
+      const last = (this as any)._lastMicroDialLogMs as number | undefined;
+      if (!last || now - last > 120) {
+        (this as any)._lastMicroDialLogMs = now;
+        console.log('[MicroDial] value', {
+          value: Number(this.microAimDialValue.toFixed(4)),
+          snapToZero,
+          offsetDeg: Number(this.getMicroAimOffsetDegrees().toFixed(3)),
+        });
+      }
+    }
   }
 
   private updateMicroDialFromMouse(bounds: { x: number; y: number; width: number; height: number }, mouseY: number) {
     const relative = Math.max(0, Math.min(1, (mouseY - bounds.y) / bounds.height));
     const normalized = (0.5 - relative) * 2;
-    this.setMicroAimDialValue(normalized);
+    // Keep micro-dial continuous while dragging; snap-to-zero on release instead.
+    this.setMicroAimDialValue(normalized, { snapToZero: false });
   }
 
   render() {
@@ -2216,8 +2234,10 @@ export class Game {
       // Cache the simulation and only recalculate when angle changes beyond threshold
       let shotPaths = null;
       if (this.aimAssist && (this.debug.isEnabled() || CONFIG.AIM_ASSIST_PHYSICS_PREVIEW)) {
-        const angleThreshold = 0.0005; // ~0.03 degrees in radians (super resolution for extreme cuts)
+        const angleThreshold = CONFIG.AIM_ASSIST_SIM_ANGLE_THRESHOLD_RAD ?? 0.004; // ~0.23 degrees in radians
         const posThreshold = 0.01; // position change threshold in inches
+        const throttleMs = CONFIG.AIM_ASSIST_SIM_THROTTLE_MS ?? 33;
+        const nowMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
         
         const angleDelta = Math.abs(Math.atan2(
           Math.sin(angle - this.cachedShotPathsAngle),
@@ -2228,7 +2248,10 @@ export class Game {
           Math.abs(this.cueBall.x - this.cachedShotPathsCueBallPos.x) > posThreshold ||
           Math.abs(this.cueBall.y - this.cachedShotPathsCueBallPos.y) > posThreshold;
         
-        if (!this.cachedShotPaths || angleDelta > angleThreshold || posChanged) {
+        const forceUpdate = angleDelta > angleThreshold * 4 || posChanged;
+        const throttled = this.cachedShotPaths && !forceUpdate && (nowMs - (this.cachedShotPathsTimeMs ?? 0)) < throttleMs;
+
+        if (!this.cachedShotPaths || (!throttled && (angleDelta > angleThreshold || posChanged))) {
           this.cachedShotPaths = this.predictor.simulateShotPaths(
             this.world,
             this.cueBall,
@@ -2237,6 +2260,7 @@ export class Game {
           );
           this.cachedShotPathsAngle = angle;
           this.cachedShotPathsCueBallPos = { x: this.cueBall.x, y: this.cueBall.y };
+          this.cachedShotPathsTimeMs = nowMs;
         }
         shotPaths = this.cachedShotPaths;
       }
@@ -2516,6 +2540,8 @@ export class Game {
   handleMicroDialMouseUp(_e: MouseEvent) {
     if (!this.isDraggingMicroDial) return;
     this.isDraggingMicroDial = false;
+    // Snap-to-zero once at the end of a drag (prevents "sticky" center behavior while scrubbing).
+    this.setMicroAimDialValue(this.microAimDialValue, { snapToZero: true });
     if (this.isTouchAimOnly()) {
       this.input.setAimDragActive(false);
     }

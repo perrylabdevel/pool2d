@@ -359,7 +359,11 @@ export class Predictor {
 
     enableCollisionCapture(false);
 
-    if (typeof import.meta !== 'undefined' && (import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV) {
+    if (
+      CONFIG.DEBUG_PREDICTOR_LOG &&
+      typeof import.meta !== 'undefined' &&
+      (import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV
+    ) {
       console.debug('[Predictor] simulateShotPaths contact', {
         source: firstContactSource,
         solverBallSnapshots,

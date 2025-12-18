@@ -19,6 +19,8 @@ export class InputManager {
 
   // Aim smoothing state
   private lastAimAngle: number | null = null;
+  private centerGuardActive: boolean = false;
+  private lastAimGuardLogMs: number = 0;
 
   // Power bar state
   isDraggingPowerBar: boolean = false;
@@ -163,34 +165,124 @@ export class InputManager {
 
   getAimAngle(ball: Ball, sensitivityMultiplier: number = 1.0): number {
     // Calculate the raw angle from ball to mouse
-    const dx = this.mouseX - ball.x;
-    const dy = this.mouseY - ball.y;
-    const targetAngle = Math.atan2(dy, dx);
+    const dxRaw = this.mouseX - ball.x;
+    const dyRaw = this.mouseY - ball.y;
+    const rWorldRaw = Math.hypot(dxRaw, dyRaw);
+    const rPxRaw = rWorldRaw * this.scale;
 
-    // For long shots, reduce angular sensitivity by interpolating with previous angle
-    // Lower sensitivity = slower angular changes = finer control
-    if (sensitivityMultiplier < 1.0 && this.lastAimAngle !== null) {
-      // Handle angle wrapping (shortest path from lastAngle to targetAngle)
-      let delta = targetAngle - this.lastAimAngle;
+    const ballRadiusPx = (ball.radius ?? CONFIG.BALL_RADIUS) * this.scale;
+    const enterPx = Math.max(
+      CONFIG.AIM_CENTER_GUARD_ENTER_PX ?? 14,
+      ballRadiusPx * (CONFIG.AIM_CENTER_GUARD_ENTER_RADII ?? 6)
+    );
+    const exitPx = Math.max(
+      CONFIG.AIM_CENTER_GUARD_EXIT_PX ?? 22,
+      ballRadiusPx * (CONFIG.AIM_CENTER_GUARD_EXIT_RADII ?? 10)
+    );
 
-      // Normalize delta to [-PI, PI]
-      while (delta > Math.PI) delta -= 2 * Math.PI;
-      while (delta < -Math.PI) delta += 2 * Math.PI;
-
-      // Interpolate: move toward target angle at rate determined by sensitivity
-      // Lower sensitivity = smaller steps = smoother, finer control
-      const smoothedAngle = this.lastAimAngle + delta * sensitivityMultiplier;
-      this.lastAimAngle = smoothedAngle;
-      return smoothedAngle;
+    // Center guard hysteresis state (tracks whether we're in the "near center" region).
+    const prevGuard = this.centerGuardActive;
+    if (!this.centerGuardActive) {
+      if (rPxRaw < enterPx) this.centerGuardActive = true;
+    } else if (rPxRaw > exitPx) {
+      this.centerGuardActive = false;
     }
 
-    // First frame or no smoothing needed
-    this.lastAimAngle = targetAngle;
-    return targetAngle;
+    // Project the cursor vector onto a minimum radius (continuous control, avoids atan2 singularity).
+    // Use the enter threshold as the minimum effective radius.
+    let dx = dxRaw;
+    let dy = dyRaw;
+    let rWorld = rWorldRaw;
+    let rPx = rPxRaw;
+    if (rPxRaw < enterPx) {
+      const eps = 1e-6;
+      const scaleUp = enterPx / Math.max(rPxRaw, eps);
+      dx = dxRaw * scaleUp;
+      dy = dyRaw * scaleUp;
+      rWorld = rWorldRaw * scaleUp;
+      rPx = enterPx;
+    }
+
+    const targetAngle = Math.atan2(dy, dx);
+
+    if (this.lastAimAngle === null) {
+      this.lastAimAngle = targetAngle;
+      if (CONFIG.DEBUG_AIM_GUARD_LOG) {
+        console.log('[AimGuard] init', {
+          rWorldRaw: Number(rWorldRaw.toFixed(3)),
+          rPxRaw: Number(rPxRaw.toFixed(2)),
+          rWorld: Number(rWorld.toFixed(3)),
+          rPx: Number(rPx.toFixed(2)),
+          enterPx: Number(enterPx.toFixed(2)),
+          exitPx: Number(exitPx.toFixed(2)),
+          ballRadiusPx: Number(ballRadiusPx.toFixed(2)),
+          guard: this.centerGuardActive,
+          targetDeg: Number((targetAngle * 180 / Math.PI).toFixed(2)),
+        });
+      }
+      return targetAngle;
+    }
+
+    if (CONFIG.DEBUG_AIM_GUARD_LOG && prevGuard !== this.centerGuardActive) {
+      const state = this.centerGuardActive ? 'ENTER' : 'EXIT';
+      console.log(`[AimGuard] ${state}`, {
+        rPxRaw: Number(rPxRaw.toFixed(2)),
+        rPx: Number(rPx.toFixed(2)),
+        enterPx: Number(enterPx.toFixed(2)),
+        exitPx: Number(exitPx.toFixed(2)),
+        ballRadiusPx: Number(ballRadiusPx.toFixed(2)),
+        dxRaw: Number(dxRaw.toFixed(3)),
+        dyRaw: Number(dyRaw.toFixed(3)),
+        cue: { x: Number(ball.x.toFixed(3)), y: Number(ball.y.toFixed(3)) },
+        mouse: { x: Number(this.mouseX.toFixed(3)), y: Number(this.mouseY.toFixed(3)) },
+      });
+    }
+
+    const effectiveSensitivity = Math.min(1.0, Math.max(0.0, sensitivityMultiplier));
+
+    // Handle angle wrapping (shortest path from lastAngle to targetAngle)
+    let delta = targetAngle - this.lastAimAngle;
+    while (delta > Math.PI) delta -= 2 * Math.PI;
+    while (delta < -Math.PI) delta += 2 * Math.PI;
+
+    // Interpolate: lower sensitivity => smaller steps => finer control
+    const smoothedAngle = this.lastAimAngle + delta * effectiveSensitivity;
+
+    if (CONFIG.DEBUG_AIM_GUARD_LOG) {
+      const now = Date.now();
+      const shouldLog =
+        this.centerGuardActive ||
+        rPxRaw < enterPx * 1.2 ||
+        Math.abs(delta) > Math.PI / 36; // ~5° spike
+
+      if (shouldLog && now - this.lastAimGuardLogMs > 180) {
+        this.lastAimGuardLogMs = now;
+        console.log('[AimGuard] tick', {
+          rWorldRaw: Number(rWorldRaw.toFixed(3)),
+          rPxRaw: Number(rPxRaw.toFixed(2)),
+          rWorld: Number(rWorld.toFixed(3)),
+          rPx: Number(rPx.toFixed(2)),
+          guard: this.centerGuardActive,
+          enterPx: Number(enterPx.toFixed(2)),
+          exitPx: Number(exitPx.toFixed(2)),
+          ballRadiusPx: Number(ballRadiusPx.toFixed(2)),
+          sensitivityMultiplier: Number(sensitivityMultiplier.toFixed(3)),
+          effectiveSensitivity: Number(effectiveSensitivity.toFixed(3)),
+          deltaDeg: Number((delta * 180 / Math.PI).toFixed(2)),
+          appliedDeltaDeg: Number((delta * effectiveSensitivity * 180 / Math.PI).toFixed(2)),
+          targetDeg: Number((targetAngle * 180 / Math.PI).toFixed(2)),
+          aimDeg: Number((smoothedAngle * 180 / Math.PI).toFixed(2)),
+        });
+      }
+    }
+
+    this.lastAimAngle = smoothedAngle;
+    return smoothedAngle;
   }
 
   resetAimAngle(): void {
     this.lastAimAngle = null;
+    this.centerGuardActive = false;
   }
 
   startPowerBarDrag(screenY: number) {
