@@ -347,7 +347,7 @@ function clampRailToCushions(rail: RailDef, cushions: RailDef[]): RailDef {
 }
 
 /** Split a rail so it leaves gaps around pockets (prevents blocked pocket openings). */
-function splitRailByPockets(rail: RailDef, pockets: PocketDef[], cushions: RailDef[]): RailDef[] {
+function splitRailByPockets(rail: RailDef, pockets: PocketDef[], cushions: RailDef[], jawRails: RailDef[] = []): RailDef[] {
   const clamped = clampRailToCushions(rail, cushions);
   const dx = clamped.to.x - clamped.from.x;
   const dy = clamped.to.y - clamped.from.y;
@@ -362,6 +362,61 @@ function splitRailByPockets(rail: RailDef, pockets: PocketDef[], cushions: RailD
   });
 
   const gaps: [number, number][] = [];
+
+  // Prefer cutting openings using derived jaw segments (from cushion outlines).
+  // This keeps the straight play-area rails from leaking into the pocket mouth.
+  if (jawRails && jawRails.length) {
+    const jawTs: number[] = [];
+    const segmentIntersectParam = (a: Vec2, b: Vec2, c: Vec2, d: Vec2): number | null => {
+      const den = (a.x - b.x) * (c.y - d.y) - (a.y - b.y) * (c.x - d.x);
+      if (Math.abs(den) < 1e-8) return null; // parallel or colinear
+      const t = ((a.x - c.x) * (c.y - d.y) - (a.y - c.y) * (c.x - d.x)) / den;
+      const u = ((a.x - c.x) * (a.y - b.y) - (a.y - c.y) * (a.x - b.x)) / den;
+      if (t < -1e-4 || t > 1 + 1e-4 || u < -1e-4 || u > 1 + 1e-4) return null;
+      return t;
+    };
+
+    for (const j of jawRails) {
+      if (!isFiniteVec2(j?.from) || !isFiniteVec2(j?.to)) continue;
+      const t = segmentIntersectParam(clamped.from, clamped.to, j.from, j.to);
+      if (t != null) jawTs.push(Math.max(0, Math.min(1, t)));
+    }
+
+    jawTs.sort((a, b) => a - b);
+    const uniqueJawTs = jawTs.filter((t, idx) => idx === 0 || Math.abs(t - jawTs[idx - 1]) > 1e-4);
+
+    const padIn = 0.05;
+    const padT = Math.min(0.02, padIn / len);
+    const endZoneT = Math.min(0.25, 12 / len);
+
+    let startT = 0;
+    let endT = 1;
+    let innerTs = uniqueJawTs;
+
+    // Corner pockets: trim the ends back to the first jaw intersection near each end.
+    if (innerTs.length && innerTs[0] <= endZoneT) {
+      startT = Math.max(startT, innerTs[0] + padT);
+      innerTs = innerTs.slice(1);
+    }
+    if (innerTs.length && innerTs[innerTs.length - 1] >= 1 - endZoneT) {
+      endT = Math.min(endT, innerTs[innerTs.length - 1] - padT);
+      innerTs = innerTs.slice(0, -1);
+    }
+
+    // Side pockets: remaining intersections should come in pairs that bound the opening.
+    for (let i = 0; i + 1 < innerTs.length; i += 2) {
+      const a = innerTs[i];
+      const b = innerTs[i + 1];
+      const s = Math.max(startT, Math.min(endT, Math.min(a, b) - padT));
+      const e = Math.max(startT, Math.min(endT, Math.max(a, b) + padT));
+      if (e - s > 1e-4) gaps.push([s, e]);
+    }
+
+    // Apply trims as implicit gaps (simplifies merge logic).
+    if (startT > 1e-4) gaps.push([0, startT]);
+    if (endT < 1 - 1e-4) gaps.push([endT, 1]);
+  }
+
   (pockets || []).forEach((p: PocketDef) => {
     if (!isFiniteVec2(p?.center) || !Number.isFinite(p.radius)) return;
     const vx = p.center.x - clamped.from.x;
@@ -841,35 +896,6 @@ export function getTableGeometry(): TableGeometry {
 
       const cushionRails = rawRails.filter(r => r.id.includes('cushion'));
 
-      // Process rails: split 'play_area' rails around pockets to avoid blocking pocket openings
-      const rails: RailDef[] = rawRails.flatMap((r) => {
-        if (r.id.includes('play_area')) {
-          return splitRailByPockets(r, pockets, cushionRails);
-        }
-        return [r];
-      });
-
-      const pixelsPerInch = physicsJson.meta?.pixelsPerInch || 7.68; // Default to 7.68 if missing
-
-      // Calculate the actual physical extent of the table based on all available geometry
-      let maxExtentX = 0;
-      let maxExtentY = 0;
-
-      const updateExtents = (points: { x: number, y: number }[]) => {
-        if (!points) return;
-        for (const p of points) {
-          maxExtentX = Math.max(maxExtentX, Math.abs(p.x));
-          maxExtentY = Math.max(maxExtentY, Math.abs(p.y));
-        }
-      };
-
-      rawRails.forEach(r => updateExtents(r.outline as any));
-      pockets.forEach(p => updateExtents((p as any).outline));
-
-      // Fallback if no geometry found
-      if (maxExtentX === 0) maxExtentX = 55; // Default estimate
-      if (maxExtentY === 0) maxExtentY = 28; // Default estimate
-
       const playArea = physicsJson.playArea || { width: 100, height: 50 };
       const halfW = playArea.width / 2;
       const halfH = playArea.height / 2;
@@ -900,6 +926,36 @@ export function getTableGeometry(): TableGeometry {
         const outline = Array.isArray(c.outline) ? c.outline.filter(isFiniteVec2) : [];
         if (outline.length < 2) return;
 
+        const intersectSegmentPlayAreaBoundary = (insidePt: Vec2, outsidePt: Vec2): Vec2 | null => {
+          const dx = outsidePt.x - insidePt.x;
+          const dy = outsidePt.y - insidePt.y;
+          const candidates: { t: number; pt: Vec2 }[] = [];
+
+          if (Math.abs(dx) > 1e-8) {
+            for (const xEdge of [-halfW, halfW]) {
+              const t = (xEdge - insidePt.x) / dx;
+              if (t < -1e-6 || t > 1 + 1e-6) continue;
+              const y = insidePt.y + dy * t;
+              if (y < -halfH - 1e-3 || y > halfH + 1e-3) continue;
+              candidates.push({ t, pt: { x: xEdge, y } });
+            }
+          }
+
+          if (Math.abs(dy) > 1e-8) {
+            for (const yEdge of [-halfH, halfH]) {
+              const t = (yEdge - insidePt.y) / dy;
+              if (t < -1e-6 || t > 1 + 1e-6) continue;
+              const x = insidePt.x + dx * t;
+              if (x < -halfW - 1e-3 || x > halfW + 1e-3) continue;
+              candidates.push({ t, pt: { x, y: yEdge } });
+            }
+          }
+
+          if (!candidates.length) return null;
+          candidates.sort((a, b) => a.t - b.t);
+          return candidates[0].pt;
+        };
+
         for (let i = 0; i < outline.length - 1; i++) {
           const p1 = outline[i];
           const p2 = outline[i + 1];
@@ -918,24 +974,55 @@ export function getTableGeometry(): TableGeometry {
             const maxJawDist = 14; // inches; generous to keep true pocket-jaw segments
             if (dSq > maxJawDist * maxJawDist) continue;
 
-            // The inside endpoint should be near the play-area boundary; if an outline point gets dragged
-            // deep into the play field, don't generate a jaw rail from that segment.
             const insidePt = in1 ? p1 : p2;
-            const distToBoundaryIn = Math.min(halfW - Math.abs(insidePt.x), halfH - Math.abs(insidePt.y));
-            if (distToBoundaryIn > 3) continue; // >3" inside the field => not a jaw edge
+            const outsidePt = in1 ? p2 : p1;
+
+            // Clamp jaw rails to the *outside* of the play area so they don't intrude into the play field.
+            // The play-area rails are the authoritative collision boundary; jaw rails should live in the pocket gaps.
+            const boundaryPt = intersectSegmentPlayAreaBoundary(insidePt, outsidePt);
+            if (!boundaryPt) continue;
 
             // Also reject unusually long jaw segments.
             if (Math.hypot(dx, dy) > 10) continue;
 
             jawRails.push({
               id: `${c.id}_jaw_${i}`,
-              from: p1,
-              to: p2,
-              normal: computeInwardNormal(p1, p2),
+              from: boundaryPt,
+              to: outsidePt,
+              normal: computeInwardNormal(boundaryPt, outsidePt),
             });
           }
         }
       });
+
+      // Process rails: split 'play_area' rails around pockets to avoid blocking pocket openings
+      const rails: RailDef[] = rawRails.flatMap((r) => {
+        if (r.id.includes('play_area')) {
+          return splitRailByPockets(r, pockets, cushionRails, jawRails);
+        }
+        return [r];
+      });
+
+      const pixelsPerInch = physicsJson.meta?.pixelsPerInch || 7.68; // Default to 7.68 if missing
+
+      // Calculate the actual physical extent of the table based on all available geometry
+      let maxExtentX = 0;
+      let maxExtentY = 0;
+
+      const updateExtents = (points: { x: number, y: number }[]) => {
+        if (!points) return;
+        for (const p of points) {
+          maxExtentX = Math.max(maxExtentX, Math.abs(p.x));
+          maxExtentY = Math.max(maxExtentY, Math.abs(p.y));
+        }
+      };
+
+      rawRails.forEach(r => updateExtents(r.outline as any));
+      pockets.forEach(p => updateExtents((p as any).outline));
+
+      // Fallback if no geometry found
+      if (maxExtentX === 0) maxExtentX = 55; // Default estimate
+      if (maxExtentY === 0) maxExtentY = 28; // Default estimate
 
       console.log(`[Geometry] Calculated Frame Extents from Physics: +/- ${maxExtentX.toFixed(3)} x ${maxExtentY.toFixed(3)}`);
 
