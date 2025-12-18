@@ -830,10 +830,14 @@ export class CueRenderer {
                 // Adjust contactPoint by interpolation offset to align with rendered cue ball
                 const adjContactX = prediction.contactPoint.x + interpOffset.x;
                 const adjContactY = prediction.contactPoint.y + interpOffset.y;
-                // contactPoint is on cue ball surface; shift to cue ball center at impact
+                // contactPoint is on cue ball surface; shift to cue ball center at impact.
                 const cueRadius = CONFIG.BALL_RADIUS;
-                const centerAtImpactX = adjContactX - prediction.contactNormal.x * cueRadius;
-                const centerAtImpactY = adjContactY - prediction.contactNormal.y * cueRadius;
+                const centerAtImpactX = prediction.type === 'rail'
+                    ? adjContactX + prediction.contactNormal.x * cueRadius
+                    : adjContactX - prediction.contactNormal.x * cueRadius;
+                const centerAtImpactY = prediction.type === 'rail'
+                    ? adjContactY + prediction.contactNormal.y * cueRadius
+                    : adjContactY - prediction.contactNormal.y * cueRadius;
                 if (prediction.type === 'ball') {
                     // Use shot direction for offset
                     const shotAngle = Math.atan2(shotDirection.y, shotDirection.x);

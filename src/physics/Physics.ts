@@ -95,6 +95,15 @@ export class PhysicsWorld {
       if (dot < 0) {
         rail.flipNormal();
       }
+      // Final safety: ensure normals point inward toward table center (protects against inconsistent authored normals).
+      const midX = (rail.x1 + rail.x2) * 0.5;
+      const midY = (rail.y1 + rail.y2) * 0.5;
+      const toCenterX = -midX;
+      const toCenterY = -midY;
+      const dotToCenter = rail.nx * toCenterX + rail.ny * toCenterY;
+      if (dotToCenter < 0) {
+        rail.flipNormal();
+      }
       this.rails.push(rail);
     });
   }

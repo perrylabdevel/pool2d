@@ -770,7 +770,9 @@ export class Predictor {
       // Apply cushion friction (0.15)
       // In Collision.ts: jt = -vt / invMass; maxFriction = jn * 0.15;
       // Here we simulate the ratio of impulse transfer
-      const cushionFriction = 0.15;
+      // Keep cushion friction low so the tangential component largely survives a rail bounce
+      // (no english/spin implemented yet).
+      const cushionFriction = 0.03;
 
       // Impulse approximation: jn ~ (1+e)*vn
       // Friction impulse jt is limited by normal impulse jn

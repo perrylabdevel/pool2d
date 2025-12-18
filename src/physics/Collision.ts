@@ -400,7 +400,9 @@ export function resolveBallRail(contact: Contact) {
   const vt = ballA.vx * tx + ballA.vy * ty;
 
   // Use cushion-specific friction (0.15) with Coulomb clamp against the normal impulse
-  const cushionFriction = 0.15;
+  // Keep cushion friction low so the tangential component largely survives a rail bounce
+  // (no english/spin implemented yet).
+  const cushionFriction = 0.03;
   const totalInvMass = ballA.invMass;
   let jt = 0;
   if (totalInvMass > 0) {
