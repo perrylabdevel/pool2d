@@ -73,6 +73,7 @@ export class FXRenderer {
 
         const smoothstep = (t: number) => t * t * (3 - 2 * t);
         const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+        const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
         const spriteScale = Math.max(0.1, (CONFIG as any).POCKET_ANIMATION_ICON_SCALE ?? 1.45);
         const baseRadius = Math.max(3, (event.radius ?? CONFIG.BALL_RADIUS) * scale * spriteScale);
@@ -91,8 +92,8 @@ export class FXRenderer {
 
         let x: number, y: number;
 
-        // Constant radius - no shrinking
-        const radius = baseRadius;
+        // Optional sink shrink (kept 0 by default in config)
+        const shrinkFactor = Math.max(0, Math.min(0.95, CONFIG.POCKET_ANIMATION_SHRINK_FACTOR ?? 0));
 
         if (progress < dropPhaseEnd) {
             // Phase 1: Ball drops into pocket (fully visible, no clip)
@@ -111,13 +112,16 @@ export class FXRenderer {
         const fadeT = progress < dropPhaseEnd ? 0 : clamp01((progress - dropPhaseEnd) / (1 - dropPhaseEnd));
         const alpha = 1 - smoothstep(fadeT);
 
+        const radius = baseRadius * (1 - shrinkFactor * smoothstep(fadeT));
+
         ctx.save();
         ctx.globalAlpha *= alpha;
 
-        // Clip during fade phase (when ball is at pocket center)
-        if (progress >= dropPhaseEnd) {
-            const clipRadiusScale = Math.max(0.1, CONFIG.POCKET_ANIMATION_CLIP_RADIUS_SCALE ?? 1.4);
-            const clipRadius = Math.max(pocketOpeningRadius * clipRadiusScale, radius * 1.05);
+        // Clip once the sprite overlaps the pocket opening so the UI overlay doesn't "sit on top" of the rim.
+        const clipRadiusScale = clamp(CONFIG.POCKET_ANIMATION_CLIP_RADIUS_SCALE ?? 1.0, 0.1, 1.0);
+        const clipRadius = pocketOpeningRadius * clipRadiusScale;
+        const distToPocket = Math.hypot(x - endScreen.x, y - endScreen.y);
+        if (distToPocket < clipRadius + radius) {
             ctx.beginPath();
             ctx.arc(endScreen.x, endScreen.y, clipRadius, 0, Math.PI * 2);
             ctx.clip();

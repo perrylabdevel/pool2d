@@ -1435,6 +1435,7 @@ export class Renderer extends BaseRenderer {
 
     const smoothstep = (t: number) => t * t * (3 - 2 * t);
     const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+    const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
     const spriteScale = Math.max(0.1, (CONFIG as any).POCKET_ANIMATION_ICON_SCALE ?? 1.45);
     const baseRadius = (event.radius ?? CONFIG.BALL_RADIUS) * this.scale * spriteScale;
@@ -1453,8 +1454,8 @@ export class Renderer extends BaseRenderer {
 
     let x: number, y: number;
 
-    // Constant radius - no shrinking
-    const radius = baseRadius;
+    // Optional sink shrink (kept 0 by default in config)
+    const shrinkFactor = Math.max(0, Math.min(0.95, CONFIG.POCKET_ANIMATION_SHRINK_FACTOR ?? 0));
 
     if (progress < dropPhaseEnd) {
       // Phase 1: Ball drops into pocket (fully visible, no clip)
@@ -1473,29 +1474,16 @@ export class Renderer extends BaseRenderer {
     const fadeT = progress < dropPhaseEnd ? 0 : clamp01((progress - dropPhaseEnd) / (1 - dropPhaseEnd));
     const alpha = 1 - smoothstep(fadeT);
 
+    const radius = baseRadius * (1 - shrinkFactor * smoothstep(fadeT));
+
     this.ctx.save();
     this.ctx.globalAlpha *= alpha;
 
-    // Only clip during fade phase (when ball is at pocket center)
-    if (progress >= dropPhaseEnd) {
-      const clipRadiusScale = Math.max(0.1, CONFIG.POCKET_ANIMATION_CLIP_RADIUS_SCALE ?? 1.4);
-      const clipRadius = Math.max(pocketOpeningRadius * clipRadiusScale, radius * 1.05);
-
-      if (!(event as any).__pocketDebugLogged) {
-        (event as any).__pocketDebugLogged = true;
-        console.log('[PocketAnim][2D] fade phase snapshot', {
-          ballId: event.ballId,
-          spriteScale,
-          baseRadius,
-          canvasScale: this.scale,
-          clipRadius,
-          pocketOpeningRadius,
-          clipRadiusScale,
-          shrinkFactorConfig: (CONFIG as any).POCKET_ANIMATION_SHRINK_FACTOR,
-          iconScaleConfig: (CONFIG as any).POCKET_ANIMATION_ICON_SCALE,
-        });
-      }
-
+    // Clip once the sprite overlaps the pocket opening so the overlay doesn't visually sit on top of the rim.
+    const clipRadiusScale = clamp(CONFIG.POCKET_ANIMATION_CLIP_RADIUS_SCALE ?? 1.0, 0.1, 1.0);
+    const clipRadius = pocketOpeningRadius * clipRadiusScale;
+    const distToPocket = Math.hypot(x - endScreenX, y - endScreenY);
+    if (distToPocket < clipRadius + radius) {
       this.ctx.beginPath();
       this.ctx.arc(endScreenX, endScreenY, clipRadius, 0, Math.PI * 2);
       this.ctx.clip();

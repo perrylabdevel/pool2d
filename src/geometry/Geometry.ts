@@ -291,6 +291,21 @@ function normalizeVec(vec: Vec2): Vec2 {
   return { x: vec.x / length, y: vec.y / length };
 }
 
+function shouldTreatOutlineClosed(outline: Vec2[]): boolean {
+  if (!Array.isArray(outline) || outline.length < 3) return false;
+  const first = outline[0];
+  const last = outline[outline.length - 1];
+  if (!isFiniteVec2(first) || !isFiniteVec2(last)) return false;
+
+  const closingLen = Math.hypot(first.x - last.x, first.y - last.y);
+  // Explicitly closed (common case).
+  if (closingLen < 1e-6) return true;
+
+  // Table-editor safety: only infer closure when the endpoints are physically close.
+  // Avoids creating a long "ghost edge" that can clamp/split rails in the wrong direction.
+  return closingLen <= 2.0;
+}
+
 function computeInwardNormal(from: Vec2, to: Vec2): Vec2 {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
@@ -325,10 +340,15 @@ function clampRailToCushions(rail: RailDef, cushions: RailDef[]): RailDef {
   };
 
   (cushions || []).forEach((c) => {
-    const outline = Array.isArray(c.outline) && c.outline.length > 1 ? c.outline : [c.from, c.to];
-    for (let i = 0; i < outline.length; i++) {
+    const outlineRaw = Array.isArray(c.outline) && c.outline.length > 1 ? c.outline : [c.from, c.to];
+    const outline = outlineRaw.filter(isFiniteVec2);
+    if (outline.length < 2) return;
+
+    const treatClosed = shouldTreatOutlineClosed(outline);
+    const edgeCount = treatClosed ? outline.length : outline.length - 1;
+    for (let i = 0; i < edgeCount; i++) {
       const p1 = outline[i];
-      const p2 = outline[(i + 1) % outline.length];
+      const p2 = treatClosed ? outline[(i + 1) % outline.length] : outline[i + 1];
       if (!isFiniteVec2(p1) || !isFiniteVec2(p2)) continue;
       const t = segmentIntersect(rail.from, rail.to, p1, p2);
       if (t != null) intersections.push(t);
@@ -363,6 +383,47 @@ function splitRailByPockets(rail: RailDef, pockets: PocketDef[], cushions: RailD
 
   const gaps: [number, number][] = [];
 
+  // For axis-aligned play-area rails, compute the expected pocket-mouth intersection parameters.
+  // This lets us ignore jaw-derived intersections that don't match the actual pocket circle geometry,
+  // which can happen with table-editor cushion outlines (they're often decorative / not authoritative).
+  const computePocketMouthTs = (): number[] => {
+    const ts: number[] = [];
+    const epsAxis = 1e-4;
+    const isHorizontal = Math.abs(dy) < epsAxis;
+    const isVertical = Math.abs(dx) < epsAxis;
+    if (!isHorizontal && !isVertical) return ts;
+
+    const y0 = clamped.from.y;
+    const x0 = clamped.from.x;
+
+    for (const p of pockets || []) {
+      if (!isFiniteVec2(p?.center) || !Number.isFinite(p.radius)) continue;
+      const r = p.radius;
+
+      if (isHorizontal) {
+        const dyc = p.center.y - y0;
+        if (Math.abs(dyc) >= r) continue;
+        const span = Math.sqrt(Math.max(0, r * r - dyc * dyc));
+        for (const x of [p.center.x - span, p.center.x + span]) {
+          const t = (x - x0) / dx;
+          if (Number.isFinite(t) && t >= -1e-4 && t <= 1 + 1e-4) ts.push(Math.max(0, Math.min(1, t)));
+        }
+      } else if (isVertical) {
+        const dxc = p.center.x - x0;
+        if (Math.abs(dxc) >= r) continue;
+        const span = Math.sqrt(Math.max(0, r * r - dxc * dxc));
+        for (const y of [p.center.y - span, p.center.y + span]) {
+          const t = (y - clamped.from.y) / dy;
+          if (Number.isFinite(t) && t >= -1e-4 && t <= 1 + 1e-4) ts.push(Math.max(0, Math.min(1, t)));
+        }
+      }
+    }
+
+    ts.sort((a, b) => a - b);
+    // De-dupe
+    return ts.filter((t, idx) => idx === 0 || Math.abs(t - ts[idx - 1]) > 2e-3);
+  };
+
   // Prefer cutting openings using derived jaw segments (from cushion outlines).
   // This keeps the straight play-area rails from leaking into the pocket mouth.
   if (jawRails && jawRails.length) {
@@ -383,7 +444,15 @@ function splitRailByPockets(rail: RailDef, pockets: PocketDef[], cushions: RailD
     }
 
     jawTs.sort((a, b) => a - b);
-    const uniqueJawTs = jawTs.filter((t, idx) => idx === 0 || Math.abs(t - jawTs[idx - 1]) > 1e-4);
+
+    // Filter jaw intersections to those consistent with pocket-mouth locations for this rail.
+    // This avoids "wrong-direction" trims caused by outline edges near corners that are not part of the true mouth.
+    const pocketMouthTs = computePocketMouthTs();
+    const jawTsFiltered = pocketMouthTs.length
+      ? jawTs.filter((t) => pocketMouthTs.some((pm) => Math.abs(pm - t) <= 0.04))
+      : jawTs;
+
+    const uniqueJawTs = jawTsFiltered.filter((t, idx) => idx === 0 || Math.abs(t - jawTsFiltered[idx - 1]) > 1e-4);
 
     const padIn = 0.05;
     const padT = Math.min(0.02, padIn / len);
@@ -926,6 +995,12 @@ export function getTableGeometry(): TableGeometry {
         const outline = Array.isArray(c.outline) ? c.outline.filter(isFiniteVec2) : [];
         if (outline.length < 2) return;
 
+        const outsideDistance = (p: Vec2): number => {
+          const dxOut = Math.max(0, Math.abs(p.x) - halfW);
+          const dyOut = Math.max(0, Math.abs(p.y) - halfH);
+          return Math.max(dxOut, dyOut);
+        };
+
         const intersectSegmentPlayAreaBoundary = (insidePt: Vec2, outsidePt: Vec2): Vec2 | null => {
           const dx = outsidePt.x - insidePt.x;
           const dy = outsidePt.y - insidePt.y;
@@ -956,9 +1031,11 @@ export function getTableGeometry(): TableGeometry {
           return candidates[0].pt;
         };
 
-        for (let i = 0; i < outline.length - 1; i++) {
+        const treatClosed = shouldTreatOutlineClosed(outline);
+        const edgeCount = treatClosed ? outline.length : outline.length - 1;
+        for (let i = 0; i < edgeCount; i++) {
           const p1 = outline[i];
-          const p2 = outline[i + 1];
+          const p2 = treatClosed ? outline[(i + 1) % outline.length] : outline[i + 1];
           if (!isFiniteVec2(p1) || !isFiniteVec2(p2)) continue;
           const dx = p2.x - p1.x;
           const dy = p2.y - p1.y;
@@ -982,14 +1059,52 @@ export function getTableGeometry(): TableGeometry {
             const boundaryPt = intersectSegmentPlayAreaBoundary(insidePt, outsidePt);
             if (!boundaryPt) continue;
 
-            // Also reject unusually long jaw segments.
-            if (Math.hypot(dx, dy) > 10) continue;
+            // Enforce that the jaw segment points outward (away from the play area).
+            // Some table-editor outlines can create ambiguous inside/outside classification near the boundary,
+            // which otherwise yields a jaw pointing 180° the wrong way.
+            const dirX = outsidePt.x - insidePt.x;
+            const dirY = outsidePt.y - insidePt.y;
+            const dirLen = Math.hypot(dirX, dirY);
+            if (!(dirLen > 1e-4)) continue;
+            let ux = dirX / dirLen;
+            let uy = dirY / dirLen;
+            const probe = 0.5;
+            const outForward = outsideDistance({ x: boundaryPt.x + ux * probe, y: boundaryPt.y + uy * probe });
+            const outBackward = outsideDistance({ x: boundaryPt.x - ux * probe, y: boundaryPt.y - uy * probe });
+            if (outBackward > outForward) {
+              ux = -ux;
+              uy = -uy;
+            }
+
+            // Clamp length to a reasonable amount while ensuring we extend into the pocket gap.
+            const maxJawLen = 10; // inches
+            // Use pocket size to pick a reasonable minimum so the jaw reliably covers the mouth area.
+            const nearest = (() => {
+              let best: PocketDef | null = null;
+              let bestD = Number.POSITIVE_INFINITY;
+              for (const p of pockets) {
+                if (!isFiniteVec2(p?.center) || !Number.isFinite(p.radius)) continue;
+                const dx = boundaryPt.x - p.center.x;
+                const dy = boundaryPt.y - p.center.y;
+                const d = dx * dx + dy * dy;
+                if (d < bestD) {
+                  bestD = d;
+                  best = p;
+                }
+              }
+              return best;
+            })();
+            const minJawLen = nearest?.radius ? Math.max(1.5, Math.min(6.0, nearest.radius * 1.75)) : 1.5;
+            const rawLen = Math.hypot(outsidePt.x - boundaryPt.x, outsidePt.y - boundaryPt.y);
+            const jawLen = Math.min(maxJawLen, Math.max(minJawLen, Number.isFinite(rawLen) ? rawLen : minJawLen));
+            const jawTo: Vec2 = { x: boundaryPt.x + ux * jawLen, y: boundaryPt.y + uy * jawLen };
+            if (outsideDistance(jawTo) < 0.01) continue;
 
             jawRails.push({
               id: `${c.id}_jaw_${i}`,
               from: boundaryPt,
-              to: outsidePt,
-              normal: computeInwardNormal(boundaryPt, outsidePt),
+              to: jawTo,
+              normal: computeInwardNormal(boundaryPt, jawTo),
             });
           }
         }

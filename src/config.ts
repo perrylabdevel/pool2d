@@ -97,11 +97,11 @@ export const CONFIG = {
   POCKET_ANIMATION_DROP_DURATION_MS: 180, // duration of drop phase (ball moving to pocket)
   POCKET_ANIMATION_ROLL_DURATION_MS: 250, // duration of fade phase
   POCKET_ANIMATION_DROP_DEPTH: 0.35, // visual drop depth in inches ~ depth perception (legacy)
-  POCKET_ANIMATION_SHRINK_FACTOR: 0.0, // (legacy - shrinking removed for cleaner visuals)
+  POCKET_ANIMATION_SHRINK_FACTOR: 0.0, // optional sink shrink during fade (0 = off)
   POCKET_ANIMATION_FADE_START: 0.9, // (legacy - fade now starts at dropPhaseEnd automatically)
   POCKET_ANIMATION_FADE_DURATION: 0.12, // (legacy - fade duration now spans entire fade phase)
   POCKET_ANIMATION_CLIP_START: 0.2, // (legacy - clip only applied during fade phase now)
-  POCKET_ANIMATION_CLIP_RADIUS_SCALE: 1.05, // scale factor for pocket clip radius
+  POCKET_ANIMATION_CLIP_RADIUS_SCALE: 1.0, // 0.1-1.0; clips overlay to pocket opening to avoid "rim overlap"
   POCKET_ANIMATION_ICON_SCALE: 1.0, // scale applied when drawing pocket animation balls (1.0 = actual size)
   POCKET_ANIMATION_UNDERFELT_PX: 10, // (legacy - roll movement removed)
   POCKET_CAPTURE_SPEED_THRESHOLD: 45, // in/s speed above which we damp pocket entry
