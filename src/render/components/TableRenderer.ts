@@ -62,6 +62,7 @@ export class TableRenderer {
     private feltTexture: THREE.Texture | null = null;
     private frameTexture: THREE.CanvasTexture | null = null;
     private skinLoadToken: number = 0;
+    private lastLoggedSkinDiagnosticsKey: string | null = null;
 
     // Texture Manager (new unified system)
     private textureManager: TableTextureManager;
@@ -180,6 +181,7 @@ export class TableRenderer {
 
                 console.log(`[TableRenderer] Skin loaded: ${image.width}x${image.height} px`);
                 console.log(`[TableRenderer] Applied Physical Size: ${physicalWidth.toFixed(2)}" x ${physicalHeight.toFixed(2)}"`);
+                this.logSkinPpiDiagnostics(image.width, image.height, PPI, skinName ? `editor:${skinName}` : 'editor');
 
                 if (this.skinMesh) {
                     // Update material texture
@@ -315,6 +317,7 @@ export class TableRenderer {
                 console.log(`[TableRenderer] Skin loaded: ${image.width}x${image.height} px`);
                 console.log(`[TableRenderer] PPI: ${PPI}`);
                 console.log(`[TableRenderer] Applied Physical Size: ${physicalWidth.toFixed(2)}" x ${physicalHeight.toFixed(2)}"`);
+                this.logSkinPpiDiagnostics(image.width, image.height, PPI, pendingSkinImage ? 'pending-skin' : 'default-skin');
 
                 if (this.skinMesh) {
                     this.skinMesh.scale.set(physicalWidth, physicalHeight, 1);
@@ -340,6 +343,53 @@ export class TableRenderer {
         this.skinMesh.name = 'SkinOverlay';
         this.skinMesh.visible = this.layerVisibility.showSkin;
         this.scene.add(this.skinMesh);
+    }
+
+    private logSkinPpiDiagnostics(imageWidthPx: number, imageHeightPx: number, pixelsPerInch: number, source: string): void {
+        const geom = getTableGeometry();
+        const outerHalfWidth = geom.frameOutline?.outerHalfWidth;
+        const outerHalfHeight = geom.frameOutline?.outerHalfHeight;
+        if (!Number.isFinite(outerHalfWidth) || !Number.isFinite(outerHalfHeight) || outerHalfWidth! <= 0 || outerHalfHeight! <= 0) {
+            return;
+        }
+
+        const outerWidthIn = outerHalfWidth! * 2;
+        const outerHeightIn = outerHalfHeight! * 2;
+        const skinWidthIn = imageWidthPx / pixelsPerInch;
+        const skinHeightIn = imageHeightPx / pixelsPerInch;
+
+        const ppiFitWidth = imageWidthPx / outerWidthIn;
+        const ppiFitHeight = imageHeightPx / outerHeightIn;
+        const aspectTable = outerWidthIn / outerHeightIn;
+        const aspectImage = imageWidthPx / imageHeightPx;
+
+        const key = `${source}:${imageWidthPx}x${imageHeightPx}@${pixelsPerInch.toFixed(6)}:${outerWidthIn.toFixed(3)}x${outerHeightIn.toFixed(3)}`;
+        if (this.lastLoggedSkinDiagnosticsKey === key) return;
+        this.lastLoggedSkinDiagnosticsKey = key;
+
+        const sizeErrorWidth = Math.abs(skinWidthIn - outerWidthIn) / outerWidthIn;
+        const sizeErrorHeight = Math.abs(skinHeightIn - outerHeightIn) / outerHeightIn;
+        const aspectError = Math.abs(aspectImage - aspectTable) / aspectTable;
+
+        const shouldWarn = sizeErrorWidth > 0.01 || sizeErrorHeight > 0.01 || aspectError > 0.01;
+        const log = shouldWarn ? console.warn : console.log;
+
+        const recommendedPxForCurrentPpiW = Math.round(outerWidthIn * pixelsPerInch);
+        const recommendedPxForCurrentPpiH = Math.round(outerHeightIn * pixelsPerInch);
+        const recommendedPxKeepWidthH = Math.round(outerHeightIn * ppiFitWidth);
+
+        log(`[TableRenderer] Skin diagnostics (${source})`, {
+            imagePx: `${imageWidthPx}x${imageHeightPx}`,
+            tableOuterIn: `${outerWidthIn.toFixed(3)}x${outerHeightIn.toFixed(3)}`,
+            pixelsPerInch,
+            skinInFromPpi: `${skinWidthIn.toFixed(3)}x${skinHeightIn.toFixed(3)}`,
+            recommendedPpiFitWidth: Number(ppiFitWidth.toFixed(6)),
+            recommendedPpiFitHeight: Number(ppiFitHeight.toFixed(6)),
+            aspectTable: Number(aspectTable.toFixed(6)),
+            aspectImage: Number(aspectImage.toFixed(6)),
+            recommendedImagePxForCurrentPpi: `${recommendedPxForCurrentPpiW}x${recommendedPxForCurrentPpiH}`,
+            recommendedImagePxKeepWidth: `${imageWidthPx}x${recommendedPxKeepWidthH}`,
+        });
     }
 
     private applyNormalizedUVs(geometry: THREE.BufferGeometry, bounds: BoundaryBounds) {

@@ -47,6 +47,10 @@
   background: radial-gradient(circle at center, var(--color-menu-bg) 0%, var(--color-deep-navy) 100%);
 }
 
+#workspace-main.workspace-in-game {
+  background: var(--color-deep-navy);
+}
+
 #workspace-main.workspace-hud-offset {
   padding-top: 120px;
 }
@@ -74,7 +78,7 @@
   height: 100%;
   max-width: 100%;
   max-height: 100%;
-  background: var(--color-deep-navy);
+  background: transparent;
   box-sizing: border-box;
   border-radius: 18px;
   overflow: hidden;

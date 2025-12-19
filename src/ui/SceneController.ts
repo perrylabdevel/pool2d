@@ -141,6 +141,7 @@ export class SceneController {
 
     private bindStateChanges() {
         uiStateMachine.onStateChange((newState, _prevState, transition) => {
+            console.log(`[SceneController] State change: ${_prevState} -> ${newState}`);
             const lobbyScene = this.scenes.get(UIState.LOBBY) as LobbyScene | undefined;
             if (lobbyScene && typeof lobbyScene.setCameFromGame === 'function') {
                 lobbyScene.setCameFromGame(_prevState === UIState.IN_GAME);
@@ -189,17 +190,28 @@ export class SceneController {
             this.transitionType = transition; // Use the requested transition
             this.canvas.style.display = 'block';
             this.canvas.style.pointerEvents = 'auto';
+            this.canvas.style.visibility = 'visible'; // Ensure visible
+            this.canvas.style.opacity = '1'; // Ensure opaque
 
             // Play sound
             uiSoundService.play('modal-open');
         } else if (!nextScene) {
+            console.log('[SceneController] Hiding UI for In-Game state');
             // Transition to nothing (e.g. in-game)
             if (this.currentScene) this.currentScene.unmount();
             this.focusManager.clear();
             this.currentScene = null;
+
+            // Force clear canvas
+            this.ctx.setTransform(1, 0, 0, 1, 0, 0);
             this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+            this.canvas.width = this.canvas.width; // Force context reset
+
+            // Ensure hidden
             this.canvas.style.display = 'none';
             this.canvas.style.pointerEvents = 'none';
+            this.canvas.style.visibility = 'hidden';
+            this.canvas.style.opacity = '0';
         }
     }
 

@@ -576,7 +576,7 @@ export class LobbyScene implements UIScene {
     }
 
     private renderBackground(ctx: CanvasRenderingContext2D, width: number, height: number) {
-        drawSceneBackground(ctx, width, height, 'blue');
+        drawSceneBackground(ctx, width, height, 'red');
     }
 
     private renderCards(ctx: CanvasRenderingContext2D) {

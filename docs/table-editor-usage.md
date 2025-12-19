@@ -40,6 +40,18 @@ This starts:
 - `Save to Disk` writes to `src/geometry/tables/<name>.physics.json`
 - `Set Active` also overwrites `src/geometry/table.physics.json`
 
+## Skins + `pixelsPerInch` (PPI)
+
+The game sizes the skin overlay in *world inches* using `meta.pixelsPerInch` from the active physics JSON:
+- `skinWidthIn  = imageWidthPx  / pixelsPerInch`
+- `skinHeightIn = imageHeightPx / pixelsPerInch`
+
+So if you use a higher-resolution skin, you must also increase `meta.pixelsPerInch` by the same scale factor (to keep the table the same physical size).
+
+Helper script (prints recommended PPI and pixel sizes, and can write the PPI back into the JSON):
+- `python3 tools/skin_ppi.py --physics src/geometry/table.physics.json --skin path/to/skin.png`
+- `python3 tools/skin_ppi.py --physics src/geometry/table.physics.json --skin path/to/skin.png --fit width --write`
+
 ## Push to game
 
 - `Push Live` sends a runtime-only geometry override (wins for the current session even if a persisted override exists)

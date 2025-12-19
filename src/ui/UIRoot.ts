@@ -24,7 +24,7 @@ export class UIRoot {
 
     // Sync initial visibility with current UI state and subscribe to changes
     this.updateForState(uiStateMachine.state);
-    uiStateMachine.onStateChange((newState) => this.updateForState(newState));
+    uiStateMachine.onStateChange((newState, previousState) => this.updateForState(newState, previousState));
   }
 
   private setupLayering() {
@@ -104,8 +104,9 @@ export class UIRoot {
     }
   }
 
-  private updateForState(state: UIState) {
+  private updateForState(state: UIState, previousState?: UIState) {
     const inGame = state === UIState.IN_GAME;
+    const enteringInGame = inGame && previousState !== UIState.IN_GAME;
     // Only show the gameplay UI overlay canvas (cue, aim lines, etc.)
     // while actually in the IN_GAME state. For lobby/menus, hide it so
     // scene canvases are not visually mixed with the overlay.
@@ -115,8 +116,17 @@ export class UIRoot {
     }
 
     if (this.uiStageCanvas) {
+      if (enteringInGame) {
+        const ctx = this.uiStageCanvas.getContext('2d');
+        if (ctx) {
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          ctx.clearRect(0, 0, this.uiStageCanvas.width, this.uiStageCanvas.height);
+        }
+      }
       this.uiStageCanvas.style.display = inGame ? 'none' : 'block';
       this.uiStageCanvas.style.pointerEvents = inGame ? 'none' : 'auto';
+      this.uiStageCanvas.style.visibility = inGame ? 'hidden' : 'visible';
+      this.uiStageCanvas.style.opacity = inGame ? '0' : '1';
     }
 
     // Hide the game canvas (3D table) when in lobby/menu scenes to prevent bleed-through
@@ -145,8 +155,10 @@ export class UIRoot {
     if (this.workspaceMain) {
       if (inGame) {
         this.workspaceMain.classList.add('workspace-hud-offset');
+        this.workspaceMain.classList.add('workspace-in-game');
       } else {
         this.workspaceMain.classList.remove('workspace-hud-offset');
+        this.workspaceMain.classList.remove('workspace-in-game');
       }
     }
   }

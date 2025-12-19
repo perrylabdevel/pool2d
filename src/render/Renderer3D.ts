@@ -136,6 +136,7 @@ export class Renderer3D extends BaseRenderer {
     this.renderer = new THREE.WebGLRenderer({
       canvas,
       antialias: true,
+      alpha: true,
     });
     // Ensure correct color output and crisp rendering
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -144,7 +145,8 @@ export class Renderer3D extends BaseRenderer {
     this.renderer.setPixelRatio(window.devicePixelRatio || 1);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    this.renderer.setClearColor(0x000000, 0); // Transparent background
+    // Clear to the same deep-navy as the app background to avoid visible seams/letterboxing.
+    this.renderer.setClearColor(0x00FF00, 1); // DEBUG: GREEN background for isolation
 
     // Initialize Components
     this.tableRenderer = new TableRenderer(this.scene, this.layerVisibility, this.layerOrder, this.settingsManager);
@@ -650,6 +652,8 @@ export class Renderer3D extends BaseRenderer {
 
     this.ballRenderer.updateBalls(world.balls, alpha);
 
+    // Ensure the WebGL clear matches the app background (some auxiliary render paths temporarily change clear alpha).
+    this.renderer.setClearColor(0x000B1A, 1);
     this.renderer.render(this.scene, this.camera);
 
     // Clear UI canvas BEFORE drawing new UI elements (pocket animations, cue, etc.)

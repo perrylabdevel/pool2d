@@ -6,7 +6,7 @@ export function drawSceneBackground(
     ctx: CanvasRenderingContext2D,
     width: number,
     height: number,
-    theme: BackgroundTheme = 'blue'
+    theme: BackgroundTheme = 'red'
 ) {
     // Save current transform and reset for background
     // This ensures background slides with scene transitions
