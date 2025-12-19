@@ -4,12 +4,12 @@
  */
 
 import * as THREE from 'three';
-import { TableGeometry } from '../stores/TableStore';
 import { TableSkin } from '../stores/SkinStore';
 import { PhysicsJson, jsonLoader } from '../utils/JsonLoader';
 import { isDerivedPlayAreaRailId } from '../utils/TableGeometryUtils';
 import type { GeometryEdit, GeometrySelection } from '../utils/TableGeometryUtils';
 import { DEFAULT_EDITOR_ASSIST_SETTINGS, type EditorAssistSettings } from '../utils/EditorAssistSettings';
+import { getCollisionRails, type DerivedRail } from '../utils/CollisionDerivation';
 
 export class TablePreview {
   private canvas: HTMLCanvasElement;
@@ -34,6 +34,10 @@ export class TablePreview {
   // State
   private showBalls: boolean = true;
   private showMeasurements: boolean = false;
+  private showCollisionOverlay: boolean = false;
+
+  // Collision overlay meshes
+  private collisionOverlayMeshes: THREE.Object3D[] = [];
   private zoom: number = 1;
   private panX: number = 0;
   private panY: number = 0;
@@ -1039,8 +1043,149 @@ export class TablePreview {
     }
   }
 
-  updateGeometry(geometry: Partial<TableGeometry>): void {
-    this.buildTable();
+  /**
+   * Build the collision overlay showing game-derived geometry:
+   * - Play area rails (boundary used for collision)
+   * - Pocket capture zones (may differ from visual radius)
+   * - Normal vectors for rails
+   */
+  private buildCollisionOverlay(): void {
+    console.log('[CollisionOverlay] buildCollisionOverlay called, showCollisionOverlay:', this.showCollisionOverlay);
+    if (!this.scene) return;
+
+    // Clear existing collision overlay meshes
+    this.collisionOverlayMeshes.forEach((m) => {
+      this.scene!.remove(m);
+      if (m instanceof THREE.Line || m instanceof THREE.LineSegments) {
+        m.geometry?.dispose();
+        if (m.material instanceof THREE.Material) m.material.dispose();
+      }
+    });
+    this.collisionOverlayMeshes = [];
+
+    if (!this.showCollisionOverlay || !this.physicsJson) return;
+
+    const json = this.physicsJson;
+    const OVERLAY_Z = 0.15; // Slightly above table surface
+
+    // Colors for collision overlay
+    const COLLISION_RAIL_COLOR = 0xcc0000; // Deep red for all collision rails
+    const CAPTURE_ZONE_COLOR = 0xff6600;   // Orange for pocket capture zones
+    const NORMAL_VECTOR_COLOR = 0x00ffff;  // Cyan for normal vectors
+
+    // Get all collision rails using the same derivation logic as the game
+    // This includes play_area rails AND derived jaw rails from cushion outlines
+    const collisionRails = getCollisionRails(json);
+    console.log('[CollisionOverlay] Drawing', collisionRails.length, 'collision rails:', collisionRails.map(r => r.id));
+
+    // 1. Draw collision rails (all in unified deep red) as thick tube meshes
+    const RAIL_THICKNESS = 0.3; // inches - visible thickness
+    for (const rail of collisionRails) {
+      // Create a tube/cylinder mesh for reliable thickness (WebGL linewidth is unreliable)
+      const start = new THREE.Vector3(rail.from.x, OVERLAY_Z, -rail.from.y);
+      const end = new THREE.Vector3(rail.to.x, OVERLAY_Z, -rail.to.y);
+      const direction = new THREE.Vector3().subVectors(end, start);
+      const length = direction.length();
+      if (length < 0.001) continue;
+
+      // Create cylinder geometry along the rail
+      const cylGeom = new THREE.CylinderGeometry(RAIL_THICKNESS, RAIL_THICKNESS, length, 8, 1);
+      const cylMat = new THREE.MeshBasicMaterial({
+        color: COLLISION_RAIL_COLOR,
+        transparent: true,
+        opacity: 0.9,
+      });
+      const cylinder = new THREE.Mesh(cylGeom, cylMat);
+
+      // Position at midpoint and rotate to align with rail direction
+      const midpoint = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
+      cylinder.position.copy(midpoint);
+
+      // Rotate cylinder to point along rail (cylinder is Y-axis aligned by default)
+      const axis = new THREE.Vector3(0, 1, 0);
+      const quaternion = new THREE.Quaternion().setFromUnitVectors(axis, direction.normalize());
+      cylinder.quaternion.copy(quaternion);
+
+      this.scene.add(cylinder);
+      this.collisionOverlayMeshes.push(cylinder);
+
+      // Draw normal vector at midpoint
+      const midX = (rail.from.x + rail.to.x) / 2;
+      const midY = (rail.from.y + rail.to.y) / 2;
+      const normalLen = 2; // inches
+      const normalPoints = [
+        new THREE.Vector3(midX, OVERLAY_Z + 0.01, -midY),
+        new THREE.Vector3(
+          midX + rail.normal.x * normalLen,
+          OVERLAY_Z + 0.01,
+          -(midY + rail.normal.y * normalLen)
+        ),
+      ];
+      const normalGeom = new THREE.BufferGeometry().setFromPoints(normalPoints);
+      const normalMat = new THREE.LineBasicMaterial({
+        color: NORMAL_VECTOR_COLOR,
+        linewidth: 2,
+      });
+      const normalLine = new THREE.Line(normalGeom, normalMat);
+      this.scene.add(normalLine);
+      this.collisionOverlayMeshes.push(normalLine);
+    }
+
+    // 2. Draw pocket capture zones (circles showing actual capture radius)
+    // Note: captureRadius may differ from visual radius
+    const captureRadiusCorner = 2.8; // Default, should come from config
+    const captureRadiusSide = 3.3;   // Default, should come from config
+
+    for (const pocket of json.pockets) {
+      const isCorner = Math.abs(pocket.center.x) > (json.playArea.width / 4);
+      const captureRadius = (pocket as any).captureRadius ??
+        (isCorner ? captureRadiusCorner : captureRadiusSide);
+
+      // Draw capture zone circle
+      const circlePoints: THREE.Vector3[] = [];
+      const segments = 32;
+      for (let i = 0; i <= segments; i++) {
+        const theta = (i / segments) * Math.PI * 2;
+        circlePoints.push(new THREE.Vector3(
+          pocket.center.x + Math.cos(theta) * captureRadius,
+          OVERLAY_Z + 0.02,
+          -(pocket.center.y + Math.sin(theta) * captureRadius)
+        ));
+      }
+      const circleGeom = new THREE.BufferGeometry().setFromPoints(circlePoints);
+      const circleMat = new THREE.LineBasicMaterial({
+        color: CAPTURE_ZONE_COLOR,
+        linewidth: 2,
+        transparent: true,
+        opacity: 0.8,
+      });
+      const circle = new THREE.Line(circleGeom, circleMat);
+      this.scene.add(circle);
+      this.collisionOverlayMeshes.push(circle);
+
+      // Draw visual radius for comparison (if different from capture)
+      if (Math.abs(pocket.radius - captureRadius) > 0.01) {
+        const visualPoints: THREE.Vector3[] = [];
+        for (let i = 0; i <= segments; i++) {
+          const theta = (i / segments) * Math.PI * 2;
+          visualPoints.push(new THREE.Vector3(
+            pocket.center.x + Math.cos(theta) * pocket.radius,
+            OVERLAY_Z + 0.01,
+            -(pocket.center.y + Math.sin(theta) * pocket.radius)
+          ));
+        }
+        const visualGeom = new THREE.BufferGeometry().setFromPoints(visualPoints);
+        const visualMat = new THREE.LineBasicMaterial({
+          color: 0xff00ff, // Magenta for visual radius
+          linewidth: 1,
+          transparent: true,
+          opacity: 0.5,
+        });
+        const visualCircle = new THREE.Line(visualGeom, visualMat);
+        this.scene.add(visualCircle);
+        this.collisionOverlayMeshes.push(visualCircle);
+      }
+    }
   }
 
   // Corner pocket X/Y offset setters
@@ -1170,13 +1315,77 @@ export class TablePreview {
     this.buildTable();
   }
 
+  toggleCollisionOverlay(show: boolean): void {
+    this.showCollisionOverlay = show;
+    this.buildCollisionOverlay();
+  }
+
   rackBalls(): void {
     this.showBalls = true;
     this.buildBalls();
   }
 
+  /**
+   * Dispose of all Three.js resources to prevent memory leaks.
+   * Call this when the editor is destroyed or unmounted.
+   */
   dispose(): void {
-    cancelAnimationFrame(this.animationId);
+    // Cancel animation loop
+    if (this.animationId) {
+      cancelAnimationFrame(this.animationId);
+      this.animationId = 0;
+    }
+
+    // Helper to dispose geometry and material from a mesh/line
+    const disposeMesh = (obj: THREE.Object3D | null) => {
+      if (!obj) return;
+      if (obj instanceof THREE.Mesh || obj instanceof THREE.Line || obj instanceof THREE.LineSegments) {
+        obj.geometry?.dispose();
+        if (obj.material) {
+          if (Array.isArray(obj.material)) {
+            obj.material.forEach((m) => m.dispose());
+          } else {
+            obj.material.dispose();
+          }
+        }
+      }
+    };
+
+    // Dispose all tracked meshes
+    disposeMesh(this.tableMesh);
+    this.pocketMeshes.forEach(disposeMesh);
+    this.railOutlineMeshes.forEach(disposeMesh);
+    disposeMesh(this.playAreaOutlineMesh);
+    this.measurementMeshes.forEach(disposeMesh);
+    this.ballMeshes.forEach(disposeMesh);
+    this.handleMeshes.forEach(disposeMesh);
+    this.collisionOverlayMeshes.forEach(disposeMesh);
+    disposeMesh(this.gridMinorMesh);
+    disposeMesh(this.gridMajorMesh);
+
+    // Dispose textures
+    this.skinTexture?.dispose();
+    this.skinTexture = null;
+
+    // Clear arrays
+    this.pocketMeshes = [];
+    this.railOutlineMeshes = [];
+    this.measurementMeshes = [];
+    this.ballMeshes = [];
+    this.handleMeshes = [];
+    this.collisionOverlayMeshes = [];
+
+    // Dispose scene (removes all children)
+    if (this.scene) {
+      this.scene.clear();
+      this.scene = null;
+    }
+
+    // Dispose renderer
     this.renderer?.dispose();
+    this.renderer = null;
+
+    // Nullify camera
+    this.camera = null;
   }
 }

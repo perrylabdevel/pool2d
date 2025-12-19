@@ -26,7 +26,15 @@ import {
   type GeometryEdit,
   type GeometrySelection,
   type RadiusScaleRule,
+  type ValidationIssue,
 } from './utils/TableGeometryUtils';
+import {
+  WebSocketBridge,
+  saveTableToDisk,
+  parseImportedFile,
+  pickAndReadFile,
+  exportTableAsFile,
+} from './io';
 
 export class TableEditorApp {
   private preview: TablePreview | null = null;
@@ -36,8 +44,7 @@ export class TableEditorApp {
   private activeRightTab: 'selection' | 'pockets' | 'rails' | 'resize' | 'save' = 'selection';
   private activeLeftTab: 'tables' | 'skins' = 'tables';
 
-  private isConnected: boolean = false;
-  private ws: WebSocket | null = null;
+  private wsBridge: WebSocketBridge;
   private pocketCaptureCornerIn: number = this.loadPocketCaptureRadius('corner', 2.8);
   private pocketCaptureSideIn: number = this.loadPocketCaptureRadius('side', 3.3);
 
@@ -64,6 +71,15 @@ export class TableEditorApp {
 
   private templatePhysicsJson: PhysicsJson | null = null;
 
+  constructor() {
+    this.wsBridge = new WebSocketBridge({
+      onPocketCaptureRadius: (kind, value) => {
+        this.setPocketCaptureRadius(kind, value);
+        if (this.activeRightTab === 'pockets') this.renderRightSidebar();
+      },
+    });
+  }
+
   async init(): Promise<void> {
     await this.skinStore.init();
     await this.tableLibrary.init();
@@ -89,7 +105,7 @@ export class TableEditorApp {
     this.renderRightSidebar();
     this.renderSkinGrid();
 
-    this.connectToGame();
+    this.wsBridge.connect();
     this.updateHeader();
     this.updateJsonEditorText();
 
@@ -415,6 +431,12 @@ export class TableEditorApp {
       this.preview?.toggleMeasurements(btn.classList.contains('active'));
     });
 
+    document.getElementById('btn-toggle-collision')?.addEventListener('click', (e) => {
+      const btn = e.currentTarget as HTMLElement;
+      btn.classList.toggle('active');
+      this.preview?.toggleCollisionOverlay(btn.classList.contains('active'));
+    });
+
     document.getElementById('btn-toggle-snap')?.addEventListener('click', (e) => {
       const btn = e.currentTarget as HTMLElement;
       const next = !btn.classList.contains('active');
@@ -652,6 +674,7 @@ export class TableEditorApp {
             <button class="btn" id="btn-apply-play-area" style="width:100%;">Scale To Size (min radius)</button>
           </div>
         </div>
+        ${this.renderValidationSection(json)}
       `;
 
       container.querySelector('#play-units')?.addEventListener('change', (e) => {
@@ -999,6 +1022,88 @@ export class TableEditorApp {
     }
   }
 
+  /**
+   * Render the validation section showing any issues with the current geometry.
+   * Uses sanitizePhysicsJson to get detailed validation results.
+   */
+  private renderValidationSection(json: PhysicsJson): string {
+    const { issues } = sanitizePhysicsJson(json);
+    const semanticWarnings = getSemanticGeometryWarnings(json);
+
+    // Convert semantic warnings to validation issues
+    const allIssues: ValidationIssue[] = [
+      ...issues,
+      ...semanticWarnings.map((msg) => ({
+        severity: 'warning' as const,
+        message: msg,
+      })),
+    ];
+
+    if (allIssues.length === 0) {
+      return `
+        <div class="property-group">
+          <div class="property-group-title">Validation</div>
+          <div style="padding: 8px; background: rgba(166, 227, 161, 0.1); border-radius: 6px; color: var(--success); font-size: 12px;">
+            No issues found
+          </div>
+        </div>
+      `;
+    }
+
+    const errorCount = allIssues.filter((i) => i.severity === 'error').length;
+    const warningCount = allIssues.filter((i) => i.severity === 'warning').length;
+    const infoCount = allIssues.filter((i) => i.severity === 'info').length;
+
+    const severityColor = (s: string) => {
+      switch (s) {
+        case 'error': return 'var(--error)';
+        case 'warning': return 'var(--warning)';
+        default: return 'var(--text-muted)';
+      }
+    };
+
+    const severityIcon = (s: string) => {
+      switch (s) {
+        case 'error': return '✗';
+        case 'warning': return '⚠';
+        default: return 'ℹ';
+      }
+    };
+
+    return `
+      <div class="property-group">
+        <div class="property-group-title">Validation</div>
+        <div style="display: flex; gap: 12px; margin-bottom: 8px; font-size: 11px;">
+          ${errorCount > 0 ? `<span style="color: var(--error);">${errorCount} errors</span>` : ''}
+          ${warningCount > 0 ? `<span style="color: var(--warning);">${warningCount} warnings</span>` : ''}
+          ${infoCount > 0 ? `<span style="color: var(--text-muted);">${infoCount} info</span>` : ''}
+        </div>
+        <div style="max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;">
+          ${allIssues
+            .slice(0, 20) // Limit to 20 issues
+            .map(
+              (issue) => `
+              <div style="
+                padding: 6px 8px;
+                background: rgba(255,255,255,0.03);
+                border-left: 3px solid ${severityColor(issue.severity)};
+                border-radius: 0 4px 4px 0;
+                font-size: 11px;
+              ">
+                <span style="color: ${severityColor(issue.severity)}; margin-right: 4px;">${severityIcon(issue.severity)}</span>
+                ${issue.message}
+                ${issue.field ? `<span style="color: var(--text-muted); display: block; margin-top: 2px; font-family: monospace; font-size: 10px;">${issue.field}</span>` : ''}
+                ${issue.repaired ? '<span style="color: var(--success); font-size: 10px;"> (auto-repaired)</span>' : ''}
+              </div>
+            `
+            )
+            .join('')}
+          ${allIssues.length > 20 ? `<div style="padding: 6px; color: var(--text-muted); font-size: 11px;">...and ${allIssues.length - 20} more</div>` : ''}
+        </div>
+      </div>
+    `;
+  }
+
   private async repairGeometry(): Promise<void> {
     const json = this.getActivePhysics();
     if (!json) return;
@@ -1090,22 +1195,8 @@ export class TableEditorApp {
   }
 
   private clearGameOverridePersisted(): void {
-    if (!confirm('Clear the game’s persisted override and rebuild the table?')) return;
-    if (!this.ws || !this.isConnected) {
-      alert('Not connected to game. Start `npm run dev` (relay on :8080).');
-      return;
-    }
-
-    this.ws.send(
-      JSON.stringify({
-        type: 'table-editor:push-config',
-        config: {
-          mode: 'persist',
-          physicsJson: null,
-          skin: null,
-        },
-      })
-    );
+    if (!confirm("Clear the game's persisted override and rebuild the table?")) return;
+    this.wsBridge.pushToGame('persist', { physicsJson: null, skin: null });
   }
 
   private getPromptUnitsLabel(): string {
@@ -1521,7 +1612,9 @@ ${JSON.stringify(json, null, 2)}
       dropZone.classList.remove('active');
       const files = (e as DragEvent).dataTransfer?.files;
       if (!files || files.length === 0) return;
+
       for (const file of Array.from(files)) {
+        // Handle image files as skin imports
         if (file.type.startsWith('image/')) {
           const skin = await this.skinStore.createFromFile(file);
           this.activeSkinId = skin.id;
@@ -1530,196 +1623,86 @@ ${JSON.stringify(json, null, 2)}
           if (skin.images.full) await this.preview?.loadSkinFromBase64(skin.images.full);
           continue;
         }
+
+        // Handle JSON/table files using FileIO utilities
         if (file.name.endsWith('.json') || file.name.endsWith('.railrush-table') || file.name.endsWith('.physics.json')) {
-          const text = await file.text();
-          const parsed = JSON.parse(text);
-          await this.importParsed(parsed, file.name);
+          try {
+            const text = await file.text();
+            const result = parseImportedFile(text, file.name);
+            if (result) {
+              const created = await this.tableLibrary.create({
+                name: result.name,
+                linkedSkinId: result.linkedSkinId ?? this.activeSkinId,
+                physicsJson: result.physicsJson as PhysicsJson,
+              });
+              await this.selectTable(created.id);
+            }
+          } catch {
+            // Ignore parse errors
+          }
         }
       }
     });
   }
 
-  private importFile(): void {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json,.railrush-table,.physics.json';
-    input.onchange = async () => {
-      const file = input.files?.[0];
-      if (!file) return;
-      const text = await file.text();
-      const parsed = JSON.parse(text);
-      await this.importParsed(parsed, file.name);
-    };
-    input.click();
-  }
+  private async importFile(): Promise<void> {
+    const file = await pickAndReadFile();
+    if (!file) return;
 
-  private async importParsed(parsed: any, filename: string): Promise<void> {
-    const isPhysicsJson = parsed && parsed.playArea && parsed.pockets && parsed.rails;
-    if (isPhysicsJson) {
-      const created = await this.tableLibrary.create({
-        name: filename.replace(/\.[^/.]+$/, ''),
-        linkedSkinId: this.activeSkinId,
-        physicsJson: parsed as PhysicsJson,
-      });
-      await this.selectTable(created.id);
+    const result = parseImportedFile(file.content, file.filename);
+    if (!result) {
+      alert('Unsupported file format.');
       return;
     }
 
-    if (parsed?.type === 'railrush-table' && parsed?.table?.physicsJson) {
-      const created = await this.tableLibrary.create({
-        name: parsed.table.name || filename.replace(/\.[^/.]+$/, ''),
-        linkedSkinId: parsed.table.linkedSkinId ?? this.activeSkinId,
-        physicsJson: parsed.table.physicsJson as PhysicsJson,
-      });
-      await this.selectTable(created.id);
-      return;
-    }
-
-    alert('Unsupported file format.');
+    const created = await this.tableLibrary.create({
+      name: result.name,
+      linkedSkinId: result.linkedSkinId ?? this.activeSkinId,
+      physicsJson: result.physicsJson as PhysicsJson,
+    });
+    await this.selectTable(created.id);
   }
 
   private exportCurrent(): void {
     if (!this.activeTable) return;
-    const bundle = {
-      version: '1.0',
-      type: 'railrush-table',
-      table: {
-        id: this.activeTable.id,
-        name: this.activeTable.name,
-        linkedSkinId: this.activeSkinId,
-        physicsJson: this.activeTable.physicsJson,
-      },
-    };
 
-    const json = JSON.stringify(bundle, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${this.activeTable.name.replace(/[^\w\-]+/g, '_')}.railrush-table`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  private connectToGame(): void {
-    const wsUrl = `ws://${window.location.hostname}:8080`;
-    try {
-      this.ws = new WebSocket(wsUrl);
-      this.ws.onopen = () => {
-        this.isConnected = true;
-        this.updateConnectionStatus(true);
-        this.ws?.send(JSON.stringify({ type: 'requestState' }));
-      };
-      this.ws.onmessage = async (event) => {
-        let data: any = event.data;
-        if (data instanceof Blob) data = await data.text();
-        try {
-          const message = JSON.parse(data);
-          this.handleRemoteMessage(message);
-        } catch {
-          // ignore
-        }
-      };
-      this.ws.onclose = () => {
-        this.isConnected = false;
-        this.updateConnectionStatus(false);
-        setTimeout(() => this.connectToGame(), 5000);
-      };
-    } catch {
-      // ignore
-    }
-  }
-
-  private handleRemoteMessage(message: any): void {
-    if (!message || typeof message !== 'object') return;
-
-    if (message.type === 'state') {
-      const geom = message.payload?.geometry;
-      const corner = geom?.CORNER_POCKET_CAPTURE_RADIUS_IN;
-      const side = geom?.SIDE_POCKET_CAPTURE_RADIUS_IN;
-      if (typeof corner === 'number' && Number.isFinite(corner)) this.setPocketCaptureRadius('corner', corner);
-      if (typeof side === 'number' && Number.isFinite(side)) this.setPocketCaptureRadius('side', side);
-      if (this.activeRightTab === 'pockets') this.renderRightSidebar();
-      return;
-    }
-
-    if (message.type === 'settings:geometry-changed') {
-      const corner = message.payload?.CORNER_POCKET_CAPTURE_RADIUS_IN;
-      const side = message.payload?.SIDE_POCKET_CAPTURE_RADIUS_IN;
-      if (typeof corner === 'number' && Number.isFinite(corner)) this.setPocketCaptureRadius('corner', corner);
-      if (typeof side === 'number' && Number.isFinite(side)) this.setPocketCaptureRadius('side', side);
-      if (this.activeRightTab === 'pockets') this.renderRightSidebar();
-      return;
-    }
-  }
-
-  private updateConnectionStatus(connected: boolean): void {
-    const dot = document.getElementById('status-dot');
-    const text = document.getElementById('status-text');
-    if (dot) dot.classList.toggle('connected', connected);
-    if (text) text.textContent = connected ? 'Connected' : 'Disconnected';
+    exportTableAsFile({
+      id: this.activeTable.id,
+      name: this.activeTable.name,
+      linkedSkinId: this.activeSkinId,
+      physicsJson: this.activeTable.physicsJson,
+    });
   }
 
   private sendGeometryPatch(patch: Record<string, unknown>): void {
-    if (!this.ws || !this.isConnected) {
-      alert('Not connected to game. Start `npm run dev` (relay on :8080).');
-      return;
-    }
-    this.ws.send(JSON.stringify({ type: 'updateGeometry', payload: patch }));
+    this.wsBridge.sendGeometryPatch(patch);
   }
 
   private pushToGame(mode: 'live' | 'persist'): void {
-    if (!this.ws || !this.isConnected) {
-      alert('Not connected to game. Start `npm run dev` (relay on :8080).');
-      return;
-    }
     if (!this.activeTable) return;
     const skin = this.activeSkinId ? this.skinStore.get(this.activeSkinId) : null;
 
-    this.ws.send(
-      JSON.stringify({
-        type: 'table-editor:push-config',
-        config: {
-          mode,
-          physicsJson: this.activeTable.physicsJson,
-          skin: skin?.images?.full ? { name: skin.name, image: skin.images.full } : null,
-        },
-      })
-    );
-  }
-
-  private getSaveServerPort(): number {
-    const stored = localStorage.getItem('table-editor-save-port');
-    const port = stored ? parseInt(stored, 10) : NaN;
-    return Number.isFinite(port) ? port : 8090;
+    this.wsBridge.pushToGame(mode, {
+      physicsJson: this.activeTable.physicsJson,
+      skin: skin?.images?.full ? { name: skin.name, image: skin.images.full } : null,
+    });
   }
 
   private async saveToDisk(options: { setActive: boolean }): Promise<void> {
     if (!this.activeTable) return;
-    const port = this.getSaveServerPort();
-    const url = `http://${window.location.hostname}:${port}/api/table-editor/save`;
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: this.activeTable.name,
-          tableId: this.activeTable.id,
-          physicsJson: this.activeTable.physicsJson,
-          setActive: options.setActive,
-        }),
-      });
 
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || `HTTP ${res.status}`);
-      }
+    const result = await saveTableToDisk({
+      name: this.activeTable.name,
+      tableId: this.activeTable.id,
+      physicsJson: this.activeTable.physicsJson,
+      setActive: options.setActive,
+    });
 
+    if (result.success) {
       this.setDirty(false);
       alert(options.setActive ? 'Saved and set active.' : 'Saved to disk.');
-    } catch (err) {
-      console.error('Save to disk failed:', err);
-      alert(`Save server not reachable.\nStart dev server and save server.\n\nError: ${String(err)}`);
+    } else {
+      alert(`Save server not reachable.\nStart dev server and save server.\n\nError: ${result.error}`);
     }
   }
 }

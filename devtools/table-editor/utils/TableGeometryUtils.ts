@@ -1,4 +1,17 @@
 import type { PhysicsJson, PhysicsJsonPocket, PhysicsJsonRail } from './JsonLoader';
+import {
+  DEFAULT_PLAY_WIDTH_IN,
+  DEFAULT_PLAY_HEIGHT_IN,
+  DEFAULT_POCKET_RADIUS_IN,
+  MIN_POCKET_RADIUS_IN,
+  POCKET_OUTLINE_SEGMENTS,
+  EPSILON,
+  UNIT_VECTOR_TOLERANCE,
+  MIN_RAIL_LENGTH_IN,
+  POCKET_MATCH_TOLERANCE_SQ,
+  RAIL_MATCH_TOLERANCE_SQ,
+  RAIL_SYMMETRY_TOLERANCE_IN,
+} from './constants';
 
 export type RadiusScaleRule = 'min' | 'avg' | 'constant';
 
@@ -111,6 +124,103 @@ function isFiniteNumber(v: unknown): v is number {
   return typeof v === 'number' && Number.isFinite(v);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Normal Vector Utilities
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Compute the unit perpendicular normal for a rail segment.
+ * Returns the normal pointing toward a reference point (typically table center).
+ */
+export function computeRailNormal(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  referencePoint: { x: number; y: number } = { x: 0, y: 0 }
+): { x: number; y: number } {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const len = Math.hypot(dx, dy);
+
+  if (len < EPSILON) {
+    // Degenerate rail - return default upward normal
+    return { x: 0, y: 1 };
+  }
+
+  // Perpendicular (two possible directions)
+  let nx = -dy / len;
+  let ny = dx / len;
+
+  // Ensure normal points toward reference (table center)
+  const midX = (from.x + to.x) / 2;
+  const midY = (from.y + to.y) / 2;
+  const toRefX = referencePoint.x - midX;
+  const toRefY = referencePoint.y - midY;
+  const dot = nx * toRefX + ny * toRefY;
+
+  if (dot < 0) {
+    nx = -nx;
+    ny = -ny;
+  }
+
+  return { x: nx, y: ny };
+}
+
+/**
+ * Normalize a vector to unit length. Returns {x: 0, y: 1} for zero/degenerate vectors.
+ */
+export function normalizeVector(v: { x: number; y: number }): { x: number; y: number } {
+  const len = Math.hypot(v.x, v.y);
+  if (len < EPSILON) return { x: 0, y: 1 };
+  return { x: v.x / len, y: v.y / len };
+}
+
+/**
+ * Check if a vector is approximately unit length.
+ */
+export function isUnitVector(v: { x: number; y: number }, epsilon = UNIT_VECTOR_TOLERANCE): boolean {
+  const len = Math.hypot(v.x, v.y);
+  return Math.abs(len - 1) < epsilon;
+}
+
+/**
+ * Check if a rail normal points inward (toward table center).
+ */
+export function isInwardNormal(
+  rail: { from: { x: number; y: number }; to: { x: number; y: number }; normal: { x: number; y: number } },
+  tableCenter: { x: number; y: number } = { x: 0, y: 0 }
+): boolean {
+  const midX = (rail.from.x + rail.to.x) / 2;
+  const midY = (rail.from.y + rail.to.y) / 2;
+  const toRefX = tableCenter.x - midX;
+  const toRefY = tableCenter.y - midY;
+  const dot = rail.normal.x * toRefX + rail.normal.y * toRefY;
+  return dot >= 0;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Validation Types
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type ValidationSeverity = 'error' | 'warning' | 'info';
+
+export interface ValidationIssue {
+  severity: ValidationSeverity;
+  message: string;
+  field?: string; // e.g., "pockets[0].center", "rails[2].normal"
+  repaired?: boolean; // true if the issue was auto-repaired
+}
+
+export interface SanitizeResult {
+  json: PhysicsJson;
+  issues: ValidationIssue[];
+  /** @deprecated Use issues.length instead */
+  repairs: number;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sanitization Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
 function sanitizePoint(pt: any, fallback: { x: number; y: number }): { x: number; y: number } {
   const x = isFiniteNumber(pt?.x) ? pt.x : fallback.x;
   const y = isFiniteNumber(pt?.y) ? pt.y : fallback.y;
@@ -126,71 +236,228 @@ function sanitizeOutline(outline: any): { x: number; y: number }[] | undefined {
   return pts;
 }
 
-export function sanitizePhysicsJson(input: any): { json: PhysicsJson; repairs: number } {
-  let repairs = 0;
+function generateCircleOutline(
+  center: { x: number; y: number },
+  radius: number,
+  steps = POCKET_OUTLINE_SEGMENTS
+): { x: number; y: number }[] {
+  const outline: { x: number; y: number }[] = [];
+  for (let i = 0; i < steps; i++) {
+    const t = (i / steps) * Math.PI * 2;
+    outline.push({ x: center.x + Math.cos(t) * radius, y: center.y + Math.sin(t) * radius });
+  }
+  outline.push({ ...outline[0] }); // Close the loop
+  return outline;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main Sanitize Function
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Sanitize and validate PhysicsJson input, returning structured validation results.
+ *
+ * Unlike previous versions that silently repaired data, this function:
+ * - Returns detailed issues with severity levels (error/warning/info)
+ * - Specifies which field caused each issue
+ * - Indicates whether issues were auto-repaired
+ *
+ * Errors indicate critical issues that may cause gameplay problems.
+ * Warnings indicate issues that were repaired with default values.
+ * Info messages are for minor issues or suggestions.
+ */
+export function sanitizePhysicsJson(input: any): SanitizeResult {
+  const issues: ValidationIssue[] = [];
 
   const metaIn = input?.meta && typeof input.meta === 'object' ? input.meta : undefined;
   const playAreaIn = input?.playArea && typeof input.playArea === 'object' ? input.playArea : {};
 
-  const playWidth = isFiniteNumber(playAreaIn.width) && playAreaIn.width > 0 ? playAreaIn.width : 100;
-  const playHeight = isFiniteNumber(playAreaIn.height) && playAreaIn.height > 0 ? playAreaIn.height : 50;
-  if (playWidth !== playAreaIn.width) repairs++;
-  if (playHeight !== playAreaIn.height) repairs++;
+  // Play area validation
+  let playWidth = playAreaIn.width;
+  let playHeight = playAreaIn.height;
+
+  if (!isFiniteNumber(playWidth) || playWidth <= 0) {
+    issues.push({
+      severity: 'error',
+      message: `Invalid playArea.width (${playWidth}), defaulted to ${DEFAULT_PLAY_WIDTH_IN}`,
+      field: 'playArea.width',
+      repaired: true,
+    });
+    playWidth = DEFAULT_PLAY_WIDTH_IN;
+  }
+  if (!isFiniteNumber(playHeight) || playHeight <= 0) {
+    issues.push({
+      severity: 'error',
+      message: `Invalid playArea.height (${playHeight}), defaulted to ${DEFAULT_PLAY_HEIGHT_IN}`,
+      field: 'playArea.height',
+      repaired: true,
+    });
+    playHeight = DEFAULT_PLAY_HEIGHT_IN;
+  }
 
   const pocketsIn = Array.isArray(input?.pockets) ? input.pockets : [];
   const railsIn = Array.isArray(input?.rails) ? input.rails : [];
 
+  if (pocketsIn.length === 0) {
+    issues.push({
+      severity: 'warning',
+      message: 'No pockets defined in physics JSON',
+      field: 'pockets',
+    });
+  }
+
+  if (railsIn.length === 0) {
+    issues.push({
+      severity: 'warning',
+      message: 'No rails defined in physics JSON',
+      field: 'rails',
+    });
+  }
+
+  // Pocket validation
   const pockets: PhysicsJsonPocket[] = pocketsIn.map((p: any, idx: number) => {
-    const center = sanitizePoint(p?.center, { x: 0, y: 0 });
-    const radius = isFiniteNumber(p?.radius) && p.radius > 0.05 ? p.radius : 2.5;
-    if (!isFiniteNumber(p?.center?.x) || !isFiniteNumber(p?.center?.y)) repairs++;
-    if (!(isFiniteNumber(p?.radius) && p.radius > 0.05)) repairs++;
+    const pocketField = `pockets[${idx}]`;
+    const id = typeof p?.id === 'string' ? p.id : `pocket_${idx}`;
+
+    // Center validation
+    let center: { x: number; y: number };
+    if (!isFiniteNumber(p?.center?.x) || !isFiniteNumber(p?.center?.y)) {
+      issues.push({
+        severity: 'error',
+        message: `Pocket "${id}" has invalid center (${JSON.stringify(p?.center)}), defaulted to (0, 0)`,
+        field: `${pocketField}.center`,
+        repaired: true,
+      });
+      center = { x: 0, y: 0 };
+    } else {
+      center = { x: p.center.x, y: p.center.y };
+    }
+
+    // Radius validation
+    let radius: number;
+    if (!isFiniteNumber(p?.radius) || p.radius <= MIN_POCKET_RADIUS_IN) {
+      issues.push({
+        severity: 'warning',
+        message: `Pocket "${id}" has invalid radius (${p?.radius}), defaulted to ${DEFAULT_POCKET_RADIUS_IN}"`,
+        field: `${pocketField}.radius`,
+        repaired: true,
+      });
+      radius = DEFAULT_POCKET_RADIUS_IN;
+    } else {
+      radius = p.radius;
+    }
+
+    // Outline validation
     let outline = sanitizeOutline(p?.outline);
-    if (p?.outline && !outline) repairs++;
+    if (p?.outline && !outline) {
+      issues.push({
+        severity: 'warning',
+        message: `Pocket "${id}" has invalid outline, regenerated from center/radius`,
+        field: `${pocketField}.outline`,
+        repaired: true,
+      });
+    }
     if (!outline) {
-      // Keep pockets editable: regenerate a circular outline around center/radius.
-      const steps = 20;
-      outline = [];
-      for (let i = 0; i < steps; i++) {
-        const t = (i / steps) * Math.PI * 2;
-        outline.push({ x: center.x + Math.cos(t) * radius, y: center.y + Math.sin(t) * radius });
-      }
-      outline.push({ ...outline[0] });
-      repairs++;
+      outline = generateCircleOutline(center, radius, POCKET_OUTLINE_SEGMENTS);
     }
 
-    return {
-      id: typeof p?.id === 'string' ? p.id : `pocket_${idx}`,
-      center,
-      radius,
-      outline,
-    };
+    return { id, center, radius, outline };
   });
 
+  // Rail validation
   const rails: PhysicsJsonRail[] = railsIn.map((r: any, idx: number) => {
-    const from = sanitizePoint(r?.from, { x: 0, y: 0 });
-    const to = sanitizePoint(r?.to, { x: 0, y: 0 });
-    const normal = sanitizePoint(r?.normal, { x: 0, y: 1 });
-    if (!isFiniteNumber(r?.from?.x) || !isFiniteNumber(r?.from?.y)) repairs++;
-    if (!isFiniteNumber(r?.to?.x) || !isFiniteNumber(r?.to?.y)) repairs++;
-    if (!isFiniteNumber(r?.normal?.x) || !isFiniteNumber(r?.normal?.y)) repairs++;
-    let outline = sanitizeOutline(r?.outline);
-    if (r?.outline && !outline) repairs++;
-    if (!outline && r?.outline !== undefined) {
-      // Keep rails editable: if outline is present but invalid, keep a 2-point fallback.
-      outline = [{ ...from }, { ...to }];
-      repairs++;
+    const railField = `rails[${idx}]`;
+    const id = typeof r?.id === 'string' ? r.id : `rail_${idx}`;
+
+    // From/To validation
+    let from: { x: number; y: number };
+    let to: { x: number; y: number };
+
+    if (!isFiniteNumber(r?.from?.x) || !isFiniteNumber(r?.from?.y)) {
+      issues.push({
+        severity: 'error',
+        message: `Rail "${id}" has invalid 'from' point (${JSON.stringify(r?.from)}), defaulted to (0, 0)`,
+        field: `${railField}.from`,
+        repaired: true,
+      });
+      from = { x: 0, y: 0 };
+    } else {
+      from = { x: r.from.x, y: r.from.y };
     }
 
-    return {
-      id: typeof r?.id === 'string' ? r.id : `rail_${idx}`,
-      from,
-      to,
-      normal,
-      outline,
-    };
+    if (!isFiniteNumber(r?.to?.x) || !isFiniteNumber(r?.to?.y)) {
+      issues.push({
+        severity: 'error',
+        message: `Rail "${id}" has invalid 'to' point (${JSON.stringify(r?.to)}), defaulted to (0, 0)`,
+        field: `${railField}.to`,
+        repaired: true,
+      });
+      to = { x: 0, y: 0 };
+    } else {
+      to = { x: r.to.x, y: r.to.y };
+    }
+
+    // Check for degenerate (zero-length) rails
+    const railLength = Math.hypot(to.x - from.x, to.y - from.y);
+    if (railLength < MIN_RAIL_LENGTH_IN) {
+      issues.push({
+        severity: 'error',
+        message: `Rail "${id}" is degenerate (zero or near-zero length: ${railLength.toFixed(4)}")`,
+        field: railField,
+      });
+    }
+
+    // Normal validation
+    let normal: { x: number; y: number };
+    if (!isFiniteNumber(r?.normal?.x) || !isFiniteNumber(r?.normal?.y)) {
+      issues.push({
+        severity: 'warning',
+        message: `Rail "${id}" has invalid normal, recomputed from endpoints`,
+        field: `${railField}.normal`,
+        repaired: true,
+      });
+      normal = computeRailNormal(from, to, { x: 0, y: 0 });
+    } else {
+      normal = { x: r.normal.x, y: r.normal.y };
+
+      // Check if normal is unit length
+      if (!isUnitVector(normal, UNIT_VECTOR_TOLERANCE)) {
+        const originalLen = Math.hypot(normal.x, normal.y);
+        issues.push({
+          severity: 'warning',
+          message: `Rail "${id}" normal is not unit length (${originalLen.toFixed(4)}), normalized`,
+          field: `${railField}.normal`,
+          repaired: true,
+        });
+        normal = normalizeVector(normal);
+      }
+
+      // Check if normal points inward
+      if (!isInwardNormal({ from, to, normal }, { x: 0, y: 0 })) {
+        issues.push({
+          severity: 'info',
+          message: `Rail "${id}" normal points outward (will be flipped by game)`,
+          field: `${railField}.normal`,
+        });
+      }
+    }
+
+    // Outline validation
+    let outline = sanitizeOutline(r?.outline);
+    if (r?.outline && !outline) {
+      issues.push({
+        severity: 'warning',
+        message: `Rail "${id}" has invalid outline, using from/to as fallback`,
+        field: `${railField}.outline`,
+        repaired: true,
+      });
+      outline = [{ ...from }, { ...to }];
+    }
+
+    return { id, from, to, normal, outline };
   });
 
+  // Meta validation (less critical)
   const meta: PhysicsJson['meta'] | undefined = metaIn
     ? {
         pixelsPerInch: isFiniteNumber(metaIn.pixelsPerInch) ? metaIn.pixelsPerInch : undefined,
@@ -211,7 +478,10 @@ export function sanitizePhysicsJson(input: any): { json: PhysicsJson; repairs: n
     rails,
   };
 
-  return { json, repairs };
+  // Count repairs for backwards compatibility
+  const repairs = issues.filter((i) => i.repaired).length;
+
+  return { json, issues, repairs };
 }
 
 function roundKey(x: number, decimals = 2): string {
@@ -347,7 +617,7 @@ export function createBlankPhysicsJsonFromPixels(options: {
   playWidthIn?: number;
   pixelsPerInch?: number;
 }): PhysicsJson {
-  const playWidthIn = options.playWidthIn ?? 100;
+  const playWidthIn = options.playWidthIn ?? DEFAULT_PLAY_WIDTH_IN;
   const pixelsPerInch = options.pixelsPerInch ?? options.innerPx.width / playWidthIn;
   const playHeightIn = options.innerPx.height / pixelsPerInch;
 
@@ -486,8 +756,9 @@ export function scalePhysicsJson(options: {
     r.from.y *= scaleY;
     r.to.x *= scaleX;
     r.to.y *= scaleY;
-    r.normal.x *= scaleX;
-    r.normal.y *= scaleY;
+    // Recompute normal from scaled endpoints to preserve unit length and correct direction.
+    // Simply scaling normals corrupts their unit length (e.g., {1,0} * {0.9, 1.1} = {0.9, 0}).
+    r.normal = computeRailNormal(r.from, r.to, { x: 0, y: 0 });
     if (r.outline) {
       r.outline = r.outline.map((pt) => ({ x: pt.x * scaleX, y: pt.y * scaleY }));
     }
@@ -521,7 +792,7 @@ function findNearestPocketIndex(json: PhysicsJson, target: { x: number; y: numbe
     if (!best || d < best.d) best = { idx: i, d };
   }
   if (!best) return null;
-  return best.d <= 4 ? best.idx : null; // ~2 inches tolerance
+  return best.d <= POCKET_MATCH_TOLERANCE_SQ ? best.idx : null;
 }
 
 function railMidpoint(rail: PhysicsJsonRail) {
@@ -537,7 +808,7 @@ function findNearestRailIndex(json: PhysicsJson, targetMid: { x: number; y: numb
     if (!best || d < best.d) best = { idx: i, d };
   }
   if (!best) return null;
-  return best.d <= 25 ? best.idx : null; // ~5 inches tolerance
+  return best.d <= RAIL_MATCH_TOLERANCE_SQ ? best.idx : null;
 }
 
 function findMirroredRailPartners(json: PhysicsJson, sourceRailIndex: number): Array<{ otherIndex: number; axes: { x: boolean; y: boolean } }> {
@@ -547,7 +818,7 @@ function findMirroredRailPartners(json: PhysicsJson, sourceRailIndex: number): A
   const sourceMid = railMidpoint(source);
 
   const sameAbsMid = (a: { x: number; y: number }, b: { x: number; y: number }) => {
-    const tol = 0.25; // inches; keep tight so we don't "jump" to neighboring cushion segments
+    const tol = RAIL_SYMMETRY_TOLERANCE_IN; // keep tight so we don't "jump" to neighboring cushion segments
     return Math.abs(Math.abs(a.x) - Math.abs(b.x)) <= tol && Math.abs(Math.abs(a.y) - Math.abs(b.y)) <= tol;
   };
 
