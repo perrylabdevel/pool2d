@@ -391,9 +391,8 @@ export class ClubSelectionScene implements UIScene {
                     headerGrad.addColorStop(0, ColorTokens.card.bevel.mid);
                     headerGrad.addColorStop(1, ColorTokens.background.primary);
                 } else {
-                    const hue = (index * 30) % 360;
-                    headerGrad.addColorStop(0, `hsl(${hue}, 60%, 30%)`);
-                    headerGrad.addColorStop(1, `hsl(${hue}, 60%, 15%)`);
+                    headerGrad.addColorStop(0, ColorTokens.background.tertiary);
+                    headerGrad.addColorStop(1, ColorTokens.background.primary);
                 }
                 ctx.fillStyle = headerGrad;
                 ctx.fillRect(innerX, innerY, innerWidth, headerHeight);

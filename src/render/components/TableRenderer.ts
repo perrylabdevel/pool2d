@@ -753,8 +753,6 @@ export class TableRenderer {
             stencilZPass: THREE.ReplaceStencilOp,
         });
 
-        console.log(`[TableRenderer] Initializing rails: ${rails.length} total.`);
-
         // Loop through all rails
         rails.forEach((rail) => {
             // Populate railLines for shadows/highlights (using the active collision edge)
@@ -762,12 +760,7 @@ export class TableRenderer {
             const nx = rail.nx;
             const ny = rail.ny;
 
-            // Only render mesh if we have a defined outline (cushions)
-            // Ensure we have enough points for a valid shape
-            // Skip extremely small outlines to avoid degenerate geometry
-            console.log(`[TableRenderer] Checking rail ${rail.id}: outline=${rail.outline ? rail.outline.length + ' pts' : 'UNDEFINED'}`);
             if (rail.outline && rail.outline.length > 2) {
-                console.log(`[TableRenderer] Creating mesh for rail ${rail.id} with ${rail.outline.length} points: first=(${rail.outline[0].x.toFixed(2)}, ${rail.outline[0].y.toFixed(2)})`);
                 const shape = new THREE.Shape();
                 shape.moveTo(rail.outline[0].x, rail.outline[0].y);
                 for (let i = 1; i < rail.outline.length; i++) {
@@ -782,22 +775,16 @@ export class TableRenderer {
                     bevelEnabled: false,
                 });
 
-                // SAFE DEBUG: Use Standard Material (avoids crash) but Magenta + No Depth Test (force visible)
-                const debugMaterial = railMaterial.clone();
-                debugMaterial.color.setHex(0xff00ff);
-                debugMaterial.depthTest = false; // Render on top
-
-                const mesh = new THREE.Mesh(geometry, debugMaterial);
+                const mesh = new THREE.Mesh(geometry, railMaterial.clone());
                 // Extrusion is along +Z. Positioning at -0.5 makes it range from -0.5 to 0.0 (flush with felt surface at 0)
                 mesh.position.set(0, 0, -0.5);
 
-                mesh.visible = true; // Force visible
-                mesh.renderOrder = 9999; // Force draw on top
+                mesh.visible = this.layerVisibility.showRails;
+                mesh.renderOrder = this.layerOrder.orderRails;
+                this.enforceRenderOrderControl(mesh);
 
                 this.scene.add(mesh);
                 this.railMeshes.push(mesh);
-
-                console.log(`[TableRenderer] Created rail mesh ${rail.id}`);
             }
 
             // For shadows/ribbons, we track the inner active edge

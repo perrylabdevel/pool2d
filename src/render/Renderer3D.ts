@@ -146,7 +146,7 @@ export class Renderer3D extends BaseRenderer {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     // Clear to the same deep-navy as the app background to avoid visible seams/letterboxing.
-    this.renderer.setClearColor(0x00FF00, 1); // DEBUG: GREEN background for isolation
+    this.renderer.setClearColor(0x000B1A, 1);
 
     // Initialize Components
     this.tableRenderer = new TableRenderer(this.scene, this.layerVisibility, this.layerOrder, this.settingsManager);
