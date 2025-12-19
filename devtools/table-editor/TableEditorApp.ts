@@ -31,6 +31,7 @@ import {
 import {
   WebSocketBridge,
   saveTableToDisk,
+  getSaveServerPort,
   parseImportedFile,
   pickAndReadFile,
   exportTableAsFile,
@@ -99,7 +100,8 @@ export class TableEditorApp {
     this.setupDragDrop();
 
     await this.ensureInitialTable();
-    await this.loadActiveSkin();
+    // Note: loadActiveSkin() is not called here because ensureInitialTable() 
+    // already loads the table's linked skin via openTable()
 
     this.renderLeftSidebar();
     this.renderRightSidebar();
@@ -297,15 +299,24 @@ export class TableEditorApp {
     this.tableLibrary.setActiveTableId(id);
 
     // Restore linked skin for this table if available; otherwise keep current selection
+    // IMPORTANT: Set physics JSON FIRST so skin dimensions use correct PPI
+    this.preview?.setPhysicsJson(table.physicsJson);
+
+    console.log('[TableEditor] Opening table, linkedSkinId:', table.linkedSkinId, 'current activeSkinId:', this.activeSkinId);
     if (table.linkedSkinId) {
       const linked = this.skinStore.get(table.linkedSkinId);
       if (linked) {
+        console.log('[TableEditor] Found linked skin:', linked.id, linked.name);
         this.activeSkinId = linked.id;
         this.skinStore.setActiveSkinId(linked.id);
         if (linked.images.full) {
           await this.preview?.loadSkinFromBase64(linked.images.full);
         }
+      } else {
+        console.warn('[TableEditor] Linked skin not found in store:', table.linkedSkinId);
       }
+    } else {
+      console.log('[TableEditor] No linkedSkinId, keeping current active skin');
     }
 
     this.undoStack = [];
@@ -319,9 +330,9 @@ export class TableEditorApp {
     }
 
     this.preview?.setSelection(null);
-    this.preview?.setPhysicsJson(table.physicsJson);
 
     this.renderTableList();
+    this.renderSkinGrid();
     this.renderRightSidebar();
     this.updateJsonEditorText();
   }
@@ -771,15 +782,15 @@ export class TableEditorApp {
           </div>
           <div style="max-height: 55vh; overflow:auto;">
             ${json.pockets
-              .map(
-                (p, idx) => `
+          .map(
+            (p, idx) => `
                 <div style="border: 1px solid var(--panel-border); border-radius: 8px; padding: 8px; margin-bottom: 8px;">
                   <div style="font-weight: 600; font-size: 12px;">${p.id || `Pocket ${idx + 1}`}</div>
                   <div style="font-size: 11px; color: var(--text-muted);">center=(${p.center.x.toFixed(2)}, ${p.center.y.toFixed(2)}) radius=${p.radius.toFixed(2)}</div>
                 </div>
               `
-              )
-              .join('')}
+          )
+          .join('')}
           </div>
         </div>
       `;
@@ -836,8 +847,8 @@ export class TableEditorApp {
           </div>
           <div style="max-height: 55vh; overflow:auto;">
             ${editableRails
-              .map(
-                (r, idx) => `
+          .map(
+            (r, idx) => `
                 <div style="border: 1px solid var(--panel-border); border-radius: 8px; padding: 8px; margin-bottom: 8px;">
                   <div style="font-weight: 600; font-size: 12px;">${r.id || `Rail ${idx + 1}`}</div>
                   <div style="font-size: 11px; color: var(--text-muted);">
@@ -845,8 +856,8 @@ export class TableEditorApp {
                   </div>
                 </div>
               `
-              )
-              .join('')}
+          )
+          .join('')}
           </div>
         </div>
       `;
@@ -959,7 +970,7 @@ export class TableEditorApp {
           </div>
           <div class="property-row" style="justify-content: space-between;">
             <span class="property-label">Save Server</span>
-            <span style="font-size:12px; color: var(--text-muted);">:${this.getSaveServerPort()}</span>
+            <span style="font-size:12px; color: var(--text-muted);">:${getSaveServerPort()}</span>
           </div>
         </div>
         <div class="property-group">
@@ -1080,9 +1091,9 @@ export class TableEditorApp {
         </div>
         <div style="max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;">
           ${allIssues
-            .slice(0, 20) // Limit to 20 issues
-            .map(
-              (issue) => `
+        .slice(0, 20) // Limit to 20 issues
+        .map(
+          (issue) => `
               <div style="
                 padding: 6px 8px;
                 background: rgba(255,255,255,0.03);
@@ -1096,8 +1107,8 @@ export class TableEditorApp {
                 ${issue.repaired ? '<span style="color: var(--success); font-size: 10px;"> (auto-repaired)</span>' : ''}
               </div>
             `
-            )
-            .join('')}
+        )
+        .join('')}
           ${allIssues.length > 20 ? `<div style="padding: 6px; color: var(--text-muted); font-size: 11px;">...and ${allIssues.length - 20} more</div>` : ''}
         </div>
       </div>
@@ -1555,8 +1566,8 @@ ${JSON.stringify(json, null, 2)}
         .map(
           (skin) => `
           <div class="skin-card ${skin.id === this.activeSkinId ? 'active' : ''}" data-skin-id="${skin.id}">
-            <div class="skin-card-preview" style="${
-              skin.thumbnail ? `background-image: url(${skin.thumbnail}); background-size: cover; background-position: center;` : ''
+            <button class="skin-card-delete" data-skin-id="${skin.id}" title="Delete skin">×</button>
+            <div class="skin-card-preview" style="${skin.thumbnail ? `background-image: url(${skin.thumbnail}); background-size: cover; background-position: center;` : ''
             }"></div>
             <div class="skin-card-name">${skin.name}</div>
           </div>
@@ -1570,13 +1581,40 @@ ${JSON.stringify(json, null, 2)}
       `;
 
     grid.querySelectorAll('.skin-card[data-skin-id]').forEach((card) => {
-      card.addEventListener('click', () => {
+      card.addEventListener('click', (e) => {
+        // Don't select if clicking delete button
+        if ((e.target as HTMLElement).classList.contains('skin-card-delete')) return;
         const id = (card as HTMLElement).dataset.skinId;
         if (id) void this.selectSkin(id);
       });
     });
 
+    grid.querySelectorAll('.skin-card-delete').forEach((btn) => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const id = (btn as HTMLElement).dataset.skinId;
+        if (id) await this.deleteSkin(id);
+      });
+    });
+
     grid.querySelector('#skin-card-add')?.addEventListener('click', () => void this.createNewSkin());
+  }
+
+  private async deleteSkin(id: string): Promise<void> {
+    const skin = this.skinStore.get(id);
+    if (!skin) return;
+
+    if (!confirm(`Delete skin "${skin.name}"?`)) return;
+
+    await this.skinStore.delete(id);
+
+    // If we deleted the active skin, clear the active skin
+    if (this.activeSkinId === id) {
+      this.activeSkinId = null;
+      this.skinStore.setActiveSkinId(null);
+    }
+
+    this.renderSkinGrid();
   }
 
   private async selectSkin(id: string): Promise<void> {

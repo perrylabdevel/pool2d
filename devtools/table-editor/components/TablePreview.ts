@@ -46,7 +46,7 @@ export class TablePreview {
   // JSON geometry (the only source of truth)
   private physicsJson: PhysicsJson | null = null;
   private selection: GeometrySelection | null = null;
-  
+
   // Skin physical dimensions (calculated from texture size / PPI)
   private skinPhysicalWidth: number = 0;
   private skinPhysicalHeight: number = 0;
@@ -711,7 +711,7 @@ export class TablePreview {
     const tableWidth = this.skinPhysicalWidth > 0 ? this.skinPhysicalWidth : playWidth + 20;
     const tableHeight = this.skinPhysicalHeight > 0 ? this.skinPhysicalHeight : playHeight + 20;
     const tableGeom = new THREE.PlaneGeometry(tableWidth, tableHeight);
-    
+
     let tableMat: THREE.Material;
     if (this.skinTexture) {
       tableMat = new THREE.MeshStandardMaterial({
@@ -785,7 +785,7 @@ export class TablePreview {
         0.1,
         -(pocket.center.y + offsetY)  // Flip Y to Z
       );
-      
+
       this.scene.add(pocketMesh);
       this.pocketMeshes.push(pocketMesh);
 
@@ -979,8 +979,8 @@ export class TablePreview {
     if (this.gridMinorMesh) this.scene.remove(this.gridMinorMesh);
     if (this.gridMajorMesh) this.scene.remove(this.gridMajorMesh);
 
-    this.gridMinorMesh = build(minor, 0x313244, 0.28);
-    this.gridMajorMesh = build(major, 0x45475a, 0.48);
+    this.gridMinorMesh = build(minor, 0xffff00, 0.28);
+    this.gridMajorMesh = build(major, 0xffd700, 0.48);
     this.scene.add(this.gridMinorMesh);
     this.scene.add(this.gridMajorMesh);
   }
@@ -1257,15 +1257,16 @@ export class TablePreview {
     const loader = new THREE.TextureLoader();
     this.skinTexture = await loader.loadAsync(base64);
     this.skinTexture.colorSpace = THREE.SRGBColorSpace;
-    
+
     // Calculate physical size from texture dimensions and PPI
     const image = this.skinTexture.image;
     if (image && image.width && image.height) {
       const PPI = this.physicsJson?.meta?.pixelsPerInch ?? 7.68;
       this.skinPhysicalWidth = image.width / PPI;
       this.skinPhysicalHeight = image.height / PPI;
+      console.log(`[TablePreview] Skin loaded: ${image.width}x${image.height}px, PPI=${PPI}, Physical=${this.skinPhysicalWidth.toFixed(2)}x${this.skinPhysicalHeight.toFixed(2)}in`);
     }
-    
+
     this.buildTable();
   }
 
@@ -1301,6 +1302,17 @@ export class TablePreview {
 
   setPhysicsJson(json: PhysicsJson): void {
     this.physicsJson = json;
+
+    // Recalculate skin physical dimensions when PPI changes
+    if (this.skinTexture?.image) {
+      const image = this.skinTexture.image;
+      if (image.width && image.height) {
+        const PPI = json?.meta?.pixelsPerInch ?? 7.68;
+        this.skinPhysicalWidth = image.width / PPI;
+        this.skinPhysicalHeight = image.height / PPI;
+      }
+    }
+
     this.buildTable();
     if (this.editingEnabled) this.rebuildHandles();
   }
