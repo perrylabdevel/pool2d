@@ -96,14 +96,14 @@ export function setSuppressWarnings(suppress: boolean) {
   suppressCollisionWarnings = suppress;
 }
 
-function getCollisionPairId(ballA: Ball, ballB: Ball): string {
+export function getCollisionPairId(ballA: Ball, ballB: Ball): string {
   // Use sorted IDs to ensure consistent pair identification
   const id1 = Math.min(ballA.id, ballB.id);
   const id2 = Math.max(ballA.id, ballB.id);
   return `${id1}-${id2}`;
 }
 
-function getBallRailPairId(ball: Ball, rail: Rail): string {
+export function getBallRailPairId(ball: Ball, rail: Rail): string {
   const railId = rail.id ?? `${rail.x1.toFixed(3)}_${rail.y1.toFixed(3)}_${rail.x2.toFixed(3)}_${rail.y2.toFixed(3)}`;
   return `${ball.id}:${railId}`;
 }

@@ -14,6 +14,11 @@ body.show-legacy-dock .panel-launcher-toggle {
   display: flex !important;
 }
 
+/* Creator mode uses the dock area for its tool panel */
+body.show-creator-dock #dock-right {
+  display: flex !important;
+}
+
 #panel-dock {
   display: flex;
   flex-direction: column;
@@ -444,6 +449,56 @@ body.show-legacy-dock .panel-launcher-toggle {
   padding: 10px 16px;
   font-size: 13px;
   font-weight: 500;
+}
+
+.creator-panel .creator-action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.creator-panel .creator-tool-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.creator-panel .creator-tool-lock {
+  margin-top: 6px;
+}
+
+.creator-panel .creator-ball-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.creator-panel .creator-ball-btn {
+  min-height: 34px;
+  font-variant-numeric: tabular-nums;
+}
+
+.creator-panel .creator-tool-btn.is-active,
+.creator-panel .creator-ball-btn.is-active {
+  border-color: rgba(120, 214, 255, 0.7);
+  box-shadow: 0 0 0 2px rgba(120, 214, 255, 0.15);
+}
+
+.creator-panel .creator-layout-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.creator-panel .creator-layout-row input,
+.creator-panel .creator-layout-row select {
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.25);
+  color: #fff;
+  font-size: 13px;
 }
 
 .event-control {

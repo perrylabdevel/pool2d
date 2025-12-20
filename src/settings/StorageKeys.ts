@@ -17,6 +17,7 @@ export const STORAGE_KEYS = {
   DEBUG_SETTINGS: 'RailRush_debug_settings',
   TEXTURE_SETTINGS: 'RailRush_texture_settings',
   TABLE_APPEARANCE: 'RailRush_table_appearance',
+  CREATOR_LAYOUTS: 'RailRush_creator_layouts',
   // Migration flag
   MIGRATION_VERSION: 'RailRush_migration_version',
 } as const;

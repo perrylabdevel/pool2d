@@ -20,6 +20,7 @@ import { AudioPanel } from '../ui/AudioPanel';
 import { HelpPanel } from '../ui/HelpPanel';
 import { RenderLayerPanel } from '../ui/RenderLayerPanel';
 import { scenarioManager } from '../debug/ScenarioManager';
+import { CreatorPanel } from '../ui/CreatorPanel';
 import { Player, PlayerType, BallGroup } from './Player';
 import { GameStateMachine, GameState } from './GameStateMachine';
 import { PoolAI } from '../ai/PoolAI';
@@ -27,6 +28,7 @@ import { GameModeBase } from './modes/GameModeBase';
 import { TimeAttackMode, TimeAttackDifficulty } from './modes/TimeAttackMode';
 import { PerfectGameMode } from './modes/PerfectGameMode';
 import { SpeedPoolMode } from './modes/SpeedPoolMode';
+import { CreatorMode } from './modes/CreatorMode';
 import type { PocketAnimationEvent } from '../render/ControlTypes';
 import { AudioManager } from '../sound/AudioManager';
 import type { AudioSettings } from '../ui/SettingsManager';
@@ -42,6 +44,7 @@ import { getClubById } from './clubs/ClubRegistry';
 import { AssetRegistry } from '../assets/AssetRegistry';
 import { currencyStore } from '../ui/CurrencyStore';
 import { notificationService } from '../ui/NotificationService';
+import { STORAGE_KEYS } from '../settings/StorageKeys';
 
 // Extracted controllers (gradual adoption)
 import {
@@ -76,6 +79,7 @@ export enum GameMode {
   TIME_ATTACK,
   PERFECT_GAME,
   SPEED_POOL,
+  CREATOR,
   PLAYBACK,
 }
 
@@ -103,6 +107,31 @@ function randomizeBallOrientation(ball: Ball) {
   ball.rotW = Math.cos(halfAngle);
 }
 
+type CreatorBallSnapshot = {
+  id: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  rotX: number;
+  rotY: number;
+  rotZ: number;
+  rotW: number;
+  angle: number;
+  angularVelocity: number;
+  pocketed: boolean;
+  sleeping: boolean;
+};
+
+type CreatorLayoutBall = { id: number; x: number; y: number };
+
+type CreatorLayout = {
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+  balls: CreatorLayoutBall[];
+};
+
 export class Game {
   world: PhysicsWorld;
   renderer: Renderer3D;
@@ -114,6 +143,7 @@ export class Game {
   renderLayerPanel: RenderLayerPanel;
   audioPanel: AudioPanel;
   helpPanel: HelpPanel;
+  creatorPanel: CreatorPanel;
   rules: EightBallRules;
   predictor: Predictor;
   audio: AudioManager;
@@ -189,6 +219,12 @@ export class Game {
 
   // Ball dragging (practice mode only)
   isDraggingBall: boolean = false;
+  private draggingBall: Ball | null = null;
+  private creatorTool: 'place' | 'move' | 'delete' = 'move';
+  private creatorSelectedBallId: number = 1;
+  private creatorUndoSnapshot: CreatorBallSnapshot[] | null = null;
+  private creatorToolLock: boolean = false;
+  private creatorClickConsumed: boolean = false;
 
   get settingsManager() {
     return this.hud.settingsManager;
@@ -208,6 +244,7 @@ export class Game {
     this.renderLayerPanel = new RenderLayerPanel(this.hud.settingsManager, this.renderer);
     this.audioPanel = new AudioPanel(this.hud.settingsManager);
     this.helpPanel = new HelpPanel();
+    this.creatorPanel = new CreatorPanel();
     this.rules = new EightBallRules(RULES_PRESETS[this.currentRuleset]);
     this.predictor = new Predictor();
     this.playbackController = new PlaybackController(this.world);
@@ -331,6 +368,13 @@ export class Game {
       if (this.waitingForPocketCall) {
         return this.handleClick(worldX, worldY);
       }
+      if (this.isCreatorMode()) {
+        const handled = this.handleCreatorClick(worldX, worldY, _event);
+        if (handled) {
+          this.creatorClickConsumed = true;
+        }
+        return handled;
+      }
       return false;
     };
 
@@ -342,7 +386,12 @@ export class Game {
       if (this.isPlayerInputBlocked()) return;
       // Don't handle ball drag or power bar during pocket selection
       if (this.waitingForPocketCall) return;
+      if (this.creatorClickConsumed) {
+        this.creatorClickConsumed = false;
+        return;
+      }
       this.handleBallDragStart(e);
+      if (this.isCreatorMode() && this.creatorTool === 'move' && this.isDraggingBall) return;
       this.handlePowerBarMouseDown(e);
       this.handleMicroDialMouseDown(e);
       if (this.isTouchAimOnly()) {
@@ -359,10 +408,24 @@ export class Game {
       if (!touch) return;
       e.preventDefault();
       const fake = { clientX: touch.clientX, clientY: touch.clientY, detail: 1 } as MouseEvent;
+      if (this.creatorClickConsumed) {
+        this.creatorClickConsumed = false;
+        return;
+      }
+      this.handleBallDragStart(fake);
+      if (this.isCreatorMode() && this.creatorTool === 'move' && this.isDraggingBall) return;
       this.handlePowerBarMouseDown(fake);
       this.handleMicroDialMouseDown(fake);
     }, { passive: false });
     this.input.canvas.addEventListener('touchmove', (e) => {
+      if (this.isDraggingBall) {
+        const touch = e.touches[0];
+        if (!touch) return;
+        e.preventDefault();
+        const fake = { clientX: touch.clientX, clientY: touch.clientY } as MouseEvent;
+        this.handleBallDrag(fake);
+        return;
+      }
       if (!this.isDraggingPower && !this.isDraggingMicroDial) return;
       const touch = e.touches[0];
       if (!touch) return;
@@ -372,6 +435,13 @@ export class Game {
       this.handleMicroDialMouseMove(fake);
     }, { passive: false });
     this.input.canvas.addEventListener('touchend', (e) => {
+      if (this.isDraggingBall) {
+        e.preventDefault();
+        const touch = e.changedTouches[0];
+        const fake = touch ? ({ clientX: touch.clientX, clientY: touch.clientY } as MouseEvent) : ({ clientX: 0, clientY: 0 } as MouseEvent);
+        this.handleBallDragEnd(fake);
+        return;
+      }
       if (!this.isDraggingPower && !this.isDraggingMicroDial) return;
       e.preventDefault();
       const touch = e.changedTouches[0];
@@ -394,6 +464,7 @@ export class Game {
       if (this.waitingForPocketCall) return;
       if (isPointerOverHudHeader(e)) return;
       this.handleBallDrag(e);
+      if (this.isDraggingBall) return;
       this.handlePowerBarMouseMove(e);
       this.handleMicroDialMouseMove(e);
     });
@@ -403,6 +474,7 @@ export class Game {
       if (this.waitingForPocketCall) return;
       if (isPointerOverHudHeader(e)) return;
       this.handleBallDragEnd(e);
+      if (this.isDraggingBall) return;
       this.handlePowerBarMouseUp(e);
       this.handleMicroDialMouseUp(e);
     });
@@ -521,6 +593,12 @@ export class Game {
     // Handle UI state changes (e.g. exiting to lobby)
     window.addEventListener('ui:state:changed', (event) => {
       const detail = (event as CustomEvent<{ to: UIState }>).detail;
+      if (detail.to === UIState.IN_GAME) {
+        if (this.isCreatorMode()) {
+          document.body.classList.add('show-creator-dock');
+          this.hud?.panelManager?.openPanel('creator-panel');
+        }
+      }
       // If leaving game context (IN_GAME or IN_GAME_MENU), stop everything
       if (detail.to !== UIState.IN_GAME && detail.to !== UIState.IN_GAME_MENU) {
         if (physicsRecorder.isRecording()) {
@@ -530,6 +608,10 @@ export class Game {
         if (this.mode === GameMode.PLAYBACK) {
           this.stopPlayback();
         }
+        if (this.hud?.panelManager?.isPanelOpen('creator-panel')) {
+          this.hud.panelManager.closePanel('creator-panel');
+        }
+        document.body.classList.remove('show-creator-dock');
       }
     });
 
@@ -538,6 +620,50 @@ export class Game {
       if (detail) {
         this.audio.playRecordedSound(detail.name, detail.intensity);
       }
+    });
+
+    window.addEventListener('creator:tool', (event) => {
+      const detail = (event as CustomEvent<{ tool: 'place' | 'move' | 'delete' }>).detail;
+      if (!detail?.tool || !this.isCreatorMode()) return;
+      this.setCreatorTool(detail.tool);
+    });
+    window.addEventListener('creator:lock-tool', (event) => {
+      const detail = (event as CustomEvent<{ locked: boolean }>).detail;
+      if (typeof detail?.locked !== 'boolean' || !this.isCreatorMode()) return;
+      this.creatorToolLock = detail.locked;
+      (window as any).__creatorToolLock = detail.locked;
+    });
+    window.addEventListener('creator:select-ball', (event) => {
+      const detail = (event as CustomEvent<{ ballId: number }>).detail;
+      if (typeof detail?.ballId !== 'number' || !this.isCreatorMode()) return;
+      this.creatorSelectedBallId = detail.ballId;
+    });
+    window.addEventListener('creator:clear', () => {
+      this.clearCreatorTable();
+    });
+    window.addEventListener('creator:rack', () => {
+      this.rackCreatorTable();
+    });
+    window.addEventListener('creator:undo', () => {
+      this.undoCreatorShot();
+    });
+    window.addEventListener('creator:reset-cue', () => {
+      this.resetCreatorCueBall();
+    });
+    window.addEventListener('creator:save-layout', (event) => {
+      const detail = (event as CustomEvent<{ name?: string }>).detail;
+      this.saveCreatorLayout(detail?.name);
+    });
+    window.addEventListener('creator:load-layout', (event) => {
+      const detail = (event as CustomEvent<{ name?: string }>).detail;
+      this.loadCreatorLayout(detail?.name);
+    });
+    window.addEventListener('creator:delete-layout', (event) => {
+      const detail = (event as CustomEvent<{ name?: string }>).detail;
+      this.deleteCreatorLayout(detail?.name);
+    });
+    window.addEventListener('creator:request-layouts', () => {
+      this.dispatchCreatorLayouts();
     });
     window.addEventListener('renderer:resized', (event: Event) => {
       const detail = (event as CustomEvent<{ width: number; height: number; scale: number; offsetX: number; offsetY: number }>).detail;
@@ -924,6 +1050,10 @@ export class Game {
       hotkeys: ['h', '?'],
       persistState: true,
     });
+    this.hud.registerPanel('creator-panel', this.creatorPanel.getController(), {
+      hotkeys: [],
+      persistState: false,
+    });
     this.hud.panelManager.restoreLastPanel();
   }
 
@@ -952,18 +1082,15 @@ export class Game {
   initializeGame() {
     try {
       this.world.balls = [];
+      if (this.mode !== GameMode.CREATOR) {
+        this.creatorTool = 'move';
+        this.input.setAimSuppressed(false);
+        this.hud?.panelManager?.closePanel('creator-panel');
+        document.body.classList.remove('show-creator-dock');
+      }
 
       // Create cue ball with randomized initial rotation
-      this.cueBall = new Ball(
-        0,
-        CUE_BALL_POSITION.x,
-        CUE_BALL_POSITION.y,
-        CONFIG.BALL_RADIUS,
-        CONFIG.BALL_MASS
-      );
-      // Randomize initial rotation angle for visual variety
-      this.cueBall.angle = Math.random() * Math.PI * 2;
-      randomizeBallOrientation(this.cueBall);
+      this.cueBall = this.createBall(0, CUE_BALL_POSITION.x, CUE_BALL_POSITION.y);
       this.world.addBall(this.cueBall);
 
       const currentRadius = CONFIG.BALL_RADIUS;
@@ -976,31 +1103,9 @@ export class Game {
 
       console.log(`[Game] InitializeGame: radius=${currentRadius} diameter=${diameter} spacing=${rowSpacingX} configRadius=${CONFIG.BALL_RADIUS} configScale=${CONFIG.BALL_SCALE}`);
 
-      // Build rack of 15 balls
-      const rackX = RACK_POSITIONS[0].x;
-      const apexY = RACK_POSITIONS[0].y;
-
-      // 5 rows: 1, 2, 3, 4, 5 balls
-      const rows = [
-        [{ id: 1 }], // Row 1 (Apex)
-        [{ id: 9 }, { id: 2 }], // Row 2
-        [{ id: 3 }, { id: 8 }, { id: 10 }], // Row 3 (8-ball in center)
-        [{ id: 11 }, { id: 4 }, { id: 12 }, { id: 5 }], // Row 4
-        [{ id: 6 }, { id: 13 }, { id: 7 }, { id: 14 }, { id: 15 }], // Row 5
-      ];
-
-      rows.forEach((rowBalls, rowIndex) => {
-        const rowX = rackX + rowIndex * rowSpacingX;
-        rowBalls.forEach((pos, index) => {
-          const ordinal = (rowBalls.length - 1) / 2 - index;
-          const rowCenterOffset = ordinal * diameter;
-          const scaledY = apexY + rowCenterOffset;
-          const ball = new Ball(pos.id, rowX, scaledY, currentRadius, CONFIG.BALL_MASS);
-          // Randomize initial rotation angle for visual variety
-          ball.angle = Math.random() * Math.PI * 2;
-          randomizeBallOrientation(ball);
-          this.world.addBall(ball);
-        });
+      const rackPocketed = this.mode === GameMode.CREATOR;
+      this.buildRackBalls(rackPocketed).forEach((ball) => {
+        this.world.addBall(ball);
       });
 
       // Initialize 3D scene
@@ -1088,6 +1193,8 @@ export class Game {
       } else if (this.mode === GameMode.SPEED_POOL) {
         this.initializeSpeedPool();
         this.hud.setPlayer2Visible(false); // Hide Player 2 in arcade modes
+      } else if (this.mode === GameMode.CREATOR) {
+        this.initializeCreatorMode();
       } else if (this.mode === GameMode.EIGHT_BALL) {
         this.hud.setMode('8-Ball Pool');
         // Show Player 2 and turn indicator for 8-Ball mode
@@ -1103,6 +1210,46 @@ export class Game {
       // Hide loading screen only after renderer assets are ready
       this.waitForRendererAssetsAndHideLoading();
     }
+  }
+
+  private createBall(id: number, x: number, y: number): Ball {
+    const ball = new Ball(id, x, y, CONFIG.BALL_RADIUS, CONFIG.BALL_MASS);
+    ball.angle = Math.random() * Math.PI * 2;
+    randomizeBallOrientation(ball);
+    return ball;
+  }
+
+  private buildRackBalls(pocketed: boolean): Ball[] {
+    const currentRadius = CONFIG.BALL_RADIUS;
+    const radiusSafe = Math.max(currentRadius, 1e-6);
+    const diameter = radiusSafe * 2;
+    const rowSpacingX = diameter * Math.sin(Math.PI / 3) * 1.02;
+
+    const rackX = RACK_POSITIONS[0].x;
+    const apexY = RACK_POSITIONS[0].y;
+    const rows = [
+      [{ id: 1 }],
+      [{ id: 9 }, { id: 2 }],
+      [{ id: 3 }, { id: 8 }, { id: 10 }],
+      [{ id: 11 }, { id: 4 }, { id: 12 }, { id: 5 }],
+      [{ id: 6 }, { id: 13 }, { id: 7 }, { id: 14 }, { id: 15 }],
+    ];
+
+    const balls: Ball[] = [];
+    rows.forEach((rowBalls, rowIndex) => {
+      const rowX = rackX + rowIndex * rowSpacingX;
+      rowBalls.forEach((pos, index) => {
+        const ordinal = (rowBalls.length - 1) / 2 - index;
+        const rowCenterOffset = ordinal * diameter;
+        const scaledY = apexY + rowCenterOffset;
+        const ball = this.createBall(pos.id, rowX, scaledY);
+        ball.pocketed = pocketed;
+        ball.sleeping = true;
+        balls.push(ball);
+      });
+    });
+
+    return balls;
   }
 
   private waitForRendererAssetsAndHideLoading() {
@@ -1402,6 +1549,318 @@ export class Game {
     console.log('⚡ Speed Pool mode initialized');
   }
 
+  initializeCreatorMode() {
+    this.arcadeMode = new CreatorMode();
+    this.arcadeMode.onStart();
+
+    this.hud.setMode('Creator Mode');
+    this.hud.hideTurnIndicator();
+    this.hud.setTurn(1, false);
+    this.hud.setPlayer2Visible(false);
+    this.hud.panelManager.openPanel('creator-panel');
+    document.body.classList.add('show-creator-dock');
+    this.setCreatorTool('move');
+    this.creatorSelectedBallId = 1;
+    this.creatorToolLock = false;
+    this.dispatchCreatorLayouts();
+
+    console.log('🧪 Creator mode initialized');
+  }
+
+  private isCreatorMode(): boolean {
+    return this.mode === GameMode.CREATOR;
+  }
+
+  private syncCreatorAimSuppression(): void {
+    if (!this.isCreatorMode()) return;
+    this.input.setAimSuppressed(false);
+  }
+
+  private setCreatorTool(tool: 'place' | 'move' | 'delete') {
+    this.creatorTool = tool;
+    this.syncCreatorAimSuppression();
+    (window as any).__creatorTool = tool;
+    window.dispatchEvent(new CustomEvent('creator:tool-updated', { detail: { tool } }));
+  }
+
+  private findBallAtPosition(x: number, y: number): Ball | null {
+    let closest: Ball | null = null;
+    let closestDist = Infinity;
+    for (const ball of this.world.balls) {
+      if (ball.pocketed) continue;
+      const dist = Math.hypot(ball.x - x, ball.y - y);
+      if (dist <= ball.radius * 1.1 && dist < closestDist) {
+        closestDist = dist;
+        closest = ball;
+      }
+    }
+    return closest;
+  }
+
+  private handleCreatorClick(worldX: number, worldY: number, event?: MouseEvent): boolean {
+    if (!this.isCreatorMode()) return false;
+    if (!this.canShoot && !this.areBallsAtRest()) {
+      notificationService.show('Wait for balls to stop', 'warning');
+      return true;
+    }
+
+    const wantsDelete = !!event?.shiftKey;
+    const wantsPlace = !!event?.altKey || !!event?.ctrlKey;
+    const action = wantsDelete
+      ? 'delete'
+      : wantsPlace
+      ? 'place'
+      : this.creatorTool === 'place' || this.creatorTool === 'delete'
+      ? this.creatorTool
+      : null;
+
+    if (!action) return false;
+
+    if (action === 'delete') {
+      const target = this.findBallAtPosition(worldX, worldY);
+      if (!target) return true;
+      if (target.id === BALL_CUE) {
+        this.resetCreatorCueBall();
+        if (!this.creatorToolLock && !wantsDelete) {
+          this.setCreatorTool('move');
+        }
+        return true;
+      }
+      this.setBallState(target, target.x, target.y, true);
+      this.creatorUndoSnapshot = null;
+      if (!this.creatorToolLock && !wantsDelete) {
+        this.setCreatorTool('move');
+      }
+      return true;
+    }
+
+    if (action === 'place') {
+      const target = this.getCreatorBall(this.creatorSelectedBallId);
+      if (!target) return true;
+      const pos = processDragPosition(worldX, worldY, target.radius, this.world.rails, this.world.pockets, false);
+      if (!isSpotOpen(pos.x, pos.y, target.radius, this.world.balls, target)) {
+        notificationService.show('Spot occupied', 'warning');
+        return true;
+      }
+      this.setBallState(target, pos.x, pos.y, false);
+      this.creatorUndoSnapshot = null;
+      if (!this.creatorToolLock && !wantsPlace) {
+        this.setCreatorTool('move');
+      }
+      return true;
+    }
+
+    return false;
+  }
+
+  private getCreatorBall(ballId: number): Ball | null {
+    let ball = this.world.balls.find((candidate) => candidate.id === ballId) || null;
+    if (!ball) {
+      ball = this.createBall(ballId, 0, 0);
+      ball.pocketed = true;
+      this.world.addBall(ball);
+    }
+    return ball;
+  }
+
+  private setBallState(ball: Ball, x: number, y: number, pocketed: boolean) {
+    ball.x = x;
+    ball.y = y;
+    ball.prevX = x;
+    ball.prevY = y;
+    ball.vx = 0;
+    ball.vy = 0;
+    ball.angularVelocity = 0;
+    ball.sleeping = true;
+    ball.pocketed = pocketed;
+    ball.lastPocketId = null;
+  }
+
+  private resetAimCaches() {
+    this.cachedPrediction = null;
+    this.cachedDirection = null;
+    this.cachedShotPaths = null;
+    this.cachedShotPathsCueBallPos = null;
+    this.cachedShotPathsTimeMs = 0;
+  }
+
+  private areBallsAtRest(): boolean {
+    return this.world.balls.every((ball) => ball.pocketed || ball.sleeping);
+  }
+
+  private resetCreatorCueBall() {
+    if (!this.cueBall) return;
+    this.setBallState(this.cueBall, CUE_BALL_POSITION.x, CUE_BALL_POSITION.y, false);
+    this.creatorUndoSnapshot = null;
+    this.resetAimCaches();
+  }
+
+  private clearCreatorTable() {
+    if (!this.isCreatorMode()) return;
+    this.resetCreatorCueBall();
+    this.world.balls.forEach((ball) => {
+      if (ball.id === BALL_CUE) return;
+      this.setBallState(ball, ball.x, ball.y, true);
+    });
+    this.updateHUDPlayerBalls();
+    this.canShoot = true;
+    this.isAimMode = true;
+    this.resetAimCaches();
+  }
+
+  private rackCreatorTable() {
+    if (!this.isCreatorMode()) return;
+    this.resetCreatorCueBall();
+    const rackBalls = this.buildRackBalls(false);
+    rackBalls.forEach((rackBall) => {
+      const target = this.getCreatorBall(rackBall.id);
+      if (!target) return;
+      this.setBallState(target, rackBall.x, rackBall.y, false);
+    });
+    this.updateHUDPlayerBalls();
+    this.creatorUndoSnapshot = null;
+    this.canShoot = true;
+    this.isAimMode = true;
+    this.resetAimCaches();
+  }
+
+  private captureCreatorUndoSnapshot() {
+    if (!this.isCreatorMode()) return;
+    this.creatorUndoSnapshot = this.world.balls.map((ball) => ({
+      id: ball.id,
+      x: ball.x,
+      y: ball.y,
+      vx: ball.vx,
+      vy: ball.vy,
+      rotX: ball.rotX,
+      rotY: ball.rotY,
+      rotZ: ball.rotZ,
+      rotW: ball.rotW,
+      angle: ball.angle,
+      angularVelocity: ball.angularVelocity,
+      pocketed: ball.pocketed,
+      sleeping: ball.sleeping,
+    }));
+  }
+
+  private undoCreatorShot() {
+    if (!this.isCreatorMode()) return;
+    if (!this.creatorUndoSnapshot) return;
+    this.creatorUndoSnapshot.forEach((snapshot) => {
+      const ball = this.getCreatorBall(snapshot.id);
+      if (!ball) return;
+      ball.x = snapshot.x;
+      ball.y = snapshot.y;
+      ball.prevX = snapshot.x;
+      ball.prevY = snapshot.y;
+      ball.vx = snapshot.vx;
+      ball.vy = snapshot.vy;
+      ball.rotX = snapshot.rotX;
+      ball.rotY = snapshot.rotY;
+      ball.rotZ = snapshot.rotZ;
+      ball.rotW = snapshot.rotW;
+      ball.angle = snapshot.angle;
+      ball.angularVelocity = snapshot.angularVelocity;
+      ball.pocketed = snapshot.pocketed;
+      ball.sleeping = snapshot.sleeping;
+      ball.lastPocketId = null;
+    });
+    this.creatorUndoSnapshot = null;
+    this.canShoot = true;
+    this.isAimMode = true;
+    this.currentPower = 0;
+    this.isDraggingPower = false;
+    this.isSpacePowerMode = false;
+    this.input.resetAimAngle();
+    this.updateHUDPlayerBalls();
+  }
+
+  private captureCreatorLayout(): CreatorLayoutBall[] {
+    return this.world.balls
+      .filter((ball) => !ball.pocketed || ball.id === BALL_CUE)
+      .map((ball) => ({ id: ball.id, x: ball.x, y: ball.y }));
+  }
+
+  private applyCreatorLayout(layout: CreatorLayout) {
+    if (!this.isCreatorMode()) return;
+    this.clearCreatorTable();
+    layout.balls.forEach((ballDef) => {
+      const ball = this.getCreatorBall(ballDef.id);
+      if (!ball) return;
+      this.setBallState(ball, ballDef.x, ballDef.y, false);
+    });
+    this.updateHUDPlayerBalls();
+    this.creatorUndoSnapshot = null;
+    this.canShoot = true;
+    this.isAimMode = true;
+    this.resetAimCaches();
+  }
+
+  private readCreatorLayouts(): CreatorLayout[] {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.CREATOR_LAYOUTS);
+      if (!stored) return [];
+      const parsed = JSON.parse(stored);
+      if (!parsed || !Array.isArray(parsed.layouts)) return [];
+      return parsed.layouts as CreatorLayout[];
+    } catch (e) {
+      console.warn('Failed to read creator layouts:', e);
+      return [];
+    }
+  }
+
+  private writeCreatorLayouts(layouts: CreatorLayout[]) {
+    localStorage.setItem(STORAGE_KEYS.CREATOR_LAYOUTS, JSON.stringify({ version: 1, layouts }));
+  }
+
+  private dispatchCreatorLayouts() {
+    const layouts = this.readCreatorLayouts();
+    window.dispatchEvent(new CustomEvent('creator:layouts-updated', { detail: { layouts } }));
+  }
+
+  private saveCreatorLayout(nameInput?: string) {
+    if (!this.isCreatorMode()) return;
+    const fallbackName = `Layout ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`;
+    const name = (nameInput || '').trim() || fallbackName;
+    const layouts = this.readCreatorLayouts();
+    const now = Date.now();
+    const balls = this.captureCreatorLayout();
+    const existing = layouts.find((layout) => layout.name === name);
+    if (existing) {
+      existing.balls = balls;
+      existing.updatedAt = now;
+    } else {
+      layouts.push({ name, createdAt: now, updatedAt: now, balls });
+    }
+    this.writeCreatorLayouts(layouts);
+    this.dispatchCreatorLayouts();
+    notificationService.show('Layout saved', 'success');
+  }
+
+  private loadCreatorLayout(nameInput?: string) {
+    if (!this.isCreatorMode()) return;
+    const name = (nameInput || '').trim();
+    if (!name) return;
+    const layouts = this.readCreatorLayouts();
+    const layout = layouts.find((item) => item.name === name);
+    if (!layout) {
+      notificationService.show('Layout not found', 'warning');
+      return;
+    }
+    this.applyCreatorLayout(layout);
+    notificationService.show('Layout loaded', 'success');
+  }
+
+  private deleteCreatorLayout(nameInput?: string) {
+    if (!this.isCreatorMode()) return;
+    const name = (nameInput || '').trim();
+    if (!name) return;
+    const layouts = this.readCreatorLayouts().filter((layout) => layout.name !== name);
+    this.writeCreatorLayouts(layouts);
+    this.dispatchCreatorLayouts();
+    notificationService.show('Layout deleted', 'info');
+  }
+
   restart() {
     // Stop recording if active so we don't lose the data
     if (physicsRecorder.isRecording()) {
@@ -1435,6 +1894,8 @@ export class Game {
 
     // Reset ball dragging state
     this.isDraggingBall = false;
+    this.draggingBall = null;
+    this.creatorUndoSnapshot = null;
 
     // Reset pocket calling state
     this.currentCalledPocketId = null;
@@ -1553,6 +2014,10 @@ export class Game {
 
     this.hasStartedRack = true;
 
+    if (this.isCreatorMode()) {
+      this.captureCreatorUndoSnapshot();
+    }
+
     // Ensure audio is fully unlocked and ready on first shot
     // This primes the audio pipeline to prevent silent first collision
     this.audio.ensureUnlocked().catch(() => {
@@ -1616,6 +2081,21 @@ export class Game {
     if (this.mode === GameMode.PLAYBACK) {
       this.playbackController.update(dt);
       return;
+    }
+
+    if (this.isCreatorMode()) {
+      const tool = (window as any).__creatorTool as typeof this.creatorTool | undefined;
+      if (tool && tool !== this.creatorTool) {
+        this.setCreatorTool(tool);
+      }
+      const selected = (window as any).__creatorSelectedBallId as number | undefined;
+      if (typeof selected === 'number' && selected !== this.creatorSelectedBallId) {
+        this.creatorSelectedBallId = selected;
+      }
+      const locked = (window as any).__creatorToolLock as boolean | undefined;
+      if (typeof locked === 'boolean') {
+        this.creatorToolLock = locked;
+      }
     }
 
     this.accumulator += dt;
@@ -2552,7 +3032,23 @@ export class Game {
    */
   handleBallDragStart(e: MouseEvent) {
     const isBallInHandPhase = this.isBallInHandPhase();
-    if (!this.canShoot && !isBallInHandPhase) return;
+    if (!this.canShoot && !isBallInHandPhase && !(this.isCreatorMode() && this.creatorTool === 'move')) return;
+
+    if (this.isCreatorMode() && this.creatorTool === 'move') {
+      if (!this.areBallsAtRest()) {
+        notificationService.show('Wait for balls to stop', 'warning');
+        return;
+      }
+      const world = this.input.screenToGame(e.clientX, e.clientY);
+      const targetBall = this.findBallAtPosition(world.x, world.y);
+      if (!targetBall) return;
+      this.isDraggingBall = true;
+      this.draggingBall = targetBall;
+      this.input.canvas.style.cursor = 'move';
+      this.input.setAimSuppressed(true);
+      return;
+    }
+
     if (!e.shiftKey && !isBallInHandPhase) return;
     if (!this.cueBall || this.cueBall.pocketed) return;
 
@@ -2566,6 +3062,7 @@ export class Game {
 
     if (isClickOnCueBall(world.x, world.y, this.cueBall)) {
       this.isDraggingBall = true;
+      this.draggingBall = this.cueBall;
       this.input.canvas.style.cursor = 'move';
       this.world.skipCuePocketCheck = true;
 
@@ -2582,23 +3079,37 @@ export class Game {
    * Handle ball drag - delegates to BallInHandController
    */
   handleBallDrag(e: MouseEvent) {
-    if (!this.isDraggingBall || !this.cueBall) return;
+    if (!this.isDraggingBall || !this.draggingBall) return;
+    const dragBall = this.draggingBall;
 
-    const deps = {
-      canvasRect: this.input.canvas.getBoundingClientRect(),
-      canvasWidth: this.renderer.canvas.width,
-      canvasHeight: this.renderer.canvas.height,
-      scale: this.renderer.scale,
-    };
-    const world = screenToWorld(e.clientX, e.clientY, deps);
-    const pos = processDragPosition(world.x, world.y, this.cueBall.radius, this.world.rails, this.world.pockets, this.shouldRestrictToKitchen());
-    applyDragToCueBall(this.cueBall, pos.x, pos.y);
+    const world = this.isCreatorMode() && this.creatorTool === 'move'
+      ? this.input.screenToGame(e.clientX, e.clientY)
+      : screenToWorld(e.clientX, e.clientY, {
+          canvasRect: this.input.canvas.getBoundingClientRect(),
+          canvasWidth: this.renderer.canvas.width,
+          canvasHeight: this.renderer.canvas.height,
+          scale: this.renderer.scale,
+        });
+    const restrictToKitchen = dragBall === this.cueBall ? this.shouldRestrictToKitchen() : false;
+    const pos = processDragPosition(world.x, world.y, dragBall.radius, this.world.rails, this.world.pockets, restrictToKitchen);
+    if (!isSpotOpen(pos.x, pos.y, dragBall.radius, this.world.balls, dragBall)) {
+      return;
+    }
+    applyDragToCueBall(dragBall, pos.x, pos.y);
+    dragBall.vx = 0;
+    dragBall.vy = 0;
+    dragBall.angularVelocity = 0;
+    dragBall.sleeping = true;
+    dragBall.prevX = pos.x;
+    dragBall.prevY = pos.y;
 
     // Debug overlay data
-    const re = this.renderer.worldToScreen(world.x, world.y);
-    const rect = deps.canvasRect;
-    const rtErrorPx = Math.hypot(re.x - (e.clientX - rect.left), re.y - (e.clientY - rect.top));
-    this.debug.setBallInHandData({ raw: world, clamped: pos, radius: this.cueBall.radius, hits: pos.hits, rtErrorPx });
+    if (dragBall === this.cueBall) {
+      const re = this.renderer.worldToScreen(world.x, world.y);
+      const rect = this.input.canvas.getBoundingClientRect();
+      const rtErrorPx = Math.hypot(re.x - (e.clientX - rect.left), re.y - (e.clientY - rect.top));
+      this.debug.setBallInHandData({ raw: world, clamped: pos, radius: dragBall.radius, hits: pos.hits, rtErrorPx });
+    }
   }
 
   /**
@@ -2607,8 +3118,13 @@ export class Game {
   handleBallDragEnd(_e: MouseEvent) {
     if (!this.isDraggingBall) return;
     this.isDraggingBall = false;
+    this.draggingBall = null;
     this.input.canvas.style.cursor = 'default';
     this.world.skipCuePocketCheck = false;
+    if (this.isCreatorMode()) {
+      this.creatorUndoSnapshot = null;
+      this.syncCreatorAimSuppression();
+    }
   }
 
   /**

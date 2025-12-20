@@ -70,6 +70,7 @@ export class PlayModesScene implements UIScene {
         this.cardImages['practice'] = AssetLoader.loadImageSync(AssetRegistry.modeCards.practice());
         this.cardImages['8ball'] = AssetLoader.loadImageSync(AssetRegistry.modeCards.eightBall());
         this.cardImages['time-attack'] = AssetLoader.loadImageSync(AssetRegistry.modeCards.timeAttack());
+        this.cardImages['creator'] = AssetLoader.loadImageSync(AssetRegistry.modeCards.creator());
 
         canvas.addEventListener('mousemove', this.onMouseMove);
         canvas.addEventListener('click', this.onClick);
@@ -156,8 +157,8 @@ export class PlayModesScene implements UIScene {
             cardWidth = contentWidth; // Full width
             cardHeight = 400; // Fixed height
         } else {
-            // Landscape or desktop: Arrange horizontally (3 columns)
-            const columns = 3;
+            // Landscape or desktop: Arrange horizontally (adaptive columns)
+            const columns = 4;
             cardWidth = (contentWidth - gap * (columns - 1)) / columns;
             cardHeight = 400; // Fixed height for consistency
         }
@@ -194,6 +195,16 @@ export class PlayModesScene implements UIScene {
                 price: 'Free',
                 image: this.cardImages['time-attack']
             },
+            {
+                id: 'creator',
+                title: 'CREATOR',
+                subtitle: 'SHOT LAB',
+                desc: 'Build custom layouts and replay them',
+                color: '#7c4d1f', // Warm bronze
+                icon: '🧪',
+                price: 'Free',
+                image: this.cardImages['creator']
+            },
         ];
 
         this.modeCards = modes;
@@ -228,7 +239,7 @@ export class PlayModesScene implements UIScene {
             this.scrollOffset = Math.min(this.scrollOffset, this.maxScroll);
         } else {
             // Horizontal layout for landscape/desktop - cards positioned relative to 0
-            const columns = 3;
+            const columns = Math.min(4, modes.length || 3);
             const startX = padding;
 
             modes.forEach((mode, index) => {
@@ -269,6 +280,9 @@ export class PlayModesScene implements UIScene {
                 break;
             case 'time-attack':
                 game.mode = GameMode.TIME_ATTACK;
+                break;
+            case 'creator':
+                game.mode = GameMode.CREATOR;
                 break;
         }
         game.restart();

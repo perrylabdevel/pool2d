@@ -4,7 +4,7 @@
 import { Ball, Rail, Pocket } from './Shapes';
 import { CONFIG } from '../config';
 import { getTableGeometry } from '../geometry/Geometry';
-import { detectBallBall, detectBallRail, resolveBallBall, resolveBallRail, Contact, resetCollisionTracking, setSuppressWarnings, shouldNotifyRailCollision, shouldNotifyBallCollision } from './Collision';
+import { detectBallBall, detectBallRail, resolveBallBall, resolveBallRail, Contact, resetCollisionTracking, setSuppressWarnings, shouldNotifyRailCollision, shouldNotifyBallCollision, getCollisionPairId, getBallRailPairId } from './Collision';
 import { physicsRecorder } from '../debug/PhysicsRecorder';
 
 const ROTATION_EPSILON = 1e-7;
@@ -76,6 +76,8 @@ export class PhysicsWorld {
   onRailCollision?: (ball: Ball, rail: Rail) => void;
   // Callback for ball pocket captures (for visuals/analytics)
   onBallPocketed?: (details: PocketCaptureDetails) => void;
+  private activeBallPairs: Set<string> = new Set();
+  private activeRailPairs: Set<string> = new Set();
   
   constructor() {
     this.initializeRails();
@@ -157,6 +159,8 @@ export class PhysicsWorld {
       Math.max(1, Math.ceil(maxTravelThisStep / Math.max(1e-6, maxTravelPerSubstep)))
     );
     const subDt = dt / substeps;
+    const ballPairsThisStep = new Set<string>();
+    const railPairsThisStep = new Set<string>();
     
     // Run physics in substeps
     for (let substep = 0; substep < substeps; substep++) {
@@ -218,7 +222,10 @@ export class PhysicsWorld {
         for (let i = 0; i < this.balls.length; i++) {
           for (let j = i + 1; j < this.balls.length; j++) {
             const contact = detectBallBall(this.balls[i], this.balls[j]);
-            if (contact) contacts.push(contact);
+            if (contact) {
+              ballPairsThisStep.add(getCollisionPairId(contact.ballA, contact.ballB!));
+              contacts.push(contact);
+            }
           }
         }
         
@@ -226,7 +233,10 @@ export class PhysicsWorld {
         for (const ball of this.balls) {
           for (const rail of this.rails) {
             const contact = detectBallRail(ball, rail);
-            if (contact) contacts.push(contact);
+            if (contact) {
+              railPairsThisStep.add(getBallRailPairId(contact.ballA, contact.rail!));
+              contacts.push(contact);
+            }
           }
         }
         
@@ -235,13 +245,17 @@ export class PhysicsWorld {
           if (contact.ballB) {
             resolveBallBall(contact);
             // Only notify about new ball collisions (once per ball pair per timestep)
-            if (this.onBallCollision && shouldNotifyBallCollision(contact.ballA, contact.ballB)) {
+            const pairId = getCollisionPairId(contact.ballA, contact.ballB);
+            const isNewContact = !this.activeBallPairs.has(pairId);
+            if (this.onBallCollision && isNewContact && shouldNotifyBallCollision(contact.ballA, contact.ballB)) {
               this.onBallCollision(contact.ballA, contact.ballB);
             }
           } else if (contact.rail) {
             resolveBallRail(contact);
             // Only notify about new rail collisions (once per ball-rail pair per timestep)
-            if (this.onRailCollision && shouldNotifyRailCollision(contact.ballA, contact.rail)) {
+            const pairId = getBallRailPairId(contact.ballA, contact.rail);
+            const isNewContact = !this.activeRailPairs.has(pairId);
+            if (this.onRailCollision && isNewContact && shouldNotifyRailCollision(contact.ballA, contact.rail)) {
               this.onRailCollision(contact.ballA, contact.rail);
             }
           }
@@ -256,6 +270,8 @@ export class PhysicsWorld {
     
     // Check sleeping
     this.checkSleeping();
+    this.activeBallPairs = ballPairsThisStep;
+    this.activeRailPairs = railPairsThisStep;
   }
   
   applyFriction(dt: number) {

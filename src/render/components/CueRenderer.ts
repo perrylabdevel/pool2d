@@ -248,8 +248,8 @@ export class CueRenderer {
             aimEndX = ghostBaseX + Math.cos(angle) * CONFIG.GHOST_BALL_OFFSET;
             aimEndY = ghostBaseY + Math.sin(angle) * CONFIG.GHOST_BALL_OFFSET;
         } else if (prediction && prediction.type === 'rail') {
-            aimEndX = prediction.contactPoint.x + interpOffsetX;
-            aimEndY = prediction.contactPoint.y + interpOffsetY;
+            aimEndX = prediction.contactPoint.x + interpOffsetX + prediction.contactNormal.x * ball.radius;
+            aimEndY = prediction.contactPoint.y + interpOffsetY + prediction.contactNormal.y * ball.radius;
         } else {
             // Clip to rails if no prediction
             const aimEndRaw = { x: aimEndX, y: aimEndY };

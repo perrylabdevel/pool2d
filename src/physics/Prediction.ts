@@ -522,7 +522,8 @@ export class Predictor {
     const s = (toRail.x * direction.y - toRail.y * direction.x) / cross;
 
     // Check if intersection is valid
-    if (t < 0 || t > maxDistance) return null; // Outside ray range
+    const minDistance = 1e-3;
+    if (t <= minDistance || t > maxDistance) return null; // Outside ray range or too close
     if (s < 0 || s > 1) return null; // Outside segment range
 
     const contactCenter = {

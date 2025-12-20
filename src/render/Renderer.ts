@@ -725,8 +725,16 @@ export class Renderer extends BaseRenderer {
     const aimStart = { x, y };
     let aimRawEnd = { x: x + dx * CONFIG.AIM_LINE_LENGTH, y: y + dy * CONFIG.AIM_LINE_LENGTH };
     if (prediction) {
-      // Always use contactPoint (not ghostCenter) - this is where the cue ball surface touches
-      aimRawEnd = { x: prediction.contactPoint.x, y: prediction.contactPoint.y };
+      // Use center-at-impact for rail hits so the rebound line aligns with the aim end.
+      if (prediction.type === 'rail' && prediction.contactNormal) {
+        aimRawEnd = {
+          x: prediction.contactPoint.x + prediction.contactNormal.x * ball.radius,
+          y: prediction.contactPoint.y + prediction.contactNormal.y * ball.radius
+        };
+      } else {
+        // Always use contactPoint (not ghostCenter) - this is where the cue ball surface touches
+        aimRawEnd = { x: prediction.contactPoint.x, y: prediction.contactPoint.y };
+      }
     }
     const aimEnd = this.clampSegmentToPlayArea(aimStart, aimRawEnd);
     const aimStrokeWidth = 1 / this.scale;

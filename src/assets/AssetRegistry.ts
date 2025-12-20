@@ -48,6 +48,7 @@ export const AssetRegistry = {
     // Add specific mode cards here as you create them:
     eightBall: () => '/assets/images/mode-cards/8ball.png',
     timeAttack: () => '/assets/images/mode-cards/time-attack.png',
+    creator: () => '/assets/images/lobby-cards/practice.png',
   },
 
   /**
