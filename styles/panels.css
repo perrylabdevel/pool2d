@@ -14,9 +14,22 @@ body.show-legacy-dock .panel-launcher-toggle {
   display: flex !important;
 }
 
-/* Creator mode uses the dock area for its tool panel */
-body.show-creator-dock #dock-right {
-  display: flex !important;
+/* Creator mode shelf lives above the table */
+body.creator-mode .hud-header {
+  gap: 16px;
+}
+
+body.creator-mode .hud-header .creator-shelf {
+  margin: 0 8px;
+  flex: 1 1 auto;
+  width: auto;
+  max-width: 720px;
+  padding: 6px 8px;
+  border-radius: 14px;
+}
+
+body.creator-mode .hud-header .creator-shelf .creator-shelf-inner {
+  gap: 10px;
 }
 
 #panel-dock {
@@ -451,54 +464,115 @@ body.show-creator-dock #dock-right {
   font-weight: 500;
 }
 
-.creator-panel .creator-action-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+/* Creator shelf */
+.creator-shelf {
+  width: min(1400px, 100%);
+  margin: 0 auto;
+  padding: 6px 8px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(16, 26, 35, 0.92), rgba(10, 14, 18, 0.95));
+  border: 1px solid rgba(120, 214, 255, 0.2);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.45);
+  position: relative;
+  z-index: 20;
+  overflow: hidden;
 }
 
-.creator-panel .creator-tool-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+.creator-shelf.hidden {
+  display: none;
 }
 
-.creator-panel .creator-tool-lock {
-  margin-top: 6px;
-}
-
-.creator-panel .creator-ball-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+.creator-shelf .creator-shelf-inner {
+  display: flex;
+  align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
-.creator-panel .creator-ball-btn {
-  min-height: 34px;
+.creator-shelf .creator-shelf-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 10px;
+  background: rgba(8, 12, 16, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  flex: 0 0 auto;
+}
+
+.creator-shelf .creator-group-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.6);
+  margin-right: 2px;
+}
+
+.creator-shelf .panel-btn {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  font-size: 11px;
+  border-radius: 9px;
+}
+
+.creator-shelf .creator-tool-grid,
+.creator-shelf .creator-action-grid {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.creator-shelf .creator-tool-divider {
+  width: 1px;
+  height: 22px;
+  background: rgba(255, 255, 255, 0.15);
+  align-self: center;
+  margin: 0 2px;
+  flex: 0 0 auto;
+}
+
+.creator-shelf .creator-tool-lock {
+  margin: 0;
+  gap: 4px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.creator-shelf .creator-tool-lock input[type='checkbox'] {
+  width: 14px;
+  height: 14px;
+}
+
+.creator-shelf .creator-ball-grid {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.creator-shelf .creator-ball-btn {
+  min-width: 30px;
+  min-height: 30px;
+  padding: 0 8px;
+  border-radius: 999px;
   font-variant-numeric: tabular-nums;
 }
 
-.creator-panel .creator-tool-btn.is-active,
-.creator-panel .creator-ball-btn.is-active {
+.creator-shelf .creator-tool-btn.is-active,
+.creator-shelf .creator-ball-btn.is-active {
   border-color: rgba(120, 214, 255, 0.7);
-  box-shadow: 0 0 0 2px rgba(120, 214, 255, 0.15);
+  box-shadow: 0 0 0 2px rgba(120, 214, 255, 0.2);
 }
 
-.creator-panel .creator-layout-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.creator-panel .creator-layout-row input,
-.creator-panel .creator-layout-row select {
-  flex: 1;
-  padding: 8px 10px;
-  border-radius: 8px;
+.creator-shelf .creator-shelf-layouts input,
+.creator-shelf .creator-shelf-layouts select {
+  padding: 6px 8px;
+  border-radius: 9px;
   border: 1px solid rgba(255, 255, 255, 0.15);
   background: rgba(0, 0, 0, 0.25);
   color: #fff;
-  font-size: 13px;
+  font-size: 11px;
+  min-width: 120px;
 }
 
 .event-control {

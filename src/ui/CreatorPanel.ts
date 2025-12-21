@@ -30,61 +30,57 @@ export class CreatorPanel {
     let panel = document.getElementById('creator-panel') as HTMLElement | null;
     if (panel) return panel;
 
-    const dock = document.getElementById('panel-dock');
+    const hud = document.getElementById('hud');
+    const hudHeader = document.querySelector('.hud-header');
+    const hudRight = document.getElementById('player2-info');
     panel = document.createElement('div');
     panel.id = 'creator-panel';
-    panel.className = 'panel-dock-card hidden creator-panel';
+    panel.className = 'creator-shelf hidden';
     panel.innerHTML = `
-      <div class="panel-header">
-        <h3>🧪 Creator Mode</h3>
-      </div>
-      <div class="panel-content">
-        <div class="settings-group">
-          <h4 class="settings-group-title">Tools</h4>
+      <div class="creator-shelf-inner" role="group" aria-label="Creator Mode Controls">
+        <div class="creator-shelf-group creator-shelf-tools">
+          <span class="creator-group-label">Tools</span>
           <div class="creator-tool-grid">
             <button class="panel-btn creator-tool-btn" data-tool="move">Move</button>
             <button class="panel-btn creator-tool-btn" data-tool="place">Place</button>
             <button class="panel-btn creator-tool-btn" data-tool="delete">Delete</button>
+            <span class="creator-tool-divider" aria-hidden="true"></span>
+            <button class="panel-btn" id="creator-clear">Clear</button>
+            <button class="panel-btn" id="creator-rack">Rack</button>
+            <button class="panel-btn" id="creator-undo">Undo</button>
+            <button class="panel-btn" id="creator-reset-cue">Reset Cue</button>
           </div>
-          <label class="panel-toggle-row creator-tool-lock">
+          <label class="panel-toggle-row creator-tool-lock" title="Hold Shift to delete, Alt/Ctrl to place">
             <input type="checkbox" id="creator-lock-tool" />
-            <span>Stay in tool</span>
+            <span>Stay</span>
           </label>
-          <p class="panel-hint">Shift = Delete · Alt/Ctrl = Place</p>
         </div>
-        <div class="settings-group">
-          <h4 class="settings-group-title">Ball Palette</h4>
-          <div class="creator-ball-grid">
+        <div class="creator-shelf-group creator-shelf-balls">
+          <span class="creator-group-label">Ball</span>
+          <div class="creator-ball-grid" role="listbox" aria-label="Ball Palette">
             <button class="panel-btn creator-ball-btn" data-ball-id="0">Cue</button>
             ${Array.from({ length: 15 }).map((_, i) => `<button class="panel-btn creator-ball-btn" data-ball-id="${i + 1}">${i + 1}</button>`).join('')}
           </div>
         </div>
-        <div class="settings-group">
-          <h4 class="settings-group-title">Actions</h4>
-          <div class="creator-action-grid">
-            <button class="panel-btn" id="creator-clear">Clear Table</button>
-            <button class="panel-btn" id="creator-rack">Rack Balls</button>
-            <button class="panel-btn" id="creator-undo">Undo Shot</button>
-            <button class="panel-btn" id="creator-reset-cue">Reset Cue</button>
-          </div>
-        </div>
-        <div class="settings-group">
-          <h4 class="settings-group-title">Layouts</h4>
-          <div class="panel-input-row creator-layout-row">
-            <input id="creator-layout-name" type="text" placeholder="Layout name" />
-            <button class="panel-btn" id="creator-save">Save</button>
-          </div>
-          <div class="panel-input-row creator-layout-row">
-            <select id="creator-layout-select"></select>
-            <button class="panel-btn" id="creator-load">Load</button>
-            <button class="panel-btn" id="creator-delete">Delete</button>
-          </div>
+        <div class="creator-shelf-group creator-shelf-layouts">
+          <span class="creator-group-label">Layouts</span>
+          <input id="creator-layout-name" type="text" placeholder="Layout name" />
+          <button class="panel-btn" id="creator-save">Save</button>
+          <select id="creator-layout-select"></select>
+          <button class="panel-btn" id="creator-load">Load</button>
+          <button class="panel-btn" id="creator-delete">Delete</button>
         </div>
       </div>
     `;
 
-    if (dock) {
-      dock.prepend(panel);
+    if (hudHeader) {
+      if (hudRight && hudRight.parentElement === hudHeader) {
+        hudHeader.insertBefore(panel, hudRight);
+      } else {
+        hudHeader.append(panel);
+      }
+    } else if (hud) {
+      hud.append(panel);
     } else {
       document.body.append(panel);
     }

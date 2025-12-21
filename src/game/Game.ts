@@ -595,7 +595,7 @@ export class Game {
       const detail = (event as CustomEvent<{ to: UIState }>).detail;
       if (detail.to === UIState.IN_GAME) {
         if (this.isCreatorMode()) {
-          document.body.classList.add('show-creator-dock');
+          document.body.classList.add('creator-mode');
           this.hud?.panelManager?.openPanel('creator-panel');
         }
       }
@@ -611,7 +611,7 @@ export class Game {
         if (this.hud?.panelManager?.isPanelOpen('creator-panel')) {
           this.hud.panelManager.closePanel('creator-panel');
         }
-        document.body.classList.remove('show-creator-dock');
+        document.body.classList.remove('creator-mode');
       }
     });
 
@@ -1086,7 +1086,7 @@ export class Game {
         this.creatorTool = 'move';
         this.input.setAimSuppressed(false);
         this.hud?.panelManager?.closePanel('creator-panel');
-        document.body.classList.remove('show-creator-dock');
+        document.body.classList.remove('creator-mode');
       }
 
       // Create cue ball with randomized initial rotation
@@ -1558,7 +1558,7 @@ export class Game {
     this.hud.setTurn(1, false);
     this.hud.setPlayer2Visible(false);
     this.hud.panelManager.openPanel('creator-panel');
-    document.body.classList.add('show-creator-dock');
+    document.body.classList.add('creator-mode');
     this.setCreatorTool('move');
     this.creatorSelectedBallId = 1;
     this.creatorToolLock = false;
@@ -1600,7 +1600,6 @@ export class Game {
   private handleCreatorClick(worldX: number, worldY: number, event?: MouseEvent): boolean {
     if (!this.isCreatorMode()) return false;
     if (!this.canShoot && !this.areBallsAtRest()) {
-      notificationService.show('Wait for balls to stop', 'warning');
       return true;
     }
 
@@ -1639,7 +1638,6 @@ export class Game {
       if (!target) return true;
       const pos = processDragPosition(worldX, worldY, target.radius, this.world.rails, this.world.pockets, false);
       if (!isSpotOpen(pos.x, pos.y, target.radius, this.world.balls, target)) {
-        notificationService.show('Spot occupied', 'warning');
         return true;
       }
       this.setBallState(target, pos.x, pos.y, false);
@@ -1834,7 +1832,6 @@ export class Game {
     }
     this.writeCreatorLayouts(layouts);
     this.dispatchCreatorLayouts();
-    notificationService.show('Layout saved', 'success');
   }
 
   private loadCreatorLayout(nameInput?: string) {
@@ -1844,11 +1841,9 @@ export class Game {
     const layouts = this.readCreatorLayouts();
     const layout = layouts.find((item) => item.name === name);
     if (!layout) {
-      notificationService.show('Layout not found', 'warning');
       return;
     }
     this.applyCreatorLayout(layout);
-    notificationService.show('Layout loaded', 'success');
   }
 
   private deleteCreatorLayout(nameInput?: string) {
@@ -1858,7 +1853,6 @@ export class Game {
     const layouts = this.readCreatorLayouts().filter((layout) => layout.name !== name);
     this.writeCreatorLayouts(layouts);
     this.dispatchCreatorLayouts();
-    notificationService.show('Layout deleted', 'info');
   }
 
   restart() {
@@ -3036,7 +3030,6 @@ export class Game {
 
     if (this.isCreatorMode() && this.creatorTool === 'move') {
       if (!this.areBallsAtRest()) {
-        notificationService.show('Wait for balls to stop', 'warning');
         return;
       }
       const world = this.input.screenToGame(e.clientX, e.clientY);
