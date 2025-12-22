@@ -1,6 +1,8 @@
 import { SettingsManager } from '../ui/SettingsManager';
 import { Renderer3D } from '../render/Renderer3D';
 import { setPhysicsJsonOverride } from '../geometry/Geometry';
+import { STORAGE_KEYS } from '../settings/StorageKeys';
+import { notificationService } from '../ui/NotificationService';
 
 export class RemoteBridge {
     private ws!: WebSocket;
@@ -216,13 +218,47 @@ export class RemoteBridge {
                 console.log('[RemoteBridge] Received table editor config', message.config);
                 this.handleTableEditorPush(message.config);
                 break;
+            case 'cue-editor:push-config':
+                console.log('[RemoteBridge] Received cue editor config', message.config);
+                this.handleCueEditorPush(message.config);
+                break;
+            case 'notification-editor:request-config':
+                this.sendNotificationEditorConfig();
+                break;
+            case 'notification-editor:push-config':
+                console.log('[RemoteBridge] Received notification editor config', message.config);
+                this.handleNotificationEditorPush(message.config);
+                break;
+            case 'banner-editor:update':
+                console.log('[RemoteBridge] Received banner editor config', message.payload);
+                this.handleBannerEditorPush(message.payload);
+                break;
         }
     }
 
+    private pendingBannerConfig: any = null;
+
+    private handleBannerEditorPush(config: any) {
+        if (!config) return;
+        this.pendingBannerConfig = config;
+
+        try {
+            localStorage.setItem(STORAGE_KEYS.BANNER_EDITOR_CONFIG, JSON.stringify(config));
+        } catch (e) {
+            console.warn('[RemoteBridge] Failed to persist banner config', e);
+        }
+
+        window.dispatchEvent(new CustomEvent('banner-editor:apply-config', {
+            detail: { config }
+        }));
+    }
+
     private pendingSkin: { name: string; image: string } | null = null;
+    private pendingCueSkin: any = null;
+    private pendingNotificationConfig: any = null;
     private lastAppliedSkinName: string | null = null;
-    private applySkinTimer: number | null = null;
     private static readonly PENDING_SKIN_STORAGE_KEY = 'table-editor-pending-skin';
+    private static readonly PENDING_CUE_SKIN_STORAGE_KEY = 'cue-editor-pending-skin';
 
     private loadPendingSkinFromStorage() {
         try {
@@ -237,6 +273,117 @@ export class RemoteBridge {
             }
         } catch (e) {
             console.warn('[RemoteBridge] Failed to load pending skin from storage', e);
+        }
+
+        try {
+            const rawCue = localStorage.getItem(RemoteBridge.PENDING_CUE_SKIN_STORAGE_KEY);
+            if (rawCue) {
+                const parsed = JSON.parse(rawCue);
+                if (parsed?.skin?.image) {
+                    this.pendingCueSkin = parsed;
+                    // Apply immediately on load
+                    setTimeout(() => this.applyPendingCueSkin(), 100);
+                }
+            }
+        } catch (e) {
+            console.warn('[RemoteBridge] Failed to load pending cue skin from storage', e);
+        }
+
+        try {
+            const rawNotifications = localStorage.getItem(STORAGE_KEYS.NOTIFICATION_CONFIG);
+            if (rawNotifications) {
+                const parsed = JSON.parse(rawNotifications);
+                if (parsed) {
+                    this.pendingNotificationConfig = parsed;
+                    setTimeout(() => this.applyPendingNotificationConfig(), 100);
+                }
+            }
+        } catch (e) {
+            console.warn('[RemoteBridge] Failed to load notification config from storage', e);
+        }
+
+        try {
+            const rawBanner = localStorage.getItem(STORAGE_KEYS.BANNER_EDITOR_CONFIG);
+            if (rawBanner) {
+                const parsed = JSON.parse(rawBanner);
+                if (parsed) {
+                    this.pendingBannerConfig = parsed;
+                    setTimeout(() => this.applyPendingBannerConfig(), 100);
+                }
+            }
+        } catch (e) {
+            console.warn('[RemoteBridge] Failed to load banner config from storage', e);
+        }
+    }
+
+    private applyPendingBannerConfig() {
+        if (!this.pendingBannerConfig) return;
+        window.dispatchEvent(new CustomEvent('banner-editor:apply-config', {
+            detail: { config: this.pendingBannerConfig }
+        }));
+    }
+
+    private handleCueEditorPush(config: any) {
+        if (config.skin) {
+            this.pendingCueSkin = config;
+            // Persist if mode is 'persist'
+            if (config.mode === 'persist') {
+                try {
+                    localStorage.setItem(RemoteBridge.PENDING_CUE_SKIN_STORAGE_KEY, JSON.stringify(config));
+                } catch (e) {
+                    console.warn('[RemoteBridge] Failed to persist pending cue skin', e);
+                }
+            } else {
+                // Clear persistence if live mode (optional, but keeps it clean)
+                localStorage.removeItem(RemoteBridge.PENDING_CUE_SKIN_STORAGE_KEY);
+            }
+            this.applyPendingCueSkin();
+        }
+    }
+
+    private applyPendingCueSkin() {
+        if (!this.pendingCueSkin?.skin) return;
+        window.dispatchEvent(new CustomEvent('cue-editor:apply-skin', {
+            detail: this.pendingCueSkin.skin
+        }));
+    }
+
+    private handleNotificationEditorPush(config: any) {
+        if (!config?.config) return;
+        if (config.config.stylePreset && config.config.stylePreset !== 'banner') {
+            config.config.stylePreset = 'banner';
+        }
+        this.pendingNotificationConfig = config.config;
+
+        if (config.mode === 'persist') {
+            try {
+                localStorage.setItem(STORAGE_KEYS.NOTIFICATION_CONFIG, JSON.stringify(config.config));
+            } catch (e) {
+                console.warn('[RemoteBridge] Failed to persist notification config', e);
+            }
+        } else {
+            localStorage.removeItem(STORAGE_KEYS.NOTIFICATION_CONFIG);
+        }
+
+        this.applyPendingNotificationConfig();
+    }
+
+    private applyPendingNotificationConfig() {
+        if (!this.pendingNotificationConfig) return;
+        window.dispatchEvent(new CustomEvent('notification-editor:apply-config', {
+            detail: { config: this.pendingNotificationConfig }
+        }));
+    }
+
+    private sendNotificationEditorConfig() {
+        try {
+            const config = notificationService.getConfig();
+            this.sendMessage({
+                type: 'notification-editor:current-config',
+                config,
+            });
+        } catch (e) {
+            console.warn('[RemoteBridge] Failed to send notification config', e);
         }
     }
 

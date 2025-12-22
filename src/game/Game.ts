@@ -1998,6 +1998,7 @@ export class Game {
   shoot(angle: number, power: number) {
     if (!this.cueBall || this.cueBall.pocketed) return;
     if (!this.canShoot) return;
+    if (notificationService.isBannerActive()) return;
     if (this.mode === GameMode.EIGHT_BALL && this.rules.gameState === RulesGameState.GAME_OVER) return;
     if (this.mode === GameMode.EIGHT_BALL) {
       const hasCalledPocket = this.ensureCalledPocketIfNeeded();

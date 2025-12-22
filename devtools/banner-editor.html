@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RailRush Banner Editor</title>
+  <link rel="stylesheet" href="/styles/design-tokens.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --sidebar-width: 320px;
+      --header-height: 48px;
+      --panel-bg: #1e1e2e;
+      --panel-border: #313244;
+      --accent: #89b4fa;
+      --accent-hover: #b4befe;
+      --text: #cdd6f4;
+      --text-muted: #6c7086;
+      --success: #a6e3a1;
+      --warning: #f9e2af;
+      --error: #f38ba8;
+    }
+    html, body { height: 100%; overflow: hidden; background: #11111b; color: var(--text); font-family: 'Inter', -apple-system, sans-serif; }
+    .app-container { display: flex; flex-direction: column; height: 100%; }
+
+    /* Header */
+    .header { height: var(--header-height); background: var(--panel-bg); border-bottom: 1px solid var(--panel-border); display: flex; align-items: center; justify-content: space-between; padding: 0 16px; flex-shrink: 0; }
+    .header-title { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+    .header-actions { display: flex; gap: 8px; align-items: center; }
+    .btn { padding: 6px 12px; border-radius: 6px; border: 1px solid var(--panel-border); background: var(--panel-bg); color: var(--text); font-size: 13px; cursor: pointer; transition: all 0.15s; }
+    .btn:hover { background: #313244; border-color: var(--accent); }
+    .btn-primary { background: var(--accent); color: #11111b; border-color: var(--accent); }
+    .btn-primary:hover { background: var(--accent-hover); }
+
+    #ws-indicator { width: 8px; height: 8px; border-radius: 50%; background: #45475a; margin-right: 8px; }
+    #ws-indicator.connected { background: var(--success); box-shadow: 0 0 8px var(--success); }
+
+    /* Layout */
+    .main-content { flex: 1; display: flex; overflow: hidden; }
+
+    /* Center Preview */
+    .preview-area { flex: 1; background: #181825; display: flex; flex-direction: column; position: relative; min-width: 0; }
+    .canvas-wrapper { flex: 1; position: relative; overflow: hidden; background-image: radial-gradient(#313244 1px, transparent 1px); background-size: 20px 20px; }
+    #preview-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 1px solid #313244; background: transparent; }
+    .preview-controls { height: 56px; border-top: 1px solid var(--panel-border); background: var(--panel-bg); display: flex; align-items: center; justify-content: center; gap: 12px; padding: 0 16px; }
+
+    /* Timeline */
+    .timeline-section { display: flex; align-items: center; gap: 12px; margin-left: auto; }
+    #timeline-status {
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      background: #313244;
+      color: var(--text-muted);
+      min-width: 80px;
+      text-align: center;
+    }
+    #timeline-status.timeline-enter { background: #1a5c1a; color: var(--success); }
+    #timeline-status.timeline-active { background: #3a3a5c; color: var(--accent); }
+    #timeline-status.timeline-exit { background: #5c4a1a; color: var(--warning); }
+
+    /* Right Sidebar */
+    .sidebar-right { width: var(--sidebar-width); background: var(--panel-bg); border-left: 1px solid var(--panel-border); overflow-y: auto; display: flex; flex-direction: column; flex-shrink: 0; }
+
+    .panel { border-bottom: 1px solid var(--panel-border); padding: 16px; }
+    .panel-header { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 12px; }
+    .control-group { margin-bottom: 16px; }
+    .control-group:last-child { margin-bottom: 0; }
+    .control-group > label { display: block; font-size: 13px; margin-bottom: 6px; color: var(--text); font-weight: 500; }
+    .control-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .control-row:last-child { margin-bottom: 0; }
+    .sub-label { font-size: 12px; color: var(--text-muted); min-width: 60px; }
+
+    input[type="text"], input[type="number"], select {
+      background: #11111b; border: 1px solid var(--panel-border); color: var(--text); padding: 6px 10px; border-radius: 4px; font-size: 12px; flex: 1;
+    }
+    select { cursor: pointer; }
+    input[type="color"] {
+      background: none; border: none; width: 28px; height: 28px; cursor: pointer; padding: 0;
+    }
+    input[type="range"] { flex: 1; accent-color: var(--accent); height: 4px; }
+    input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px; }
+
+    .hex-input { width: 80px; font-family: monospace; }
+    .value-display { font-size: 11px; color: var(--text-muted); min-width: 45px; text-align: right; }
+
+    /* Left Sidebar (Presets) */
+    .sidebar-left { width: 220px; background: var(--panel-bg); border-right: 1px solid var(--panel-border); overflow-y: auto; display: flex; flex-direction: column; flex-shrink: 0; }
+    .preset-browser { padding: 12px; }
+    .preset-section { margin-bottom: 16px; }
+    .preset-section-header { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 8px; padding: 0 4px; }
+    .preset-list { display: flex; flex-direction: column; gap: 4px; }
+    .preset-item { display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 6px; background: #11111b; cursor: pointer; transition: background 0.15s; position: relative; }
+    .preset-item:hover { background: #313244; }
+    .preset-color { width: 6px; height: 32px; border-radius: 3px; flex-shrink: 0; }
+    .preset-info { flex: 1; min-width: 0; }
+    .preset-name { font-size: 13px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .preset-type { font-size: 11px; color: var(--text-muted); text-transform: capitalize; }
+    .preset-delete { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 20px; height: 20px; border: none; background: transparent; color: var(--text-muted); font-size: 16px; cursor: pointer; opacity: 0; transition: opacity 0.15s; border-radius: 4px; display: flex; align-items: center; justify-content: center; }
+    .preset-item:hover .preset-delete { opacity: 1; }
+    .preset-delete:hover { background: var(--error); color: white; }
+    .preset-actions { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--panel-border); }
+    .btn-save { width: 100%; padding: 10px; background: var(--accent); color: #11111b; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .btn-save:hover { background: var(--accent-hover); }
+
+    /* Image Uploader */
+    .image-uploader { margin-top: 8px; }
+    .upload-area { border: 2px dashed var(--panel-border); border-radius: 8px; padding: 12px; cursor: pointer; transition: all 0.2s; }
+    .upload-area:hover { border-color: var(--accent); background: rgba(137, 180, 250, 0.05); }
+    .upload-area.drag-over { border-color: var(--accent); background: rgba(137, 180, 250, 0.1); }
+    .upload-placeholder { text-align: center; color: var(--text-muted); }
+    .upload-icon { font-size: 24px; margin-bottom: 4px; }
+    .upload-text { font-size: 12px; margin-bottom: 2px; }
+    .upload-hint { font-size: 10px; opacity: 0.7; }
+    .upload-preview { position: relative; }
+    .upload-preview img { width: 100%; height: 60px; object-fit: cover; border-radius: 4px; }
+    .upload-clear { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border: none; background: rgba(0,0,0,0.7); color: white; border-radius: 50%; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; }
+    .upload-clear:hover { background: var(--error); }
+    .upload-info { font-size: 10px; color: var(--text-muted); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    /* Status message toast */
+    #status-message {
+      position: fixed;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--panel-bg);
+      border: 1px solid var(--accent);
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 13px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s, transform 0.2s;
+      z-index: 1000;
+    }
+    #status-message.visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <header class="header">
+      <div class="header-title">
+        <span style="color: var(--accent);">RailRush</span> Banner Editor
+      </div>
+      <div class="header-actions">
+        <div id="ws-indicator" title="WebSocket connection"></div>
+        <button class="btn" id="btn-export">Export JSON</button>
+        <button class="btn btn-primary" id="btn-push">Push Live</button>
+      </div>
+    </header>
+
+    <div class="main-content">
+      <aside class="sidebar-left" id="presets-container">
+        <!-- Presets injected here -->
+      </aside>
+
+      <main class="preview-area">
+        <div class="canvas-wrapper">
+          <canvas id="preview-canvas" width="800" height="600"></canvas>
+        </div>
+        <div class="preview-controls">
+          <button class="btn btn-primary" id="btn-show">▶ Play Animation</button>
+          <button class="btn" id="btn-reset">Reset Config</button>
+          <div class="timeline-section">
+            <span id="timeline-status">Ready</span>
+          </div>
+        </div>
+      </main>
+
+      <aside class="sidebar-right" id="panels-container">
+        <!-- Panels injected here -->
+      </aside>
+    </div>
+  </div>
+
+  <div id="status-message"></div>
+
+  <script type="module" src="/devtools/banner-editor/main.ts"></script>
+</body>
+</html>

@@ -1,12 +1,75 @@
-export interface NotificationOptions {
-  message: string;
-  type?: 'info' | 'success' | 'warning' | 'error' | 'epic';
-  duration?: number;
-  size?: 'normal' | 'large';
-}
-
 import { uiSoundService } from './UISoundService';
 import { LayoutConstants } from './theme/LayoutConstants';
+import { STORAGE_KEYS } from '../settings/StorageKeys';
+
+export type NotificationType = 'info' | 'success' | 'warning' | 'error' | 'epic';
+export type NotificationChannel = 'system' | 'gameplay' | 'ui' | 'tournament';
+export type NotificationPosition =
+  | 'top-left'
+  | 'top'
+  | 'top-right'
+  | 'center'
+  | 'bottom-left'
+  | 'bottom'
+  | 'bottom-right';
+export type NotificationPriority = 'low' | 'normal' | 'high' | 'critical';
+export type NotificationReplaceMode = 'stack' | 'replace';
+export type NotificationStylePreset = 'banner' | 'toast';
+
+export interface NotificationRequest {
+  message: string;
+  type?: NotificationType;
+  duration?: number;
+  size?: 'normal' | 'large';
+  channel?: NotificationChannel;
+  priority?: NotificationPriority;
+  dedupeKey?: string;
+  replaceMode?: NotificationReplaceMode;
+  icon?: string;
+  accentColor?: string;
+  sound?: 'toast' | 'error' | 'none';
+}
+
+export interface NotificationTypeSettings {
+  duration?: number;
+  size?: 'normal' | 'large';
+  icon?: string;
+  accentColor?: string;
+  sound?: 'toast' | 'error' | 'none';
+  channel?: NotificationChannel;
+  priority?: NotificationPriority;
+  replaceMode?: NotificationReplaceMode;
+}
+
+export interface NotificationConfig {
+  maxQueue: number;
+  maxVisiblePerPosition: number;
+  dedupeWindowMs: number;
+  defaultDurations: Record<NotificationType, number>;
+  positions: Record<NotificationChannel, NotificationPosition>;
+  stackSpacing: number;
+  soundEnabled: boolean;
+  nonInterruptibleChannels: NotificationChannel[];
+  stylePreset: NotificationStylePreset;
+  typeSettings: Record<NotificationType, NotificationTypeSettings>;
+}
+
+interface QueuedNotification {
+  id: string;
+  request: Required<NotificationRequest>;
+  queuedAt: number;
+  priorityValue: number;
+  position: NotificationPosition;
+}
+
+interface ActiveNotification {
+  id: string;
+  element: HTMLElement;
+  request: Required<NotificationRequest>;
+  timeoutId: number | null;
+  exitTimeoutId: number | null;
+  position: NotificationPosition;
+}
 
 interface BannerAnimation {
   startTime: number;
@@ -15,175 +78,437 @@ interface BannerAnimation {
   progress: number;
 }
 
+interface BannerEditorConfig {
+  height: number;
+  animation: {
+    entry: { type: string; duration: number };
+    hold: number;
+    exit: { type: string; duration: number };
+  };
+  text: { fontSize: number; fontWeight: number };
+  icon: { enabled: boolean; size: number };
+}
+
+const DEFAULT_CONFIG: NotificationConfig = {
+  maxQueue: 8,
+  maxVisiblePerPosition: 1,
+  dedupeWindowMs: 1200,
+  defaultDurations: {
+    info: LayoutConstants.Animation.Notification.Toast,
+    success: LayoutConstants.Animation.Notification.Toast + 600,
+    warning: LayoutConstants.Animation.Notification.Toast,
+    error: LayoutConstants.Animation.Notification.Toast + 800,
+    epic: LayoutConstants.Animation.Notification.Toast + 1200,
+  },
+  positions: {
+    system: 'top',
+    gameplay: 'top',
+    tournament: 'top',
+    ui: 'top-right',
+  },
+  stackSpacing: 10,
+  soundEnabled: true,
+  nonInterruptibleChannels: ['tournament'],
+  stylePreset: 'banner',
+  typeSettings: {
+    info: { channel: 'ui', priority: 'normal', replaceMode: 'stack' },
+    success: { channel: 'ui', priority: 'normal', replaceMode: 'stack' },
+    warning: { channel: 'gameplay', priority: 'high', replaceMode: 'stack' },
+    error: { channel: 'gameplay', priority: 'critical', replaceMode: 'stack', sound: 'error' },
+    epic: { channel: 'gameplay', priority: 'high', replaceMode: 'stack', size: 'large' },
+  },
+};
+
+const POSITION_LIST: NotificationPosition[] = [
+  'top-left',
+  'top',
+  'top-right',
+  'center',
+  'bottom-left',
+  'bottom',
+  'bottom-right',
+];
+
+const PRIORITY_VALUES: Record<NotificationPriority, number> = {
+  low: 0,
+  normal: 1,
+  high: 2,
+  critical: 3,
+};
+
 export class NotificationService {
-  private canvas: HTMLCanvasElement;
-  private ctx: CanvasRenderingContext2D;
-  private currentBanner: NotificationOptions | null = null;
-  private animation: BannerAnimation | null = null;
-  private queue: NotificationOptions[] = [];
-  private isShowing: boolean = false;
-  private animationFrame: number | null = null;
-  private shimmerOffset: number = 0;
+  private container: HTMLElement;
+  private stacks: Map<NotificationPosition, HTMLElement> = new Map();
+  private queue: QueuedNotification[] = [];
+  private active: Map<string, ActiveNotification> = new Map();
+  private dedupeMap: Map<string, number> = new Map();
+  private config: NotificationConfig = { ...DEFAULT_CONFIG };
+
+  private bannerCanvas: HTMLCanvasElement;
+  private bannerCtx: CanvasRenderingContext2D;
+  private bannerAnimation: BannerAnimation | null = null;
+  private currentBanner: Required<NotificationRequest> | null = null;
+  private bannerAnimationFrame: number | null = null;
+  private bannerTimerIds: number[] = [];
+  private bannerEditorConfig: BannerEditorConfig = {
+    height: 240,
+    animation: {
+      entry: { type: 'slide-right', duration: 400 },
+      hold: 3000,
+      exit: { type: 'slide-left', duration: 300 },
+    },
+    text: { fontSize: 48, fontWeight: 700 },
+    icon: { enabled: true, size: 80 },
+  };
 
   constructor() {
-    // Create canvas overlay for notifications
-    this.canvas = document.createElement('canvas');
-    this.canvas.id = 'notification-canvas';
-    this.canvas.style.position = 'fixed';
-    this.canvas.style.top = '0';
-    this.canvas.style.left = '0';
-    this.canvas.style.width = '100%';
-    this.canvas.style.height = '100%';
-    this.canvas.style.pointerEvents = 'none';
-    this.canvas.style.zIndex = '9000';
-    document.body.appendChild(this.canvas);
-
-    const ctx = this.canvas.getContext('2d');
+    this.container = this.ensureContainer();
+    this.bannerCanvas = this.createBannerCanvas();
+    const ctx = this.bannerCanvas.getContext('2d');
     if (!ctx) throw new Error('Could not get 2D context');
-    this.ctx = ctx;
+    this.bannerCtx = ctx;
 
-    this.resize();
-    window.addEventListener('resize', () => this.resize());
+    this.loadConfigFromStorage();
+    this.loadBannerEditorConfig();
+    this.ensureStacks();
+    this.applyStackSpacing();
+    this.syncToastVisibility();
+    this.resizeBannerCanvas();
+
+    window.addEventListener('resize', () => this.resizeBannerCanvas());
+    window.addEventListener('notification-editor:apply-config', (event: Event) => {
+      const detail = (event as CustomEvent<{ config?: Partial<NotificationConfig> }>).detail;
+      if (detail?.config) {
+        this.updateConfig(detail.config);
+      }
+    });
+
+    // Listen for banner editor config updates (from localStorage push in editor)
+    window.addEventListener('banner-editor:push', (event: Event) => {
+      const detail = (event as CustomEvent<{ config?: BannerEditorConfig }>).detail;
+      if (detail?.config) {
+        this.updateBannerEditorConfig(detail.config);
+      }
+    });
+
+    // Listen for banner editor config updates (from RemoteBridge WebSocket)
+    window.addEventListener('banner-editor:apply-config', (event: Event) => {
+      const detail = (event as CustomEvent<{ config?: BannerEditorConfig }>).detail;
+      if (detail?.config) {
+        this.updateBannerEditorConfig(detail.config);
+      }
+    });
   }
 
-  private resize() {
-    this.canvas.width = window.innerWidth;
-    this.canvas.height = window.innerHeight;
+  show(message: string, type: NotificationType = 'info', duration?: number): string | null;
+  show(options: NotificationRequest): string | null;
+  show(messageOrOptions: string | NotificationRequest, type: NotificationType = 'info', duration?: number): string | null {
+    const request = typeof messageOrOptions === 'string'
+      ? { message: messageOrOptions, type, duration }
+      : messageOrOptions;
+    return this.enqueue(request);
   }
 
-  show(message: string, type: 'info' | 'success' | 'warning' | 'error' | 'epic' = 'info', duration: number = 3000) {
-    const size = type === 'epic' || type === 'success' ? 'large' : 'normal';
-    // Epic/Success notifications stay longer by default
-    const defaultDuration = (type === 'epic' || type === 'success') ? 4000 : 3000;
-    this.queue.push({ message, type, duration: duration || defaultDuration, size });
-    this.processQueue();
-  }
-
-  private processQueue() {
-    if (this.isShowing || this.queue.length === 0) return;
-
-    const next = this.queue.shift();
-    if (!next) return;
-
-    this.isShowing = true;
-    this.showBanner(next);
+  /**
+   * Returns true if a banner is currently showing (including during exit animation).
+   * Use this to block game actions like shooting while notifications are visible.
+   */
+  isBannerActive(): boolean {
+    return this.currentBanner !== null || this.bannerAnimation !== null;
   }
 
   clear() {
     this.queue = [];
-    this.dismiss();
+    this.dedupeMap.clear();
+    this.active.forEach((toast) => this.removeToast(toast, true));
+    this.active.clear();
+    this.dismissBanner(true);
   }
 
-  private showBanner(options: NotificationOptions) {
-    this.currentBanner = options;
-    const enterDuration = LayoutConstants.Animation.Notification.Enter; // e.g. 0.4s
-    const activeDuration = options.duration || LayoutConstants.Animation.Notification.Active;
-    const exitDuration = LayoutConstants.Animation.Notification.Exit; // e.g. 0.3s
+  updateConfig(partial: Partial<NotificationConfig>) {
+    const coerced = { ...partial };
+    if (coerced.stylePreset && coerced.stylePreset !== 'banner') {
+      coerced.stylePreset = 'banner';
+    }
+    const next = this.mergeConfig(this.config, coerced);
+    const styleChanged = next.stylePreset !== this.config.stylePreset;
+    this.config = next;
+    this.ensureStacks();
+    this.applyStackSpacing();
+    this.syncToastVisibility();
+    if (styleChanged) {
+      this.clear();
+    }
+  }
 
-    // Play sound
-    if (options.type === 'error') {
-      uiSoundService.play('error');
-    } else if (options.type === 'success' || options.type === 'epic') {
-      uiSoundService.play('toast');
-    } else {
-      uiSoundService.play('toast');
+  getConfig(): NotificationConfig {
+    return { ...this.config };
+  }
+
+  private enqueue(request: NotificationRequest): string | null {
+    const normalized = this.normalizeRequest(request);
+    const dedupeKey = normalized.dedupeKey;
+    const now = Date.now();
+
+    const lastSeen = this.dedupeMap.get(dedupeKey);
+    if (lastSeen && now - lastSeen < this.config.dedupeWindowMs) {
+      return null;
+    }
+    this.dedupeMap.set(dedupeKey, now);
+
+    const position = this.config.positions[normalized.channel];
+    const priorityValue = PRIORITY_VALUES[normalized.priority];
+
+    const queued: QueuedNotification = {
+      id: this.generateId(),
+      request: normalized,
+      queuedAt: now,
+      priorityValue,
+      position,
+    };
+
+    if (this.queue.length >= this.config.maxQueue) {
+      const dropIndex = this.findDropCandidateIndex(priorityValue);
+      if (dropIndex === -1) {
+        return null;
+      }
+      this.queue.splice(dropIndex, 1);
     }
 
-    // Enter animation
-    this.animation = {
+    this.queue.push(queued);
+    this.processQueue();
+    return queued.id;
+  }
+
+  private processQueue() {
+    let didShow = true;
+    while (didShow) {
+      didShow = false;
+      const nextIndex = this.findNextEligibleIndex();
+      if (nextIndex === -1) return;
+      const [next] = this.queue.splice(nextIndex, 1);
+      this.showToast(next);
+      didShow = true;
+    }
+  }
+
+  private findNextEligibleIndex(): number {
+    if (!this.queue.length) return -1;
+
+    const blockedChannel = this.getBlockingChannel();
+
+    let bestIndex = -1;
+    let bestPriority = -1;
+    let bestTime = Infinity;
+
+    for (let i = 0; i < this.queue.length; i += 1) {
+      const queued = this.queue[i];
+      const { request, position, priorityValue, queuedAt } = queued;
+
+      if (blockedChannel && request.channel !== blockedChannel) {
+        continue;
+      }
+
+      if (!this.hasSpaceForPosition(position)) {
+        continue;
+      }
+
+      if (priorityValue > bestPriority || (priorityValue === bestPriority && queuedAt < bestTime)) {
+        bestPriority = priorityValue;
+        bestTime = queuedAt;
+        bestIndex = i;
+      }
+    }
+
+    return bestIndex;
+  }
+
+  private getBlockingChannel(): NotificationChannel | null {
+    const blocking = this.config.nonInterruptibleChannels;
+    for (const toast of this.active.values()) {
+      if (blocking.includes(toast.request.channel)) {
+        return toast.request.channel;
+      }
+    }
+    if (this.currentBanner && blocking.includes(this.currentBanner.channel)) {
+      return this.currentBanner.channel;
+    }
+    return null;
+  }
+
+  private showToast(queued: QueuedNotification) {
+    if (this.config.stylePreset === 'banner') {
+      this.showBanner(queued);
+      return;
+    }
+    const { request, position } = queued;
+
+    if (request.replaceMode === 'replace') {
+      this.active.forEach((toast) => {
+        if (toast.request.channel === request.channel) {
+          this.removeToast(toast, false);
+        }
+      });
+    }
+
+    const stack = this.stacks.get(position);
+    if (!stack) return;
+
+    const toast = document.createElement('div');
+    toast.className = `notification-toast type-${request.type} size-${request.size}`;
+    if (request.accentColor) {
+      toast.style.setProperty('--notify-accent', request.accentColor);
+    }
+    toast.dataset.channel = request.channel;
+
+    const icon = document.createElement('div');
+    icon.className = 'notification-icon';
+    icon.textContent = request.icon || this.getIconForType(request.type);
+
+    const text = document.createElement('div');
+    text.className = 'notification-text';
+    text.textContent = request.message;
+
+    toast.appendChild(icon);
+    toast.appendChild(text);
+
+    stack.appendChild(toast);
+
+    requestAnimationFrame(() => {
+      toast.classList.add('is-visible');
+    });
+
+    if (this.config.soundEnabled) {
+      this.playSound(request.type, request.sound);
+    }
+
+    const active: ActiveNotification = {
+      id: queued.id,
+      element: toast,
+      request,
+      timeoutId: null,
+      exitTimeoutId: null,
+      position,
+    };
+
+    const duration = request.duration;
+    active.timeoutId = window.setTimeout(() => {
+      this.removeToast(active, false);
+    }, duration);
+
+    this.active.set(active.id, active);
+  }
+
+  private showBanner(queued: QueuedNotification) {
+    const { request } = queued;
+
+    if (request.replaceMode === 'replace' && this.currentBanner) {
+      this.dismissBanner(false);
+    }
+
+    if (this.currentBanner) {
+      return;
+    }
+
+    this.currentBanner = request;
+
+    if (this.config.soundEnabled) {
+      this.playSound(request.type, request.sound);
+    }
+
+    this.startBannerAnimation();
+  }
+
+  private startBannerAnimation() {
+    if (!this.currentBanner) return;
+    this.stopBannerAnimation();
+
+    const enterDuration = this.bannerEditorConfig.animation.entry.duration;
+    const activeDuration = this.bannerEditorConfig.animation.hold;
+    const exitDuration = this.bannerEditorConfig.animation.exit.duration;
+
+    this.bannerAnimation = {
       startTime: Date.now(),
       duration: enterDuration,
       phase: 'enter',
-      progress: 0
+      progress: 0,
     };
 
-    this.startAnimation();
+    this.animateBanner();
 
-    // Transition to active phase
-    setTimeout(() => {
-      if (this.animation) {
-        this.animation.phase = 'active';
-        this.animation.startTime = Date.now();
-        this.animation.duration = activeDuration;
+    this.bannerTimerIds.push(window.setTimeout(() => {
+      if (this.bannerAnimation) {
+        this.bannerAnimation.phase = 'active';
+        this.bannerAnimation.startTime = Date.now();
+        this.bannerAnimation.duration = activeDuration;
       }
-    }, enterDuration);
+    }, enterDuration));
 
-    // Transition to exit phase
-    setTimeout(() => {
-      if (this.animation) {
-        this.animation.phase = 'exit';
-        this.animation.startTime = Date.now();
-        this.animation.duration = exitDuration;
+    this.bannerTimerIds.push(window.setTimeout(() => {
+      if (this.bannerAnimation) {
+        this.bannerAnimation.phase = 'exit';
+        this.bannerAnimation.startTime = Date.now();
+        this.bannerAnimation.duration = exitDuration;
       }
-    }, enterDuration + activeDuration);
+    }, enterDuration + activeDuration));
 
-    // Complete and show next
-    setTimeout(() => {
-      this.dismiss();
-    }, enterDuration + activeDuration + exitDuration);
+    this.bannerTimerIds.push(window.setTimeout(() => {
+      this.dismissBanner(false);
+    }, enterDuration + activeDuration + exitDuration));
   }
 
-  private startAnimation() {
+  private animateBanner() {
     const animate = () => {
-      if (!this.currentBanner || !this.animation) {
-        this.stopAnimation();
+      if (!this.currentBanner || !this.bannerAnimation) {
+        this.stopBannerAnimation();
         return;
       }
 
-      // Update animation progress
-      const elapsed = Date.now() - this.animation.startTime;
-      this.animation.progress = Math.min(elapsed / this.animation.duration, 1);
+      const elapsed = Date.now() - this.bannerAnimation.startTime;
+      this.bannerAnimation.progress = Math.min(elapsed / this.bannerAnimation.duration, 1);
 
-      // Update shimmer effect
-      this.shimmerOffset += 0.015;
-      if (this.shimmerOffset > 2) this.shimmerOffset = 0;
-
-      // Clear canvas
-      this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-
-      // Render banner
+      this.bannerCtx.clearRect(0, 0, this.bannerCanvas.width, this.bannerCanvas.height);
       this.renderBanner();
 
-      this.animationFrame = requestAnimationFrame(animate);
+      this.bannerAnimationFrame = requestAnimationFrame(animate);
     };
 
     animate();
   }
 
-  private stopAnimation() {
-    if (this.animationFrame) {
-      cancelAnimationFrame(this.animationFrame);
-      this.animationFrame = null;
+  private stopBannerAnimation() {
+    if (this.bannerAnimationFrame) {
+      cancelAnimationFrame(this.bannerAnimationFrame);
+      this.bannerAnimationFrame = null;
     }
-    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    this.bannerCtx.clearRect(0, 0, this.bannerCanvas.width, this.bannerCanvas.height);
   }
 
   private renderBanner() {
-    if (!this.currentBanner || !this.animation) return;
+    if (!this.currentBanner || !this.bannerAnimation) return;
 
-    const ctx = this.ctx;
+    const ctx = this.bannerCtx;
     const { message, type = 'info' } = this.currentBanner;
-    const { phase, progress } = this.animation;
+    const { phase, progress } = this.bannerAnimation;
 
-    // Layout configuration
-    // Full width banner style
-    const bannerWidth = this.canvas.width;
-    const bannerHeight = 240; // 3x previous height
+    // Full-width banner style
+    const bannerWidth = this.bannerCanvas.width;
+    const bannerHeight = this.bannerEditorConfig.height;
 
-    // Target Y position (Vertically centered)
-    const targetY = (this.canvas.height - bannerHeight) / 2;
+    // Vertically centered
+    const targetY = (this.bannerCanvas.height - bannerHeight) / 2;
 
-    // Animation transforms
+    // Horizontal slide animation
     let offsetX = 0;
     let opacity = 1;
 
     if (phase === 'enter') {
-      // Slide in from Left (offscreen) to Center (0)
+      // Slide in from left
       const ease = this.easeOutBack(progress);
       offsetX = -bannerWidth * (1 - ease);
       opacity = progress;
     } else if (phase === 'exit') {
-      // Slide out from Center (0) to Left (offscreen)
+      // Slide out to left
       const ease = this.easeInQuad(progress);
       offsetX = -bannerWidth * ease;
       opacity = 1 - ease;
@@ -201,58 +526,80 @@ export class NotificationService {
   }
 
   private drawFullWidthBanner(x: number, y: number, width: number, height: number, message: string, type: string) {
-    const ctx = this.ctx;
-    const colors = this.getTypeColors(type);
+    const ctx = this.bannerCtx;
+    const colors = this.getBannerTypeColors(type);
+    const { text, icon } = this.bannerEditorConfig;
 
     ctx.save();
 
     // Background: Horizontal Gradient (Transparent -> Opaque -> Transparent)
     const bgGradient = ctx.createLinearGradient(0, y, width, y);
-    // 0% transparent
     bgGradient.addColorStop(0, colors.bg + '00');
-    // 20% opaque
     bgGradient.addColorStop(0.2, colors.bg + 'CC');
-    // 80% opaque
     bgGradient.addColorStop(0.8, colors.bg + 'CC');
-    // 100% transparent
     bgGradient.addColorStop(1, colors.bg + '00');
 
     ctx.fillStyle = bgGradient;
     ctx.fillRect(x, y, width, height);
 
-    // Draw icon
-    const iconSize = 80; // Scaled up
-    // Position icon to the left of center, relative to the banner's current position (x)
+    // Icon
+    const iconSize = icon.size;
     const centerX = x + width / 2;
-    const contentWidth = 600; // Wider content area
+    const contentWidth = 600;
     const iconX = centerX - contentWidth / 2;
     const iconY = y + height / 2;
 
-    this.drawIcon(iconX, iconY, type, iconSize, '#FFFFFF');
+    if (icon.enabled) {
+      this.drawIcon(iconX, iconY, type, iconSize, '#FFFFFF');
+    }
 
-    // Draw message text
-    const fontSize = 48; // Scaled up
-    ctx.font = `bold ${fontSize}px "Rajdhani", "Impact", sans-serif`;
+    // Text
+    const fontSize = text.fontSize;
+    ctx.font = `${text.fontWeight} ${fontSize}px "Rajdhani", "Impact", sans-serif`;
     ctx.fillStyle = '#FFFFFF';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
 
-    // Text Shadow
     ctx.shadowColor = 'rgba(0,0,0,0.5)';
     ctx.shadowBlur = 4;
     ctx.shadowOffsetY = 2;
 
-    ctx.fillText(message.toUpperCase(), iconX + 100, y + height / 2 + 3);
+    const textX = icon.enabled ? iconX + 100 : iconX;
+    ctx.fillText(message.toUpperCase(), textX, y + height / 2 + 3);
 
     ctx.restore();
   }
 
+  private getBannerTypeColors(type: string): { bg: string } {
+    switch (type) {
+      case 'success':
+      case 'epic':
+      case 'info':
+        return { bg: '#004488' }; // Blue
+      case 'error':
+      case 'warning':
+        return { bg: '#880000' }; // Red
+      default:
+        return { bg: '#004488' };
+    }
+  }
+
+  private easeOutBack(x: number): number {
+    const c1 = 1.70158;
+    const c3 = c1 + 1;
+    return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
+  }
+
+  private easeInQuad(x: number): number {
+    return x * x;
+  }
+
   private drawIcon(x: number, y: number, type: string, size: number, color: string) {
-    const ctx = this.ctx;
+    const ctx = this.bannerCtx;
     ctx.save();
 
-    ctx.shadowColor = 'rgba(0,0,0,0.3)';
-    ctx.shadowBlur = 5;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 15;
     ctx.fillStyle = color;
 
     if (type === 'success' || type === 'epic') {
@@ -268,93 +615,330 @@ export class NotificationService {
     ctx.restore();
   }
 
-  // Icon drawing helpers (simplified for brevity, reused from before but scaled)
   private drawTrophy(x: number, y: number, size: number) {
-    const ctx = this.ctx;
+    const ctx = this.bannerCtx;
     const scale = size / 32;
+
+    ctx.fillStyle = '#FFD700';
     ctx.beginPath();
-    ctx.arc(x, y - 2 * scale, 10 * scale, Math.PI, 0);
-    ctx.lineTo(x + 2 * scale, y + 12 * scale);
-    ctx.lineTo(x - 2 * scale, y + 12 * scale);
+    ctx.arc(x, y, 10 * scale, Math.PI, 0);
+    ctx.lineTo(x + 10 * scale, y + 10 * scale);
+    ctx.lineTo(x - 10 * scale, y + 10 * scale);
     ctx.closePath();
     ctx.fill();
-    ctx.fillRect(x - 8 * scale, y + 12 * scale, 16 * scale, 3 * scale);
+
+    ctx.fillRect(x - 12 * scale, y + 10 * scale, 24 * scale, 3 * scale);
   }
 
   private drawWarning(x: number, y: number, size: number) {
-    const ctx = this.ctx;
+    const ctx = this.bannerCtx;
     const scale = size / 32;
-    ctx.strokeStyle = ctx.fillStyle;
+
+    ctx.fillStyle = '#FF3333';
+    ctx.strokeStyle = '#FF3333';
     ctx.lineWidth = 4 * scale;
+
     ctx.beginPath();
-    ctx.moveTo(x - 8 * scale, y - 8 * scale);
-    ctx.lineTo(x + 8 * scale, y + 8 * scale);
-    ctx.moveTo(x + 8 * scale, y - 8 * scale);
-    ctx.lineTo(x - 8 * scale, y + 8 * scale);
+    ctx.moveTo(x - 10 * scale, y - 10 * scale);
+    ctx.lineTo(x + 10 * scale, y + 10 * scale);
+    ctx.moveTo(x + 10 * scale, y - 10 * scale);
+    ctx.lineTo(x - 10 * scale, y + 10 * scale);
     ctx.stroke();
   }
 
   private drawLightning(x: number, y: number, size: number) {
-    const ctx = this.ctx;
+    const ctx = this.bannerCtx;
     const scale = size / 32;
+
+    ctx.fillStyle = '#FF8C00';
     ctx.beginPath();
-    ctx.moveTo(x + 2 * scale, y - 10 * scale);
-    ctx.lineTo(x - 6 * scale, y + 2 * scale);
-    ctx.lineTo(x, y + 2 * scale);
-    ctx.lineTo(x - 2 * scale, y + 10 * scale);
-    ctx.lineTo(x + 6 * scale, y - 2 * scale);
-    ctx.lineTo(x, y - 2 * scale);
+    ctx.moveTo(x, y - 12 * scale);
+    ctx.lineTo(x - 6 * scale, y);
+    ctx.lineTo(x + 2 * scale, y);
+    ctx.lineTo(x, y + 12 * scale);
+    ctx.lineTo(x + 6 * scale, y);
+    ctx.lineTo(x - 2 * scale, y);
     ctx.closePath();
     ctx.fill();
   }
 
   private drawInfoCircle(x: number, y: number, size: number) {
-    const ctx = this.ctx;
+    const ctx = this.bannerCtx;
     const scale = size / 32;
+
+    ctx.fillStyle = '#00B4FF';
     ctx.beginPath();
-    ctx.arc(x, y, 10 * scale, 0, Math.PI * 2);
+    ctx.arc(x, y, 12 * scale, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#0055AA'; // Dark text on light icon
-    ctx.font = `bold ${16 * scale}px Arial`;
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = `bold ${20 * scale}px Arial`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('i', x, y);
   }
 
-  private getTypeColors(type: string): { bg: string } {
-    switch (type) {
-      case 'success':
-      case 'epic':
-      case 'info':
-        return { bg: '#004488' }; // Blue
-      case 'error':
-      case 'warning':
-        return { bg: '#880000' }; // Red
-      default:
-        return { bg: '#004488' }; // Blue
+  private dismissBanner(immediate: boolean) {
+    if (!this.currentBanner) {
+      this.stopBannerAnimation();
+      return;
+    }
+
+    if (immediate) {
+      this.currentBanner = null;
+      this.bannerAnimation = null;
+      this.stopBannerAnimation();
+      this.clearBannerTimers();
+      this.processQueue();
+      return;
+    }
+
+    this.currentBanner = null;
+    this.bannerAnimation = null;
+    this.stopBannerAnimation();
+    this.clearBannerTimers();
+
+    window.setTimeout(() => this.processQueue(), 200);
+  }
+
+  private clearBannerTimers() {
+    this.bannerTimerIds.forEach((id) => window.clearTimeout(id));
+    this.bannerTimerIds = [];
+  }
+
+  private removeToast(toast: ActiveNotification, immediate: boolean) {
+    if (toast.timeoutId) window.clearTimeout(toast.timeoutId);
+    if (toast.exitTimeoutId) window.clearTimeout(toast.exitTimeoutId);
+
+    if (immediate) {
+      toast.element.remove();
+      this.active.delete(toast.id);
+      this.processQueue();
+      return;
+    }
+
+    toast.element.classList.remove('is-visible');
+    toast.element.classList.add('is-exiting');
+
+    toast.exitTimeoutId = window.setTimeout(() => {
+      toast.element.remove();
+      this.active.delete(toast.id);
+      this.processQueue();
+    }, 260);
+  }
+
+  private normalizeRequest(request: NotificationRequest): Required<NotificationRequest> {
+    const type = request.type ?? 'info';
+    const typeDefaults = this.config.typeSettings[type] ?? {};
+    const size = request.size ?? typeDefaults.size ?? 'normal';
+    const channel = request.channel ?? typeDefaults.channel ?? 'ui';
+    const priority = request.priority ?? typeDefaults.priority ?? 'normal';
+    const replaceMode = request.replaceMode ?? typeDefaults.replaceMode ?? 'stack';
+    const duration = request.duration ?? typeDefaults.duration ?? this.config.defaultDurations[type];
+    const dedupeKey = request.dedupeKey ?? `${channel}:${type}:${request.message}`;
+    const icon = request.icon ?? typeDefaults.icon ?? '';
+    const accentColor = request.accentColor ?? typeDefaults.accentColor ?? '';
+    const sound = request.sound ?? typeDefaults.sound ?? 'toast';
+
+    return {
+      message: request.message,
+      type,
+      size,
+      channel,
+      priority,
+      replaceMode,
+      duration,
+      dedupeKey,
+      icon,
+      accentColor,
+      sound,
+    };
+  }
+
+  private ensureContainer(): HTMLElement {
+    let container = document.getElementById('notification-container');
+    if (container) return container;
+
+    container = document.createElement('div');
+    container.id = 'notification-container';
+    document.body.appendChild(container);
+    return container;
+  }
+
+  private createBannerCanvas(): HTMLCanvasElement {
+    let canvas = document.getElementById('notification-canvas') as HTMLCanvasElement | null;
+    if (canvas) return canvas;
+    canvas = document.createElement('canvas');
+    canvas.id = 'notification-canvas';
+    canvas.style.position = 'fixed';
+    canvas.style.top = '0';
+    canvas.style.left = '0';
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+    canvas.style.pointerEvents = 'none';
+    canvas.style.zIndex = '9000';
+    document.body.appendChild(canvas);
+    return canvas;
+  }
+
+  private resizeBannerCanvas() {
+    this.bannerCanvas.width = window.innerWidth;
+    this.bannerCanvas.height = window.innerHeight;
+  }
+
+  private ensureStacks() {
+    POSITION_LIST.forEach((position) => {
+      if (this.stacks.has(position)) return;
+      const stack = document.createElement('div');
+      stack.className = `notification-stack position-${position}`;
+      stack.dataset.position = position;
+      this.container.appendChild(stack);
+      this.stacks.set(position, stack);
+    });
+  }
+
+  private applyStackSpacing() {
+    this.container.style.setProperty('--notification-stack-gap', `${this.config.stackSpacing}px`);
+  }
+
+  private syncToastVisibility() {
+    const showToasts = this.config.stylePreset !== 'banner';
+    this.container.style.display = showToasts ? 'block' : 'none';
+  }
+
+  private hasSpaceForPosition(position: NotificationPosition): boolean {
+    if (this.config.stylePreset === 'banner') {
+      return !this.currentBanner;
+    }
+    let count = 0;
+    this.active.forEach((toast) => {
+      if (toast.position === position) count += 1;
+    });
+    return count < this.config.maxVisiblePerPosition;
+  }
+
+  private findDropCandidateIndex(newPriorityValue: number): number {
+    if (!this.queue.length) return -1;
+
+    let minPriority = Infinity;
+    let oldestTime = Infinity;
+    let candidateIndex = -1;
+
+    this.queue.forEach((item, index) => {
+      if (item.priorityValue < minPriority || (item.priorityValue === minPriority && item.queuedAt < oldestTime)) {
+        minPriority = item.priorityValue;
+        oldestTime = item.queuedAt;
+        candidateIndex = index;
+      }
+    });
+
+    if (newPriorityValue <= minPriority) {
+      return -1;
+    }
+
+    return candidateIndex;
+  }
+
+  private playSound(type: NotificationType, override?: 'toast' | 'error' | 'none') {
+    if (override === 'none') return;
+    const sound = override ?? (type === 'error' ? 'error' : 'toast');
+    if (sound === 'error') {
+      uiSoundService.play('error');
+    } else {
+      uiSoundService.play('toast');
     }
   }
 
-  private easeOutBack(x: number): number {
-    const c1 = 1.70158;
-    const c3 = c1 + 1;
-    return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
+  private getIconForType(type: NotificationType): string {
+    switch (type) {
+      case 'success':
+        return '✓';
+      case 'warning':
+        return '!';
+      case 'error':
+        return '×';
+      case 'epic':
+        return '★';
+      default:
+        return '•';
+    }
   }
 
-  private easeInQuad(x: number): number {
-    return x * x;
+  private loadConfigFromStorage() {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.NOTIFICATION_CONFIG);
+      if (!stored) return;
+      const parsed = JSON.parse(stored);
+      if (parsed?.stylePreset && parsed.stylePreset !== 'banner') {
+        parsed.stylePreset = 'banner';
+        try {
+          localStorage.setItem(STORAGE_KEYS.NOTIFICATION_CONFIG, JSON.stringify(parsed));
+        } catch {
+          // ignore write failures
+        }
+      }
+      this.config = this.mergeConfig(this.config, parsed);
+    } catch (e) {
+      console.warn('[NotificationService] Failed to load config', e);
+    }
   }
 
-  private dismiss() {
-    this.currentBanner = null;
-    this.animation = null;
-    this.isShowing = false;
-    this.stopAnimation();
+  private mergeConfig(base: NotificationConfig, patch: Partial<NotificationConfig>): NotificationConfig {
+    return {
+      ...base,
+      ...patch,
+      defaultDurations: {
+        ...base.defaultDurations,
+        ...(patch.defaultDurations ?? {}),
+      },
+      positions: {
+        ...base.positions,
+        ...(patch.positions ?? {}),
+      },
+      nonInterruptibleChannels: patch.nonInterruptibleChannels ?? base.nonInterruptibleChannels,
+      stylePreset: patch.stylePreset ?? base.stylePreset,
+      typeSettings: {
+        ...base.typeSettings,
+        ...(patch.typeSettings ?? {}),
+      },
+    };
+  }
 
-    // Process next in queue with a small delay
-    setTimeout(() => {
-      this.processQueue();
-    }, 200);
+  private generateId(): string {
+    return `notify_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  private loadBannerEditorConfig() {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.BANNER_EDITOR_CONFIG);
+      if (!stored) return;
+      const parsed = JSON.parse(stored);
+      this.bannerEditorConfig = this.mergeBannerEditorConfig(this.bannerEditorConfig, parsed);
+    } catch (e) {
+      console.warn('[NotificationService] Failed to load banner editor config', e);
+    }
+  }
+
+  private updateBannerEditorConfig(config: Partial<BannerEditorConfig>) {
+    this.bannerEditorConfig = this.mergeBannerEditorConfig(this.bannerEditorConfig, config);
+    try {
+      localStorage.setItem(STORAGE_KEYS.BANNER_EDITOR_CONFIG, JSON.stringify(this.bannerEditorConfig));
+    } catch (e) {
+      console.warn('[NotificationService] Failed to save banner editor config', e);
+    }
+  }
+
+  private mergeBannerEditorConfig(base: BannerEditorConfig, patch: Partial<BannerEditorConfig>): BannerEditorConfig {
+    return {
+      height: patch.height ?? base.height,
+      animation: {
+        entry: { ...base.animation.entry, ...(patch.animation?.entry ?? {}) },
+        hold: patch.animation?.hold ?? base.animation.hold,
+        exit: { ...base.animation.exit, ...(patch.animation?.exit ?? {}) },
+      },
+      text: { ...base.text, ...(patch.text ?? {}) },
+      icon: { ...base.icon, ...(patch.icon ?? {}) },
+    };
   }
 }
 

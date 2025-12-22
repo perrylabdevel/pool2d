@@ -31,6 +31,12 @@ export class CueRenderer {
     private cueImage: HTMLImageElement | null = null;
     private cueImageReady: boolean = false;
     private cueImageFailed: boolean = false;
+    private cueSkinConfig: {
+        tipOffsetPx?: number;
+        lengthScale?: number;
+        thicknessScale?: number;
+        ppi?: number;
+    } | null = null;
 
     constructor(
         private uiCtx: CanvasRenderingContext2D,
@@ -48,6 +54,32 @@ export class CueRenderer {
             this.cueImageFailed = true;
         };
         this.cueImage.src = cueTextureUrl;
+
+        window.addEventListener('cue-editor:apply-skin', (e: any) => {
+            this.applySkin(e.detail);
+        });
+    }
+
+    applySkin(skin: { image?: string; tipOffsetPx?: number; lengthScale?: number; thicknessScale?: number; ppi?: number } | null) {
+        if (!skin) {
+            this.cueSkinConfig = null;
+            // Revert to default
+            this.cueImage = new Image();
+            this.cueImage.onload = () => { this.cueImageReady = true; };
+            this.cueImage.src = cueTextureUrl;
+            return;
+        }
+
+        this.cueSkinConfig = skin;
+        if (skin.image) {
+            const img = new Image();
+            img.onload = () => {
+                this.cueImage = img;
+                this.cueImageReady = true;
+                this.cueImageFailed = false;
+            };
+            img.src = skin.image;
+        }
     }
 
     setDebugMode(enabled: boolean) {
@@ -167,17 +199,46 @@ export class CueRenderer {
         const useTexturedCue = this.cueImageReady && !!this.cueImage && !this.cueImageFailed;
 
         if (useTexturedCue) {
+            const img = this.cueImage as HTMLImageElement;
+            const lengthScale = this.cueSkinConfig?.lengthScale ?? 1.0;
+            const thicknessScale = this.cueSkinConfig?.thicknessScale ?? 1.0;
+            const tipOffsetPx = this.cueSkinConfig?.tipOffsetPx ?? 0;
+            
+            // Calculate base dimensions
             const dx = cueEnd.x - tipEndScreen.x;
             const dy = cueEnd.y - tipEndScreen.y;
-            const length = Math.hypot(dx, dy);
-            if (length > 0) {
-                const img = this.cueImage as HTMLImageElement;
+            const baseLength = Math.hypot(dx, dy); // Length in screen pixels
+            
+            if (baseLength > 0) {
                 const aspect = img.height / img.width;
-                const cueHeightPx = Math.max(length * aspect, cueThicknessPixels * 0.8, 3);
+                
+                // Determine drawn length and height based on scales
+                // If lengthScale is 1.0, we map the image length to the calculated cue length?
+                // Or does lengthScale magnify it?
+                // Let's assume the image maps to the full stick.
+                // lengthScale scales the drawn image relative to the standard cue length.
+                const drawLength = baseLength * lengthScale;
+                
+                // Thickness is usually derived from aspect, but we can override with thicknessScale
+                // cueHeightPx is the diameter
+                const baseHeight = Math.max(drawLength * aspect, cueThicknessPixels * 0.8, 3);
+                const drawHeight = baseHeight * thicknessScale;
+
+                // We need to account for tipOffsetPx.
+                // The image starts at -tipOffsetPx relative to the tip point.
+                // We also need to scale tipOffsetPx if we are scaling the image?
+                // Probably yes. If the image is scaled by `drawLength / img.width` (implied), 
+                // then tipOffsetPx (which is in source pixels) should be scaled too.
+                
+                const imgScale = drawLength / img.width;
+                const offsetScreen = tipOffsetPx * imgScale;
+
                 this.uiCtx.save();
                 this.uiCtx.translate(tipEndScreen.x, tipEndScreen.y);
                 this.uiCtx.rotate(Math.atan2(dy, dx));
-                this.uiCtx.drawImage(img, 0, -cueHeightPx / 2, length, cueHeightPx);
+                
+                // Draw shifted by offset
+                this.uiCtx.drawImage(img, -offsetScreen, -drawHeight / 2, drawLength, drawHeight);
                 this.uiCtx.restore();
             }
         } else {

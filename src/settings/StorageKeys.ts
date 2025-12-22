@@ -18,6 +18,9 @@ export const STORAGE_KEYS = {
   TEXTURE_SETTINGS: 'RailRush_texture_settings',
   TABLE_APPEARANCE: 'RailRush_table_appearance',
   CREATOR_LAYOUTS: 'RailRush_creator_layouts',
+  CUE_EDITOR_SKIN: 'RailRush_cue_editor_skin',
+  NOTIFICATION_CONFIG: 'RailRush_notification_config',
+  BANNER_EDITOR_CONFIG: 'RailRush_banner_editor_config',
   // Migration flag
   MIGRATION_VERSION: 'RailRush_migration_version',
 } as const;
