@@ -71,6 +71,8 @@ lerna-debug.log*
 .temp/
 tmp/
 !public/assets/tmp/
+!src/assets/tmp/
+
 
 # Claude Code local settings
 .claude/settings.local.json
