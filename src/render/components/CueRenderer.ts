@@ -16,6 +16,7 @@ import {
 } from '../RenderUtils';
 import { ColorTokens } from '../../ui/theme/ColorTokens';
 import { LayoutConstants } from '../../ui/theme/LayoutConstants';
+import cueTextureUrl from '../../assets/tmp/cue.png';
 
 const EMPTY_CHIP_BORDER = ColorTokens.border.emphasis;
 
@@ -27,6 +28,9 @@ export class CueRenderer {
     private trajectoryLines: THREE.Line[] = [];
 
     private debugMode: boolean = false;
+    private cueImage: HTMLImageElement | null = null;
+    private cueImageReady: boolean = false;
+    private cueImageFailed: boolean = false;
 
     constructor(
         private uiCtx: CanvasRenderingContext2D,
@@ -34,7 +38,17 @@ export class CueRenderer {
         private worldToScreen: (x: number, y: number) => { x: number; y: number },
         private getScale: () => number,
         private getUiCanvas: () => HTMLCanvasElement
-    ) { }
+    ) {
+        this.cueImage = new Image();
+        this.cueImage.decoding = 'async';
+        this.cueImage.onload = () => {
+            this.cueImageReady = true;
+        };
+        this.cueImage.onerror = () => {
+            this.cueImageFailed = true;
+        };
+        this.cueImage.src = cueTextureUrl;
+    }
 
     setDebugMode(enabled: boolean) {
         this.debugMode = enabled;
@@ -150,82 +164,100 @@ export class CueRenderer {
             this.uiCtx.fill();
         }
 
-        // Draw main cue stick with gradient shading for 3D effect
-        const lineWidth = Math.max(LayoutConstants.Cue.MinThicknessPixels, cueThicknessPixels);
+        const useTexturedCue = this.cueImageReady && !!this.cueImage && !this.cueImageFailed;
 
-        // Create gradient perpendicular to cue direction for cylindrical appearance
-        const dx = cueEnd.x - tipStartScreen.x;
-        const dy = cueEnd.y - tipStartScreen.y;
-        const length = Math.hypot(dx, dy);
+        if (useTexturedCue) {
+            const dx = cueEnd.x - tipEndScreen.x;
+            const dy = cueEnd.y - tipEndScreen.y;
+            const length = Math.hypot(dx, dy);
+            if (length > 0) {
+                const img = this.cueImage as HTMLImageElement;
+                const aspect = img.height / img.width;
+                const cueHeightPx = Math.max(length * aspect, cueThicknessPixels * 0.8, 3);
+                this.uiCtx.save();
+                this.uiCtx.translate(tipEndScreen.x, tipEndScreen.y);
+                this.uiCtx.rotate(Math.atan2(dy, dx));
+                this.uiCtx.drawImage(img, 0, -cueHeightPx / 2, length, cueHeightPx);
+                this.uiCtx.restore();
+            }
+        } else {
+            // Draw main cue stick with gradient shading for 3D effect
+            const lineWidth = Math.max(LayoutConstants.Cue.MinThicknessPixels, cueThicknessPixels);
 
-        if (length > 0) {
-            // Create radial-like gradient effect by drawing multiple passes
-            // Shadow/dark side
-            this.uiCtx.strokeStyle = this.shadeColor(cueStickColor, -0.4);
-            this.uiCtx.lineWidth = lineWidth;
+            // Create gradient perpendicular to cue direction for cylindrical appearance
+            const dx = cueEnd.x - tipStartScreen.x;
+            const dy = cueEnd.y - tipStartScreen.y;
+            const length = Math.hypot(dx, dy);
+
+            if (length > 0) {
+                // Create radial-like gradient effect by drawing multiple passes
+                // Shadow/dark side
+                this.uiCtx.strokeStyle = this.shadeColor(cueStickColor, -0.4);
+                this.uiCtx.lineWidth = lineWidth;
+                this.uiCtx.lineCap = 'butt';
+                this.uiCtx.beginPath();
+                this.uiCtx.moveTo(tipStartScreen.x, tipStartScreen.y);
+                this.uiCtx.lineTo(cueEnd.x, cueEnd.y);
+                this.uiCtx.stroke();
+
+                // Mid-tone
+                this.uiCtx.strokeStyle = cueStickColor;
+                this.uiCtx.lineWidth = lineWidth * 0.7;
+                this.uiCtx.lineCap = 'butt';
+                this.uiCtx.beginPath();
+                this.uiCtx.moveTo(tipStartScreen.x, tipStartScreen.y);
+                this.uiCtx.lineTo(cueEnd.x, cueEnd.y);
+                this.uiCtx.stroke();
+
+                // Highlight (top edge)
+                this.uiCtx.strokeStyle = this.shadeColor(cueStickColor, 0.3);
+                this.uiCtx.lineWidth = lineWidth * 0.3;
+                this.uiCtx.lineCap = 'butt';
+                this.uiCtx.beginPath();
+                this.uiCtx.moveTo(tipStartScreen.x, tipStartScreen.y);
+                this.uiCtx.lineTo(cueEnd.x, cueEnd.y);
+                this.uiCtx.stroke();
+
+                // Crisp guide along cue centerline so the shaft always visually points at the cue ball
+                this.uiCtx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+                this.uiCtx.lineWidth = Math.max(1, lineWidth * 0.18);
+                this.uiCtx.lineCap = 'butt';
+                this.uiCtx.beginPath();
+                this.uiCtx.moveTo(tipStartScreen.x, tipStartScreen.y);
+                this.uiCtx.lineTo(cueEnd.x, cueEnd.y);
+                this.uiCtx.stroke();
+            }
+
+            // Draw tip with gradient shading
+            const tipWidth = Math.max(3, cueThicknessPixels * 0.9);
+
+            // Tip shadow
+            this.uiCtx.strokeStyle = this.shadeColor(cueTipColor, -0.3);
+            this.uiCtx.lineWidth = tipWidth;
             this.uiCtx.lineCap = 'butt';
             this.uiCtx.beginPath();
             this.uiCtx.moveTo(tipStartScreen.x, tipStartScreen.y);
-            this.uiCtx.lineTo(cueEnd.x, cueEnd.y);
+            this.uiCtx.lineTo(tipEndScreen.x, tipEndScreen.y);
             this.uiCtx.stroke();
 
-            // Mid-tone
-            this.uiCtx.strokeStyle = cueStickColor;
-            this.uiCtx.lineWidth = lineWidth * 0.7;
+            // Tip mid-tone
+            this.uiCtx.strokeStyle = cueTipColor;
+            this.uiCtx.lineWidth = tipWidth * 0.6;
             this.uiCtx.lineCap = 'butt';
             this.uiCtx.beginPath();
             this.uiCtx.moveTo(tipStartScreen.x, tipStartScreen.y);
-            this.uiCtx.lineTo(cueEnd.x, cueEnd.y);
+            this.uiCtx.lineTo(tipEndScreen.x, tipEndScreen.y);
             this.uiCtx.stroke();
 
-            // Highlight (top edge)
-            this.uiCtx.strokeStyle = this.shadeColor(cueStickColor, 0.3);
-            this.uiCtx.lineWidth = lineWidth * 0.3;
+            // Tip highlight
+            this.uiCtx.strokeStyle = this.shadeColor(cueTipColor, 0.4);
+            this.uiCtx.lineWidth = tipWidth * 0.25;
             this.uiCtx.lineCap = 'butt';
             this.uiCtx.beginPath();
             this.uiCtx.moveTo(tipStartScreen.x, tipStartScreen.y);
-            this.uiCtx.lineTo(cueEnd.x, cueEnd.y);
-            this.uiCtx.stroke();
-
-            // Crisp guide along cue centerline so the shaft always visually points at the cue ball
-            this.uiCtx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
-            this.uiCtx.lineWidth = Math.max(1, lineWidth * 0.18);
-            this.uiCtx.lineCap = 'butt';
-            this.uiCtx.beginPath();
-            this.uiCtx.moveTo(tipStartScreen.x, tipStartScreen.y);
-            this.uiCtx.lineTo(cueEnd.x, cueEnd.y);
+            this.uiCtx.lineTo(tipEndScreen.x, tipEndScreen.y);
             this.uiCtx.stroke();
         }
-
-        // Draw tip with gradient shading
-        const tipWidth = Math.max(3, cueThicknessPixels * 0.9);
-
-        // Tip shadow
-        this.uiCtx.strokeStyle = this.shadeColor(cueTipColor, -0.3);
-        this.uiCtx.lineWidth = tipWidth;
-        this.uiCtx.lineCap = 'butt';
-        this.uiCtx.beginPath();
-        this.uiCtx.moveTo(tipStartScreen.x, tipStartScreen.y);
-        this.uiCtx.lineTo(tipEndScreen.x, tipEndScreen.y);
-        this.uiCtx.stroke();
-
-        // Tip mid-tone
-        this.uiCtx.strokeStyle = cueTipColor;
-        this.uiCtx.lineWidth = tipWidth * 0.6;
-        this.uiCtx.lineCap = 'butt';
-        this.uiCtx.beginPath();
-        this.uiCtx.moveTo(tipStartScreen.x, tipStartScreen.y);
-        this.uiCtx.lineTo(tipEndScreen.x, tipEndScreen.y);
-        this.uiCtx.stroke();
-
-        // Tip highlight
-        this.uiCtx.strokeStyle = this.shadeColor(cueTipColor, 0.4);
-        this.uiCtx.lineWidth = tipWidth * 0.25;
-        this.uiCtx.lineCap = 'butt';
-        this.uiCtx.beginPath();
-        this.uiCtx.moveTo(tipStartScreen.x, tipStartScreen.y);
-        this.uiCtx.lineTo(tipEndScreen.x, tipEndScreen.y);
-        this.uiCtx.stroke();
 
         // Draw aim line in 2D - clipped to contact point or rails
         // Use interpolated ball position (ballX, ballY) to match cue stick alignment
