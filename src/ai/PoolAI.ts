@@ -19,6 +19,8 @@ export interface ShotOption {
   positioningScore: number; // 0-100 for cue ball leave
   cutAngle: number;      // Cut angle in radians
   distance: number;      // Distance from cue ball to target ball
+  spinSide?: number;     // -1..1 side english
+  spinTop?: number;      // -1..1 top/back english
 }
 
 export class PoolAI {
@@ -86,8 +88,8 @@ export class PoolAI {
       // For now, we'll just pick a random sub-optimal shot if available
       if (shotOptions.length > 0) {
         const randomShot = shotOptions[Math.floor(Math.random() * shotOptions.length)];
-        return this.addHumanError(randomShot);
-      }
+      return this.addSpinPreference(this.addHumanError(randomShot));
+    }
     }
 
     if (shotOptions.length === 0) {
@@ -106,12 +108,12 @@ export class PoolAI {
       if (safety) return safety;
       // Fall back to weakest offensive option
       const worst = shotOptions.reduce((w, s) => (s.expectedSuccess < w.expectedSuccess ? s : w));
-      return this.addHumanError(worst);
+      return this.addSpinPreference(this.addHumanError(worst));
     }
 
     // Choose the best offensive shot based on stats
     const best = this.chooseBestShot(shotOptions);
-    return this.addHumanError(best);
+    return this.addSpinPreference(this.addHumanError(best));
   }
 
   private createFallbackBreakShot(cueBall: Ball, world: PhysicsWorld): ShotOption | null {
@@ -132,17 +134,19 @@ export class PoolAI {
     // Power based on aggression
     const power = 15 + (this.opponent.stats.aggression * 10);
 
-    return {
-      targetBall,
-      pocket: fallbackPocket,
-      aimAngle,
-      power,
-      expectedSuccess: 0.15,
-      isSafe: false,
-      positioningScore: 0,
-      cutAngle: 0,
-      distance,
-    };
+      return {
+        targetBall,
+        pocket: fallbackPocket,
+        aimAngle,
+        power,
+        expectedSuccess: 0.15,
+        isSafe: false,
+        positioningScore: 0,
+        cutAngle: 0,
+        distance,
+        spinSide: 0,
+        spinTop: 0,
+      };
   }
 
   private getLegalBalls(balls: Ball[], player: Player): Ball[] {
@@ -221,6 +225,8 @@ export class PoolAI {
       positioningScore,
       cutAngle,
       distance: toContactDist,
+      spinSide: 0,
+      spinTop: 0,
     };
   }
 
@@ -380,6 +386,8 @@ export class PoolAI {
         positioningScore: 0,
         cutAngle: 0,
         distance,
+        spinSide: 0,
+        spinTop: 0,
       };
     }
     return null;
@@ -400,6 +408,40 @@ export class PoolAI {
       ...shot,
       aimAngle: shot.aimAngle + angleJitter,
       power: Math.max(CONFIG.CUE_POWER_MIN, Math.min(CONFIG.CUE_POWER_MAX, shot.power + powerJitter)),
+    };
+  }
+
+  private addSpinPreference(shot: ShotOption): ShotOption {
+    const spinPreference = this.opponent.stats.spinPreference ?? 0;
+    if (spinPreference <= 0 || shot.isSafe) {
+      return { ...shot, spinSide: 0, spinTop: 0 };
+    }
+
+    const useSpin = Math.random() < spinPreference;
+    if (!useSpin || shot.expectedSuccess < 0.35) {
+      return { ...shot, spinSide: 0, spinTop: 0 };
+    }
+
+    const cutDeg = (shot.cutAngle * 180) / Math.PI;
+    const longShot = shot.distance > 24;
+
+    let spinTop = longShot ? 0.3 : 0.18;
+    if (cutDeg < 6 && longShot) {
+      spinTop = 0.4;
+    } else if (cutDeg > 35) {
+      spinTop = 0.1;
+    }
+
+    let spinSide = 0;
+    if (cutDeg > 18) {
+      const sign = Math.random() < 0.5 ? -1 : 1;
+      spinSide = sign * 0.25;
+    }
+
+    return {
+      ...shot,
+      spinSide: spinSide * spinPreference,
+      spinTop: spinTop * spinPreference,
     };
   }
 

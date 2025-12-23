@@ -24,6 +24,8 @@ export class Ball {
   angularAxisX: number;
   angularAxisY: number;
   angularAxisZ: number;
+  spinSide: number; // -1..1 cue english (left/right)
+  spinTop: number; // -1..1 cue english (top/back)
   // Orientation quaternion (x, y, z vector, w scalar)
   rotX: number;
   rotY: number;
@@ -51,6 +53,8 @@ export class Ball {
     this.angularAxisX = 0;
     this.angularAxisY = 1;
     this.angularAxisZ = 0;
+    this.spinSide = 0;
+    this.spinTop = 0;
     this.rotX = 0;
     this.rotY = 0;
     this.rotZ = 0;
@@ -87,6 +91,8 @@ export class Ball {
     copy.angularAxisX = this.angularAxisX;
     copy.angularAxisY = this.angularAxisY;
     copy.angularAxisZ = this.angularAxisZ;
+    copy.spinSide = this.spinSide;
+    copy.spinTop = this.spinTop;
     copy.rotX = this.rotX;
     copy.rotY = this.rotY;
     copy.rotZ = this.rotZ;

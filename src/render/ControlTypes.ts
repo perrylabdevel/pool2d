@@ -4,6 +4,13 @@ export type MicroDialRenderState = {
   isActive: boolean;
 };
 
+export type SpinControlRenderState = {
+  x: number;
+  y: number;
+  isActive: boolean;
+  pulse?: number;
+};
+
 export type PocketAnimationEvent = {
   ballId: number;
   position: { x: number; y: number };

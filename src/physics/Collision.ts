@@ -220,6 +220,8 @@ export function resolveBallBall(contact: Contact) {
   const totalInvMass = ballA.invMass + ballB.invMass;
   const pairId = getCollisionPairId(ballA, ballB);
   const isFirstResolution = !resolvedPairsThisStep.has(pairId);
+  const cueBall = ballA.id === 0 ? ballA : (ballB.id === 0 ? ballB : null);
+  const cueSpeedBefore = cueBall ? cueBall.getSpeed() : 0;
   
   // Positional correction (Baumgarte stabilization) - always apply
   const correction = depth * 1.2; // 120% correction to prevent collision loops
@@ -332,6 +334,28 @@ export function resolveBallBall(contact: Contact) {
   ballA.vy -= jty * ballA.invMass;
   ballB.vx += jtx * ballB.invMass;
   ballB.vy += jty * ballB.invMass;
+
+  if (cueBall && (Math.abs(cueBall.spinSide) > 1e-4 || Math.abs(cueBall.spinTop) > 1e-4)) {
+    const cueIsA = cueBall === ballA;
+    const cueNormalX = cueIsA ? nx_corrected : -nx_corrected;
+    const cueNormalY = cueIsA ? ny_corrected : -ny_corrected;
+    const cueTangentX = -cueNormalY;
+    const cueTangentY = cueNormalX;
+    const impactSpeed = Math.max(Math.abs(vRel), cueSpeedBefore);
+    const follow = cueBall.spinTop * CONFIG.SPIN_FOLLOW_FACTOR * impactSpeed;
+    const throwSpin = cueBall.spinSide * CONFIG.SPIN_SIDE_THROW_FACTOR * impactSpeed;
+    cueBall.vx += cueNormalX * follow + cueTangentX * throwSpin;
+    cueBall.vy += cueNormalY * follow + cueTangentY * throwSpin;
+    cueBall.spinTop *= CONFIG.SPIN_COLLISION_DECAY;
+    cueBall.spinSide *= CONFIG.SPIN_COLLISION_DECAY;
+    if (CONFIG.DEBUG_SPIN_LOG) {
+      console.log('[Spin] ball contact', {
+        follow: Number(follow.toFixed(3)),
+        throw: Number(throwSpin.toFixed(3)),
+        vRel: Number(vRel.toFixed(3)),
+      });
+    }
+  }
   
   // Record velocities AFTER all impulses are applied
   if (shotCapture.isCapturing()) {
@@ -413,6 +437,19 @@ export function resolveBallRail(contact: Contact) {
 
   ballA.vx += jtClamped * tx * ballA.invMass;
   ballA.vy += jtClamped * ty * ballA.invMass;
+
+  if (Math.abs(ballA.spinSide) > 1e-4) {
+    const spinImpulse = ballA.spinSide * CONFIG.SPIN_RAIL_FACTOR * Math.max(0, Math.abs(vn));
+    ballA.vx += tx * spinImpulse;
+    ballA.vy += ty * spinImpulse;
+    ballA.spinSide *= CONFIG.SPIN_COLLISION_DECAY;
+    if (CONFIG.DEBUG_SPIN_LOG) {
+      console.log('[Spin] rail', {
+        spinImpulse: Number(spinImpulse.toFixed(3)),
+        vn: Number(vn.toFixed(3)),
+      });
+    }
+  }
 
   // Enhanced rail riding: clamp separating velocity to allow balls to ride along rails
   const vnAfter = ballA.vx * nx + ballA.vy * ny;

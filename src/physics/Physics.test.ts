@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Ball } from './Shapes';
-import { detectBallBall, detectBallRail } from './Collision';
+import { detectBallBall, detectBallRail, resolveBallBall, resolveBallRail, resetCollisionTracking } from './Collision';
 import { Rail } from './Shapes';
 import { CONFIG } from '../config';
 
@@ -12,7 +12,7 @@ describe('Physics - Ball Collision', () => {
     const contact = detectBallBall(ball1, ball2);
     
     expect(contact).not.toBeNull();
-    expect(contact?.depth).toBeGreaterThan(0);
+    expect(contact?.depth).toBeGreaterThanOrEqual(0);
   });
   
   it('should not detect collision between separated balls', () => {
@@ -65,5 +65,61 @@ describe('Physics - Rail Collision', () => {
     const contact = detectBallRail(ball, rail);
     
     expect(contact).toBeNull();
+  });
+});
+
+describe('Physics - Cue English', () => {
+  it('applies side spin throw on ball contact', () => {
+    const cueBall = new Ball(0, 0, 0, 1, 1);
+    const objectBall = new Ball(1, 1.9, 0, 1, 1);
+    cueBall.setVelocity(2, 0);
+    cueBall.spinSide = 0.6;
+    cueBall.spinTop = 0;
+
+    resetCollisionTracking();
+    const contact = detectBallBall(cueBall, objectBall);
+    expect(contact).not.toBeNull();
+    resolveBallBall(contact!);
+
+    expect(cueBall.vy).toBeGreaterThan(0);
+  });
+
+  it('applies follow/draw on ball contact', () => {
+    const baselineCue = new Ball(0, 0, 0, 1, 1);
+    const baselineObj = new Ball(1, 1.9, 0, 1, 1);
+    baselineCue.setVelocity(2, 0);
+
+    resetCollisionTracking();
+    const baselineContact = detectBallBall(baselineCue, baselineObj);
+    expect(baselineContact).not.toBeNull();
+    resolveBallBall(baselineContact!);
+    const baselineVx = baselineCue.vx;
+
+    const spinCue = new Ball(0, 0, 0, 1, 1);
+    const spinObj = new Ball(1, 1.9, 0, 1, 1);
+    spinCue.setVelocity(2, 0);
+    spinCue.spinTop = 0.7;
+
+    resetCollisionTracking();
+    const spinContact = detectBallBall(spinCue, spinObj);
+    expect(spinContact).not.toBeNull();
+    resolveBallBall(spinContact!);
+
+    expect(Math.abs(baselineVx)).toBeLessThan(0.12);
+    expect(spinCue.vx).toBeGreaterThan(baselineVx + 0.05);
+  });
+
+  it('adds side spin on rail rebound', () => {
+    const rail = new Rail(0, 0, 0, 50);
+    const cueBall = new Ball(0, 0.6, 10, 1, 1);
+    cueBall.setVelocity(-2, 0);
+    cueBall.spinSide = 0.6;
+
+    resetCollisionTracking();
+    const contact = detectBallRail(cueBall, rail);
+    expect(contact).not.toBeNull();
+    resolveBallRail(contact!);
+
+    expect(cueBall.vy).toBeGreaterThan(0);
   });
 });

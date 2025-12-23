@@ -51,6 +51,14 @@ export const CONFIG = {
   GHOST_LINE_LENGTH: 30,
   FINE_AIM_SENSITIVITY: 0.1,
   MICRO_AIM_MAX_DEGREES: 2.5, // Maximum micro-dial adjustment (total range = ±value degrees)
+  SPIN_FOLLOW_FACTOR: 0.26, // Scale for top/back spin effect after ball contact
+  SPIN_SIDE_THROW_FACTOR: 0.18, // Scale for side-spin deflection on ball contact
+  SPIN_RAIL_FACTOR: 0.28, // Scale for side-spin influence on rail rebounds
+  SPIN_COLLISION_DECAY: 0.75, // Spin retained after collisions (0-1)
+  SPIN_SIDE_DECAY_PER_SEC: 0.25, // Side-spin decay per second (cloth + rails)
+  SPIN_TOP_DECAY_PER_SEC: 0.3, // Top/back spin decay per second
+  SPIN_SWERVE_FACTOR: 0.012, // Curvature from side spin while rolling
+  SPIN_SWERVE_MIN_SPEED: 6, // Minimum speed for swerve (in/s)
 
   // Distance-based aim sensitivity
   DISTANCE_AIM_SCALING_ENABLED: true,
@@ -64,6 +72,7 @@ export const CONFIG = {
   DEBUG_BIH_LOG: false, // Verbose console logs for ball-in-hand clamping and drag
   DEBUG_AIM_GUARD_LOG: false, // Logs aim center-guard metrics (can be spammy; throttled)
   DEBUG_MICRO_DIAL_LOG: false, // Logs micro aim dial updates (throttled)
+  DEBUG_SPIN_LOG: true, // Logs cue spin values + application (throttled)
   DEBUG_PREDICTOR_LOG: false, // Logs prediction contact stats (DEV only; can be spammy)
 
   // Ball-in-hand placement

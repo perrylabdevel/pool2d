@@ -328,7 +328,13 @@ export class PlaybackController {
                 angle: lerpAngle(prev.cue.angle, next.cue.angle, alpha),
                 power: prev.cue.power + (next.cue.power - prev.cue.power) * alpha,
                 isAiming: prev.cue.isAiming,
-                guideLineVisible: prev.cue.guideLineVisible
+                guideLineVisible: prev.cue.guideLineVisible,
+                spin: prev.cue.spin && next.cue.spin
+                  ? {
+                      x: prev.cue.spin.x + (next.cue.spin.x - prev.cue.spin.x) * alpha,
+                      y: prev.cue.spin.y + (next.cue.spin.y - prev.cue.spin.y) * alpha
+                    }
+                  : prev.cue.spin ?? next.cue.spin
             };
         } else {
             this.currentCueState = prev.cue || next.cue || null;

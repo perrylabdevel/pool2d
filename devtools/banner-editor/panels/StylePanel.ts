@@ -232,6 +232,8 @@ export class StylePanel {
     setVal('glow-enabled', config.glow.enabled);
     setVal('glow-blur', config.glow.blur);
     setVal('glow-color', config.glow.color);
+    setVal('bg-image-tint', config.background.image?.tint || '#000000');
+    setVal('bg-image-tint-opacity', (config.background.image?.tintOpacity || 0) * 100);
 
     const updateDisplay = (id: string, text: string) => {
       const el = this.element.querySelector('#' + id);
@@ -257,6 +259,20 @@ export class StylePanel {
     if (gradientRow) gradientRow.style.display = bgType === 'gradient' ? 'flex' : 'none';
     if (imageUpload) imageUpload.style.display = bgType === 'image' ? 'block' : 'none';
     if (tintRow) tintRow.style.display = bgType === 'image' ? 'flex' : 'none';
+
+    // Update ImageUploader with current image (important when loading presets)
+    if (this.imageUploader) {
+      if (config.background.image?.src) {
+        this.imageUploader.setImage({
+          src: config.background.image.src,
+          name: 'Background Image',
+          width: 0,
+          height: 0,
+        });
+      } else {
+        this.imageUploader.setImage(null);
+      }
+    }
   }
 
   bindEvents() {

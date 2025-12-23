@@ -355,9 +355,9 @@ devtools/
 
 ### Phase 5: Integration
 - [x] Wire WebSocket push to game
-- [x] Update `NotificationService` to consume `BannerConfig`
+- [x] Update `NotificationService` to consume `BannerConfig` *(full config: background, frame, shadow, glow, effects)*
 - [x] Add `RemoteBridge` handlers for banner-editor
-- [ ] Test live preview sync
+- [x] Test live preview sync *(fixed deep merge, image rendering, style persistence)*
 - [x] Add to `vite.config.ts` build inputs
 
 ---

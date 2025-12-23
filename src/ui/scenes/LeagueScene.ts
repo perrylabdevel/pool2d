@@ -41,6 +41,12 @@ export class LeagueScene implements UIScene {
         this.canvas = document.getElementById('ui-stage') as HTMLCanvasElement;
         if (!this.canvas) return;
 
+        this.canvas.addEventListener('mousemove', this.onMouseMove);
+        this.canvas.addEventListener('click', this.onClick);
+        this.canvas.addEventListener('wheel', this.onWheel);
+        this.canvas.addEventListener('touchstart', this.onTouchStart);
+        this.canvas.addEventListener('touchmove', this.onTouchMove);
+
         this.loadData();
         this.onResize(this.canvas.width, this.canvas.height);
     }

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../../config';
 import { Ball } from '../../physics/Shapes';
 import { PredictionResult, ShotPreviewPaths } from '../../physics/Prediction';
-import { MicroDialRenderState } from '../ControlTypes';
+import { MicroDialRenderState, SpinControlRenderState } from '../ControlTypes';
 import { getTableGeometry, type Vec2 } from '../../geometry/Geometry';
 import {
     parseHexColor,
@@ -95,6 +95,7 @@ export class CueRenderer {
         isAimMode: boolean,
         prediction?: PredictionResult,
         microDialState?: MicroDialRenderState,
+        spinState?: SpinControlRenderState,
         alpha: number = 1.0
     ) {
         // Remove old 3D elements if they exist
@@ -113,7 +114,7 @@ export class CueRenderer {
 
         // Draw power bar and micro dial first (UI layer), so cue/aim sit above
         if (showPowerBar) {
-            this.drawPowerBar2D(power, isAimMode, microDialState);
+            this.drawPowerBar2D(power, isAimMode, microDialState, spinState);
         }
 
         // Draw cue stick in 2D (clamped to play area so it doesn't clip off-canvas)
@@ -475,7 +476,7 @@ export class CueRenderer {
         }
     }
 
-    drawPowerBar2D(power: number, isAimMode: boolean, microDialState?: MicroDialRenderState) {
+    drawPowerBar2D(power: number, isAimMode: boolean, microDialState?: MicroDialRenderState, spinState?: SpinControlRenderState) {
         const { width: barWidth, height: barHeight } = this.getSidebarSize();
         const { powerSide } = this.getSidebarSides();
         const rect = this.getSideBarRect(powerSide, barWidth, barHeight);
@@ -627,6 +628,7 @@ export class CueRenderer {
         ctx.fillText(`${Math.round(powerPercent * 100)}%`, labelX + labelWidth / 2, labelY + labelHeight / 2);
 
         this.drawMicroDial2D(microDialState);
+        this.drawSpinControl2D(spinState);
     }
 
     private drawMicroDial2D(state?: MicroDialRenderState) {
@@ -712,6 +714,79 @@ export class CueRenderer {
         ctx.moveTo(handleX, handleY - handleRadius + 4);
         ctx.lineTo(handleX, handleY + handleRadius - 4);
         ctx.stroke();
+
+        ctx.restore();
+    }
+
+    private drawSpinControl2D(state?: SpinControlRenderState) {
+        const bounds = this.getSpinControlBounds();
+        if (!bounds) return;
+
+        const ctx = this.uiCtx;
+        const valueX = Math.max(-1, Math.min(1, state?.x ?? 0));
+        const valueY = Math.max(-1, Math.min(1, state?.y ?? 0));
+        const isActive = state?.isActive ?? false;
+
+        const padding = Math.max(6, bounds.width * 0.12);
+        const radius = bounds.width / 2 - padding;
+        const centerX = bounds.x + bounds.width / 2;
+        const centerY = bounds.y + bounds.height / 2;
+
+        ctx.save();
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius + padding * 0.5, 0, Math.PI * 2);
+        ctx.clip();
+        const panelGradient = ctx.createLinearGradient(bounds.x, bounds.y, bounds.x, bounds.y + bounds.height);
+        panelGradient.addColorStop(0, 'rgba(20, 24, 32, 0.9)');
+        panelGradient.addColorStop(1, 'rgba(8, 10, 16, 0.9)');
+        ctx.fillStyle = panelGradient;
+        ctx.fillRect(bounds.x, bounds.y, bounds.width, bounds.height);
+        ctx.restore();
+        const ringGlow = isActive ? 0.55 : 0.35;
+        ctx.strokeStyle = `rgba(255, 255, 255, ${ringGlow})`;
+        ctx.lineWidth = isActive ? 2 : 1.5;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius + padding * 0.5, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(centerX, bounds.y + padding);
+        ctx.lineTo(centerX, bounds.y + bounds.height - padding);
+        ctx.moveTo(bounds.x + padding, centerY);
+        ctx.lineTo(bounds.x + bounds.width - padding, centerY);
+        ctx.stroke();
+
+        const puckGradient = ctx.createRadialGradient(centerX, centerY, radius * 0.1, centerX, centerY, radius);
+        puckGradient.addColorStop(0, 'rgba(255, 255, 255, 0.98)');
+        puckGradient.addColorStop(1, 'rgba(212, 216, 222, 0.95)');
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+        ctx.fillStyle = puckGradient;
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
+        ctx.stroke();
+
+        if (state?.pulse && state.pulse > 0) {
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius + state.pulse * 10, 0, Math.PI * 2);
+            ctx.strokeStyle = `rgba(255, 238, 170, ${0.5 * state.pulse})`;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+
+        const handleRadius = Math.max(5, radius * 0.24);
+        const handleX = centerX + valueX * radius;
+        const handleY = centerY - valueY * radius;
+        ctx.beginPath();
+        ctx.arc(handleX, handleY, handleRadius, 0, Math.PI * 2);
+        ctx.fillStyle = '#e53935';
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
+        ctx.shadowBlur = isActive ? 8 : 4;
+        ctx.fill();
+        ctx.shadowBlur = 0;
 
         ctx.restore();
     }
@@ -1326,6 +1401,24 @@ export class CueRenderer {
         const { dialSide } = this.getSidebarSides();
         const rect = this.getSideBarRect(dialSide, width, height);
         return { x: rect.x, y: rect.y, width, height };
+    }
+
+    getSpinControlBounds() {
+        const { width, height } = this.getSidebarSize();
+        const { dialSide } = this.getSidebarSides();
+        const rect = this.getSideBarRect(dialSide, width, height);
+        const canvas = this.getUiCanvas();
+        const isMobile = canvas.width < 500;
+        const size = Math.max(isMobile ? 72 : 60, width * (isMobile ? 1.5 : 1.2));
+        const gap = isMobile ? 16 : 12;
+        let x = rect.x + (width - size) / 2;
+        let y = rect.y + height + gap;
+        if (y + size > canvas.height - 10) {
+            y = rect.y - gap - size;
+        }
+        y = Math.max(10, Math.min(canvas.height - size - 10, y));
+        x = Math.max(10, Math.min(canvas.width - size - 10, x));
+        return { x, y, width: size, height: size };
     }
 
     private getSideBarRect(side: 'left' | 'right', width: number, height: number) {

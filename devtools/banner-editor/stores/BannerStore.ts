@@ -68,12 +68,37 @@ export class BannerStore {
 
       if (stored) {
         const parsed = JSON.parse(stored);
-        // Merge with default to ensure new fields are present
-        this.config = { ...DEFAULT_BANNER_CONFIG, ...parsed };
+        // Deep merge with default to ensure new fields are present
+        this.config = this.deepMerge(DEFAULT_BANNER_CONFIG, parsed);
       }
     } catch (e) {
       console.warn('Failed to load banner config', e);
     }
+  }
+
+  private deepMerge<T extends Record<string, unknown>>(defaults: T, patch: Partial<T>): T {
+    const result = { ...defaults };
+    for (const key of Object.keys(patch) as Array<keyof T>) {
+      const defaultVal = defaults[key];
+      const patchVal = patch[key];
+      if (
+        patchVal !== undefined &&
+        typeof defaultVal === 'object' &&
+        defaultVal !== null &&
+        !Array.isArray(defaultVal) &&
+        typeof patchVal === 'object' &&
+        patchVal !== null &&
+        !Array.isArray(patchVal)
+      ) {
+        result[key] = this.deepMerge(
+          defaultVal as Record<string, unknown>,
+          patchVal as Record<string, unknown>
+        ) as T[keyof T];
+      } else if (patchVal !== undefined) {
+        result[key] = patchVal as T[keyof T];
+      }
+    }
+    return result;
   }
 
   reset() {

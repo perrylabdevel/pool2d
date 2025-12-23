@@ -205,6 +205,10 @@ export class Game {
   hasStartedRack: boolean = false;
   microAimDialValue: number = 0;
   isDraggingMicroDial: boolean = false;
+  spinControlX: number = 0;
+  spinControlY: number = 0;
+  isDraggingSpinControl: boolean = false;
+  spinControlPulseTime: number = -Infinity;
 
   // Cached prediction for frozen paths in power mode (normal mode only)
   cachedPrediction: ReturnType<Predictor['predictFirstContact']> | null = null;
@@ -394,8 +398,9 @@ export class Game {
       if (this.isCreatorMode() && this.creatorTool === 'move' && this.isDraggingBall) return;
       this.handlePowerBarMouseDown(e);
       this.handleMicroDialMouseDown(e);
+      this.handleSpinControlMouseDown(e);
       if (this.isTouchAimOnly()) {
-        const engageAim = !this.isDraggingPower && !this.isDraggingMicroDial && !this.isDraggingBall;
+        const engageAim = !this.isDraggingPower && !this.isDraggingMicroDial && !this.isDraggingSpinControl && !this.isDraggingBall;
         this.input.setAimDragActive(engageAim);
       }
     });
@@ -416,6 +421,7 @@ export class Game {
       if (this.isCreatorMode() && this.creatorTool === 'move' && this.isDraggingBall) return;
       this.handlePowerBarMouseDown(fake);
       this.handleMicroDialMouseDown(fake);
+      this.handleSpinControlMouseDown(fake);
     }, { passive: false });
     this.input.canvas.addEventListener('touchmove', (e) => {
       if (this.isDraggingBall) {
@@ -426,13 +432,14 @@ export class Game {
         this.handleBallDrag(fake);
         return;
       }
-      if (!this.isDraggingPower && !this.isDraggingMicroDial) return;
+      if (!this.isDraggingPower && !this.isDraggingMicroDial && !this.isDraggingSpinControl) return;
       const touch = e.touches[0];
       if (!touch) return;
       e.preventDefault();
       const fake = { clientX: touch.clientX, clientY: touch.clientY } as MouseEvent;
       this.handlePowerBarMouseMove(fake);
       this.handleMicroDialMouseMove(fake);
+      this.handleSpinControlMouseMove(fake);
     }, { passive: false });
     this.input.canvas.addEventListener('touchend', (e) => {
       if (this.isDraggingBall) {
@@ -442,12 +449,13 @@ export class Game {
         this.handleBallDragEnd(fake);
         return;
       }
-      if (!this.isDraggingPower && !this.isDraggingMicroDial) return;
+      if (!this.isDraggingPower && !this.isDraggingMicroDial && !this.isDraggingSpinControl) return;
       e.preventDefault();
       const touch = e.changedTouches[0];
       const fake = touch ? ({ clientX: touch.clientX, clientY: touch.clientY } as MouseEvent) : ({ clientX: 0, clientY: 0 } as MouseEvent);
       this.handlePowerBarMouseUp(fake);
       this.handleMicroDialMouseUp(fake);
+      this.handleSpinControlMouseUp(fake);
     }, { passive: false });
     const isPointerOverHudHeader = (e: MouseEvent) => {
       const header = document.querySelector('.hud-header') as HTMLElement | null;
@@ -467,6 +475,7 @@ export class Game {
       if (this.isDraggingBall) return;
       this.handlePowerBarMouseMove(e);
       this.handleMicroDialMouseMove(e);
+      this.handleSpinControlMouseMove(e);
     });
     window.addEventListener('mouseup', (e) => {
       if (isUIBlockingGameplay()) return;
@@ -477,6 +486,7 @@ export class Game {
       if (this.isDraggingBall) return;
       this.handlePowerBarMouseUp(e);
       this.handleMicroDialMouseUp(e);
+      this.handleSpinControlMouseUp(e);
     });
 
     // Handle A key to toggle aim/power mode
@@ -967,6 +977,7 @@ export class Game {
       this.isDraggingBall = false;
       this.isDraggingPower = false;
       this.isDraggingMicroDial = false;
+      this.isDraggingSpinControl = false;
       this.input.canvas.style.cursor = 'default';
       this.world.skipCuePocketCheck = false;
     });
@@ -1669,6 +1680,8 @@ export class Game {
     ball.vx = 0;
     ball.vy = 0;
     ball.angularVelocity = 0;
+    ball.spinSide = 0;
+    ball.spinTop = 0;
     ball.sleeping = true;
     ball.pocketed = pocketed;
     ball.lastPocketId = null;
@@ -1975,6 +1988,8 @@ export class Game {
     this.cueBall.vx = 0;
     this.cueBall.vy = 0;
     this.cueBall.angularVelocity = 0;
+    this.cueBall.spinSide = 0;
+    this.cueBall.spinTop = 0;
     this.cueBall.angle = 0;
     this.cueBall.x = CUE_BALL_POSITION.x;
     this.cueBall.y = CUE_BALL_POSITION.y;
@@ -1995,7 +2010,7 @@ export class Game {
     );
   }
 
-  shoot(angle: number, power: number) {
+  shoot(angle: number, power: number, spin?: { side: number; top: number }) {
     if (!this.cueBall || this.cueBall.pocketed) return;
     if (!this.canShoot) return;
     if (notificationService.isBannerActive()) return;
@@ -2019,12 +2034,29 @@ export class Game {
       // Silently ignore - audio will work on next attempt
     });
 
+    // Capture spin before we reset controls
+    const rawSpin = spin ?? { side: this.spinControlX, top: this.spinControlY };
+    const shotSpin = {
+      side: Math.max(-1, Math.min(1, rawSpin.side)),
+      top: Math.max(-1, Math.min(1, rawSpin.top)),
+    };
+
+    if (CONFIG.DEBUG_SPIN_LOG) {
+      console.log('[Spin] shot', {
+        side: Number(shotSpin.side.toFixed(3)),
+        top: Number(shotSpin.top.toFixed(3)),
+        power: Number(power.toFixed(2)),
+      });
+    }
+
     // Clear cached prediction and aim angle smoothing state
     this.cachedPrediction = null;
     this.cachedDirection = null;
     this.cachedShotPaths = null;
     this.cachedShotPathsCueBallPos = null;
     this.microAimDialValue = 0;
+    this.spinControlX = 0;
+    this.spinControlY = 0;
     this.input.resetAimAngle();
     this.isAimMode = false;
 
@@ -2032,7 +2064,7 @@ export class Game {
     if (shotCapture.isCapturing()) {
       // Prefer physics-based prediction for capture (more accurate at glancing/rail cases)
       let prediction: ReturnType<typeof this.predictor.predictFirstContact>;
-      const sim = this.predictor.simulateShotPaths(this.world, this.cueBall, angle, power);
+      const sim = this.predictor.simulateShotPaths(this.world, this.cueBall, angle, power, shotSpin);
       if (sim && sim.firstContact) {
         prediction = sim.firstContact;
       } else {
@@ -2052,6 +2084,8 @@ export class Game {
     const vx = Math.cos(angle) * velocity;
     const vy = Math.sin(angle) * velocity;
 
+    this.cueBall.spinSide = shotSpin.side;
+    this.cueBall.spinTop = shotSpin.top;
     this.cueBall.setVelocity(vx, vy);
     this.world.logShotSnapshot(angle, power);
     physicsRecorder.recordShot(angle, power);
@@ -2108,7 +2142,8 @@ export class Game {
           angle: this.isAimMode && this.cueBall ? this.input.getAimAngle(this.cueBall, this.calculateAimSensitivity()) : this.lockedAngle,
           power: this.currentPower,
           isAiming: this.isAimMode,
-          guideLineVisible: this.aimAssist
+          guideLineVisible: this.aimAssist,
+          spin: { x: this.spinControlX, y: this.spinControlY }
         };
         physicsRecorder.recordFrame(this.world, cueState);
 
@@ -2432,6 +2467,7 @@ export class Game {
       selectedShot: this.aiSelectedShot,
       shotAnimation: this.aiShotAnim,
     };
+    const pendingAIShot = aiState.selectedShot;
 
     const result = updateAITurn(
       aiState,
@@ -2479,7 +2515,9 @@ export class Game {
     if (result.shouldShoot && result.shotAngle !== undefined && result.shotPower !== undefined) {
       this.canShoot = true;
       this.isAimMode = false;
-      this.shoot(result.shotAngle, result.shotPower);
+      const spinSide = pendingAIShot?.spinSide ?? 0;
+      const spinTop = pendingAIShot?.spinTop ?? 0;
+      this.shoot(result.shotAngle, result.shotPower, { side: spinSide, top: spinTop });
       this.isAimMode = true;
       this.currentPower = 0;
     }
@@ -2594,6 +2632,54 @@ export class Game {
     this.setMicroAimDialValue(normalized, { snapToZero: false });
   }
 
+  private setSpinControlValue(valueX: number, valueY: number, opts?: { snapToCenter?: boolean }) {
+    const clampedX = Math.max(-1, Math.min(1, valueX));
+    const clampedY = Math.max(-1, Math.min(1, valueY));
+    const snapToCenter = opts?.snapToCenter ?? true;
+    const snapThreshold = 0.04;
+    const snappedX = snapToCenter && Math.abs(clampedX) < snapThreshold ? 0 : clampedX;
+    const snappedY = snapToCenter && Math.abs(clampedY) < snapThreshold ? 0 : clampedY;
+
+    if (Math.abs(snappedX - this.spinControlX) < 1e-4 && Math.abs(snappedY - this.spinControlY) < 1e-4) {
+      return;
+    }
+
+    this.spinControlX = snappedX;
+    this.spinControlY = snappedY;
+    this.cachedShotPaths = null;
+    this.cachedShotPathsAngle = 0;
+    this.cachedShotPathsTimeMs = 0;
+
+    if (CONFIG.DEBUG_SPIN_LOG) {
+      const now = Date.now();
+      const last = (this as any)._lastSpinLogMs as number | undefined;
+      if (!last || now - last > 120) {
+        (this as any)._lastSpinLogMs = now;
+        console.log('[Spin] control', {
+          x: Number(this.spinControlX.toFixed(3)),
+          y: Number(this.spinControlY.toFixed(3)),
+          snapToCenter,
+        });
+      }
+    }
+  }
+
+  private updateSpinControlFromMouse(bounds: { x: number; y: number; width: number; height: number }, mouseX: number, mouseY: number) {
+    const centerX = bounds.x + bounds.width / 2;
+    const centerY = bounds.y + bounds.height / 2;
+    const padding = Math.max(6, bounds.width * 0.12);
+    const maxOffset = Math.max(4, bounds.width / 2 - padding);
+    const dx = mouseX - centerX;
+    const dy = mouseY - centerY;
+    const dist = Math.hypot(dx, dy);
+    const scale = dist > maxOffset ? maxOffset / dist : 1;
+    const clampedX = dx * scale;
+    const clampedY = dy * scale;
+    const normalizedX = clampedX / maxOffset;
+    const normalizedY = -clampedY / maxOffset;
+    this.setSpinControlValue(normalizedX, normalizedY, { snapToCenter: false });
+  }
+
   render() {
     // In playback mode, use alpha=1.0 since we're setting exact positions via seek()
     // In normal mode, use accumulator for physics interpolation
@@ -2645,6 +2731,7 @@ export class Game {
           cueState.isAiming,
           prediction,
           undefined,
+          cueState.spin ? { x: cueState.spin.x, y: cueState.spin.y, isActive: false } : undefined,
           alpha
         );
       }
@@ -2731,7 +2818,8 @@ export class Game {
             this.world,
             this.cueBall,
             angle,
-            this.currentPower
+            this.currentPower,
+            { side: this.spinControlX, top: this.spinControlY }
           );
           this.cachedShotPathsAngle = angle;
           this.cachedShotPathsCueBallPos = { x: this.cueBall.x, y: this.cueBall.y };
@@ -2780,7 +2868,16 @@ export class Game {
         degrees: this.getMicroAimOffsetDegrees(),
         isActive: this.isDraggingMicroDial,
       };
-      this.renderer.drawCueAndPowerBar(this.cueBall, angle, this.currentPower, this.aimAssist, true, this.isAimMode, drawPrediction, microDialState, alpha);
+      const nowMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      const pulseAge = nowMs - this.spinControlPulseTime;
+      const pulse = pulseAge >= 0 && pulseAge < 320 ? 1 - pulseAge / 320 : 0;
+      const spinState = {
+        x: this.spinControlX,
+        y: this.spinControlY,
+        isActive: this.isDraggingSpinControl,
+        pulse,
+      };
+      this.renderer.drawCueAndPowerBar(this.cueBall, angle, this.currentPower, this.aimAssist, true, this.isAimMode, drawPrediction, microDialState, spinState, alpha);
     }
 
     // Highlight pockets when waiting for pocket call
@@ -3017,6 +3114,57 @@ export class Game {
     this.isDraggingMicroDial = false;
     // Snap-to-zero once at the end of a drag (prevents "sticky" center behavior while scrubbing).
     this.setMicroAimDialValue(this.microAimDialValue, { snapToZero: true });
+    if (this.isTouchAimOnly()) {
+      this.input.setAimDragActive(false);
+    }
+  }
+
+  handleSpinControlMouseDown(e: MouseEvent) {
+    if (!this.canShoot || !this.cueBall || this.cueBall.pocketed) return;
+    const bounds = this.renderer.getSpinControlBounds();
+    if (!bounds) return;
+
+    const rect = this.input.canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    if (
+      mouseX >= bounds.x &&
+      mouseX <= bounds.x + bounds.width &&
+      mouseY >= bounds.y &&
+      mouseY <= bounds.y + bounds.height
+    ) {
+      if (e.detail >= 2) {
+        this.setSpinControlValue(0, 0);
+        this.isDraggingSpinControl = false;
+        this.spinControlPulseTime = performance.now();
+        return;
+      }
+      this.isDraggingSpinControl = true;
+      this.updateSpinControlFromMouse(bounds, mouseX, mouseY);
+      this.input.setAimSuppressed(true);
+      if (this.isTouchAimOnly()) {
+        this.input.setAimDragActive(false);
+      }
+    }
+  }
+
+  handleSpinControlMouseMove(e: MouseEvent) {
+    if (!this.isDraggingSpinControl) return;
+    const bounds = this.renderer.getSpinControlBounds();
+    if (!bounds) return;
+
+    const rect = this.input.canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    this.updateSpinControlFromMouse(bounds, mouseX, mouseY);
+  }
+
+  handleSpinControlMouseUp(_e: MouseEvent) {
+    if (!this.isDraggingSpinControl) return;
+    this.isDraggingSpinControl = false;
+    this.spinControlPulseTime = performance.now();
+    this.input.setAimSuppressed(false);
     if (this.isTouchAimOnly()) {
       this.input.setAimDragActive(false);
     }

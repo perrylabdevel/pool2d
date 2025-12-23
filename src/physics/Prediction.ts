@@ -89,6 +89,7 @@ export class Predictor {
     cueBall: Ball,
     angle: number,
     power?: number,
+    spin?: { side: number; top: number },
     duration: number = 1.1
   ): ShotPreviewPaths | null {
     if (cueBall.pocketed) return null;
@@ -105,6 +106,10 @@ export class Predictor {
       : CONFIG.CUE_POWER_MAX * 0.8;
     const speed = effectivePower * CONFIG.CUE_POWER_MULTIPLIER;
 
+    if (spin) {
+      previewCue.spinSide = spin.side;
+      previewCue.spinTop = spin.top;
+    }
     previewCue.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
     previewCue.sleeping = false;
     previewCue.prevX = previewCue.x;

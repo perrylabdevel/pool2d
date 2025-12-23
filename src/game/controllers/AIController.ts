@@ -33,6 +33,8 @@ export interface AISelectedShot {
   pocket: { id: string; center: { x: number; y: number } };
   aimAngle: number;
   power: number;
+  spinSide?: number;
+  spinTop?: number;
 }
 
 export interface AIState {

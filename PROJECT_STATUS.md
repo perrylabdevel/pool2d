@@ -1,6 +1,6 @@
 # RailRush — Project Status & Deliverables
 
-> **Last Updated:** December 13, 2025  
+> **Last Updated:** December 23, 2025  
 > **Version:** Pre-Alpha  
 > **Platform:** Web (Desktop & Mobile), iOS (Capacitor)
 
@@ -17,6 +17,7 @@
 ## Known Issues (High Priority)
 
 - **Touch Aim Mode aim offset:** In the new touch/drag aim-only mode, clicks/drags outside the rendered table can still hijack aim and lock the shot direction (captured angle can be 0°). Needs a screen-space play-area clamp that accounts for renderer scale, padding, and current canvas sizing (not just world play bounds). Workaround: only click/drag within the felt area until fixed.
+- **Cue english consistency:** Backspin/side-spin can feel inconsistent across shot setups; debug logging is now available via `CONFIG.DEBUG_SPIN_LOG` while we verify control persistence and contact application.
 
 ---
 
@@ -29,7 +30,7 @@
 | Ball-ball collisions | ✅ Complete | Impulse-based solver |
 | Ball-cushion collisions | ✅ Complete | Segmented cushion geometry |
 | Pocket detection & capture | ✅ Complete | Gravity-based capture zones |
-| Spin (english) | ✅ Complete | Full 3D spin transfer |
+| Spin (english) | 🚧 In Progress | Implemented, tuning + debug underway |
 | Prediction/ghost ball | ✅ Complete | Real-time aim assist |
 
 ### ✅ Renderer
@@ -105,6 +106,7 @@
 | Turn indicator | ✅ Complete | Visual + text |
 | Ball chips | ✅ Complete | Potted ball tracking |
 | Menu button | ✅ Complete | Hamburger icon |
+| Creator tool panel | ✅ Complete | Draggable overlay, stays on top |
 
 ### ✅ Responsive Design
 | Breakpoint | Status | Notes |
@@ -174,8 +176,7 @@
 
 | Item | Priority | Notes |
 |------|----------|-------|
-| Item | Priority | Notes |
-|------|----------|-------|
+| Cue english tuning | High | Spin control persistence + contact response validation |
 | Focus/keyboard navigation | High | Accessibility for canvas UI (Partially Complete) |
 
 ---

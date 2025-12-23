@@ -80,13 +80,50 @@ interface BannerAnimation {
 
 interface BannerEditorConfig {
   height: number;
-  animation: {
-    entry: { type: string; duration: number };
-    hold: number;
-    exit: { type: string; duration: number };
+  background: {
+    type: 'solid' | 'gradient' | 'image';
+    color?: string;
+    gradient?: {
+      type: 'linear' | 'radial';
+      angle?: number;
+      stops: Array<{ offset: number; color: string }>;
+    };
+    image?: {
+      src: string;
+      fit: 'cover' | 'contain' | 'stretch' | 'tile' | '9slice';
+      tint?: string;
+      tintOpacity?: number;
+    };
   };
-  text: { fontSize: number; fontWeight: number };
+  frame: {
+    enabled: boolean;
+    width: number;
+    color: string;
+    radius: number;
+  };
+  shadow: {
+    enabled: boolean;
+    offsetX: number;
+    offsetY: number;
+    blur: number;
+    color: string;
+  };
+  glow: {
+    enabled: boolean;
+    blur: number;
+    color: string;
+  };
+  animation: {
+    entry: { type: string; duration: number; easing?: string };
+    hold: number;
+    exit: { type: string; duration: number; easing?: string };
+  };
+  text: { fontSize: number; fontWeight: number; color?: string };
   icon: { enabled: boolean; size: number };
+  effects: {
+    shimmer: boolean;
+    shimmerSpeed: number;
+  };
 }
 
 const DEFAULT_CONFIG: NotificationConfig = {
@@ -152,14 +189,35 @@ export class NotificationService {
   private bannerTimerIds: number[] = [];
   private bannerEditorConfig: BannerEditorConfig = {
     height: 240,
-    animation: {
-      entry: { type: 'slide-right', duration: 400 },
-      hold: 3000,
-      exit: { type: 'slide-left', duration: 300 },
+    background: {
+      type: 'gradient',
+      color: '#004488',
+      gradient: {
+        type: 'linear',
+        angle: 0,
+        stops: [
+          { offset: 0, color: '#00448800' },
+          { offset: 0.2, color: '#004488CC' },
+          { offset: 0.8, color: '#004488CC' },
+          { offset: 1, color: '#00448800' },
+        ],
+      },
     },
-    text: { fontSize: 48, fontWeight: 700 },
+    frame: { enabled: false, width: 0, color: '#000000', radius: 0 },
+    shadow: { enabled: false, offsetX: 0, offsetY: 0, blur: 0, color: 'rgba(0,0,0,0)' },
+    glow: { enabled: false, blur: 10, color: '#89b4fa' },
+    animation: {
+      entry: { type: 'slide-right', duration: 400, easing: 'ease-out-back' },
+      hold: 3000,
+      exit: { type: 'slide-left', duration: 300, easing: 'ease-in' },
+    },
+    text: { fontSize: 48, fontWeight: 700, color: '#ffffff' },
     icon: { enabled: true, size: 80 },
+    effects: { shimmer: false, shimmerSpeed: 1 },
   };
+  private cachedBannerImage: HTMLImageElement | null = null;
+  private cachedBannerImageSrc: string = '';
+  private shimmerOffset: number = 0;
 
   constructor() {
     this.container = this.ensureContainer();
@@ -527,20 +585,114 @@ export class NotificationService {
 
   private drawFullWidthBanner(x: number, y: number, width: number, height: number, message: string, type: string) {
     const ctx = this.bannerCtx;
-    const colors = this.getBannerTypeColors(type);
-    const { text, icon } = this.bannerEditorConfig;
+    const { background, frame, shadow, glow, text, icon, effects } = this.bannerEditorConfig;
+    const fallbackColor = this.getBannerTypeColors(type).bg;
 
     ctx.save();
 
-    // Background: Horizontal Gradient (Transparent -> Opaque -> Transparent)
-    const bgGradient = ctx.createLinearGradient(0, y, width, y);
-    bgGradient.addColorStop(0, colors.bg + '00');
-    bgGradient.addColorStop(0.2, colors.bg + 'CC');
-    bgGradient.addColorStop(0.8, colors.bg + 'CC');
-    bgGradient.addColorStop(1, colors.bg + '00');
+    // Glow effect (drawn first, behind everything)
+    if (glow.enabled) {
+      ctx.shadowColor = glow.color;
+      ctx.shadowBlur = glow.blur;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+    }
 
-    ctx.fillStyle = bgGradient;
-    ctx.fillRect(x, y, width, height);
+    // Shadow effect
+    if (shadow.enabled) {
+      ctx.shadowColor = shadow.color;
+      ctx.shadowBlur = shadow.blur;
+      ctx.shadowOffsetX = shadow.offsetX;
+      ctx.shadowOffsetY = shadow.offsetY;
+    }
+
+    // Background
+    const bgColor = background.color || fallbackColor;
+    if (background.type === 'image' && background.image?.src) {
+      // Draw image background
+      const img = this.loadBannerImage(background.image.src);
+      if (img) {
+        // Cover fit
+        const imgRatio = img.width / img.height;
+        const bannerRatio = width / height;
+        let drawW = width;
+        let drawH = height;
+        let drawX = x;
+        let drawY = y;
+        if (imgRatio > bannerRatio) {
+          drawH = height;
+          drawW = height * imgRatio;
+          drawX = x + (width - drawW) / 2;
+        } else {
+          drawW = width;
+          drawH = width / imgRatio;
+          drawY = y + (height - drawH) / 2;
+        }
+        ctx.drawImage(img, drawX, drawY, drawW, drawH);
+
+        // Tint overlay
+        if (background.image.tint && (background.image.tintOpacity ?? 0) > 0) {
+          ctx.fillStyle = background.image.tint;
+          ctx.globalAlpha = background.image.tintOpacity ?? 0;
+          ctx.fillRect(x, y, width, height);
+          ctx.globalAlpha = 1;
+        }
+      } else {
+        // Fallback to solid while loading
+        ctx.fillStyle = bgColor;
+        ctx.fillRect(x, y, width, height);
+      }
+    } else if (background.type === 'gradient' && background.gradient) {
+      const grad = ctx.createLinearGradient(0, y, width, y);
+      for (const stop of background.gradient.stops) {
+        grad.addColorStop(stop.offset, stop.color);
+      }
+      ctx.fillStyle = grad;
+      ctx.fillRect(x, y, width, height);
+    } else {
+      // Solid color - create horizontal fade gradient
+      const solidGrad = ctx.createLinearGradient(0, y, width, y);
+      solidGrad.addColorStop(0, bgColor + '00');
+      solidGrad.addColorStop(0.2, bgColor + 'CC');
+      solidGrad.addColorStop(0.8, bgColor + 'CC');
+      solidGrad.addColorStop(1, bgColor + '00');
+      ctx.fillStyle = solidGrad;
+      ctx.fillRect(x, y, width, height);
+    }
+
+    // Reset shadow for frame/content
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+
+    // Frame
+    if (frame.enabled && frame.width > 0) {
+      ctx.strokeStyle = frame.color;
+      ctx.lineWidth = frame.width;
+      if (frame.radius > 0) {
+        this.roundRect(ctx, x, y, width, height, frame.radius);
+        ctx.stroke();
+      } else {
+        ctx.strokeRect(x, y, width, height);
+      }
+    }
+
+    // Shimmer effect
+    if (effects.shimmer) {
+      this.shimmerOffset += effects.shimmerSpeed * 1.5;
+      if (this.shimmerOffset > width + 200) this.shimmerOffset = -200;
+
+      const shimmerGrad = ctx.createLinearGradient(
+        x + this.shimmerOffset - 100, y,
+        x + this.shimmerOffset + 100, y
+      );
+      shimmerGrad.addColorStop(0, 'rgba(255,255,255,0)');
+      shimmerGrad.addColorStop(0.5, 'rgba(255,255,255,0.15)');
+      shimmerGrad.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = shimmerGrad;
+      ctx.fillRect(x, y, width, height);
+    }
 
     // Icon
     const iconSize = icon.size;
@@ -550,13 +702,13 @@ export class NotificationService {
     const iconY = y + height / 2;
 
     if (icon.enabled) {
-      this.drawIcon(iconX, iconY, type, iconSize, '#FFFFFF');
+      this.drawIcon(iconX, iconY, type, iconSize, text.color || '#FFFFFF');
     }
 
     // Text
     const fontSize = text.fontSize;
     ctx.font = `${text.fontWeight} ${fontSize}px "Rajdhani", "Impact", sans-serif`;
-    ctx.fillStyle = '#FFFFFF';
+    ctx.fillStyle = text.color || '#FFFFFF';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
 
@@ -568,6 +720,36 @@ export class NotificationService {
     ctx.fillText(message.toUpperCase(), textX, y + height / 2 + 3);
 
     ctx.restore();
+  }
+
+  private loadBannerImage(src: string): HTMLImageElement | null {
+    if (this.cachedBannerImageSrc === src && this.cachedBannerImage) {
+      return this.cachedBannerImage;
+    }
+    if (this.cachedBannerImageSrc !== src) {
+      this.cachedBannerImageSrc = src;
+      this.cachedBannerImage = null;
+      const img = new Image();
+      img.onload = () => {
+        this.cachedBannerImage = img;
+      };
+      img.src = src;
+    }
+    return this.cachedBannerImage;
+  }
+
+  private roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
   }
 
   private getBannerTypeColors(type: string): { bg: string } {
@@ -931,6 +1113,15 @@ export class NotificationService {
   private mergeBannerEditorConfig(base: BannerEditorConfig, patch: Partial<BannerEditorConfig>): BannerEditorConfig {
     return {
       height: patch.height ?? base.height,
+      background: {
+        type: patch.background?.type ?? base.background.type,
+        color: patch.background?.color ?? base.background.color,
+        gradient: patch.background?.gradient ?? base.background.gradient,
+        image: patch.background?.image ? { ...base.background.image, ...patch.background.image } : base.background.image,
+      },
+      frame: { ...base.frame, ...(patch.frame ?? {}) },
+      shadow: { ...base.shadow, ...(patch.shadow ?? {}) },
+      glow: { ...base.glow, ...(patch.glow ?? {}) },
       animation: {
         entry: { ...base.animation.entry, ...(patch.animation?.entry ?? {}) },
         hold: patch.animation?.hold ?? base.animation.hold,
@@ -938,6 +1129,7 @@ export class NotificationService {
       },
       text: { ...base.text, ...(patch.text ?? {}) },
       icon: { ...base.icon, ...(patch.icon ?? {}) },
+      effects: { ...base.effects, ...(patch.effects ?? {}) },
     };
   }
 }

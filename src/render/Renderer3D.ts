@@ -16,7 +16,7 @@ import {
 } from './RenderLayers';
 import { SettingsManager, type RenderSettings } from '../ui/SettingsManager';
 import { BaseRenderer } from './BaseRenderer';
-import type { MicroDialRenderState, PocketAnimationEvent } from './ControlTypes';
+import type { MicroDialRenderState, PocketAnimationEvent, SpinControlRenderState } from './ControlTypes';
 import { TableRenderer } from './components/TableRenderer';
 import { BallRenderer } from './components/BallRenderer';
 import { CueRenderer } from './components/CueRenderer';
@@ -883,8 +883,8 @@ export class Renderer3D extends BaseRenderer {
 
 
   // Compatibility methods for existing code
-  drawCueAndPowerBar(ball: Ball, angle: number, power: number, showGhost: boolean, showPowerBar: boolean, isAimMode: boolean, prediction?: PredictionResult, microDialState?: MicroDialRenderState, alpha: number = 1.0) {
-    this.cueRenderer.drawCueAndPowerBar(ball, angle, power, showGhost, showPowerBar, isAimMode, prediction, microDialState, alpha);
+  drawCueAndPowerBar(ball: Ball, angle: number, power: number, showGhost: boolean, showPowerBar: boolean, isAimMode: boolean, prediction?: PredictionResult, microDialState?: MicroDialRenderState, spinState?: SpinControlRenderState, alpha: number = 1.0) {
+    this.cueRenderer.drawCueAndPowerBar(ball, angle, power, showGhost, showPowerBar, isAimMode, prediction, microDialState, spinState, alpha);
   }
 
   drawPrediction(_prediction: PredictionResult) {
@@ -923,6 +923,10 @@ export class Renderer3D extends BaseRenderer {
 
   getMicroDialBounds() {
     return this.cueRenderer.getMicroDialBounds();
+  }
+
+  getSpinControlBounds() {
+    return this.cueRenderer.getSpinControlBounds();
   }
 
   queuePocketAnimation(event: PocketAnimationEvent) {

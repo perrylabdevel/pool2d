@@ -21,7 +21,7 @@ import { TextureCache } from '../textures/TextureCache';
 import { TextureConfig, TEXTURE_PRESETS } from '../textures/TextureConfig';
 
 import { PredictionResult } from '../physics/Prediction';
-import type { MicroDialRenderState, PocketAnimationEvent } from './ControlTypes';
+import type { MicroDialRenderState, PocketAnimationEvent, SpinControlRenderState } from './ControlTypes';
 
 type FrameClipInfo = {
   outerX: number;
@@ -672,12 +672,12 @@ export class Renderer extends BaseRenderer {
     this.ctx.fill();
   }
 
-  drawCueAndPowerBar(ball: Ball, angle: number, power: number, showGhost: boolean, showPowerBar: boolean, isAimMode: boolean, prediction?: PredictionResult, microDialState?: MicroDialRenderState) {
+  drawCueAndPowerBar(ball: Ball, angle: number, power: number, showGhost: boolean, showPowerBar: boolean, isAimMode: boolean, prediction?: PredictionResult, microDialState?: MicroDialRenderState, spinState?: SpinControlRenderState) {
     this.ctx.save();
 
     // Draw power/dial first so cue/aim lines sit above
     if (showPowerBar) {
-      this.drawPowerBar(power, isAimMode, microDialState);
+      this.drawPowerBar(power, isAimMode, microDialState, spinState);
     }
 
     // Use same transform as main render
@@ -1097,7 +1097,7 @@ export class Renderer extends BaseRenderer {
 
 
 
-  drawPowerBar(power: number, isAimMode: boolean, microDialState?: MicroDialRenderState) {
+  drawPowerBar(power: number, isAimMode: boolean, microDialState?: MicroDialRenderState, spinState?: SpinControlRenderState) {
     this.ctx.save();
     this.ctx.setTransform(1, 0, 0, 1, 0, 0); // Screen space
 
@@ -1165,6 +1165,7 @@ export class Renderer extends BaseRenderer {
 
     // Micro aim dial on the opposite side
     this.drawMicroAimDial(microDialState);
+    this.drawSpinControl(spinState);
 
     this.ctx.restore();
   }
@@ -1304,6 +1305,24 @@ export class Renderer extends BaseRenderer {
     return { x, y, width: barWidth, height: barHeight };
   }
 
+  getSpinControlBounds() {
+    const barWidth = 45;
+    const barHeight = 200;
+    const { dialSide } = this.getSidebarSides();
+    const { x, y } = this.getSideBarPosition(dialSide, barWidth, barHeight);
+    const isMobile = this.canvas.width < 500;
+    const size = Math.max(isMobile ? 72 : 60, barWidth * (isMobile ? 1.5 : 1.2));
+    const gap = isMobile ? 14 : 10;
+    let spinX = x + (barWidth - size) / 2;
+    let spinY = y + barHeight + gap;
+    if (spinY + size > this.canvas.height - 10) {
+      spinY = y - gap - size;
+    }
+    spinY = Math.max(10, Math.min(this.canvas.height - size - 10, spinY));
+    spinX = Math.max(10, Math.min(this.canvas.width - size - 10, spinX));
+    return { x: spinX, y: spinY, width: size, height: size };
+  }
+
   private getSideBarPosition(side: 'left' | 'right', width: number, height: number) {
     const geom = getTableGeometry();
     const canvasCenterX = this.canvas.width / 2;
@@ -1402,6 +1421,80 @@ export class Renderer extends BaseRenderer {
     ctx.stroke();
 
     // Labels
+    ctx.restore();
+  }
+
+  private drawSpinControl(state?: SpinControlRenderState) {
+    const bounds = this.getSpinControlBounds();
+    const ctx = this.ctx;
+    if (!bounds) return;
+
+    const valueX = Math.max(-1, Math.min(1, state?.x ?? 0));
+    const valueY = Math.max(-1, Math.min(1, state?.y ?? 0));
+    const isActive = state?.isActive ?? false;
+
+    const padding = Math.max(6, bounds.width * 0.12);
+    const radius = bounds.width / 2 - padding;
+    const centerX = bounds.x + bounds.width / 2;
+    const centerY = bounds.y + bounds.height / 2;
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius + padding * 0.5, 0, Math.PI * 2);
+    ctx.clip();
+    const panelGradient = ctx.createLinearGradient(bounds.x, bounds.y, bounds.x, bounds.y + bounds.height);
+    panelGradient.addColorStop(0, 'rgba(20, 24, 32, 0.9)');
+    panelGradient.addColorStop(1, 'rgba(8, 10, 16, 0.9)');
+    ctx.fillStyle = panelGradient;
+    ctx.fillRect(bounds.x, bounds.y, bounds.width, bounds.height);
+    ctx.restore();
+    const ringGlow = isActive ? 0.55 : 0.35;
+    ctx.strokeStyle = `rgba(255, 255, 255, ${ringGlow})`;
+    ctx.lineWidth = isActive ? 2 : 1.5;
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius + padding * 0.5, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(centerX, bounds.y + padding);
+    ctx.lineTo(centerX, bounds.y + bounds.height - padding);
+    ctx.moveTo(bounds.x + padding, centerY);
+    ctx.lineTo(bounds.x + bounds.width - padding, centerY);
+    ctx.stroke();
+
+    const puckGradient = ctx.createRadialGradient(centerX, centerY, radius * 0.1, centerX, centerY, radius);
+    puckGradient.addColorStop(0, 'rgba(255, 255, 255, 0.98)');
+    puckGradient.addColorStop(1, 'rgba(212, 216, 222, 0.95)');
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+    ctx.fillStyle = puckGradient;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
+    ctx.stroke();
+
+    if (state?.pulse && state.pulse > 0) {
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius + state.pulse * 10, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(255, 238, 170, ${0.5 * state.pulse})`;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    const handleRadius = Math.max(5, radius * 0.24);
+    const handleX = centerX + valueX * radius;
+    const handleY = centerY - valueY * radius;
+    ctx.beginPath();
+    ctx.arc(handleX, handleY, handleRadius, 0, Math.PI * 2);
+    ctx.fillStyle = '#e53935';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
+    ctx.shadowBlur = isActive ? 8 : 4;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
     ctx.restore();
   }
 

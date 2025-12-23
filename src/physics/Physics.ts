@@ -292,6 +292,21 @@ export class PhysicsWorld {
       
       ball.vx *= factor;
       ball.vy *= factor;
+
+      const speedAfter = ball.getSpeed();
+      if (Math.abs(ball.spinSide) > 1e-4 && speedAfter > CONFIG.SPIN_SWERVE_MIN_SPEED) {
+        const invSpeed = 1 / speedAfter;
+        const perpX = -ball.vy * invSpeed;
+        const perpY = ball.vx * invSpeed;
+        const swerve = ball.spinSide * CONFIG.SPIN_SWERVE_FACTOR * speedAfter;
+        ball.vx += perpX * swerve * dt;
+        ball.vy += perpY * swerve * dt;
+      }
+
+      const sideDecay = Math.max(0, 1 - CONFIG.SPIN_SIDE_DECAY_PER_SEC * dt);
+      const topDecay = Math.max(0, 1 - CONFIG.SPIN_TOP_DECAY_PER_SEC * dt);
+      ball.spinSide *= sideDecay;
+      ball.spinTop *= topDecay;
     });
   }
   
@@ -362,6 +377,8 @@ export class PhysicsWorld {
         ball.vx = 0;
         ball.vy = 0;
         ball.angularVelocity = 0; // Stop rotation when ball sleeps
+        ball.spinSide = 0;
+        ball.spinTop = 0;
       } else if (ball.sleeping && speed >= CONFIG.VELOCITY_EPSILON * 2) {
         // Wake up if moving fast enough
         ball.sleeping = false;

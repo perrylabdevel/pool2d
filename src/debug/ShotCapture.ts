@@ -558,5 +558,7 @@ class ShotCaptureSystem {
 export const shotCapture = new ShotCaptureSystem();
 
 // Global helpers
-(window as any).captureShot = () => shotCapture.startCapture();
-(window as any).cancelCapture = () => shotCapture.cancelCapture();
+if (typeof window !== 'undefined') {
+  (window as any).captureShot = () => shotCapture.startCapture();
+  (window as any).cancelCapture = () => shotCapture.cancelCapture();
+}

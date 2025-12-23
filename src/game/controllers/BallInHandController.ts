@@ -202,6 +202,8 @@ export function placeCueBall(
   cueBall.vx = 0;
   cueBall.vy = 0;
   cueBall.angularVelocity = 0;
+  cueBall.spinSide = 0;
+  cueBall.spinTop = 0;
   cueBall.sleeping = true;
   cueBall.pocketed = false;
   cueBall.lastPocketId = null;
@@ -351,6 +353,8 @@ export function applyDragToCueBall(
     cueBall.pocketed = false;
     cueBall.vx = 0;
     cueBall.vy = 0;
+    cueBall.spinSide = 0;
+    cueBall.spinTop = 0;
     cueBall.sleeping = true;
   }
   

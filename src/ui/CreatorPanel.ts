@@ -9,6 +9,12 @@ export class CreatorPanel {
   private toolLocked: boolean = false;
   private selectedBallId: number = 1;
   private layoutSelect: HTMLSelectElement | null = null;
+  private isDragging = false;
+  private dragOffsetX = 0;
+  private dragOffsetY = 0;
+  private dragPointerId: number | null = null;
+  private dragReady = false;
+  private readonly storageKey = 'creatorPanelPositionV1';
 
   constructor() {
     this.panel = this.createPanel();
@@ -17,9 +23,12 @@ export class CreatorPanel {
     this.controller.addEventListener('panel:open', () => {
       this.requestLayouts();
       this.syncToolLock();
+      requestAnimationFrame(() => this.ensureDraggablePosition(true));
     });
 
     this.bindEvents();
+    this.enableDrag();
+    requestAnimationFrame(() => this.ensureDraggablePosition());
   }
 
   getController(): UIPanel {
@@ -162,6 +171,114 @@ export class CreatorPanel {
     this.setActiveTool(this.activeTool);
     this.setSelectedBall(this.selectedBallId);
     this.syncToolLock();
+  }
+
+  private enableDrag() {
+    this.panel.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0) return;
+      if (this.isInteractiveTarget(event.target as HTMLElement | null)) return;
+      this.ensureDraggablePosition();
+
+      const rect = this.panel.getBoundingClientRect();
+      this.isDragging = true;
+      this.dragPointerId = event.pointerId;
+      this.dragOffsetX = event.clientX - rect.left;
+      this.dragOffsetY = event.clientY - rect.top;
+      this.panel.setPointerCapture(event.pointerId);
+    });
+
+    this.panel.addEventListener('pointermove', (event) => {
+      if (!this.isDragging || this.dragPointerId !== event.pointerId) return;
+      this.applyDragPosition(event.clientX - this.dragOffsetX, event.clientY - this.dragOffsetY);
+    });
+
+    const endDrag = (event: PointerEvent) => {
+      if (!this.isDragging || (this.dragPointerId !== null && event.pointerId !== this.dragPointerId)) return;
+      this.isDragging = false;
+      this.dragPointerId = null;
+      this.panel.releasePointerCapture(event.pointerId);
+      const rect = this.panel.getBoundingClientRect();
+      this.savePosition(rect.left, rect.top);
+    };
+
+    this.panel.addEventListener('pointerup', endDrag);
+    this.panel.addEventListener('pointercancel', endDrag);
+
+    window.addEventListener('resize', () => {
+      if (!this.dragReady) return;
+      const rect = this.panel.getBoundingClientRect();
+      this.applyDragPosition(rect.left, rect.top, true);
+    });
+  }
+
+  private ensureDraggablePosition(force: boolean = false) {
+    if (this.dragReady && !force) return;
+    const rect = this.panel.getBoundingClientRect();
+    if (rect.width < 1 || rect.height < 1) return;
+
+    const saved = this.loadSavedPosition();
+    if (this.dragReady && force && saved) {
+      this.applyDragPosition(saved.left, saved.top, true);
+      return;
+    }
+
+    this.panel.style.position = 'fixed';
+    if (saved) {
+      this.panel.style.left = `${saved.left}px`;
+      this.panel.style.top = `${saved.top}px`;
+    } else {
+      this.panel.style.left = `${rect.left}px`;
+      this.panel.style.top = `${rect.top}px`;
+    }
+    this.panel.style.margin = '0';
+    this.panel.style.width = `${rect.width}px`;
+    this.panel.style.maxWidth = 'calc(100vw - 24px)';
+    this.panel.style.zIndex = '9999';
+    this.panel.style.touchAction = 'none';
+    this.dragReady = true;
+
+    if (saved) {
+      const current = this.panel.getBoundingClientRect();
+      this.applyDragPosition(current.left, current.top, true);
+    }
+  }
+
+  private applyDragPosition(left: number, top: number, skipSave: boolean = false) {
+    const rect = this.panel.getBoundingClientRect();
+    const maxLeft = Math.max(8, window.innerWidth - rect.width - 8);
+    const maxTop = Math.max(8, window.innerHeight - rect.height - 8);
+    const clampedLeft = Math.max(8, Math.min(maxLeft, left));
+    const clampedTop = Math.max(8, Math.min(maxTop, top));
+    this.panel.style.left = `${clampedLeft}px`;
+    this.panel.style.top = `${clampedTop}px`;
+    if (!skipSave) {
+      this.savePosition(clampedLeft, clampedTop);
+    }
+  }
+
+  private isInteractiveTarget(target: HTMLElement | null): boolean {
+    if (!target) return false;
+    return !!target.closest('button, input, select, option, textarea, label');
+  }
+
+  private savePosition(left: number, top: number) {
+    try {
+      localStorage.setItem(this.storageKey, JSON.stringify({ left, top }));
+    } catch {
+      // Ignore storage errors (private mode, quota, etc.)
+    }
+  }
+
+  private loadSavedPosition(): { left: number; top: number } | null {
+    try {
+      const raw = localStorage.getItem(this.storageKey);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as { left?: number; top?: number };
+      if (typeof parsed.left !== 'number' || typeof parsed.top !== 'number') return null;
+      return { left: parsed.left, top: parsed.top };
+    } catch {
+      return null;
+    }
   }
 
   private setActiveTool(tool: CreatorTool) {

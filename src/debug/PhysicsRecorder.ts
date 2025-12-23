@@ -12,6 +12,7 @@ export interface CueState {
   power: number;
   isAiming: boolean;
   guideLineVisible: boolean;
+  spin?: { x: number; y: number };
 }
 
 export interface PhysicsSnapshot {
