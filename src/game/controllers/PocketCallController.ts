@@ -12,7 +12,7 @@ import { Ball } from '../../physics/Shapes';
 import { getTableGeometry } from '../../geometry/Geometry';
 import { BALL_8 } from '../../config';
 
-// Pocket labels for display
+// Pocket labels for display (legacy IDs)
 const POCKET_LABELS: Record<string, string> = {
   NW_corner: 'Head left corner',
   NE_corner: 'Head right corner',
@@ -56,11 +56,52 @@ export function createInitialPocketCallState(): PocketCallState {
   };
 }
 
+function getPlayHalfExtents() {
+  const geom = getTableGeometry();
+  let halfW = Number.isFinite(geom.playWidthIn) && geom.playWidthIn > 0 ? geom.playWidthIn / 2 : 0;
+  let halfH = Number.isFinite(geom.playHeightIn) && geom.playHeightIn > 0 ? geom.playHeightIn / 2 : 0;
+
+  if (halfW <= 0 || halfH <= 0) {
+    for (const pocket of geom.pockets) {
+      if (!pocket?.center) continue;
+      halfW = Math.max(halfW, Math.abs(pocket.center.x));
+      halfH = Math.max(halfH, Math.abs(pocket.center.y));
+    }
+  }
+
+  return {
+    halfW: Math.max(halfW, 1),
+    halfH: Math.max(halfH, 1),
+  };
+}
+
+function getPocketLabelForPosition(center: Vec2): string {
+  const { halfW } = getPlayHalfExtents();
+  const isCorner = Math.abs(center.x) > halfW * 0.25;
+  const isHead = center.y >= 0;
+  const isLeft = center.x < 0;
+
+  if (!isCorner) {
+    return isHead ? 'Head side pocket' : 'Foot side pocket';
+  }
+
+  if (isHead) {
+    return isLeft ? 'Head left corner' : 'Head right corner';
+  }
+  return isLeft ? 'Foot left corner' : 'Foot right corner';
+}
+
 /**
  * Get pocket label for display
  */
 export function getPocketLabel(pocketId: string): string {
-  return POCKET_LABELS[pocketId] ?? pocketId ?? 'Unknown pocket';
+  if (POCKET_LABELS[pocketId]) return POCKET_LABELS[pocketId];
+  const geom = getTableGeometry();
+  const pocket = geom.pockets.find((p) => p.id === pocketId);
+  if (pocket?.center) {
+    return getPocketLabelForPosition(pocket.center);
+  }
+  return pocketId ?? 'Unknown pocket';
 }
 
 /**
@@ -69,10 +110,10 @@ export function getPocketLabel(pocketId: string): string {
 export function getPocketChoices(): PocketChoice[] {
   const geom = getTableGeometry();
   return geom.pockets
-    .filter((pocket) => pocket.id && POCKET_LABELS[pocket.id])
+    .filter((pocket) => pocket.id)
     .map((pocket) => ({
       id: pocket.id,
-      label: getPocketLabel(pocket.id),
+      label: POCKET_LABELS[pocket.id] ?? (pocket.center ? getPocketLabelForPosition(pocket.center) : pocket.id),
       center: { x: pocket.center.x, y: pocket.center.y },
     }));
 }
@@ -130,9 +171,9 @@ export function pickNearestPocketId(eightBall: Ball): string | null {
   const geom = getTableGeometry();
   let nearestId: string | null = null;
   let nearestDist = Infinity;
-  
+
   for (const pocket of geom.pockets) {
-    if (!pocket.id || !POCKET_LABELS[pocket.id]) continue;
+    if (!pocket.id) continue;
     const dx = eightBall.x - pocket.center.x;
     const dy = eightBall.y - pocket.center.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
@@ -157,7 +198,7 @@ export function handlePocketClick(
   if (!state.waitingForPocketCall) return null;
   
   const geom = getTableGeometry();
-  const pockets = geom.pockets.filter(p => p.id && POCKET_LABELS[p.id]);
+  const pockets = geom.pockets.filter(p => p.id);
   const clickRadius = 3.0; // Generous click radius in inches
   
   for (const pocket of pockets) {

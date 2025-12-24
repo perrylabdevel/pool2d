@@ -83,15 +83,6 @@ export enum GameMode {
   PLAYBACK,
 }
 
-const POCKET_LABELS: Record<string, string> = {
-  NW_corner: 'Head left corner',
-  NE_corner: 'Head right corner',
-  SW_corner: 'Foot left corner',
-  SE_corner: 'Foot right corner',
-  N_middle: 'Head side pocket',
-  S_middle: 'Foot side pocket',
-};
-
 function randomizeBallOrientation(ball: Ball) {
   const axisZ = Math.random() * 2 - 1;
   const axisRadius = Math.sqrt(Math.max(0, 1 - axisZ * axisZ));
@@ -3384,8 +3375,7 @@ export class Game {
     if (!this.waitingForPocketCall) return false;
 
     // Check if click is near any pocket
-    const geom = getTableGeometry();
-    const pockets = geom.pockets.filter(p => p.id && POCKET_LABELS[p.id]);
+    const pockets = this.getPocketChoices();
 
     // Use a generous click radius (in inches)
     const clickRadius = 3.0;
