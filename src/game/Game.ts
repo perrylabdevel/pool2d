@@ -10,7 +10,7 @@ import { CONFIG, CUE_BALL_POSITION, RACK_POSITIONS, BALL_8, BALL_CUE, DEFAULT_US
 import { getTableGeometry } from '../geometry/Geometry';
 import { clampBallInHand } from '../geometry/Placement';
 import { EightBallRules, GameState as RulesGameState, type BallInHandPlacement } from '../rules/EightBall';
-import { RULES_PRESETS, getRulesDescription } from '../rules/RulesConfig';
+import { RULES_PRESETS, getRulesDescription, type RulesConfig } from '../rules/RulesConfig';
 import { physicsRecorder, type CueState } from '../debug/PhysicsRecorder';
 import { Predictor } from '../physics/Prediction';
 import { shotCapture } from '../debug/ShotCapture';
@@ -67,7 +67,6 @@ import {
   type AIState,
   createInitialAIState,
   // BallInHandController - drag handling
-  screenToWorld,
   isClickOnCueBall,
   processDragPosition,
   applyDragToCueBall,
@@ -143,6 +142,7 @@ export class Game {
   currentClubId: string | null = null; // Track which club the current match is in
   currentEntryFee: number = 0; // Entry fee for prize calculation
   currentRuleset: string = 'TOURNAMENT'; // Tournament rules as default
+  private customRulesConfig: RulesConfig | null = null;
   private lastBallScale: number;
   private _lastCanvasScale?: number;
   private currentCalledPocketId: string | null = null;
@@ -241,6 +241,7 @@ export class Game {
     this.helpPanel = new HelpPanel();
     this.creatorPanel = new CreatorPanel();
     this.rules = new EightBallRules(RULES_PRESETS[this.currentRuleset]);
+    this.pushRulesConfigUpdate(this.rules.config);
     this.predictor = new Predictor();
     this.playbackController = new PlaybackController(this.world);
     this.playbackPanelUI = new PlaybackPanel(this.playbackController, () => {
@@ -277,6 +278,11 @@ export class Game {
           this.ai.setOpponent(opponentId);
         }
       }
+    });
+    window.addEventListener('settings:rules-changed', (event) => {
+      const detail = (event as CustomEvent<{ settings?: RulesConfig; source?: string }>).detail;
+      if (!detail?.settings || detail.source === 'game') return;
+      this.applyRulesConfig(detail.settings, true);
     });
     window.addEventListener('audio:preview', (event) => {
       const detail = (event as CustomEvent<{ event: string }>).detail;
@@ -864,21 +870,25 @@ export class Game {
       }
       // Ruleset switching (affects 8-Ball mode rules)
       if (e.key === '1') {
+        this.customRulesConfig = null;
         this.currentRuleset = 'CASUAL';
         console.log('🎱 Ruleset: CASUAL (relaxed bar rules)');
         this.restart();
       }
       if (e.key === '2') {
+        this.customRulesConfig = null;
         this.currentRuleset = 'TOURNAMENT';
         console.log('🎱 Ruleset: TOURNAMENT (strict BCA/WPA rules)');
         this.restart();
       }
       if (e.key === '3') {
+        this.customRulesConfig = null;
         this.currentRuleset = 'APA';
         console.log('🎱 Ruleset: APA (league rules)');
         this.restart();
       }
       if (e.key === '4') {
+        this.customRulesConfig = null;
         this.currentRuleset = 'PRACTICE';
         console.log('🎱 Ruleset: PRACTICE (very relaxed, for learning)');
         this.restart();
@@ -1926,8 +1936,10 @@ export class Game {
     this.world.onBallPocketed = (details) => this.handleBallPocketed(details);
 
     // Recreate rules with current ruleset config
-    this.rules = new EightBallRules(RULES_PRESETS[this.currentRuleset]);
+    const rulesConfig = this.customRulesConfig ?? RULES_PRESETS[this.currentRuleset];
+    this.rules = new EightBallRules(rulesConfig);
     this.rules.setCalledPocket(null);
+    this.pushRulesConfigUpdate(this.rules.config);
 
     // Re-attach collision callback after world recreation
     this.setupCollisionTracking();
@@ -3183,15 +3195,48 @@ export class Game {
     }
 
     if (!e.shiftKey && !isBallInHandPhase) return;
-    if (!this.cueBall || this.cueBall.pocketed) return;
+    if (!this.cueBall) return;
+    if (this.cueBall.pocketed && !isBallInHandPhase) return;
 
-    const deps = {
-      canvasRect: this.input.canvas.getBoundingClientRect(),
-      canvasWidth: this.renderer.canvas.width,
-      canvasHeight: this.renderer.canvas.height,
-      scale: this.renderer.scale,
-    };
-    const world = screenToWorld(e.clientX, e.clientY, deps);
+    const rect = this.input.canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    const overPowerBar = (() => {
+      const bounds = this.renderer.getPowerBarBounds();
+      if (!bounds) return false;
+      return (
+        mouseX >= bounds.x &&
+        mouseX <= bounds.x + bounds.width &&
+        mouseY >= bounds.y &&
+        mouseY <= bounds.y + bounds.height
+      );
+    })();
+    const overMicroDial = (() => {
+      const bounds = this.renderer.getMicroDialBounds();
+      if (!bounds) return false;
+      return (
+        mouseX >= bounds.x &&
+        mouseX <= bounds.x + bounds.width &&
+        mouseY >= bounds.y &&
+        mouseY <= bounds.y + bounds.height
+      );
+    })();
+    const overSpinControl = (() => {
+      const bounds = this.renderer.getSpinControlBounds();
+      if (!bounds) return false;
+      return (
+        mouseX >= bounds.x &&
+        mouseX <= bounds.x + bounds.width &&
+        mouseY >= bounds.y &&
+        mouseY <= bounds.y + bounds.height
+      );
+    })();
+
+    if (overPowerBar || overMicroDial || overSpinControl) return;
+
+    const world = this.input.screenToGame(e.clientX, e.clientY);
+
+    const allowFreeDrag = isBallInHandPhase || CONFIG.DEBUG_BIH_LOG || this.debug.isBallInHandOverlayEnabled();
 
     if (isClickOnCueBall(world.x, world.y, this.cueBall)) {
       this.isDraggingBall = true;
@@ -3199,13 +3244,37 @@ export class Game {
       this.input.canvas.style.cursor = 'move';
       this.world.skipCuePocketCheck = true;
 
-      const allowFreeDrag = isBallInHandPhase || CONFIG.DEBUG_BIH_LOG || this.debug.isBallInHandOverlayEnabled();
       if (allowFreeDrag) {
         const pos = processDragPosition(world.x, world.y, this.cueBall.radius, this.world.rails, this.world.pockets, this.shouldRestrictToKitchen());
         applyDragToCueBall(this.cueBall, pos.x, pos.y);
         if (CONFIG.DEBUG_BIH_LOG) console.log('BIH drag start', { raw: world, clamped: pos });
       }
+      return;
     }
+
+    if (isBallInHandPhase && allowFreeDrag) {
+      const pos = processDragPosition(world.x, world.y, this.cueBall.radius, this.world.rails, this.world.pockets, this.shouldRestrictToKitchen());
+      if (isSpotOpen(pos.x, pos.y, this.cueBall.radius, this.world.balls, this.cueBall)) {
+        applyDragToCueBall(this.cueBall, pos.x, pos.y);
+        this.cueBall.vx = 0;
+        this.cueBall.vy = 0;
+        this.cueBall.angularVelocity = 0;
+        this.cueBall.sleeping = true;
+      }
+    }
+  }
+
+  private applyRulesConfig(config: RulesConfig, persist: boolean) {
+    this.rules.config = { ...config };
+    if (persist) {
+      this.customRulesConfig = { ...config };
+    }
+    this.pushRulesConfigUpdate(this.rules.config);
+  }
+
+  private pushRulesConfigUpdate(config: RulesConfig) {
+    (window as any).__rulesConfig = config;
+    window.dispatchEvent(new CustomEvent('settings:rules-changed', { detail: { settings: config, source: 'game' } }));
   }
 
   /**
@@ -3215,14 +3284,7 @@ export class Game {
     if (!this.isDraggingBall || !this.draggingBall) return;
     const dragBall = this.draggingBall;
 
-    const world = this.isCreatorMode() && this.creatorTool === 'move'
-      ? this.input.screenToGame(e.clientX, e.clientY)
-      : screenToWorld(e.clientX, e.clientY, {
-          canvasRect: this.input.canvas.getBoundingClientRect(),
-          canvasWidth: this.renderer.canvas.width,
-          canvasHeight: this.renderer.canvas.height,
-          scale: this.renderer.scale,
-        });
+    const world = this.input.screenToGame(e.clientX, e.clientY);
     const restrictToKitchen = dragBall === this.cueBall ? this.shouldRestrictToKitchen() : false;
     const pos = processDragPosition(world.x, world.y, dragBall.radius, this.world.rails, this.world.pockets, restrictToKitchen);
     if (!isSpotOpen(pos.x, pos.y, dragBall.radius, this.world.balls, dragBall)) {

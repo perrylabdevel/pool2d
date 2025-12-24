@@ -146,6 +146,16 @@ export class RemoteBridge {
             });
         });
 
+        window.addEventListener('settings:rules-changed', (event) => {
+            const detail = (event as CustomEvent<{ settings?: any }>).detail;
+            const payload = detail?.settings ?? (window as any).__rulesConfig ?? null;
+            if (!payload) return;
+            this.sendMessage({
+                type: 'settings:rules-changed',
+                payload
+            });
+        });
+
         // Listen for match recordings and send to devtools
         window.addEventListener('match:recorded', (e: any) => {
             if (e.detail) {
@@ -165,7 +175,8 @@ export class RemoteBridge {
                 game: this.settingsManager.getGameSettings(),
                 uiColors: this.settingsManager.getUIColors(),
                 tableAppearance: this.settingsManager.getTableAppearance(),
-                physics: this.settingsManager.getPhysicsSettings()
+                physics: this.settingsManager.getPhysicsSettings(),
+                rules: (window as any).__rulesConfig ?? null
             }
         });
     }
@@ -210,6 +221,10 @@ export class RemoteBridge {
             case 'updatePhysics':
                 console.log('[RemoteBridge] Received physics update', message.payload);
                 this.settingsManager.savePhysicsSettings(message.payload);
+                break;
+            case 'updateRules':
+                console.log('[RemoteBridge] Received rules update', message.payload);
+                window.dispatchEvent(new CustomEvent('settings:rules-changed', { detail: { settings: message.payload } }));
                 break;
             case 'command':
                 this.handleCommand(message.command, message.payload);

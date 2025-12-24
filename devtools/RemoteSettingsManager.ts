@@ -14,6 +14,7 @@ import {
 } from '../src/ui/SettingsManager';
 import { defaultRenderLayerSettings } from '../src/render/RenderLayers';
 import { ModernPocketGeometry } from '../src/geometry/ModernGeometry';
+import { RULES_PRESETS, type RulesConfig } from '../src/rules/RulesConfig';
 
 export class RemoteSettingsManager extends EventTarget {
     private ws!: WebSocket;
@@ -94,6 +95,7 @@ export class RemoteSettingsManager extends EventTarget {
     private uiColors: UIColors = { ...DEFAULT_UI_COLORS };
     private tableAppearance: TableAppearance = { ...DEFAULT_TABLE_APPEARANCE };
     private physicsSettings: PhysicsSettings = { ...DEFAULT_PHYSICS_SETTINGS };
+    private rulesConfig: RulesConfig = { ...RULES_PRESETS.TOURNAMENT };
 
     constructor() {
         super();
@@ -164,6 +166,7 @@ export class RemoteSettingsManager extends EventTarget {
             uiColors: this.uiColors,
             tableAppearance: this.tableAppearance,
             physics: this.physicsSettings,
+            rules: this.rulesConfig,
         };
     }
 
@@ -179,6 +182,7 @@ export class RemoteSettingsManager extends EventTarget {
                 this.uiColors = message.payload.uiColors;
                 this.tableAppearance = message.payload.tableAppearance;
                 this.physicsSettings = message.payload.physics;
+                this.rulesConfig = message.payload.rules ?? this.rulesConfig;
                 this.dispatchUpdates();
                 break;
             case 'settings:geometry-changed':
@@ -224,6 +228,11 @@ export class RemoteSettingsManager extends EventTarget {
             case 'settings:physics-changed':
                 this.physicsSettings = { ...this.physicsSettings, ...message.payload };
                 window.dispatchEvent(new CustomEvent('settings:physics-changed', { detail: { settings: this.physicsSettings } }));
+                this.dispatchEvent(new Event('state-updated'));
+                break;
+            case 'settings:rules-changed':
+                this.rulesConfig = { ...this.rulesConfig, ...message.payload };
+                window.dispatchEvent(new CustomEvent('settings:rules-changed', { detail: { settings: this.rulesConfig } }));
                 this.dispatchEvent(new Event('state-updated'));
                 break;
             case 'build:ios:status':
@@ -272,6 +281,7 @@ export class RemoteSettingsManager extends EventTarget {
         window.dispatchEvent(new CustomEvent('settings:game-changed', { detail: { settings: this.gameSettings } }));
         window.dispatchEvent(new CustomEvent('settings:ui-colors-changed', { detail: { settings: this.uiColors } }));
         window.dispatchEvent(new CustomEvent('settings:physics-changed', { detail: { settings: this.physicsSettings } }));
+        window.dispatchEvent(new CustomEvent('settings:rules-changed', { detail: { settings: this.rulesConfig } }));
         this.dispatchEvent(new Event('state-updated'));
     }
 
@@ -377,5 +387,14 @@ export class RemoteSettingsManager extends EventTarget {
 
     resetPhysicsSettings() {
         this.sendMessage({ type: 'command', command: 'resetPhysics' });
+    }
+
+    getRulesConfig(): RulesConfig {
+        return this.rulesConfig;
+    }
+
+    saveRulesConfig(settings: Partial<RulesConfig> | RulesConfig) {
+        this.rulesConfig = { ...this.rulesConfig, ...settings };
+        this.sendMessage({ type: 'updateRules', payload: this.rulesConfig });
     }
 }

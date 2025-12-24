@@ -41,6 +41,7 @@ import { AudioPanel } from '../src/ui/AudioPanel';
 import { GameSettingsPanel } from '../src/ui/GameSettingsPanel';
 import { PhysicsPanel } from './src/ui/PhysicsPanel';
 import { IOSBuildPanel } from './src/ui/IOSBuildPanel';
+import { RulesPanel } from './src/ui/RulesPanel';
 
 // Initialize panels
 const mockRenderer = new MockRenderer(); // Define mockRenderer once
@@ -60,6 +61,7 @@ const audioPanel = new AudioPanel(settingsManager as any);
 const gameSettingsPanel = new GameSettingsPanel(settingsManager as any);
 const physicsPanel = new PhysicsPanel(settingsManager as any);
 const iosBuildPanel = new IOSBuildPanel(settingsManager as any);
+const rulesPanel = new RulesPanel(settingsManager as any);
 
 import { PlaybackPanel } from './src/ui/PlaybackPanel';
 const playbackPanel = new PlaybackPanel(() => { });
@@ -73,6 +75,7 @@ audioPanel.getController().open();
 gameSettingsPanel.getController().open();
 physicsPanel.getController().open();
 iosBuildPanel.getController().open();
+rulesPanel.getController().open();
 
 // Handle connection status
 const statusEl = document.getElementById('connection-status');
