@@ -3,6 +3,7 @@ import { db } from '../data/db';
 export interface CurrencyBalances {
     coins: number;
     gold: number;
+    chips: number;
     trophies: number;
 }
 
@@ -13,7 +14,7 @@ type Listener = (balances: CurrencyBalances) => void;
  * Provides real-time currency updates across all UI scenes.
  */
 class CurrencyStore {
-    private balances: CurrencyBalances = { coins: 0, gold: 0, trophies: 0 };
+    private balances: CurrencyBalances = { coins: 0, gold: 0, chips: 0, trophies: 0 };
     private listeners: Listener[] = [];
     private initialized: boolean = false;
 
@@ -29,14 +30,15 @@ class CurrencyStore {
                 this.balances = {
                     coins: user.coins,
                     gold: user.gold,
+                    chips: user.chips || 0,
                     trophies: user.trophies || 0
                 };
 
-                // Auto-fix negative balance or force top-up if needed
+                // Clamp negative balance to zero to avoid masking economy issues
                 if (this.balances.coins < 0) {
-                    this.balances.coins = 10000;
+                    this.balances.coins = 0;
                     this.syncToDatabase();
-                    console.log('💰 Fixed negative balance to 10,000');
+                    console.warn('💰 Clamped negative coin balance to 0');
                 }
 
                 console.log('💰 Currency loaded from DB:', this.balances);
@@ -70,6 +72,12 @@ class CurrencyStore {
         this.syncToDatabase();
     }
 
+    addChips(amount: number) {
+        this.balances.chips += amount;
+        this.notify();
+        this.syncToDatabase();
+    }
+
     addTrophies(amount: number) {
         this.balances.trophies += amount;
         this.notify();
@@ -98,6 +106,14 @@ class CurrencyStore {
         return true;
     }
 
+    spendChips(amount: number): boolean {
+        if (this.balances.chips < amount) return false;
+        this.balances.chips -= amount;
+        this.notify();
+        this.syncToDatabase();
+        return true;
+    }
+
     subscribe(listener: Listener): () => void {
         this.listeners.push(listener);
         // Send initial state
@@ -117,6 +133,7 @@ class CurrencyStore {
             await db.user.where('id').equals(1).modify({
                 coins: this.balances.coins,
                 gold: this.balances.gold,
+                chips: this.balances.chips,
                 trophies: this.balances.trophies
             });
         } catch (e) {

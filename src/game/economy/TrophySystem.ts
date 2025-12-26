@@ -8,17 +8,18 @@
  * 
  * Trophies determine:
  * - Which clubs you can access (minTrophies requirement)
- * - Your league tier (Bronze → Legend)
+ * - Your league tier (Bronze → Crystal)
  */
 
 import { getClubById } from '../clubs/ClubRegistry';
+import { LeagueTierId } from '../leagues/LeagueIdentity';
 
 /**
  * League tiers based on trophy count
  * Players are auto-assigned to a tier based on their total trophies
  */
 export interface LeagueTier {
-    id: string;
+    id: LeagueTierId;
     name: string;
     minTrophies: number;
     icon: string;
@@ -26,14 +27,16 @@ export interface LeagueTier {
 }
 
 export const LEAGUE_TIERS: LeagueTier[] = [
-    { id: 'bronze',   name: 'Bronze',   minTrophies: 0,     icon: '🏆', frameAsset: 'bronze' },
-    { id: 'silver',   name: 'Silver',   minTrophies: 100,   icon: '🥈', frameAsset: 'silver' },
-    { id: 'gold',     name: 'Gold',     minTrophies: 300,   icon: '🥇', frameAsset: 'gold' },
-    { id: 'platinum', name: 'Platinum', minTrophies: 600,   icon: '💠', frameAsset: 'platinum' },
-    { id: 'diamond',  name: 'Diamond',  minTrophies: 1000,  icon: '💎', frameAsset: 'diamond' },
-    { id: 'master',   name: 'Master',   minTrophies: 2000,  icon: '👑', frameAsset: 'master' },
-    { id: 'elite',    name: 'Elite',    minTrophies: 5000,  icon: '🔥', frameAsset: 'elite' },
-    { id: 'legend',   name: 'Legend',   minTrophies: 10000, icon: '⭐', frameAsset: 'emerald' },
+    { id: 'bronze',      name: 'Bronze',      minTrophies: 0,     icon: '🏆', frameAsset: 'bronze' },
+    { id: 'silver',      name: 'Silver',      minTrophies: 100,   icon: '🥈', frameAsset: 'silver' },
+    { id: 'gold',        name: 'Gold',        minTrophies: 300,   icon: '🥇', frameAsset: 'gold' },
+    { id: 'platinum',    name: 'Platinum',    minTrophies: 600,   icon: '💠', frameAsset: 'platinum' },
+    { id: 'diamond',     name: 'Diamond',     minTrophies: 1000,  icon: '💎', frameAsset: 'diamond' },
+    { id: 'master',      name: 'Master',      minTrophies: 2000,  icon: '👑', frameAsset: 'master' },
+    { id: 'grandmaster', name: 'Grandmaster', minTrophies: 5000,  icon: '🎓', frameAsset: 'grandmaster' },
+    { id: 'elite',       name: 'Elite',       minTrophies: 10000, icon: '🔥', frameAsset: 'elite' },
+    { id: 'emerald',     name: 'Emerald',     minTrophies: 20000, icon: '❇️', frameAsset: 'emerald' },
+    { id: 'crystal',     name: 'Crystal',     minTrophies: 50000, icon: '💠', frameAsset: 'crystal' },
 ];
 
 /**

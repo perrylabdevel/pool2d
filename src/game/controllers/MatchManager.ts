@@ -11,6 +11,7 @@ import { getClampedTrophyChange, getLeagueForTrophies } from '../economy/TrophyS
 import { getChestForLeague, CHEST_DEFINITIONS } from '../economy/ChestSystem';
 import { getClubById } from '../clubs/ClubRegistry';
 import { getChestSlots, updateChestSlot } from '../../data/db';
+import { LeagueService } from '../leagues/LeagueService';
 
 export interface MatchState {
   clubId: string | null;
@@ -207,6 +208,8 @@ export async function processMatchEnd(
 
     console.log('Match saved to DB:', record, `Trophies: ${trophyChange > 0 ? '+' : ''}${trophyChange}`);
 
+    await LeagueService.updateUserScore(record.earnings);
+
     // Award chest for winning (Miniclip style)
     if (isWin) {
       chestAwarded = await awardChestForWin(params.clubId || 'club_basement');
@@ -219,6 +222,7 @@ export async function processMatchEnd(
       currencyStore.setBalances({
         coins: user.coins,
         gold: user.gold,
+        chips: user.chips || 0,
         trophies: user.trophies || 0
       });
     }

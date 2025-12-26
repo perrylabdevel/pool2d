@@ -8,6 +8,7 @@ import { drawSceneBackground } from '../components/SceneBackground';
 import { db } from '../../data/db';
 import { UserProfile, UserStats } from '../../data/models';
 import { AssetRegistry } from '../../assets/AssetRegistry';
+import { getTierFromLeagueId } from '../../game/leagues/LeagueIdentity';
 import { AssetLoader } from '../../assets/AssetLoader';
 import { DEFAULT_USER_NAME } from '../../config';
 
@@ -258,7 +259,7 @@ export class ProfileScene implements UIScene {
 
         // Render Frame Overlay
         // Use user's actual league frame or default to bronze
-        const leagueId = this.userProfile?.leagueId || 'bronze_1';
+        const leagueId = this.userProfile?.leagueId || 'bronze';
         const frameUrl = this.getFrameForLeague(leagueId);
         const frameImg = AssetLoader.getCached(frameUrl);
 
@@ -482,16 +483,16 @@ export class ProfileScene implements UIScene {
     }
 
     private getFrameForLeague(leagueId?: string): string {
-        const id = (leagueId || '').toLowerCase();
-        if (id.includes('diamond')) return AssetRegistry.frames.diamond();
-        if (id.includes('platinum')) return AssetRegistry.frames.platinum();
-        if (id.includes('gold')) return AssetRegistry.frames.gold();
-        if (id.includes('silver')) return AssetRegistry.frames.silver();
-        if (id.includes('grandmaster')) return AssetRegistry.frames.grandmaster();
-        if (id.includes('master')) return AssetRegistry.frames.master();
-        if (id.includes('elite')) return AssetRegistry.frames.elite();
-        if (id.includes('emerald')) return AssetRegistry.frames.emerald();
-        if (id.includes('crystal')) return AssetRegistry.frames.crystal();
+        const tier = getTierFromLeagueId(leagueId);
+        if (tier === 'diamond') return AssetRegistry.frames.diamond();
+        if (tier === 'platinum') return AssetRegistry.frames.platinum();
+        if (tier === 'gold') return AssetRegistry.frames.gold();
+        if (tier === 'silver') return AssetRegistry.frames.silver();
+        if (tier === 'grandmaster') return AssetRegistry.frames.grandmaster();
+        if (tier === 'master') return AssetRegistry.frames.master();
+        if (tier === 'elite') return AssetRegistry.frames.elite();
+        if (tier === 'emerald') return AssetRegistry.frames.emerald();
+        if (tier === 'crystal') return AssetRegistry.frames.crystal();
         return AssetRegistry.frames.bronze();
     }
 }

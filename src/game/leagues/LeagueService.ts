@@ -1,8 +1,8 @@
 import { db } from '../../data/db';
 import { LeagueStanding, UserProfile } from '../../data/models';
 import { OPPONENTS } from '../../ai/OpponentRegistry';
-import { AssetRegistry } from '../../assets/AssetRegistry';
 import { getLeagueById, LEAGUES } from './LeagueSystem';
+import { getTierFromLeagueId } from './LeagueIdentity';
 
 export class LeagueService {
     private static readonly LEAGUE_SIZE = 20;
@@ -13,7 +13,10 @@ export class LeagueService {
      * Populates with the user and 19 AI opponents.
      */
     static async initializeLeagueIfNeeded(user: UserProfile): Promise<void> {
-        const leagueId = user.leagueId;
+        const leagueId = getTierFromLeagueId(user.leagueId);
+        if (leagueId !== user.leagueId) {
+            await db.user.update(1, { leagueId });
+        }
         const count = await db.standings.where('leagueId').equals(leagueId).count();
 
         if (count > 0) return;
@@ -35,13 +38,13 @@ export class LeagueService {
 
         // 2. Add AI Opponents
         // Filter opponents by league tier (bronze, silver, etc.)
-        const leagueTier = leagueId.split('_')[0];
-        const eligibleOpponents = OPPONENTS.filter(opp => opp.leagueId.startsWith(leagueTier));
+        const leagueTier = leagueId;
+        const eligibleOpponents = OPPONENTS.filter(opp => getTierFromLeagueId(opp.leagueId) === leagueTier);
 
         // If not enough specific tier opponents, fill with others but prioritize tier
         let pool = [...eligibleOpponents];
         if (pool.length < this.LEAGUE_SIZE - 1) {
-            const others = OPPONENTS.filter(opp => !opp.leagueId.startsWith(leagueTier));
+            const others = OPPONENTS.filter(opp => getTierFromLeagueId(opp.leagueId) !== leagueTier);
             pool = [...pool, ...others];
         }
 
@@ -72,18 +75,23 @@ export class LeagueService {
         const user = await db.user.get(1);
         if (!user) return;
 
+        const leagueId = getTierFromLeagueId(user.leagueId);
+        if (leagueId !== user.leagueId) {
+            await db.user.update(1, { leagueId });
+        }
+
         const standing = await db.standings
-            .where({ leagueId: user.leagueId, playerId: 'user' })
+            .where({ leagueId, playerId: 'user' })
             .first();
 
         if (standing && standing.id) {
             await db.standings.update(standing.id, {
                 score: standing.score + amount
             });
-            await this.updateRanks(user.leagueId);
+            await this.updateRanks(leagueId);
         } else {
             // Should have been initialized, but just in case
-            await this.initializeLeagueIfNeeded(user);
+            await this.initializeLeagueIfNeeded({ ...user, leagueId });
             // Retry once
             await this.updateUserScore(amount);
         }
@@ -94,7 +102,8 @@ export class LeagueService {
      * Should be called periodically (e.g. on scene load).
      */
     static async simulateAIProgress(leagueId: string): Promise<void> {
-        const standings = await db.standings.where('leagueId').equals(leagueId).toArray();
+        const normalizedLeagueId = getTierFromLeagueId(leagueId);
+        const standings = await db.standings.where('leagueId').equals(normalizedLeagueId).toArray();
         const aiStandings = standings.filter(s => !s.isUser);
 
         if (aiStandings.length === 0) return;
@@ -113,7 +122,7 @@ export class LeagueService {
         }
 
         await Promise.all(updates);
-        await this.updateRanks(leagueId);
+        await this.updateRanks(normalizedLeagueId);
     }
 
     /**
@@ -140,7 +149,8 @@ export class LeagueService {
      * Returns the current standings for a league.
      */
     static async getStandings(leagueId: string): Promise<LeagueStanding[]> {
-        return db.standings.where('leagueId').equals(leagueId).sortBy('rank');
+        const normalizedLeagueId = getTierFromLeagueId(leagueId);
+        return db.standings.where('leagueId').equals(normalizedLeagueId).sortBy('rank');
     }
 
     /**
@@ -153,6 +163,11 @@ export class LeagueService {
         reward?: number;
         newLeagueId?: string;
     }> {
+        const leagueId = getTierFromLeagueId(user.leagueId);
+        if (leagueId !== user.leagueId) {
+            await db.user.update(1, { leagueId });
+        }
+
         if (!user.seasonEndTime) {
             // Fix missing seasonEndTime
             await db.user.update(1, { seasonEndTime: Date.now() + this.SEASON_LENGTH_MS });
@@ -166,22 +181,22 @@ export class LeagueService {
         console.log('Season ended! Processing results...');
 
         // 1. Get Final Standings
-        const standings = await this.getStandings(user.leagueId);
+        const standings = await this.getStandings(leagueId);
         const userStanding = standings.find(s => s.isUser);
         const rank = userStanding ? userStanding.rank : 20;
 
         // 2. Determine Outcome
-        let newLeagueId = user.leagueId;
+        let newLeagueId = leagueId;
         let promoted = false;
         let relegated = false;
         let reward = 0;
 
-        const currentLeague = getLeagueById(user.leagueId);
+        const currentLeague = getLeagueById(leagueId);
         if (!currentLeague) return { ended: false }; // Should not happen
 
         // Promotion: Top 3
         if (rank <= 3) {
-            const nextLeague = this.getNextLeague(user.leagueId);
+            const nextLeague = this.getNextLeague(leagueId);
             if (nextLeague) {
                 newLeagueId = nextLeague.id;
                 promoted = true;
@@ -193,7 +208,7 @@ export class LeagueService {
         }
         // Relegation: Bottom 3 (Rank 18-20)
         else if (rank >= 18) {
-            const prevLeague = this.getPreviousLeague(user.leagueId);
+            const prevLeague = this.getPreviousLeague(leagueId);
             if (prevLeague) {
                 newLeagueId = prevLeague.id;
                 relegated = true;
@@ -210,13 +225,23 @@ export class LeagueService {
             });
 
             // Clear Old Standings
-            await db.standings.where('leagueId').equals(user.leagueId).delete();
+            await db.standings.where('leagueId').equals(leagueId).delete();
         });
 
         // 4. Initialize New League
         const updatedUser = await db.user.get(1);
         if (updatedUser) {
             await this.initializeLeagueIfNeeded(updatedUser);
+        }
+
+        if (updatedUser) {
+            const { currencyStore } = await import('../../ui/CurrencyStore');
+            currencyStore.setBalances({
+                coins: updatedUser.coins,
+                gold: updatedUser.gold,
+                chips: updatedUser.chips || 0,
+                trophies: updatedUser.trophies || 0
+            });
         }
 
         return {

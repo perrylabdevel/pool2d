@@ -15,6 +15,7 @@ import { AssetLoader } from '../../assets/AssetLoader';
 import { OpponentDef } from '../../data/models';
 import { db } from '../../data/db';
 import { getLeagueById } from '../../game/leagues/LeagueSystem';
+import { getTierFromLeagueId } from '../../game/leagues/LeagueIdentity';
 import { Game } from '../../game/Game';
 
 interface PreviewButton {
@@ -30,7 +31,7 @@ export class OpponentPreviewScene implements UIScene {
     private hoveredButton: PreviewButton | null = null;
     private navigationBar: NavigationBar;
     private selectedOpponent: OpponentDef | null = null;
-    private userLeagueId: string = 'bronze_1';
+    private userLeagueId: string = 'bronze';
     private opponentAvatar: HTMLImageElement | null = null;
     private entryFee: number = 50;
     private prizePool: number = 100;
@@ -71,7 +72,7 @@ export class OpponentPreviewScene implements UIScene {
         try {
             const user = await db.user.get(1);
             if (user) {
-                this.userLeagueId = user.leagueId || 'bronze_1';
+                this.userLeagueId = getTierFromLeagueId(user.leagueId || 'bronze');
             }
         } catch (e) {
             console.error('Failed to load user data:', e);
@@ -135,7 +136,7 @@ export class OpponentPreviewScene implements UIScene {
             id: 'bot_rookie',
             name: 'Rookie Rick',
             avatarId: 'avatar_rookie_rick',
-            leagueId: 'bronze_1',
+            leagueId: 'bronze',
             bio: 'Ready to learn!',
             stats: {
                 accuracy: 0.4,
@@ -295,7 +296,7 @@ export class OpponentPreviewScene implements UIScene {
         ctx.fillText(this.selectedOpponent.name, centerX, nameY);
 
         // League badge
-        const league = getLeagueById(this.selectedOpponent.leagueId);
+        const league = getLeagueById(getTierFromLeagueId(this.selectedOpponent.leagueId));
         if (league) {
             ctx.fillStyle = this.getLeagueColor(league.tier);
             ctx.font = `bold 14px ${LayoutConstants.Fonts.Family.Body}`;
@@ -378,4 +379,3 @@ export class OpponentPreviewScene implements UIScene {
         }
     }
 }
-

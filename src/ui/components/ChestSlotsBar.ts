@@ -213,9 +213,21 @@ export class ChestSlotsBar {
                     return;
                 }
 
-                // For now, show info - could add a confirm dialog
-                notificationService.show(`${skipCost} gold to unlock now`, 'info', 2000);
-                // TODO: Add confirm dialog for skip
+                if (!window.confirm(`Spend ${skipCost} gold to unlock now?`)) {
+                    return;
+                }
+
+                if (!currencyStore.spendGold(skipCost)) {
+                    notificationService.show('Not enough gold!', 'error', 2000);
+                    return;
+                }
+
+                await updateChestSlot(slotIndex, {
+                    status: 'ready',
+                    unlockEndTime: Date.now()
+                });
+                await this.loadSlots();
+                notificationService.show('Chest unlocked!', 'success', 2000);
                 break;
 
             case 'ready':
@@ -431,4 +443,3 @@ export class ChestSlotsBar {
         ctx.restore();
     }
 }
-

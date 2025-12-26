@@ -215,8 +215,7 @@ export function drawCurrencyPill(
         if (type === 'coins') {
             drawCoin(ctx, iconX, iconY, iconSize);
         } else if (type === 'cash') {
-            // Use green chip for cash
-            drawChip(ctx, iconX, iconY, iconSize, ColorTokens.currency.cashChip);
+            drawGoldBar(ctx, iconX, iconY, iconSize);
         } else {
             drawTrophy(ctx, iconX, iconY, iconSize);
         }
@@ -447,6 +446,10 @@ export function drawChip(ctx: CanvasRenderingContext2D, x: number, y: number, si
 
 export function drawCoin(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
     const radius = size / 2;
+    const copperLight = '#F2A25C';
+    const copperMid = '#C87034';
+    const copperDark = '#7A3E1D';
+    const rustAccent = '#B84A2B';
 
     ctx.save();
     ctx.translate(x, y);
@@ -458,9 +461,9 @@ export function drawCoin(ctx: CanvasRenderingContext2D, x: number, y: number, si
 
     // 2. Outer Rim (Beveled Gold)
     const rimGrad = ctx.createLinearGradient(-radius, -radius, radius, radius);
-    rimGrad.addColorStop(0, ColorTokens.coin.lightGold);
-    rimGrad.addColorStop(0.5, ColorTokens.coin.goldenRod);
-    rimGrad.addColorStop(1, ColorTokens.coin.darkGold);
+    rimGrad.addColorStop(0, copperDark);
+    rimGrad.addColorStop(0.45, copperMid);
+    rimGrad.addColorStop(1, copperLight);
 
     ctx.beginPath();
     ctx.arc(0, 0, radius, 0, Math.PI * 2);
@@ -468,31 +471,39 @@ export function drawCoin(ctx: CanvasRenderingContext2D, x: number, y: number, si
     ctx.fill();
 
     // 3. Inner Face (Recessed)
-    const innerRadius = radius * 0.75;
-    const faceGrad = ctx.createRadialGradient(0, -innerRadius * 0.5, 0, 0, 0, innerRadius);
-    faceGrad.addColorStop(0, ColorTokens.coin.gold);
-    faceGrad.addColorStop(1, ColorTokens.coin.orangeGold);
+    const innerRadius = radius * 0.72;
+    const faceGrad = ctx.createRadialGradient(0, -innerRadius * 0.45, 0, 0, 0, innerRadius);
+    faceGrad.addColorStop(0, copperLight);
+    faceGrad.addColorStop(1, copperDark);
 
     ctx.beginPath();
     ctx.arc(0, 0, innerRadius, 0, Math.PI * 2);
     ctx.fillStyle = faceGrad;
     ctx.fill();
 
-    // Darker outline for center area visibility (User Request)
-    ctx.strokeStyle = ColorTokens.effects.shadowLight;
-    ctx.lineWidth = LayoutConstants.Lines.Normal;
-    ctx.stroke();
-
     // Inner Rim Highlight (to separate rim from face)
     ctx.strokeStyle = ColorTokens.effects.gloss.start;
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
+    // Center inlay for contrast
+    const inlayRadius = innerRadius * 0.55;
+    ctx.beginPath();
+    ctx.arc(0, 0, inlayRadius, 0, Math.PI * 2);
+    const inlayGrad = ctx.createRadialGradient(0, -inlayRadius * 0.3, 0, 0, 0, inlayRadius);
+    inlayGrad.addColorStop(0, '#ffffff');
+    inlayGrad.addColorStop(1, rustAccent);
+    ctx.fillStyle = inlayGrad;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.25)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
     // 4. Symbol: Crown
-    const crownSize = innerRadius * 0.6;
+    const crownSize = innerRadius * 0.5;
     const cy = size * 0.05; // slight offset
 
-    ctx.fillStyle = ColorTokens.coin.darkGold;
+    ctx.fillStyle = copperDark;
     ctx.shadowColor = ColorTokens.chip.innerShadow;
     ctx.shadowBlur = 2;
     ctx.shadowOffsetY = 1;
@@ -524,6 +535,56 @@ export function drawCoin(ctx: CanvasRenderingContext2D, x: number, y: number, si
     ctx.ellipse(-radius * 0.3, -radius * 0.3, radius * 0.25, radius * 0.12, Math.PI / 4, 0, Math.PI * 2);
     ctx.fillStyle = ColorTokens.effects.gloss.start;
     ctx.fill();
+
+    ctx.restore();
+}
+
+export function drawGoldBar(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
+    const width = size * 0.95;
+    const height = size * 0.55;
+    const radius = Math.max(2, height * 0.2);
+
+    ctx.save();
+    ctx.translate(x - width / 2, y - height / 2);
+
+    ctx.shadowColor = ColorTokens.effects.shadowLight;
+    ctx.shadowBlur = 4;
+    ctx.shadowOffsetY = 2;
+
+    const barGrad = ctx.createLinearGradient(0, 0, width, height);
+    barGrad.addColorStop(0, ColorTokens.coin.lightGold);
+    barGrad.addColorStop(0.5, ColorTokens.coin.goldenRod);
+    barGrad.addColorStop(1, ColorTokens.coin.darkGold);
+
+    drawRoundedRect(ctx, 0, 0, width, height, radius);
+    ctx.fillStyle = barGrad;
+    ctx.fill();
+
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
+
+    ctx.strokeStyle = ColorTokens.effects.gloss.start;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.save();
+    ctx.beginPath();
+    drawRoundedRect(ctx, 0, 0, width, height, radius);
+    ctx.clip();
+    const highlight = ctx.createLinearGradient(0, 0, 0, height);
+    highlight.addColorStop(0, 'rgba(255, 255, 255, 0.5)');
+    highlight.addColorStop(0.5, 'rgba(255, 255, 255, 0.05)');
+    highlight.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = highlight;
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
+
+    ctx.fillStyle = ColorTokens.coin.darkGold;
+    ctx.font = `700 ${Math.max(8, height * 0.35)}px ${LayoutConstants.Fonts.Family.Heading}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('AU', width / 2, height / 2);
 
     ctx.restore();
 }

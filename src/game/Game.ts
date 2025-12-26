@@ -36,11 +36,8 @@ import { PlaybackController } from './PlaybackController';
 import { MatchData } from '../debug/PhysicsRecorder';
 import { PlaybackPanel } from '../ui/PlaybackPanel';
 import { uiStateMachine, UIState } from '../ui/UIStateMachine';
-import { db, getChestSlots, updateChestSlot } from '../data/db';
-import { MatchRecord } from '../data/models';
-import { getChestForLeague, CHEST_DEFINITIONS } from './economy/ChestSystem';
-import { getClampedTrophyChange, getLeagueForTrophies } from './economy/TrophySystem';
-import { getClubById } from './clubs/ClubRegistry';
+import { db } from '../data/db';
+import { getTierFromLeagueId } from './leagues/LeagueIdentity';
 import { AssetRegistry } from '../assets/AssetRegistry';
 import { currencyStore } from '../ui/CurrencyStore';
 import { notificationService } from '../ui/NotificationService';
@@ -55,6 +52,7 @@ import {
   isSpotOpen,
   placeCueBall,
   awardChestForWin,
+  processMatchEnd,
   getPocketLabel as getPocketLabelFromController,
   getPocketChoices as getPocketChoicesFromController,
   pickNearestPocketId as pickNearestPocketIdFromController,
@@ -1288,7 +1286,7 @@ export class Game {
     this.hud.setPlayerName(1, humanPlayer.name);
     this.hud.setPlayerName(2, aiPlayer.name);
     this.hud.setPlayerVisuals(1, this.getAvatarUrl(), this.getFrameForLeague());
-    this.hud.setPlayerVisuals(2, this.getAvatarUrl('rookie_rick'), this.getFrameForLeague('bronze_1'));
+    this.hud.setPlayerVisuals(2, this.getAvatarUrl('rookie_rick'), this.getFrameForLeague('bronze'));
 
     console.log('[8-Ball] Players initialized:', {
       player0: { id: this.players[0].id, type: this.players[0].type, isAI: this.players[0].isAI() },
@@ -1372,88 +1370,15 @@ export class Game {
 
       // Save match record if it's a valid Human vs AI game
       if (humanPlayer && aiPlayer) {
-        const isWin = winningPlayer?.id === humanPlayer.id;
-        const record: MatchRecord = {
-          timestamp: Date.now(),
-          opponentId: this.ai?.getOpponentDef().id || 'unknown',
-          opponentName: aiPlayer.name,
-          userScore: isWin ? 1 : 0,
-          opponentScore: isWin ? 0 : 1,
-          result: isWin ? 'win' : 'loss',
-          earnings: isWin ? this.currentEntryFee * 2 : 0, // Winner gets 2x entry fee, loser gets nothing
-          leagueId: this.currentClubId || 'club_basement', // Use tracked club
-        };
-
-        let chestAwarded: string | null = null;
-        let trophyChange = 0;
-
-        try {
-          await db.matches.add(record);
-
-          // Get current user for trophy calculation
-          const currentUser = await db.user.get(1);
-          const currentTrophies = currentUser?.trophies || 0;
-
-          // Calculate trophy change based on club and result
-          trophyChange = getClampedTrophyChange(
-            this.currentClubId || 'club_basement',
-            isWin,
-            currentTrophies
-          );
-
-          // Update user stats and trophies
-          await db.user.where('id').equals(1).modify(user => {
-            user.stats.gamesPlayed++;
-            user.stats.totalEarnings += record.earnings;
-
-            // Update trophies
-            user.trophies = Math.max(0, (user.trophies || 0) + trophyChange);
-
-            // Update league based on new trophy count
-            const newLeague = getLeagueForTrophies(user.trophies);
-            user.leagueId = newLeague.id;
-
-            if (isWin) {
-              user.stats.wins++;
-              user.stats.winStreak++;
-              user.coins += record.earnings;
-            } else {
-              user.stats.losses++;
-              user.stats.winStreak = 0; // Reset streak on loss
-              user.coins += record.earnings;
-            }
-          });
-          console.log('Match saved to DB:', record, `Trophies: ${trophyChange > 0 ? '+' : ''}${trophyChange}`);
-
-          // Award chest for winning (Miniclip style)
-          if (isWin) {
-            chestAwarded = await this.awardChestForWinInternal(this.currentClubId || 'club_basement');
-          }
-
-          // Sync currency store with database (including trophies)
-          const user = await db.user.get(1);
-          if (user) {
-            const { currencyStore } = await import('../ui/CurrencyStore');
-            currencyStore.setBalances({
-              coins: user.coins,
-              gold: user.gold,
-              trophies: user.trophies || 0
-            });
-          }
-        } catch (e) {
-          console.error('Failed to save match:', e);
-        }
-
-        // Transition to match result screen
-        const matchResultData = {
-          isWin,
-          earnings: record.earnings,
-          trophyChange,
-          opponentName: aiPlayer.name,
-          opponentId: record.opponentId,
-          chestAwarded,
+        const matchResultData = await processMatchEnd({
+          winnerId: winner,
+          humanPlayerId: humanPlayer.id,
+          aiPlayerId: aiPlayer.id,
+          aiPlayerName: aiPlayer.name,
+          aiOpponentId: this.ai?.getOpponentDef().id || 'unknown',
           clubId: this.currentClubId,
-        };
+          entryFee: this.currentEntryFee,
+        });
         (window as any).__lastMatchResult = matchResultData;
 
         // Small delay before transitioning to result screen
@@ -1495,15 +1420,16 @@ export class Game {
   }
 
   private getFrameForLeague(leagueId?: string): string {
-    const id = (leagueId || '').toLowerCase();
-    if (id.includes('diamond')) return AssetRegistry.frames.diamond();
-    if (id.includes('platinum')) return AssetRegistry.frames.platinum();
-    if (id.includes('gold')) return AssetRegistry.frames.gold();
-    if (id.includes('silver')) return AssetRegistry.frames.silver();
-    if (id.includes('master')) return AssetRegistry.frames.master();
-    if (id.includes('elite')) return AssetRegistry.frames.elite();
-    if (id.includes('emerald')) return AssetRegistry.frames.emerald();
-    if (id.includes('crystal')) return AssetRegistry.frames.crystal();
+    const tier = getTierFromLeagueId(leagueId);
+    if (tier === 'diamond') return AssetRegistry.frames.diamond();
+    if (tier === 'platinum') return AssetRegistry.frames.platinum();
+    if (tier === 'gold') return AssetRegistry.frames.gold();
+    if (tier === 'silver') return AssetRegistry.frames.silver();
+    if (tier === 'grandmaster') return AssetRegistry.frames.grandmaster();
+    if (tier === 'master') return AssetRegistry.frames.master();
+    if (tier === 'elite') return AssetRegistry.frames.elite();
+    if (tier === 'emerald') return AssetRegistry.frames.emerald();
+    if (tier === 'crystal') return AssetRegistry.frames.crystal();
     return AssetRegistry.frames.bronze();
   }
 

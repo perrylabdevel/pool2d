@@ -5,8 +5,9 @@ export interface UserProfile {
     xp: number;
     coins: number;
     gold: number;
+    chips: number;
     trophies: number;
-    leagueId: string; // e.g., 'bronze_1'
+    leagueId: string; // e.g., 'bronze'
     seasonEndTime?: number;
     avatarId: string;
     equippedCueId: string;

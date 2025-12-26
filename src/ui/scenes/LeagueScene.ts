@@ -7,6 +7,7 @@ import { NavigationBar } from '../components/NavigationBar';
 import { drawSceneBackground } from '../components/SceneBackground';
 import { db } from '../../data/db';
 import { getLeagueById } from '../../game/leagues/LeagueSystem';
+import { getTierFromLeagueId, LEAGUE_TIER_IDS } from '../../game/leagues/LeagueIdentity';
 import { UserProfile } from '../../data/models';
 import { AssetRegistry } from '../../assets/AssetRegistry';
 import { AssetLoader } from '../../assets/AssetLoader';
@@ -239,7 +240,7 @@ export class LeagueScene implements UIScene {
         ctx.shadowOffsetY = 0;
 
         const colors = section.colors;
-        const leagueDef = getLeagueById(section.id + '_1') || getLeagueById('bronze_1'); // Fallback
+        const leagueDef = getLeagueById(section.id) || getLeagueById('bronze'); // Fallback
 
         // League Badge / Icon Area
         const badgeSize = 100;
@@ -335,17 +336,15 @@ export class LeagueScene implements UIScene {
 
 
     private async getLeagueSections() {
-        const userLeagueId = this.userProfile?.leagueId || 'bronze_1';
-        const userTier = userLeagueId.split('_')[0];
+        const userLeagueId = this.userProfile?.leagueId || 'bronze';
+        const userTier = getTierFromLeagueId(userLeagueId);
 
         // Order must match LeagueSystem.ts tiers
-        const bases = ['bronze', 'silver', 'gold', 'platinum', 'diamond', 'master', 'grandmaster', 'elite', 'emerald', 'crystal'];
+        const bases = LEAGUE_TIER_IDS;
 
         const sections = await Promise.all(bases.map(async tier => {
-            // If this is the user's tier, use their specific league ID (e.g. 'bronze_1')
-            // Otherwise, default to the first division of that tier (e.g. 'silver_1')
             const isUserTier = tier === userTier;
-            const queryId = isUserTier ? userLeagueId : `${tier}_1`;
+            const queryId = isUserTier ? userTier : tier;
 
             return {
                 id: tier,
@@ -411,8 +410,8 @@ export class LeagueScene implements UIScene {
     private generateVisualMock(leagueId: string) {
         if (this.standingsCache[leagueId]) return this.standingsCache[leagueId];
 
-        const leagueTier = leagueId.split('_')[0];
-        const leagueOpponents = OPPONENTS.filter(opp => opp.leagueId.startsWith(leagueTier));
+        const leagueTier = getTierFromLeagueId(leagueId);
+        const leagueOpponents = OPPONENTS.filter(opp => getTierFromLeagueId(opp.leagueId) === leagueTier);
 
         if (leagueOpponents.length === 0) return [];
 

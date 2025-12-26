@@ -177,7 +177,7 @@ export function getOpponentById(id: string): OpponentDef | undefined {
 }
 
 export function getOpponentsByLeague(leagueId: string): OpponentDef[] {
-    // Simple prefix matching for now (e.g. 'bronze' matches 'bronze_1', 'bronze_2')
-    const tier = leagueId.split('_')[0];
-    return OPPONENTS.filter(o => o.leagueId.startsWith(tier));
+    // Simple tier matching (e.g. 'bronze' matches 'bronze_1', 'bronze_2')
+    const tier = leagueId.split('_')[0].toLowerCase();
+    return OPPONENTS.filter(o => o.leagueId.toLowerCase().startsWith(tier));
 }

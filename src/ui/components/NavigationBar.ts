@@ -4,6 +4,7 @@ import { drawCurrencyPill, Rect } from './UIComponents';
 import { uiStateMachine, UIState } from '../UIStateMachine';
 import { currencyStore } from '../CurrencyStore';
 import { AssetRegistry } from '../../assets/AssetRegistry';
+import { getTierFromLeagueId } from '../../game/leagues/LeagueIdentity';
 import { AssetLoader } from '../../assets/AssetLoader';
 import { db } from '../../data/db';
 
@@ -17,7 +18,7 @@ export interface NavigationBarConfig {
     onBack?: () => void;
     onProfile?: () => void;
     onSettings?: () => void;
-    balancesProvider?: () => { coins: number; gold: number; trophies?: number };
+    balancesProvider?: () => { coins: number; gold: number; chips?: number; trophies?: number };
 }
 
 interface NavButton {
@@ -316,7 +317,7 @@ export class NavigationBar {
         // On tablet/desktop, show all 3
         const showCash = !isMobile;
 
-        const balances = this.config.balancesProvider ? this.config.balancesProvider() : { coins: 0, gold: 0, trophies: 0 };
+        const balances = this.config.balancesProvider ? this.config.balancesProvider() : { coins: 0, gold: 0, chips: 0, trophies: 0 };
 
         const baseOptions = {
             width: metrics.width,
@@ -539,15 +540,16 @@ export class NavigationBar {
     }
 
     private getFrameForLeague(leagueId?: string): string {
-        const id = (leagueId || '').toLowerCase();
-        if (id.includes('diamond')) return AssetRegistry.frames.diamond();
-        if (id.includes('platinum')) return AssetRegistry.frames.platinum();
-        if (id.includes('gold')) return AssetRegistry.frames.gold();
-        if (id.includes('silver')) return AssetRegistry.frames.silver();
-        if (id.includes('master')) return AssetRegistry.frames.master();
-        if (id.includes('elite')) return AssetRegistry.frames.elite();
-        if (id.includes('emerald')) return AssetRegistry.frames.emerald();
-        if (id.includes('crystal')) return AssetRegistry.frames.crystal();
+        const tier = getTierFromLeagueId(leagueId);
+        if (tier === 'diamond') return AssetRegistry.frames.diamond();
+        if (tier === 'platinum') return AssetRegistry.frames.platinum();
+        if (tier === 'gold') return AssetRegistry.frames.gold();
+        if (tier === 'silver') return AssetRegistry.frames.silver();
+        if (tier === 'grandmaster') return AssetRegistry.frames.grandmaster();
+        if (tier === 'master') return AssetRegistry.frames.master();
+        if (tier === 'elite') return AssetRegistry.frames.elite();
+        if (tier === 'emerald') return AssetRegistry.frames.emerald();
+        if (tier === 'crystal') return AssetRegistry.frames.crystal();
         return AssetRegistry.frames.bronze();
     }
 

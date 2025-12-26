@@ -35,10 +35,58 @@ export class PoolDatabase extends Dexie {
             chestSlots: '++id, slotIndex, status',
             standings: '++id, leagueId, playerId, score'
         });
+
+        // Version 4: Normalize league IDs to tier-only (e.g. bronze, silver)
+        this.version(4).stores({
+            user: '++id, name',
+            matches: '++id, timestamp, opponentId, result',
+            inventory: '++id, itemId, type, [type+isEquipped]',
+            chestSlots: '++id, slotIndex, status',
+            standings: '++id, leagueId, playerId, score'
+        }).upgrade(async tx => {
+            const userTable = tx.table('user');
+            const standingsTable = tx.table('standings');
+
+            const users = await userTable.toArray();
+            await Promise.all(users.map(user => {
+                const normalized = normalizeLeagueId(user.leagueId);
+                if (normalized === user.leagueId) return Promise.resolve(0);
+                return userTable.update(user.id, { leagueId: normalized });
+            }));
+
+            const standings = await standingsTable.toArray();
+            await Promise.all(standings.map(standing => {
+                const normalized = normalizeLeagueId(standing.leagueId);
+                if (normalized === standing.leagueId) return Promise.resolve(0);
+                return standingsTable.update(standing.id, { leagueId: normalized });
+            }));
+        });
+
+        // Version 5: Add chips currency to user profile
+        this.version(5).stores({
+            user: '++id, name',
+            matches: '++id, timestamp, opponentId, result',
+            inventory: '++id, itemId, type, [type+isEquipped]',
+            chestSlots: '++id, slotIndex, status',
+            standings: '++id, leagueId, playerId, score'
+        }).upgrade(async tx => {
+            const userTable = tx.table('user');
+            const users = await userTable.toArray();
+            await Promise.all(users.map(user => {
+                if (typeof user.chips === 'number') return Promise.resolve(0);
+                return userTable.update(user.id, { chips: 0 });
+            }));
+        });
     }
 }
 
 export const db = new PoolDatabase();
+
+function normalizeLeagueId(leagueId?: string): string {
+    if (!leagueId) return 'bronze';
+    const normalized = leagueId.toLowerCase();
+    return normalized.split('_')[0] || 'bronze';
+}
 
 // Helper to initialize a new user if none exists
 export async function initializeUserIfNeeded() {
@@ -50,7 +98,8 @@ export async function initializeUserIfNeeded() {
             xp: 0,
             coins: 10000, // Starting coins (Updated to 10k)
             gold: 5,    // Starting gold
-            leagueId: 'bronze_1',
+            chips: 0,
+            leagueId: 'bronze',
             seasonEndTime: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
             trophies: 0,
             avatarId: 'player',
