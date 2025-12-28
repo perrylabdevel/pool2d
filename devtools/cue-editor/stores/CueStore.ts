@@ -3,6 +3,7 @@ import { openEditorDb, STORE_SKINS } from './EditorDb';
 export interface CueSkin {
   id: string;
   name: string;
+  subtitle?: string;
   imageBase64: string;
   thumbnail?: string;
   
@@ -11,6 +12,10 @@ export interface CueSkin {
   lengthScale: number;      // Scale factor for length (default 1.0)
   thicknessScale: number;   // Scale factor for thickness (default 1.0)
   ppi: number;              // Pixels per inch of the texture
+  power?: number;
+  accuracy?: number;
+  spin?: number;
+  aim?: number;
 
   createdAt: Date;
   updatedAt: Date;
@@ -41,6 +46,20 @@ export class CueStore {
       request.onsuccess = async () => {
         this.skins.clear();
         for (const skin of request.result) {
+          const normalizedStats = this.normalizeStats(skin);
+          skin.power = normalizedStats.stats.power;
+          skin.accuracy = normalizedStats.stats.accuracy;
+          skin.spin = normalizedStats.stats.spin;
+          skin.aim = normalizedStats.stats.aim;
+
+          const needsSubtitle = !skin.subtitle || !skin.subtitle.trim();
+          if (needsSubtitle) {
+            skin.subtitle = this.buildSubtitle(skin.name);
+          }
+
+          if (normalizedStats.changed || needsSubtitle) {
+            await this.save(skin);
+          }
           this.skins.set(skin.id, skin);
         }
         
@@ -106,6 +125,80 @@ export class CueStore {
       };
       img.src = base64;
     });
+  }
+
+  private normalizeStats(
+    skin: CueSkin
+  ): { stats: { power: number; accuracy: number; spin: number; aim: number }; changed: boolean } {
+    const hasStats = [skin.power, skin.accuracy, skin.spin, skin.aim].every((value) => typeof value === 'number');
+    if (hasStats) {
+      return {
+        stats: {
+          power: skin.power as number,
+          accuracy: skin.accuracy as number,
+          spin: skin.spin as number,
+          aim: skin.aim as number,
+        },
+        changed: false,
+      };
+    }
+    return { stats: this.defaultStats(), changed: true };
+  }
+
+  private defaultStats(): { power: number; accuracy: number; spin: number; aim: number } {
+    return { power: 55, accuracy: 55, spin: 55, aim: 55 };
+  }
+
+  private buildSubtitle(name?: string): string {
+    const title = this.formatCueName(name) || 'Custom cue';
+    const adjectives = [
+      'razor-sharp',
+      'ice-calm',
+      'pressure-ready',
+      'precision-tuned',
+      'storm-lit',
+      'night-forged',
+      'break-heavy',
+      'silky-smooth'
+    ];
+    const nouns = [
+      'runouts',
+      'breaks',
+      'cut shots',
+      'bank shots',
+      'line drives',
+      'final racks'
+    ];
+    const templates = [
+      (adj: string, noun: string) => `${title} — ${adj} ${noun}.`,
+      (adj: string, noun: string) => `${title} channels ${adj} control for ${noun}.`,
+      (adj: string, noun: string) => `${title}: ${adj} feel, clean ${noun}.`,
+    ];
+
+    const seed = this.hashString(title);
+    const adj = adjectives[seed % adjectives.length];
+    const noun = nouns[Math.floor(seed / adjectives.length) % nouns.length];
+    const template = templates[Math.floor(seed / (adjectives.length * nouns.length)) % templates.length];
+    return template(adj, noun);
+  }
+
+  private formatCueName(name?: string): string | null {
+    if (!name) return null;
+    const cleaned = name
+      .replace(/^cue[_\-\s]+/i, '')
+      .replace(/[_\-]+/g, ' ')
+      .trim();
+    if (!cleaned) return null;
+    return cleaned.replace(/\b\w/g, (char) => char.toUpperCase());
+  }
+
+  private hashString(input: string): number {
+    let hash = 0;
+    for (let i = 0; i < input.length; i += 1) {
+      hash = (hash << 5) - hash + input.charCodeAt(i);
+      hash |= 0;
+    }
+    return Math.abs(hash);
   }
 
   async create(input: CueSkinCreateInput): Promise<CueSkin> {
@@ -190,12 +283,14 @@ export class CueStore {
     // Initial defaults. User can adjust later.
     return this.create({
       name,
+      subtitle: this.buildSubtitle(name),
       imageBase64: base64,
       thumbnail,
       tipOffsetPx: 0,
       lengthScale: 1.0,
       thicknessScale: 1.0,
       ppi: 72, // Reasonable default?
+      ...this.defaultStats(),
     });
   }
 }

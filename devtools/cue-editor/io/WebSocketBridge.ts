@@ -5,11 +5,16 @@ export interface WebSocketBridgeCallbacks {
 export interface CuePushConfig {
     skin: { 
         name: string; 
+        subtitle?: string;
         image: string;
         tipOffsetPx: number;
         lengthScale: number;
         thicknessScale: number;
         ppi: number;
+        power?: number;
+        accuracy?: number;
+        spin?: number;
+        aim?: number;
     } | null;
 }
 

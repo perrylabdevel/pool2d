@@ -4,6 +4,7 @@ import { uiRoot } from './UIRoot';
 import { LobbyScene } from './scenes/LobbyScene';
 import { PlayModesScene } from './scenes/PlayModesScene';
 import { ShopScene } from './scenes/ShopScene';
+import { CueDetailScene } from './scenes/CueDetailScene';
 import { EventsScene } from './scenes/EventsScene';
 import { GoldenSpinScene } from './scenes/GoldenSpinScene';
 import { ProfileScene } from './scenes/ProfileScene';
@@ -107,6 +108,7 @@ export class SceneController {
         this.registerScene(UIState.LOBBY, new LobbyScene());
         this.registerScene(UIState.PLAY_MODES, new PlayModesScene());
         this.registerScene(UIState.SHOP, new ShopScene());
+        this.registerScene(UIState.CUE_DETAIL, new CueDetailScene());
         this.registerScene(UIState.EVENTS, new EventsScene());
         this.registerScene(UIState.EVENT_GOLDEN_SPIN, new GoldenSpinScene());
         this.registerScene(UIState.PROFILE, new ProfileScene());

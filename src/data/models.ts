@@ -45,6 +45,13 @@ export interface InventoryItem {
     isEquipped: boolean;
 }
 
+export interface CueOwnership {
+    id?: number;
+    cueId: string;
+    acquiredDate: number;
+    isEquipped: boolean;
+}
+
 export interface OpponentDef {
     id: string;
     name: string;
@@ -107,6 +114,26 @@ export interface ClubDef {
     minTrophies: number;
     difficulty: number; // 1-10
     tableId: string; // e.g., 'standard', 'lux', 'neon'
+}
+
+export type CueRarity = 'COMMON' | 'RARE' | 'EPIC' | 'LEGENDARY';
+
+export interface CueStats {
+    power: number;
+    accuracy: number;
+    spin: number;
+    aim: number;
+}
+
+export interface CueDef {
+    id: string;
+    name: string;
+    subtitle: string;
+    rarity: CueRarity;
+    stickColor: string;
+    tipColor: string;
+    accent: string;
+    stats: CueStats;
 }
 
 // ChestDef removed - use ChestDefinition from game/economy/ChestSystem.ts instead

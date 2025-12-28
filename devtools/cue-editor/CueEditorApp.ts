@@ -181,6 +181,10 @@ export class CueEditorApp {
           <span class="property-label">Name</span>
           <input class="property-input" style="flex:1; text-align: left;" id="prop-name" type="text" value="${skin.name}">
         </div>
+        <div class="property-row" style="margin-top: 8px;">
+          <span class="property-label">Subtitle</span>
+          <input class="property-input" style="flex:1; text-align: left;" id="prop-subtitle" type="text" value="${skin.subtitle ?? ''}">
+        </div>
       </div>
 
       <div class="property-group">
@@ -216,6 +220,33 @@ export class CueEditorApp {
         </div>
         <input class="property-slider" id="slider-scale-t" type="range" min="0.5" max="2.0" step="0.05" value="${skin.thicknessScale}">
       </div>
+
+      <div class="property-group">
+        <div class="property-group-title">Stats</div>
+        <div class="property-row">
+          <span class="property-label">Power</span>
+          <input class="property-input" id="prop-power" type="number" step="1" min="0" max="100" value="${skin.power ?? 55}">
+        </div>
+        <input class="property-slider" id="slider-power" type="range" min="0" max="100" step="1" value="${skin.power ?? 55}">
+
+        <div class="property-row" style="margin-top: 12px;">
+          <span class="property-label">Accuracy</span>
+          <input class="property-input" id="prop-accuracy" type="number" step="1" min="0" max="100" value="${skin.accuracy ?? 55}">
+        </div>
+        <input class="property-slider" id="slider-accuracy" type="range" min="0" max="100" step="1" value="${skin.accuracy ?? 55}">
+
+        <div class="property-row" style="margin-top: 12px;">
+          <span class="property-label">Spin</span>
+          <input class="property-input" id="prop-spin" type="number" step="1" min="0" max="100" value="${skin.spin ?? 55}">
+        </div>
+        <input class="property-slider" id="slider-spin" type="range" min="0" max="100" step="1" value="${skin.spin ?? 55}">
+
+        <div class="property-row" style="margin-top: 12px;">
+          <span class="property-label">Aim</span>
+          <input class="property-input" id="prop-aim" type="number" step="1" min="0" max="100" value="${skin.aim ?? 55}">
+        </div>
+        <input class="property-slider" id="slider-aim" type="range" min="0" max="100" step="1" value="${skin.aim ?? 55}">
+      </div>
     `;
 
     // Bind inputs
@@ -248,6 +279,7 @@ export class CueEditorApp {
     };
 
     bind('prop-name', 'name', 'text');
+    bind('prop-subtitle', 'subtitle', 'text');
     bind('prop-offset', 'tipOffsetPx', 'number');
     bind('slider-offset', 'tipOffsetPx', 'number');
     bind('prop-ppi', 'ppi', 'number');
@@ -255,6 +287,14 @@ export class CueEditorApp {
     bind('slider-scale-l', 'lengthScale', 'number');
     bind('prop-scale-t', 'thicknessScale', 'number');
     bind('slider-scale-t', 'thicknessScale', 'number');
+    bind('prop-power', 'power', 'number');
+    bind('slider-power', 'power', 'number');
+    bind('prop-accuracy', 'accuracy', 'number');
+    bind('slider-accuracy', 'accuracy', 'number');
+    bind('prop-spin', 'spin', 'number');
+    bind('slider-spin', 'spin', 'number');
+    bind('prop-aim', 'aim', 'number');
+    bind('slider-aim', 'aim', 'number');
   }
 
   private pushToGame(mode: 'live' | 'persist') {
@@ -265,11 +305,16 @@ export class CueEditorApp {
     this.wsBridge.pushToGame(mode, {
       skin: {
         name: skin.name,
+        subtitle: skin.subtitle ?? '',
         image: skin.imageBase64,
         tipOffsetPx: skin.tipOffsetPx,
         lengthScale: skin.lengthScale,
         thicknessScale: skin.thicknessScale,
-        ppi: skin.ppi
+        ppi: skin.ppi,
+        power: skin.power ?? 55,
+        accuracy: skin.accuracy ?? 55,
+        spin: skin.spin ?? 55,
+        aim: skin.aim ?? 55
       }
     });
   }

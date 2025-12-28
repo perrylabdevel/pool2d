@@ -1,11 +1,12 @@
 import Dexie, { Table } from 'dexie';
-import { UserProfile, MatchRecord, InventoryItem, ChestSlotData, LeagueStanding } from './models';
+import { UserProfile, MatchRecord, InventoryItem, ChestSlotData, LeagueStanding, CueOwnership } from './models';
 import { DEFAULT_USER_NAME } from '../config';
 
 export class PoolDatabase extends Dexie {
     user!: Table<UserProfile>;
     matches!: Table<MatchRecord>;
     inventory!: Table<InventoryItem>;
+    cueInventory!: Table<CueOwnership>;
     chestSlots!: Table<ChestSlotData>;
     standings!: Table<LeagueStanding>;
 
@@ -76,6 +77,45 @@ export class PoolDatabase extends Dexie {
                 if (typeof user.chips === 'number') return Promise.resolve(0);
                 return userTable.update(user.id, { chips: 0 });
             }));
+        });
+
+        // Version 6: Add cue inventory table
+        this.version(6).stores({
+            user: '++id, name',
+            matches: '++id, timestamp, opponentId, result',
+            inventory: '++id, itemId, type, [type+isEquipped]',
+            cueInventory: '++id, cueId, isEquipped',
+            chestSlots: '++id, slotIndex, status',
+            standings: '++id, leagueId, playerId, score'
+        }).upgrade(async tx => {
+            const cueInventoryTable = tx.table('cueInventory');
+            const inventoryTable = tx.table('inventory');
+            const userTable = tx.table('user');
+
+            const cueItems = await inventoryTable.where('type').equals('cue').toArray();
+            const existingCueIds = new Set<string>();
+            cueItems.forEach(item => {
+                if (item.itemId) existingCueIds.add(item.itemId);
+            });
+
+            if (cueItems.length) {
+                await cueInventoryTable.bulkAdd(
+                    cueItems.map(item => ({
+                        cueId: item.itemId,
+                        acquiredDate: item.acquiredDate,
+                        isEquipped: item.isEquipped
+                    }))
+                );
+            } else {
+                const user = await userTable.get(1);
+                if (user?.equippedCueId && !existingCueIds.has(user.equippedCueId)) {
+                    await cueInventoryTable.add({
+                        cueId: user.equippedCueId,
+                        acquiredDate: Date.now(),
+                        isEquipped: true
+                    });
+                }
+            }
         });
     }
 }

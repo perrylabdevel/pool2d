@@ -2,6 +2,7 @@ export enum UIState {
     LOBBY = 'LOBBY',
     PLAY_MODES = 'PLAY_MODES',
     SHOP = 'SHOP',
+    CUE_DETAIL = 'CUE_DETAIL',
     EVENTS = 'EVENTS',
     EVENT_GOLDEN_SPIN = 'EVENT_GOLDEN_SPIN',
     LEAGUE = 'LEAGUE',
@@ -144,6 +145,7 @@ export class UIStateMachine {
             UIState.LOBBY,
             UIState.PLAY_MODES,
             UIState.SHOP,
+            UIState.CUE_DETAIL,
             UIState.EVENTS,
             UIState.EVENT_GOLDEN_SPIN,
             UIState.SETTINGS,
@@ -173,6 +175,7 @@ export class UIStateMachine {
         switch (this.currentState) {
             case UIState.PLAY_MODES:
             case UIState.SHOP:
+            case UIState.CUE_DETAIL:
             case UIState.EVENTS:
             case UIState.LEAGUE:
             case UIState.PROFILE:

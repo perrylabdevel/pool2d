@@ -1,4 +1,4 @@
-import { UIScene } from '../SceneController';
+import { UIScene, sceneController } from '../SceneController';
 import { uiStateMachine, UIState } from '../UIStateMachine';
 import { drawGlossyButton, drawRoundedRect, drawChip, Rect } from '../components/UIComponents';
 import { ColorTokens } from '../theme/ColorTokens';
@@ -7,6 +7,10 @@ import { NavigationBar } from '../components/NavigationBar';
 import { SettingsManager } from '../SettingsManager';
 import { notificationService } from '../NotificationService';
 import { drawSceneBackground } from '../components/SceneBackground';
+import { CONFIG } from '../../config';
+import { DEFAULT_CUES } from '../../data/cues';
+import { CueOwnership, CueStats } from '../../data/models';
+import { db } from '../../data/db';
 
 type ShopButton = {
     id: 'back' | 'equip';
@@ -23,16 +27,37 @@ type CueCard = {
     tipColor: string;
     accent: string;
     desc: string;
+    stats: CueStats;
+    previewUrl?: string;
+    skin?: CueSkin;
 };
 
-const CUES: CueCard[] = [
-    { id: 'default', name: 'Standard Issue', rarity: 'COMMON', stickColor: '#8B4513', tipColor: '#4A90E2', accent: '#F0A35E', desc: 'Reliable and sturdy house cue.' },
-    { id: 'midnight', name: 'Midnight Stealth', rarity: 'RARE', stickColor: '#0F111A', tipColor: '#FF3333', accent: '#2B7FFF', desc: 'Matte stealth finish for precision strikes.' },
-    { id: 'royal', name: 'Royal Oak', rarity: 'RARE', stickColor: '#5D4037', tipColor: '#FFD700', accent: '#D3A863', desc: 'Polished oak with gold accents.' },
-    { id: 'cyber', name: 'Cyber Pulse', rarity: 'EPIC', stickColor: '#00B4FF', tipColor: '#FFFFFF', accent: '#7C5CFF', desc: 'Neon-infused composite material.' },
-    { id: 'viper', name: 'Viper Strike', rarity: 'EPIC', stickColor: '#66FF00', tipColor: '#000000', accent: '#7AFF33', desc: 'Toxic finish that glows under low light.' },
-    { id: 'inferno', name: 'Dragon\'s Breath', rarity: 'LEGENDARY', stickColor: '#FF3333', tipColor: '#FFD700', accent: '#FF7A18', desc: 'Forged in fire. Handle stays hot.' }
-];
+type CueSkin = {
+    id: string;
+    name: string;
+    subtitle?: string;
+    imageBase64: string;
+    thumbnail?: string;
+    tipOffsetPx: number;
+    lengthScale: number;
+    thicknessScale: number;
+    ppi: number;
+    power?: number;
+    accuracy?: number;
+    spin?: number;
+    aim?: number;
+};
+
+const DEFAULT_CUE_CARDS: CueCard[] = DEFAULT_CUES.map((cue) => ({
+    id: cue.id,
+    name: cue.name,
+    rarity: cue.rarity,
+    stickColor: cue.stickColor,
+    tipColor: cue.tipColor,
+    accent: cue.accent,
+    desc: cue.subtitle,
+    stats: cue.stats
+}));
 
 type Chip = {
     id: string;
@@ -60,7 +85,9 @@ export class ShopScene implements UIScene {
     private selectedCardIndex: number = 0;
     private cardRects: Rect[] = [];
     private settingsManager = new SettingsManager();
-    private equippedCueId: string = CUES[0].id;
+    private cues: CueCard[] = [];
+    private cuePreviewCache: Map<string, HTMLImageElement> = new Map();
+    private equippedCueId: string = '';
     private equippedChipId: string = CHIPS[0].id;
     private currentTab: ShopTab = 'CUES';
     private tabRects: { [key in ShopTab]: Rect } = {
@@ -88,7 +115,13 @@ export class ShopScene implements UIScene {
     mount(): void {
         this.canvas = document.getElementById('ui-stage') as HTMLCanvasElement;
         if (!this.canvas) return;
-        this.syncEquippedCue();
+        if (CONFIG.USE_JSON_GEOMETRY) {
+            this.loadCueSkins().catch(err => console.warn('Failed to load cue skins:', err));
+        } else {
+            this.cues = DEFAULT_CUE_CARDS;
+            void this.syncCueInventory();
+            this.syncEquippedCue();
+        }
         this.updateLayout(this.canvas.width, this.canvas.height);
         this.canvas.addEventListener('mousemove', this.onMouseMove);
         this.canvas.addEventListener('click', this.onClick);
@@ -107,6 +140,209 @@ export class ShopScene implements UIScene {
         this.canvas.removeEventListener('touchmove', this.onTouchMove);
 
         this.canvas.style.cursor = 'default';
+    }
+
+    private async loadCueSkins(): Promise<void> {
+        const skins = await this.fetchCueSkins();
+        if (!skins.length) {
+            this.cues = [];
+            await this.syncCueInventory();
+            this.syncEquippedCue();
+            this.updateLayout(this.canvas?.width, this.canvas?.height);
+            return;
+        }
+
+        this.cues = skins.map((skin, index) => ({
+            id: skin.id,
+            name: skin.name || `Cue ${index + 1}`,
+            rarity: 'EPIC',
+            stickColor: '#8B4513',
+            tipColor: '#f5f5f5',
+            accent: '#4A90E2',
+            desc: (skin.subtitle && skin.subtitle.trim().length > 0)
+                ? skin.subtitle
+                : this.resolveCueSubtitle(skin.name),
+            stats: this.getSkinStats(skin, index),
+            previewUrl: skin.imageBase64,
+            skin,
+        }));
+
+        if (this.cues.length === 0) {
+            this.cues = [];
+        }
+
+        await this.syncCueInventory();
+        this.syncEquippedCue();
+        this.updateLayout(this.canvas?.width, this.canvas?.height);
+    }
+
+    private resolveCueSubtitle(name?: string): string {
+        if (name) {
+            const match = DEFAULT_CUE_CARDS.find((cue) => cue.name.toLowerCase() === name.toLowerCase());
+            if (match) return match.desc;
+        }
+        const title = this.formatCueName(name);
+        if (title) {
+            return `${title} crafted for confident runouts.`;
+        }
+        return 'Custom cue crafted for confident runouts.';
+    }
+
+    private getDefaultSkinStats(index: number): CueStats {
+        const base = 55;
+        const bump = (index % 4) * 5;
+        return {
+            power: base + bump,
+            accuracy: base + 5,
+            spin: base + bump - 5,
+            aim: base
+        };
+    }
+
+    private getSkinStats(skin: CueSkin, index: number): CueStats {
+        const hasStats = [skin.power, skin.accuracy, skin.spin, skin.aim].every((value) => typeof value === 'number');
+        if (hasStats) {
+            return {
+                power: skin.power as number,
+                accuracy: skin.accuracy as number,
+                spin: skin.spin as number,
+                aim: skin.aim as number
+            };
+        }
+        return this.getDefaultSkinStats(index);
+    }
+
+    private async syncCueInventory(): Promise<void> {
+        if (!this.cues.length) return;
+        try {
+            const user = await db.user.get(1);
+            const cueItems = await db.inventory.where('type').equals('cue').toArray();
+            const existing = new Map(cueItems.map(item => [item.itemId, item]));
+            const cueInventoryItems = await db.cueInventory.toArray();
+            const cueInventoryMap = new Map(cueInventoryItems.map(item => [item.cueId, item]));
+
+            const missing = this.cues.filter(cue => !existing.has(cue.id)).map(cue => ({
+                itemId: cue.id,
+                type: 'cue' as const,
+                acquiredDate: Date.now(),
+                isEquipped: false
+            }));
+
+            if (missing.length) {
+                await db.inventory.bulkAdd(missing);
+                missing.forEach(item => existing.set(item.itemId, item));
+            }
+
+            const preferredCueId = user?.equippedCueId;
+            const activeCueId = this.cues.some(cue => cue.id === preferredCueId)
+                ? preferredCueId
+                : this.cues[0].id;
+
+            if (user && user.equippedCueId !== activeCueId) {
+                await db.user.update(1, { equippedCueId: activeCueId });
+            }
+
+            const updates: Promise<number>[] = [];
+            for (const item of existing.values()) {
+                if (!item.id) continue;
+                const shouldEquip = item.itemId === activeCueId;
+                if (item.isEquipped !== shouldEquip) {
+                    updates.push(db.inventory.update(item.id, { isEquipped: shouldEquip }));
+                }
+            }
+            if (updates.length) await Promise.all(updates);
+
+            const cueInventoryAdds: CueOwnership[] = [];
+            this.cues.forEach(cue => {
+                if (!cueInventoryMap.has(cue.id)) {
+                    cueInventoryAdds.push({
+                        cueId: cue.id,
+                        acquiredDate: Date.now(),
+                        isEquipped: cue.id === activeCueId
+                    });
+                }
+            });
+            if (cueInventoryAdds.length) {
+                await db.cueInventory.bulkAdd(cueInventoryAdds);
+                cueInventoryAdds.forEach(item => cueInventoryMap.set(item.cueId, item));
+            }
+
+            const cueInventoryUpdates: Promise<number>[] = [];
+            for (const item of cueInventoryMap.values()) {
+                if (!item.id) continue;
+                const shouldEquip = item.cueId === activeCueId;
+                if (item.isEquipped !== shouldEquip) {
+                    cueInventoryUpdates.push(db.cueInventory.update(item.id, { isEquipped: shouldEquip }));
+                }
+            }
+            if (cueInventoryUpdates.length) await Promise.all(cueInventoryUpdates);
+        } catch (e) {
+            console.warn('Failed to sync cue inventory:', e);
+        }
+    }
+
+    private async persistEquippedCue(cueId: string): Promise<void> {
+        try {
+            await db.user.update(1, { equippedCueId: cueId });
+            const cueItems = await db.inventory.where('type').equals('cue').toArray();
+            const updates: Promise<number>[] = [];
+            cueItems.forEach(item => {
+                if (!item.id) return;
+                const shouldEquip = item.itemId === cueId;
+                if (item.isEquipped !== shouldEquip) {
+                    updates.push(db.inventory.update(item.id, { isEquipped: shouldEquip }));
+                }
+            });
+            if (updates.length) await Promise.all(updates);
+
+            const cueInventoryItems = await db.cueInventory.toArray();
+            const cueInventoryUpdates: Promise<number>[] = [];
+            cueInventoryItems.forEach(item => {
+                if (!item.id) return;
+                const shouldEquip = item.cueId === cueId;
+                if (item.isEquipped !== shouldEquip) {
+                    cueInventoryUpdates.push(db.cueInventory.update(item.id, { isEquipped: shouldEquip }));
+                }
+            });
+            if (cueInventoryUpdates.length) await Promise.all(cueInventoryUpdates);
+        } catch (e) {
+            console.warn('Failed to persist equipped cue:', e);
+        }
+    }
+
+    private formatCueName(name?: string): string | null {
+        if (!name) return null;
+        const cleaned = name
+            .replace(/^cue[_\-\s]+/i, '')
+            .replace(/[_\-]+/g, ' ')
+            .trim();
+        if (!cleaned) return null;
+        return cleaned.replace(/\b\w/g, (char) => char.toUpperCase());
+    }
+
+    private fetchCueSkins(): Promise<CueSkin[]> {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open('RailRush_CueEditor', 1);
+            request.onupgradeneeded = () => {
+                const db = request.result;
+                if (!db.objectStoreNames.contains('skins')) {
+                    db.createObjectStore('skins', { keyPath: 'id' });
+                }
+            };
+            request.onerror = () => reject(request.error);
+            request.onsuccess = () => {
+                const db = request.result;
+                if (!db.objectStoreNames.contains('skins')) {
+                    resolve([]);
+                    return;
+                }
+                const tx = db.transaction('skins', 'readonly');
+                const store = tx.objectStore('skins');
+                const getAllRequest = store.getAll();
+                getAllRequest.onsuccess = () => resolve(getAllRequest.result as CueSkin[]);
+                getAllRequest.onerror = () => reject(getAllRequest.error);
+            };
+        });
     }
 
     private updateLayout = (width?: number, height?: number) => {
@@ -137,7 +373,7 @@ export class ShopScene implements UIScene {
         this.tabRects.CUES = { x: tabCenterX - totalTabsWidth / 2, y: tabY, width: tabWidth, height: tabHeight };
         this.tabRects.CHIPS = { x: tabCenterX - totalTabsWidth / 2 + tabWidth + LayoutConstants.Tabs.Gap, y: tabY, width: tabWidth, height: tabHeight };
 
-        const items = this.currentTab === 'CUES' ? CUES : CHIPS;
+        const items = this.currentTab === 'CUES' ? this.cues : CHIPS;
 
         // Responsive column count
         const columns = canvasWidth < 720 ? 1 : canvasWidth < 1080 ? 2 : 3;
@@ -225,13 +461,7 @@ export class ShopScene implements UIScene {
             }
         }
 
-        this.hoveredCardIndex = -1;
-        this.cardRects.forEach((cardRect, index) => {
-            const { x: cx, y: cy, width: cw, height: ch } = cardRect;
-            if (x >= cx && x <= cx + cw && y >= cy && y <= cy + ch) {
-                this.hoveredCardIndex = index;
-            }
-        });
+        this.hoveredCardIndex = this.getCardIndexAt(x, y);
 
         // Check tabs
         if (x >= this.tabRects.CUES.x && x <= this.tabRects.CUES.x + this.tabRects.CUES.width &&
@@ -266,7 +496,7 @@ export class ShopScene implements UIScene {
         if (x >= this.tabRects.CUES.x && x <= this.tabRects.CUES.x + this.tabRects.CUES.width &&
             y >= this.tabRects.CUES.y && y <= this.tabRects.CUES.y + this.tabRects.CUES.height) {
             this.currentTab = 'CUES';
-            this.selectedCardIndex = CUES.findIndex(c => c.id === this.equippedCueId);
+            this.selectedCardIndex = this.cues.findIndex(c => c.id === this.equippedCueId);
             if (this.selectedCardIndex === -1) this.selectedCardIndex = 0;
             this.scrollOffset = 0; // Reset scroll on tab change
             this.updateLayout(this.canvas.width, this.canvas.height);
@@ -289,18 +519,29 @@ export class ShopScene implements UIScene {
         }
 
         // Check cards
-        if (this.hoveredCardIndex !== -1) {
-            this.selectedCardIndex = this.hoveredCardIndex;
+        const clickedCardIndex = this.getCardIndexAt(x, y);
+        if (clickedCardIndex !== -1) {
+            this.selectedCardIndex = clickedCardIndex;
 
             if (this.currentTab === 'CUES') {
-                const cue = CUES[this.selectedCardIndex];
-                if (cue && cue.id !== this.equippedCueId) {
-                    this.settingsManager.saveUIColors({
-                        cueStickColor: cue.stickColor,
-                        cueTipColor: cue.tipColor
-                    });
-                    this.equippedCueId = cue.id;
-                    notificationService.show(`${cue.name} ready to dominate!`, 'success', LayoutConstants.Animation.Notification.Toast);
+                const cue = this.cues[this.selectedCardIndex];
+                if (cue) {
+                    const scene = sceneController.getScene(UIState.CUE_DETAIL) as any;
+                    if (scene && typeof scene.setCue === 'function') {
+                        scene.setCue({
+                            id: cue.id,
+                            name: cue.name,
+                            subtitle: cue.desc,
+                            rarity: cue.rarity,
+                            accent: cue.accent,
+                            previewUrl: cue.previewUrl,
+                            stats: cue.stats,
+                            skin: cue.skin,
+                            stickColor: cue.stickColor,
+                            tipColor: cue.tipColor
+                        });
+                    }
+                    uiStateMachine.transitionTo(UIState.CUE_DETAIL);
                 }
             } else {
                 const chip = CHIPS[this.selectedCardIndex];
@@ -313,6 +554,26 @@ export class ShopScene implements UIScene {
         }
     };
 
+    private getCardIndexAt(x: number, y: number): number {
+        if (!this.contentRect) return -1;
+        const withinContent = (
+            x >= this.contentRect.x &&
+            x <= this.contentRect.x + this.contentRect.width &&
+            y >= this.contentRect.y &&
+            y <= this.contentRect.y + this.contentRect.height
+        );
+        if (!withinContent) return -1;
+
+        const contentY = y - this.contentRect.y + this.scrollOffset;
+        for (let index = 0; index < this.cardRects.length; index += 1) {
+            const { x: cx, y: cy, width: cw, height: ch } = this.cardRects[index];
+            if (x >= cx && x <= cx + cw && contentY >= cy && contentY <= cy + ch) {
+                return index;
+            }
+        }
+        return -1;
+    }
+
     private handleButtonClick(id: ShopButton['id']) {
         if (id === 'back') {
             uiStateMachine.transitionTo(UIState.LOBBY);
@@ -320,12 +581,18 @@ export class ShopScene implements UIScene {
         }
         if (id === 'equip') {
             if (this.isSelectedCueEquipped()) return;
-            const cue = CUES[this.selectedCardIndex];
-            this.settingsManager.saveUIColors({
-                cueStickColor: cue.stickColor,
-                cueTipColor: cue.tipColor
-            });
+            const cue = this.cues[this.selectedCardIndex];
+            if (cue.skin) {
+                this.applyCueSkin(cue);
+            } else {
+                this.clearCueSkin();
+                this.settingsManager.saveUIColors({
+                    cueStickColor: cue.stickColor,
+                    cueTipColor: cue.tipColor
+                });
+            }
             this.equippedCueId = cue.id;
+            void this.persistEquippedCue(cue.id);
             notificationService.show(`${cue.name} ready to dominate!`, 'success', LayoutConstants.Animation.Notification.Toast);
         }
     }
@@ -408,13 +675,62 @@ export class ShopScene implements UIScene {
             const isHovered = index === this.hoveredCardIndex;
 
             if (this.currentTab === 'CUES') {
-                const cue = CUES[index];
+                const cue = this.cues[index];
                 if (cue) this.drawCueCard(ctx, rect, cue, isSelected, isHovered);
             } else {
                 const chip = CHIPS[index];
                 if (chip) this.drawChipCard(ctx, rect, chip, isSelected, isHovered);
             }
         });
+    }
+
+    private getCuePreviewImage(url?: string): HTMLImageElement | null {
+        if (!url) return null;
+        const cached = this.cuePreviewCache.get(url);
+        if (cached) {
+            return cached.complete ? cached : null;
+        }
+        const img = new Image();
+        img.src = url;
+        this.cuePreviewCache.set(url, img);
+        return null;
+    }
+
+    private applyCueSkin(cue: CueCard) {
+        if (!cue.skin) return;
+        try {
+            localStorage.setItem('cue-editor-active-skin', cue.skin.id);
+        } catch (e) {
+            // ignore storage failures
+        }
+        window.dispatchEvent(new CustomEvent('cue-editor:apply-skin', {
+            detail: {
+                image: cue.skin.imageBase64,
+                tipOffsetPx: cue.skin.tipOffsetPx,
+                lengthScale: cue.skin.lengthScale,
+                thicknessScale: cue.skin.thicknessScale,
+                ppi: cue.skin.ppi
+            }
+        }));
+    }
+
+    private clearCueSkin() {
+        try {
+            localStorage.removeItem('cue-editor-active-skin');
+        } catch (e) {
+            // ignore storage failures
+        }
+        window.dispatchEvent(new CustomEvent('cue-editor:apply-skin', {
+            detail: null
+        }));
+    }
+
+    private getActiveCueSkinId(): string | null {
+        try {
+            return localStorage.getItem('cue-editor-active-skin');
+        } catch (e) {
+            return null;
+        }
     }
 
     private drawChipCard(ctx: CanvasRenderingContext2D, rect: Rect, chip: Chip, isSelected: boolean, isHovered: boolean) {
@@ -843,54 +1159,78 @@ export class ShopScene implements UIScene {
         }
         ctx.restore();
 
-        // DRAMATIC CUE VISUALIZATION - Large diagonal cue
-        const cueLength = innerWidth * 0.75;
-        const cueThickness = 12;
-        const cueStartX = innerX + innerWidth * 0.15;
-        const cueStartY = innerY + innerHeight * 0.35;
-        const cueEndX = cueStartX + cueLength;
-        const cueEndY = cueStartY - cueLength * 0.3;
+        // Cue visualization: use cue-editor preview if available
+        const previewImg = this.getCuePreviewImage(cue.previewUrl);
+        if (previewImg) {
+            const previewRect = {
+                x: innerX + innerWidth * 0.1,
+                y: innerY + innerHeight * 0.22,
+                width: innerWidth * 0.8,
+                height: innerHeight * 0.35
+            };
+            const scale = Math.min(previewRect.width / previewImg.width, previewRect.height / previewImg.height);
+            const drawW = previewImg.width * scale;
+            const drawH = previewImg.height * scale;
+            const drawX = previewRect.x + (previewRect.width - drawW) / 2;
+            const drawY = previewRect.y + (previewRect.height - drawH) / 2;
 
-        ctx.save();
-        // Cue shadow
-        ctx.shadowColor = ColorTokens.effects.shadowHeavy;
-        ctx.shadowBlur = LayoutConstants.Shadows.Glow.blur;
-        ctx.shadowOffsetX = 4;
-        ctx.shadowOffsetY = 4;
+            ctx.save();
+            ctx.shadowColor = ColorTokens.effects.shadowHeavy;
+            ctx.shadowBlur = LayoutConstants.Shadows.Glow.blur;
+            ctx.shadowOffsetX = 4;
+            ctx.shadowOffsetY = 4;
+            ctx.drawImage(previewImg, drawX, drawY, drawW, drawH);
+            ctx.restore();
+        } else {
+            // DRAMATIC CUE VISUALIZATION - Large diagonal cue
+            const cueLength = innerWidth * 0.75;
+            const cueThickness = 12;
+            const cueStartX = innerX + innerWidth * 0.15;
+            const cueStartY = innerY + innerHeight * 0.35;
+            const cueEndX = cueStartX + cueLength;
+            const cueEndY = cueStartY - cueLength * 0.3;
 
-        // Cue stick with gradient
-        ctx.lineCap = 'round';
-        ctx.lineWidth = cueThickness;
-        const cueGradient = ctx.createLinearGradient(cueStartX, cueStartY, cueEndX, cueEndY);
-        cueGradient.addColorStop(0, adjustBrightness(cue.stickColor, -30));
-        cueGradient.addColorStop(0.5, cue.stickColor);
-        cueGradient.addColorStop(1, adjustBrightness(cue.stickColor, 20));
-        ctx.strokeStyle = cueGradient;
-        ctx.beginPath();
-        ctx.moveTo(cueStartX, cueStartY);
-        ctx.lineTo(cueEndX, cueEndY);
-        ctx.stroke();
+            ctx.save();
+            // Cue shadow
+            ctx.shadowColor = ColorTokens.effects.shadowHeavy;
+            ctx.shadowBlur = LayoutConstants.Shadows.Glow.blur;
+            ctx.shadowOffsetX = 4;
+            ctx.shadowOffsetY = 4;
 
-        // Cue tip with glow
-        ctx.shadowColor = cue.tipColor;
-        ctx.shadowBlur = LayoutConstants.Shadows.Medium.blur - 5;
-        ctx.fillStyle = cue.tipColor;
-        ctx.beginPath();
-        ctx.arc(cueStartX, cueStartY, cueThickness * 0.7, 0, Math.PI * 2);
-        ctx.fill();
+            // Cue stick with gradient
+            ctx.lineCap = 'round';
+            ctx.lineWidth = cueThickness;
+            const cueGradient = ctx.createLinearGradient(cueStartX, cueStartY, cueEndX, cueEndY);
+            cueGradient.addColorStop(0, adjustBrightness(cue.stickColor, -30));
+            cueGradient.addColorStop(0.5, cue.stickColor);
+            cueGradient.addColorStop(1, adjustBrightness(cue.stickColor, 20));
+            ctx.strokeStyle = cueGradient;
+            ctx.beginPath();
+            ctx.moveTo(cueStartX, cueStartY);
+            ctx.lineTo(cueEndX, cueEndY);
+            ctx.stroke();
 
-        // Accent band on cue
-        const bandX = cueStartX + cueLength * 0.65;
-        const bandY = cueStartY - cueLength * 0.3 * 0.65;
-        ctx.shadowColor = cue.accent;
-        ctx.shadowBlur = LayoutConstants.Shadows.Small.blur + 2;
-        ctx.strokeStyle = cue.accent;
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.arc(bandX, bandY, cueThickness * 0.75, 0, Math.PI * 2);
-        ctx.stroke();
+            // Cue tip with glow
+            ctx.shadowColor = cue.tipColor;
+            ctx.shadowBlur = LayoutConstants.Shadows.Medium.blur - 5;
+            ctx.fillStyle = cue.tipColor;
+            ctx.beginPath();
+            ctx.arc(cueStartX, cueStartY, cueThickness * 0.7, 0, Math.PI * 2);
+            ctx.fill();
 
-        ctx.restore();
+            // Accent band on cue
+            const bandX = cueStartX + cueLength * 0.65;
+            const bandY = cueStartY - cueLength * 0.3 * 0.65;
+            ctx.shadowColor = cue.accent;
+            ctx.shadowBlur = LayoutConstants.Shadows.Small.blur + 2;
+            ctx.strokeStyle = cue.accent;
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.arc(bandX, bandY, cueThickness * 0.75, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.restore();
+        }
 
         // RARITY BADGE - Top right corner with glow
         const rarityPadding = LayoutConstants.Spacing.Medium;
@@ -1110,23 +1450,27 @@ export class ShopScene implements UIScene {
     }
 
     private syncEquippedCue() {
-        const colors = this.settingsManager.getUIColors();
-        const index = CUES.findIndex(
-            (cue) =>
-                cue.stickColor.toLowerCase() === colors.cueStickColor.toLowerCase() &&
-                cue.tipColor.toLowerCase() === colors.cueTipColor.toLowerCase()
-        );
-        if (index >= 0) {
-            this.selectedCardIndex = index;
-            this.equippedCueId = CUES[index].id;
+        const activeSkinId = this.getActiveCueSkinId();
+        if (activeSkinId) {
+            const skinIndex = this.cues.findIndex(cue => cue.skin?.id === activeSkinId);
+            if (skinIndex >= 0) {
+                this.selectedCardIndex = skinIndex;
+                this.equippedCueId = this.cues[skinIndex].id;
+                return;
+            }
+        }
+
+        if (this.cues.length > 0) {
+            this.selectedCardIndex = 0;
+            this.equippedCueId = this.cues[0].id;
         } else {
             this.selectedCardIndex = 0;
-            this.equippedCueId = CUES[0].id;
+            this.equippedCueId = '';
         }
     }
 
     private isSelectedCueEquipped() {
-        const cue = CUES[this.selectedCardIndex];
+        const cue = this.cues[this.selectedCardIndex];
         return cue ? cue.id === this.equippedCueId : false;
     }
 }
