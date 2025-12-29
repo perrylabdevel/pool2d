@@ -1220,6 +1220,17 @@ export class TablePreview {
     };
   }
 
+  // Get the loaded skin's pixel dimensions (returns null if no skin loaded)
+  getSkinPixelDimensions(): { width: number; height: number } | null {
+    if (this.skinTexture?.image) {
+      const image = this.skinTexture.image;
+      if (image.width && image.height) {
+        return { width: image.width, height: image.height };
+      }
+    }
+    return null;
+  }
+
   async applySkin(skin: TableSkin): Promise<void> {
     // Load skin image as texture
     if (skin.images.full) {

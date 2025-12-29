@@ -1,5 +1,5 @@
 import { UIScene } from '../SceneController';
-import { uiStateMachine, UIState } from '../UIStateMachine';
+import { UIState } from '../UIStateMachine';
 import { NavigationBar } from '../components/NavigationBar';
 import { drawRoundedRect } from '../components/UIComponents';
 import { ColorTokens } from '../theme/ColorTokens';
@@ -96,10 +96,13 @@ export class CueDetailScene implements UIScene {
 
     onResize(width: number, height: number): void {
         this.navigationBar.setupLayout(width, height);
-        const navHeight = this.navigationBar.getHeight();
-        const buttonWidth = Math.min(240, width * 0.4);
-        const buttonHeight = 52;
-        const buttonPadding = 18;
+
+
+        // Responsive button sizing
+        const buttonWidth = Math.min(280, width * 0.5);
+        const buttonHeight = 64;
+        const buttonPadding = 24;
+
         this.button = {
             id: 'equip',
             label: 'EQUIP',
@@ -112,7 +115,7 @@ export class CueDetailScene implements UIScene {
         };
     }
 
-    update(_dt: number): void {}
+    update(_dt: number): void { }
 
     render(ctx: CanvasRenderingContext2D): void {
         const width = ctx.canvas.width;
@@ -129,20 +132,18 @@ export class CueDetailScene implements UIScene {
         }
 
         const navHeight = this.navigationBar.getHeight();
-        const contentY = navHeight + 20;
-        const contentH = height - navHeight - 100;
-        const panelX = width * 0.08;
-        const panelW = width * 0.84;
+        const contentY = navHeight + 24;
+        const bottomPadding = 110; // Space for button
+        const contentH = height - contentY - bottomPadding;
+
+        // Responsive panel width
+        const isMobile = width < 768;
+        const panelW = isMobile ? width * 0.92 : Math.min(600, width * 0.8);
+        const panelX = (width - panelW) / 2;
         const panelH = contentH;
 
-        ctx.save();
-        drawRoundedRect(ctx, panelX, contentY, panelW, panelH, LayoutConstants.Radii.Large);
-        ctx.fillStyle = ColorTokens.background.panelSolid;
-        ctx.fill();
-        ctx.strokeStyle = ColorTokens.border.default;
-        ctx.lineWidth = LayoutConstants.Lines.Thin;
-        ctx.stroke();
-        ctx.restore();
+        // Draw Main Panel with Arcade Style
+        this.renderArcadePanel(ctx, panelX, contentY, panelW, panelH);
 
         this.renderCueHeader(ctx, panelX, contentY, panelW);
         this.renderRarityBadge(ctx, panelX, contentY, panelW);
@@ -231,9 +232,7 @@ export class CueDetailScene implements UIScene {
         if (!this.cue) return;
         const stats = this.cue.stats;
         const startY = y + height * 0.6;
-        const barX = x + width * 0.18;
-        const barW = width * 0.7;
-        const lineH = 26;
+        const lineH = 28;
         const cap = 100;
         const labels: Array<{ label: string; value: number }> = [
             { label: 'POWER', value: stats.power },
@@ -242,59 +241,253 @@ export class CueDetailScene implements UIScene {
             { label: 'AIM', value: stats.aim },
         ];
 
-        const statsPanelX = x + width * 0.06;
-        const statsPanelY = startY - 30;
-        const statsPanelW = width * 0.88;
-        const statsPanelH = lineH * labels.length + 50;
-        drawRoundedRect(ctx, statsPanelX, statsPanelY, statsPanelW, statsPanelH, 10);
-        ctx.fillStyle = ColorTokens.background.overlay;
+        const statsPanelX = x + width * 0.05;
+        const statsPanelY = startY - 40;
+        const statsPanelW = width * 0.9;
+        const statsPanelH = lineH * labels.length + 60;
+
+        // Render Inset Panel Background
+        ctx.save();
+        const radius = 12;
+        drawRoundedRect(ctx, statsPanelX, statsPanelY, statsPanelW, statsPanelH, radius);
+
+        // Inset gradient (darker at top)
+        const insetGrad = ctx.createLinearGradient(statsPanelX, statsPanelY, statsPanelX, statsPanelY + statsPanelH);
+        insetGrad.addColorStop(0, '#0a0a0a'); // Very dark at top
+        insetGrad.addColorStop(1, '#1a1a1a'); // Slightly lighter at bottom
+        ctx.fillStyle = insetGrad;
         ctx.fill();
 
-        ctx.font = `${LayoutConstants.Fonts.Weight.Bold} 12px ${LayoutConstants.Fonts.Family.Body}`;
-        ctx.textAlign = 'left';
+        // Inner Shadow/Glow (top edge)
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Bottom Highlight (to accent the ledge)
+        ctx.beginPath();
+        ctx.moveTo(statsPanelX, statsPanelY + statsPanelH);
+        ctx.lineTo(statsPanelX + statsPanelW, statsPanelY + statsPanelH);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.stroke();
+
+        ctx.restore();
+
+        // CAP text
+        ctx.font = `${LayoutConstants.Fonts.Weight.Bold} 11px ${LayoutConstants.Fonts.Family.Game}`;
+        ctx.textAlign = 'right';
         ctx.fillStyle = ColorTokens.text.muted;
-        ctx.fillText('CAP: 100', statsPanelX + 16, statsPanelY + 12);
+        ctx.fillText('MAX 100', statsPanelX + statsPanelW - 20, statsPanelY + 20);
+
+        const barX = statsPanelX + 100; // Fixed label width
+        const barW = statsPanelW - 120 - 40; // Remaining width minus padding and value text space
+
         labels.forEach((item, index) => {
             const rowY = startY + index * lineH;
-            ctx.fillStyle = ColorTokens.text.secondary;
-            ctx.fillText(item.label, x + 24, rowY);
 
-            drawRoundedRect(ctx, barX, rowY - 10, barW, 8, 4);
-            ctx.fillStyle = ColorTokens.background.overlay;
+            // Label
+            ctx.textAlign = 'left';
+            ctx.fillStyle = ColorTokens.text.secondary;
+            ctx.font = `${LayoutConstants.Fonts.Weight.Bold} 12px ${LayoutConstants.Fonts.Family.Game}`;
+            ctx.fillText(item.label, statsPanelX + 20, rowY);
+
+            // Bar Track (Background)
+            drawRoundedRect(ctx, barX, rowY - 8, barW, 8, 4);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
             ctx.fill();
 
+            // Bar Track Inner Shadow
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            // Bar Fill
             const clampedValue = Math.max(0, Math.min(cap, item.value));
             const fillW = Math.max(6, Math.min(barW, (clampedValue / cap) * barW));
-            drawRoundedRect(ctx, barX, rowY - 10, fillW, 8, 4);
-            ctx.fillStyle = this.getStatColor(clampedValue);
+
+            drawRoundedRect(ctx, barX, rowY - 8, fillW, 8, 4);
+            // Gradient Fill for bar
+            const barGrad = ctx.createLinearGradient(barX, rowY - 8, barX, rowY);
+            const baseColor = this.getStatColor(clampedValue);
+            barGrad.addColorStop(0, this.lightenColor(baseColor, 40));
+            barGrad.addColorStop(0.5, baseColor);
+            barGrad.addColorStop(1, this.darkenColor(baseColor, 20));
+            ctx.fillStyle = barGrad;
             ctx.fill();
 
+            // Bar Glint (Top)
+            ctx.beginPath();
+            ctx.moveTo(barX + 2, rowY - 6);
+            ctx.lineTo(barX + fillW - 2, rowY - 6);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            // Value Text
             ctx.fillStyle = ColorTokens.text.primary;
             ctx.textAlign = 'right';
-            ctx.fillText(`${clampedValue}`, barX + barW, rowY + 2);
-            ctx.textAlign = 'left';
+            ctx.font = `${LayoutConstants.Fonts.Weight.Bold} 14px ${LayoutConstants.Fonts.Family.Game}`;
+            ctx.fillText(`${clampedValue}`, statsPanelX + statsPanelW - 20, rowY + 1);
         });
+    }
+
+    private lightenColor(hex: string, amount: number): string {
+        const cleaned = hex.replace('#', '');
+        const r = Math.min(255, parseInt(cleaned.substring(0, 2), 16) + amount);
+        const g = Math.min(255, parseInt(cleaned.substring(2, 4), 16) + amount);
+        const b = Math.min(255, parseInt(cleaned.substring(4, 6), 16) + amount);
+        return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+    }
+
+    private renderArcadePanel(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number) {
+        const radius = 16;
+        const frameWidth = 6;
+        const bevelWidth = 3;
+        const borderWidth = 2;
+
+        ctx.save();
+
+        // Outer Frame - Metallic/Wood-grain effect
+        drawRoundedRect(ctx, x, y, width, height, radius);
+        const frameGradient = ctx.createLinearGradient(x, y, x, y + height);
+        frameGradient.addColorStop(0, ColorTokens.card.frame.light);
+        frameGradient.addColorStop(0.5, ColorTokens.card.frame.mid);
+        frameGradient.addColorStop(1, ColorTokens.card.frame.dark);
+        ctx.fillStyle = frameGradient;
+        ctx.fill();
+
+        // Middle Bevel Layer
+        const bevelX = x + frameWidth;
+        const bevelY = y + frameWidth;
+        const bevelW = width - frameWidth * 2;
+        const bevelH = height - frameWidth * 2;
+        const bevelRadius = radius - frameWidth;
+
+        drawRoundedRect(ctx, bevelX, bevelY, bevelW, bevelH, bevelRadius);
+        const bevelGradient = ctx.createLinearGradient(bevelX, bevelY, bevelX, bevelY + bevelH);
+        bevelGradient.addColorStop(0, ColorTokens.card.bevel.top);
+        bevelGradient.addColorStop(0.5, ColorTokens.card.bevel.mid);
+        bevelGradient.addColorStop(1, ColorTokens.card.bevel.bottom);
+        ctx.fillStyle = bevelGradient;
+        ctx.fill();
+
+        // Inner Content Area
+        const innerX = bevelX + bevelWidth;
+        const innerY = bevelY + bevelWidth;
+        const innerW = bevelW - bevelWidth * 2;
+        const innerH = bevelH - bevelWidth * 2;
+        const innerRadius = bevelRadius - bevelWidth;
+
+        drawRoundedRect(ctx, innerX, innerY, innerW, innerH, innerRadius);
+        ctx.fillStyle = ColorTokens.background.panelSolid;
+        ctx.fill();
+
+        // Inner Border
+        ctx.strokeStyle = ColorTokens.border.darkStrong;
+        ctx.lineWidth = borderWidth;
+        ctx.stroke();
+
+        // Corner Accents
+        const cornerSize = 12;
+        const cornerInset = frameWidth + bevelWidth + 4;
+        ctx.strokeStyle = ColorTokens.card.cornerAccent;
+        ctx.lineWidth = 2;
+
+        const corners = [
+            { x: x + cornerInset, y: y + cornerInset }, // TL
+            { x: x + width - cornerInset, y: y + cornerInset }, // TR
+            { x: x + cornerInset, y: y + height - cornerInset }, // BL
+            { x: x + width - cornerInset, y: y + height - cornerInset } // BR
+        ];
+
+        ctx.beginPath();
+        // Top Left
+        ctx.moveTo(corners[0].x, corners[0].y + cornerSize);
+        ctx.lineTo(corners[0].x, corners[0].y);
+        ctx.lineTo(corners[0].x + cornerSize, corners[0].y);
+        // Top Right
+        ctx.moveTo(corners[1].x - cornerSize, corners[1].y);
+        ctx.lineTo(corners[1].x, corners[1].y);
+        ctx.lineTo(corners[1].x, corners[1].y + cornerSize);
+        // Bottom Left
+        ctx.moveTo(corners[2].x, corners[2].y - cornerSize);
+        ctx.lineTo(corners[2].x, corners[2].y);
+        ctx.lineTo(corners[2].x + cornerSize, corners[2].y);
+        // Bottom Right
+        ctx.moveTo(corners[3].x - cornerSize, corners[3].y);
+        ctx.lineTo(corners[3].x, corners[3].y);
+        ctx.lineTo(corners[3].x, corners[3].y - cornerSize);
+        ctx.stroke();
+
+        ctx.restore();
     }
 
     private renderEquipButton(ctx: CanvasRenderingContext2D) {
         if (!this.button) return;
         const isEquipped = this.cue?.id && this.cue.id === this.equippedCueId;
         const label = isEquipped ? 'EQUIPPED' : 'EQUIP';
-        const { x, y, width, height } = this.button.rect;
+        const { x, y, width: w, height: h } = this.button.rect;
 
-        drawRoundedRect(ctx, x, y, width, height, 10);
-        ctx.fillStyle = isEquipped ? ColorTokens.ui.gray : ColorTokens.action.success;
+        const isHovered = this.hovered && !isEquipped;
+
+        ctx.save();
+
+        // Button Shadow
+        if (isHovered) {
+            ctx.shadowColor = ColorTokens.effects.shadowHeavy;
+            ctx.shadowBlur = 12;
+            ctx.shadowOffsetY = 4;
+        } else {
+            ctx.shadowColor = ColorTokens.effects.shadow;
+            ctx.shadowBlur = 4;
+            ctx.shadowOffsetY = 2;
+        }
+
+        // Use same arcade panel style for button but with action colors
+        const radius = 12;
+        const frameWidth = 4;
+
+        // Outer Frame
+        drawRoundedRect(ctx, x, y, w, h, radius);
+        const frameGrad = ctx.createLinearGradient(x, y, x, y + h);
+        frameGrad.addColorStop(0, '#5a5a5a');
+        frameGrad.addColorStop(1, '#2a2a2a');
+        ctx.fillStyle = frameGrad;
         ctx.fill();
 
-        ctx.strokeStyle = ColorTokens.border.emphasis;
-        ctx.lineWidth = 1;
+        // Inner Bevel
+        const innerX = x + frameWidth;
+        const innerY = y + frameWidth;
+        const innerW = w - frameWidth * 2;
+        const innerH = h - frameWidth * 2;
+
+        drawRoundedRect(ctx, innerX, innerY, innerW, innerH, radius - 2);
+
+        if (isEquipped) {
+            ctx.fillStyle = ColorTokens.ui.gray;
+        } else {
+            const btnGrad = ctx.createLinearGradient(innerX, innerY, innerX, innerY + innerH);
+            btnGrad.addColorStop(0, isHovered ? '#4caf50' : '#388e3c');
+            btnGrad.addColorStop(1, isHovered ? '#2e7d32' : '#1b5e20');
+            ctx.fillStyle = btnGrad;
+        }
+        ctx.fill();
+
+        // Inner Highlight
+        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+        ctx.lineWidth = 2;
         ctx.stroke();
 
-        ctx.fillStyle = ColorTokens.text.primary;
-        ctx.font = `${LayoutConstants.Fonts.Weight.Bold} 14px ${LayoutConstants.Fonts.Family.Game}`;
+        ctx.shadowColor = 'transparent';
+
+        ctx.fillStyle = isEquipped ? ColorTokens.text.muted : ColorTokens.text.primary;
+        ctx.font = `${LayoutConstants.Fonts.Weight.Black} 20px ${LayoutConstants.Fonts.Family.Game}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(label, x + width / 2, y + height / 2);
+        ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        ctx.shadowBlur = 2;
+        ctx.fillText(label, x + w / 2, y + h / 2 + 1);
+
+        ctx.restore();
     }
 
     private onMouseMove = (e: MouseEvent) => {

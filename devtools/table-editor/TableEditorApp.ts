@@ -1220,90 +1220,233 @@ export class TableEditorApp {
     const ppi = this.getPixelsPerInch(json);
     const rects = (json.meta as any)?.pixelRects;
 
-    const fmt = (n: number) => (Number.isFinite(n) ? n.toFixed(6).replace(/\.?0+$/, '') : String(n));
-    const pt = (p: { x: number; y: number }) => `(${fmt(p.x)}, ${fmt(p.y)})`;
+    const fmt = (n: number) => (Number.isFinite(n) ? n.toFixed(2) : String(n));
 
-    const bbox = (points: { x: number; y: number }[]) => {
-      let minX = Number.POSITIVE_INFINITY;
-      let minY = Number.POSITIVE_INFINITY;
-      let maxX = Number.NEGATIVE_INFINITY;
-      let maxY = Number.NEGATIVE_INFINITY;
-      for (const p of points) {
-        if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
-        minX = Math.min(minX, p.x);
-        minY = Math.min(minY, p.y);
-        maxX = Math.max(maxX, p.x);
-        maxY = Math.max(maxY, p.y);
-      }
-      if (!Number.isFinite(minX)) return null;
-      return { minX, minY, maxX, maxY };
-    };
+    // Calculate image dimensions - prioritize loaded skin, then physics JSON metadata, then calculate
+    let fullW: number | undefined;
+    let fullH: number | undefined;
 
-    const pocketLines = json.pockets.map((p) => {
-      const box = Array.isArray(p.outline) ? bbox(p.outline) : null;
-      const boxText = box ? ` bbox=[${fmt(box.minX)}, ${fmt(box.minY)} .. ${fmt(box.maxX)}, ${fmt(box.maxY)}]` : '';
-      return `- ${p.id}: center=${pt(p.center)} radius=${fmt(p.radius)} outlinePts=${p.outline?.length ?? 0}${boxText}`;
+    // 1. Try to get dimensions from loaded skin image in preview
+    const skinDims = this.preview?.getSkinPixelDimensions();
+    if (skinDims) {
+      fullW = skinDims.width;
+      fullH = skinDims.height;
+    }
+
+    // 2. Fall back to physics JSON pixelRects
+    if (!fullW || !fullH) {
+      fullW = rects?.full?.width as number | undefined;
+      fullH = rects?.full?.height as number | undefined;
+    }
+
+    // 3. Calculate from play area + margin if still not available
+    if (!fullW || !fullH) {
+      const marginIn = Math.max(json.playArea.width, json.playArea.height) * 0.15;
+      fullW = Math.ceil((json.playArea.width + marginIn * 2) * ppi);
+      fullH = Math.ceil((json.playArea.height + marginIn * 2) * ppi);
+      if (fullW % 2 !== 0) fullW++;
+      if (fullH % 2 !== 0) fullH++;
+    }
+    const cx = fullW / 2;
+    const cy = fullH / 2;
+
+    // Helper to convert physics coords to pixel coords for examples
+    const toPixel = (x: number, y: number) => ({
+      px: Math.round(cx + x * ppi),
+      py: Math.round(cy - y * ppi)
     });
 
-    const railLines = json.rails.map((r) => {
-      const outlinePts = Array.isArray(r.outline) ? r.outline : [];
-      const box = outlinePts.length ? bbox(outlinePts) : null;
-      const boxText = box ? ` bbox=[${fmt(box.minX)}, ${fmt(box.minY)} .. ${fmt(box.maxX)}, ${fmt(box.maxY)}]` : '';
-      return `- ${r.id}: from=${pt(r.from)} to=${pt(r.to)} normal=${pt(r.normal)} outlinePts=${outlinePts.length}${boxText}`;
-    });
+    // Calculate key reference points
+    const playHalfW = json.playArea.width / 2;
+    const playHalfH = json.playArea.height / 2;
+    const topLeftPlay = toPixel(-playHalfW, playHalfH);
+    const bottomRightPlay = toPixel(playHalfW, -playHalfH);
 
-    const pxInfo =
-      rects?.inner?.width && rects?.inner?.height
-        ? `pixelRects: inner=${rects.inner.width}x${rects.inner.height}px outer=${rects?.outer?.width ?? '?'}x${rects?.outer?.height ?? '?'}px full=${rects?.full?.width ?? '?'}x${rects?.full?.height ?? '?'}px`
-        : 'pixelRects: (not set)';
+    // Get corner pocket for example
+    const cornerPocket = json.pockets.find(p => p.id.includes('pocket_2_2') || Math.abs(p.center.x) > 40);
+    const cornerPocketPx = cornerPocket ? toPixel(cornerPocket.center.x, cornerPocket.center.y) : null;
 
-    const offsetX = (json.meta as any)?.offset?.x;
-    const offsetY = (json.meta as any)?.offset?.y;
-    const hasOffset = Number.isFinite(offsetX) && Number.isFinite(offsetY);
+    // Format pocket data
+    const pocketList = json.pockets.map(p => {
+      const px = toPixel(p.center.x, p.center.y);
+      return `• ${p.id}: physics=(${fmt(p.center.x)}, ${fmt(p.center.y)}) → pixel=(${px.px}, ${px.py}), radius=${fmt(p.radius)}in = ${fmt(p.radius * ppi)}px`;
+    }).join('\n');
 
-    return `You are a vision-capable image generator. I am designing a pool/billiards TABLE SKIN (image), not doing code review.
+    // Format rail data (just the main cushions, not derived)
+    const mainRails = json.rails.filter(r => r.id.startsWith('cushion_'));
+    const railList = mainRails.map(r => {
+      const fromPx = toPixel(r.from.x, r.from.y);
+      const toPx = toPixel(r.to.x, r.to.y);
+      return `• ${r.id}: from pixel (${fromPx.px}, ${fromPx.py}) to (${toPx.px}, ${toPx.py})`;
+    }).join('\n');
 
-I will provide:
-1) A screenshot/reference image of the current table art, and
-2) The table physics geometry JSON below (inches + rails/pockets).
+    // Randomized style presets
+    const frameMaterials = [
+      { name: 'Dark Walnut Wood', desc: 'Rich dark brown walnut with visible grain, matte finish' },
+      { name: 'Honey Oak Wood', desc: 'Light golden oak with prominent grain patterns, satin finish' },
+      { name: 'Mahogany Wood', desc: 'Deep reddish-brown mahogany with elegant grain, glossy lacquer' },
+      { name: 'Brushed Steel', desc: 'Industrial brushed stainless steel with subtle directional texture' },
+      { name: 'Chrome Metal', desc: 'Highly reflective chrome with mirror-like finish and soft highlights' },
+      { name: 'Matte Black Metal', desc: 'Sleek matte black powder-coated steel, modern look' },
+      { name: 'Bronze Metal', desc: 'Warm antique bronze with subtle patina and aged highlights' },
+      { name: 'Carbon Fiber', desc: 'Black carbon fiber weave pattern with glossy clear coat' },
+      { name: 'Ebony Wood', desc: 'Nearly black ebony wood with subtle grain, high polish' },
+      { name: 'Copper Metal', desc: 'Warm copper with oxidized patina accents, industrial aesthetic' },
+    ];
 
-Your task:
-- Generate a clean, high-quality table skin image that aligns perfectly to the physics geometry.
-- Keep pockets/cushions consistent with the provided rails/pocket outlines.
+    const feltColors = [
+      { name: 'Championship Green', hex: '#0A6B3D', desc: 'Classic tournament green' },
+      { name: 'Electric Blue', hex: '#1E40AF', desc: 'Vibrant royal blue' },
+      { name: 'Wine Red', hex: '#7F1D1D', desc: 'Deep burgundy red' },
+      { name: 'Midnight Purple', hex: '#4C1D95', desc: 'Rich purple' },
+      { name: 'Slate Gray', hex: '#374151', desc: 'Modern charcoal gray' },
+      { name: 'Ocean Teal', hex: '#0D9488', desc: 'Tropical teal' },
+      { name: 'Burnt Orange', hex: '#C2410C', desc: 'Bold burnt orange' },
+      { name: 'Forest Green', hex: '#065F46', desc: 'Deep forest green' },
+      { name: 'Navy Blue', hex: '#1E3A5F', desc: 'Classic navy' },
+      { name: 'Black', hex: '#18181B', desc: 'Elegant black' },
+    ];
 
-Coordinate systems / mapping:
-- Physics geometry units: inches (origin at play-area center; +X right/East, +Y up/North)
-- Pixels are derived via pixelsPerInch (PPI) for skin alignment.
-- pixelsPerInch (PPI): ${fmt(ppi)}
-- ${pxInfo}
-- ${hasOffset ? `The play-area origin (0,0) maps to pixel (${fmt(offsetX)}, ${fmt(offsetY)}) in the FULL image.` : 'meta.offset is not provided; assume the play-area origin maps to the center of the inner rect.'}
-- Convert inches -> pixels using:
-  - px = originPxX + x_in * PPI
-  - py = originPxY - y_in * PPI   (because +Y is up in physics, but down in image pixels)
+    const cushionStyles = [
+      { name: 'Traditional Leather', desc: 'Brown leather-wrapped rail tops with visible stitching' },
+      { name: 'Matching Felt', desc: 'Rail tops covered in same cloth as playing surface' },
+      { name: 'Black Vinyl', desc: 'Sleek black synthetic leather rail covers' },
+      { name: 'Natural Rubber', desc: 'Exposed rubber cushion noses in black' },
+    ];
 
-Deliverables (as text output describing what you generated):
-- A single PNG for the FULL table at fullPx size (or the closest available size without distortion).
-- Optional: separate transparent PNG layers: felt / rails / frame / pockets (same pixel dimensions).
-- Optional but helpful: an SVG overlay (in pixel coordinates) that draws:
-  - play-area rectangle
-  - pocket circles/outlines
-  - rail outlines
+    // Format options for the AI to choose from
+    const frameOptions = frameMaterials.map((f, i) => `${i + 1}. **${f.name}**: ${f.desc}`).join('\n');
+    const feltOptions = feltColors.map((f, i) => `${i + 1}. **${f.name}** (${f.hex}): ${f.desc}`).join('\n');
+    const cushionOptions = cushionStyles.map((c, i) => `${i + 1}. **${c.name}**: ${c.desc}`).join('\n');
 
-Table summary:
-- name: ${this.activeTable.name}
-- playArea: width=${fmt(json.playArea.width)}in height=${fmt(json.playArea.height)}in
-- editor display units: ${this.getPromptUnitsLabel()}
+    const styleSection = `
+## STYLE SELECTION (RANDOMLY CHOOSE ONE FROM EACH CATEGORY)
 
-Pockets (${json.pockets.length}):
-${pocketLines.join('\n')}
+**IMPORTANT**: Before generating, randomly select ONE option from each category below. Do NOT always pick the first option - use true randomness.
 
-Rails (${json.rails.length}):
-${railLines.join('\n')}
+### Frame Materials (pick one):
+${frameOptions}
 
-Full physics JSON:
-\`\`\`json
-${JSON.stringify(json, null, 2)}
+### Felt Colors (pick one):
+${feltOptions}
+
+### Cushion Styles (pick one):
+${cushionOptions}
+
+---
+`;
+
+    return `
+# POOL TABLE SKIN GENERATION
+
+## YOUR TASK
+Generate a **photorealistic top-down pool table image** (PNG, ${fullW}x${fullH} pixels) that matches the physics geometry below.
+
+> **IMPORTANT**: If a reference image is attached, match its visual style. Otherwise, use the randomly selected style below.
+
+${styleSection}
+
+## VISUAL QUALITY REQUIREMENTS (CRITICAL)
+
+
+This is for a **high-fidelity mobile game**. The table must look premium and realistic:
+
+### Frame/Rim
+- Apply your randomly selected frame material from above
+- Subtle **glossy highlights** at edges (or matte for certain metals)
+- **Beveled edges** with depth/shadow
+
+### Cushions/Rails
+- **Rubber cushion noses** with realistic rounded profile
+- Apply your randomly selected cushion style from above
+- Shadow gradient where cushion meets felt
+- Diamond-shaped **rail sights** (markers) along the rails
+
+### Felt (Use your randomly selected color)
+- **Fine cloth texture** with subtle weave pattern
+- Use the exact hex color from your selection above
+- May have **subtle shadow vignette** around edges
+
+### Pockets
+- **Deep, dark holes** with gradient fading to black
+- **Chamfered/beveled edge** around pocket opening
+- Subtle **shadow/depth** around pocket rim
+- Optional: leather pocket liners visible
+
+### Overall
+- **Soft ambient shadows** throughout
+- **Consistent lighting** from above (no harsh directional shadows)
+- **High resolution** with crisp details at 100% zoom
+
+---
+
+## POOL TABLE ANATOMY
+
+A pool table consists of these NESTED layers from outside to inside:
+
+1. **FRAME/RIM** - The wooden outer border
+2. **RAILS/CUSHIONS** - Rubber-covered edges that balls bounce off
+3. **PLAY AREA** (THE FELT) - The green cloth surface where balls roll (rectangle centered at 0,0)
+4. **POCKETS** - Holes at the corners and sides (at the EDGE of the felt, NOT inside it)
+
+---
+
+## COORDINATE SYSTEM
+
+- **Physics coordinates**: Origin (0,0) is the CENTER of the play area. +X=right, +Y=up.
+- **Pixel coordinates**: Origin (0,0) is TOP-LEFT. +X=right, +Y=DOWN.
+
+**Conversion**:
 \`\`\`
+Pixel_X = ${fmt(cx)} + (Physics_X * ${fmt(ppi)})
+Pixel_Y = ${fmt(cy)} - (Physics_Y * ${fmt(ppi)})
+\`\`\`
+
+---
+
+## WORKED EXAMPLES
+
+**Play Area** (The green felt rectangle):
+- Pixels: Top-left **(${topLeftPlay.px}, ${topLeftPlay.py})**, bottom-right **(${bottomRightPlay.px}, ${bottomRightPlay.py})**
+
+${cornerPocket && cornerPocketPx ? `**Corner Pocket** (${cornerPocket.id}):
+- Pixel center: **(${cornerPocketPx.px}, ${cornerPocketPx.py})**
+- Radius: ${fmt(cornerPocket.radius * ppi)}px
+` : ''}
+
+---
+
+## GEOMETRY DATA
+
+**Play Area**: ${fmt(json.playArea.width)}" × ${fmt(json.playArea.height)}" (${fmt(json.playArea.width * ppi)}px × ${fmt(json.playArea.height * ppi)}px)
+
+**Pockets** (HOLES at table edges):
+${pocketList}
+
+**Cushion Rails**:
+${railList}
+
+---
+
+## DELIVERABLES
+
+1. **Main Image**: ${fullW}×${fullH}px PNG with all visual quality features above
+2. **(Optional) SVG Overlay**: Circles at pocket centers + lines along rail edges for verification
+
+---
+
+## MISTAKES TO AVOID
+
+❌ Flat/cartoonish style without texture
+❌ Simple solid colors without gradients or depth
+❌ Pockets floating inside the felt (they must be at CORNERS and SIDES)
+❌ Missing wood grain on frame (unless metal frame selected)
+❌ Missing cloth texture on felt
+❌ **ANY text, logos, labels, or branding on the felt surface** - the felt must be PLAIN with only cloth texture
+❌ Numbers, letters, or markings of any kind on the playing surface
+❌ Company logos or watermarks anywhere on the table
+✅ The felt should be a plain, unmarked cloth surface
+✅ Match the reference image quality if one is provided
 `;
   }
 
