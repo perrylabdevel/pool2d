@@ -36,9 +36,32 @@ export interface TableSkin {
     sideOffsetX?: number;
     sideOffsetY?: number;
   };
+
+  // Modular rail/pocket asset set (optional)
+  railPocketSet?: RailPocketSet;
+
+  // Cached composite overlay for modular sets
+  composedOverlay?: string;
 }
 
 export type SkinCreateInput = Omit<TableSkin, 'id' | 'createdAt' | 'updatedAt'>;
+
+export interface RailPocketSet {
+  assets: {
+    railMiddleTile?: string;
+    railEndcapLeft?: string;
+    railEndcapRight?: string;
+    cornerPocket?: string;
+    sidePocket?: string;
+  };
+  railThicknessPx: number;
+  seamOverlapPx?: number;
+  ppi?: number;
+  metadata?: {
+    version?: number;
+    notes?: string;
+  };
+}
 
 export class SkinStore {
   private db: IDBDatabase | null = null;
@@ -65,7 +88,11 @@ export class SkinStore {
         }
         
         // Clean up old boilerplate skins (those without real images)
-        const boilerplateSkins = Array.from(this.skins.values()).filter(s => !s.images?.full);
+        const boilerplateSkins = Array.from(this.skins.values()).filter((s) => {
+          const hasFull = !!s.images?.full;
+          const hasModular = !!s.railPocketSet?.assets?.railMiddleTile;
+          return !hasFull && !hasModular;
+        });
         for (const skin of boilerplateSkins) {
           await this.delete(skin.id);
         }
@@ -238,6 +265,8 @@ export class SkinStore {
       thumbnail: original.thumbnail,
       sourceFile: original.sourceFile ? { ...original.sourceFile } : undefined,
       geometry: { ...original.geometry },
+      railPocketSet: original.railPocketSet ? structuredClone(original.railPocketSet) : undefined,
+      composedOverlay: original.composedOverlay,
     };
 
     return this.create(copy);
@@ -291,6 +320,8 @@ export class SkinStore {
         images: data.images || {},
         thumbnail: data.thumbnail,
         geometry: data.geometry,
+        railPocketSet: data.railPocketSet,
+        composedOverlay: data.composedOverlay,
       });
       return skin;
     } catch (err) {

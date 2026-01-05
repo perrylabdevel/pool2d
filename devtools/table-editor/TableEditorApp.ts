@@ -7,7 +7,7 @@
  */
 
 import { TablePreview } from './components/TablePreview';
-import { SkinStore } from './stores/SkinStore';
+import { SkinStore, type RailPocketSet, type TableSkin } from './stores/SkinStore';
 import { TableLibraryStore, type TableDocument } from './stores/TableLibraryStore';
 import { jsonLoader, type PhysicsJson } from './utils/JsonLoader';
 import {
@@ -36,6 +36,7 @@ import {
   pickAndReadFile,
   exportTableAsFile,
 } from './io';
+import { composeRailPocketOverlay } from './utils/RailPocketComposer';
 
 export class TableEditorApp {
   private preview: TablePreview | null = null;
@@ -58,6 +59,7 @@ export class TableEditorApp {
   private activeTable: TableDocument | null = null;
 
   private activeSkinId: string | null = null;
+  private skinSource: 'full' | 'modular' = this.loadSkinSource();
 
   private undoStack: PhysicsJson[] = [];
   private redoStack: PhysicsJson[] = [];
@@ -98,6 +100,7 @@ export class TableEditorApp {
 
     this.setupEventListeners();
     this.setupDragDrop();
+    this.setupModularSkinControls();
 
     await this.ensureInitialTable();
     // Note: loadActiveSkin() is not called here because ensureInitialTable() 
@@ -106,6 +109,7 @@ export class TableEditorApp {
     this.renderLeftSidebar();
     this.renderRightSidebar();
     this.renderSkinGrid();
+    this.refreshModularSkinControls();
 
     this.wsBridge.connect();
     this.updateHeader();
@@ -158,6 +162,27 @@ export class TableEditorApp {
       // ignore
     }
     return 'in';
+  }
+
+  private loadSkinSource(): 'full' | 'modular' {
+    try {
+      const raw = localStorage.getItem('table-editor-skin-source');
+      if (raw === 'modular') return 'modular';
+    } catch {
+      // ignore
+    }
+    return 'full';
+  }
+
+  private setSkinSource(source: 'full' | 'modular'): void {
+    this.skinSource = source;
+    try {
+      localStorage.setItem('table-editor-skin-source', source);
+    } catch {
+      // ignore
+    }
+    void this.applyActiveSkinPreview();
+    this.refreshModularSkinControls();
   }
 
   private loadPocketCaptureRadius(kind: 'corner' | 'side', fallback: number): number {
@@ -468,8 +493,8 @@ export class TableEditorApp {
     document.getElementById('btn-export')?.addEventListener('click', () => this.exportCurrent());
     document.getElementById('btn-create-prompt')?.addEventListener('click', () => void this.createPromptForVisionLlm());
     document.getElementById('btn-save-disk')?.addEventListener('click', () => void this.saveToDisk({ setActive: false }));
-    document.getElementById('btn-push-live')?.addEventListener('click', () => this.pushToGame('live'));
-    document.getElementById('btn-push-persist')?.addEventListener('click', () => this.pushToGame('persist'));
+    document.getElementById('btn-push-live')?.addEventListener('click', () => void this.pushToGame('live'));
+    document.getElementById('btn-push-persist')?.addEventListener('click', () => void this.pushToGame('persist'));
 
     document.getElementById('bottom-panel-toggle')?.addEventListener('click', () => {
       document.getElementById('bottom-panel')?.classList.toggle('collapsed');
@@ -1262,14 +1287,32 @@ export class TableEditorApp {
     const topLeftPlay = toPixel(-playHalfW, playHalfH);
     const bottomRightPlay = toPixel(playHalfW, -playHalfH);
 
+    // Calculate total table dimensions (image size in inches)
+    const totalWidthIn = fullW / ppi;
+    const totalHeightIn = fullH / ppi;
+
+    // Calculate frame/rail width (space from play area edge to image edge)
+    const frameWidthIn = (totalWidthIn - json.playArea.width) / 2;
+    const frameHeightIn = (totalHeightIn - json.playArea.height) / 2;
+
     // Get corner pocket for example
     const cornerPocket = json.pockets.find(p => p.id.includes('pocket_2_2') || Math.abs(p.center.x) > 40);
     const cornerPocketPx = cornerPocket ? toPixel(cornerPocket.center.x, cornerPocket.center.y) : null;
 
-    // Format pocket data
+    // Calculate pocket-to-edge distances
+    const getEdgeDistance = (p: typeof json.pockets[0]) => {
+      const distToLeft = (fullW / 2 + p.center.x * ppi);
+      const distToRight = (fullW / 2 - p.center.x * ppi);
+      const distToTop = (fullH / 2 - p.center.y * ppi);
+      const distToBottom = (fullH / 2 + p.center.y * ppi);
+      return Math.min(distToLeft, distToRight, distToTop, distToBottom);
+    };
+
+    // Format pocket data with edge distance
     const pocketList = json.pockets.map(p => {
       const px = toPixel(p.center.x, p.center.y);
-      return `• ${p.id}: physics=(${fmt(p.center.x)}, ${fmt(p.center.y)}) → pixel=(${px.px}, ${px.py}), radius=${fmt(p.radius)}in = ${fmt(p.radius * ppi)}px`;
+      const edgeDist = getEdgeDistance(p);
+      return `• ${p.id}: pixel (${px.px}, ${px.py}), radius=${fmt(p.radius * ppi)}px, distance to nearest image edge: ${fmt(edgeDist)}px`;
     }).join('\n');
 
     // Format rail data (just the main cushions, not derived)
@@ -1339,14 +1382,34 @@ ${cushionOptions}
     return `
 # POOL TABLE SKIN GENERATION
 
-## YOUR TASK
-Generate a **photorealistic top-down pool table image** (PNG, ${fullW}x${fullH} pixels) that matches the physics geometry below.
+## ⚠️ CRITICAL REQUIREMENTS (READ FIRST)
 
-> **IMPORTANT**: If a reference image is attached, match its visual style. Otherwise, use the randomly selected style below.
+### Image Dimensions
+- **Width: ${fullW} pixels**
+- **Height: ${fullH} pixels**
+- Output MUST be EXACTLY ${fullW}x${fullH} pixels. No other size is acceptable.
+
+### Composition (VERY IMPORTANT)
+- The **ENTIRE table** must be visible - NO CROPPING on any edge
+- The table must be **perfectly CENTERED** in the image
+- All **6 pockets** must be fully visible (4 corners + 2 sides)
+- The **complete wooden/metal frame** must be visible on all 4 sides
+- Leave some **dark background margin** around the outer frame edge
+
+❌ DO NOT crop or cut off any part of the table
+❌ DO NOT let the table extend past the image boundaries
+✅ The full table should fit comfortably within the ${fullW}x${fullH} canvas
+
+---
+
+## YOUR TASK
+Generate a **photorealistic top-down pool table image** that is EXACTLY **${fullW} x ${fullH} pixels** (PNG format).
+
+> If a reference image is attached, match its visual style. Otherwise, randomly select from the style options below.
 
 ${styleSection}
 
-## VISUAL QUALITY REQUIREMENTS (CRITICAL)
+## VISUAL QUALITY REQUIREMENTS
 
 
 This is for a **high-fidelity mobile game**. The table must look premium and realistic:
@@ -1418,10 +1481,21 @@ ${cornerPocket && cornerPocketPx ? `**Corner Pocket** (${cornerPocket.id}):
 
 ## GEOMETRY DATA
 
-**Play Area**: ${fmt(json.playArea.width)}" × ${fmt(json.playArea.height)}" (${fmt(json.playArea.width * ppi)}px × ${fmt(json.playArea.height * ppi)}px)
+**Total Image Size**: ${fullW}px × ${fullH}px (= ${fmt(totalWidthIn)}" × ${fmt(totalHeightIn)}")
 
-**Pockets** (HOLES at table edges):
+**Play Area (Green Felt)**: ${fmt(json.playArea.width)}" × ${fmt(json.playArea.height)}" (= ${fmt(json.playArea.width * ppi)}px × ${fmt(json.playArea.height * ppi)}px)
+- Centered in the image
+- Top-left corner at pixel (${topLeftPlay.px}, ${topLeftPlay.py})
+- Bottom-right corner at pixel (${bottomRightPlay.px}, ${bottomRightPlay.py})
+
+**Frame/Rail Width**: approximately ${fmt(frameWidthIn)}" (${fmt(frameWidthIn * ppi)}px) on each side
+- This is the space between the felt edge and the image edge
+- Pockets are cut into this frame/rail zone
+
+**Pockets** (6 total - these are HOLES cut into the rail, very close to outer edge):
 ${pocketList}
+
+**IMPORTANT**: Pockets should be very close to the outer frame edge (within ~30-50px typically). The frame is narrow!
 
 **Cushion Rails**:
 ${railList}
@@ -1430,13 +1504,14 @@ ${railList}
 
 ## DELIVERABLES
 
-1. **Main Image**: ${fullW}×${fullH}px PNG with all visual quality features above
+1. **Main Image**: EXACTLY ${fullW}×${fullH} pixels PNG (no other size!)
 2. **(Optional) SVG Overlay**: Circles at pocket centers + lines along rail edges for verification
 
 ---
 
 ## MISTAKES TO AVOID
 
+❌ **WRONG IMAGE SIZE** - Must be EXACTLY ${fullW}x${fullH} pixels, NOT 1024x1024 or any other size
 ❌ Flat/cartoonish style without texture
 ❌ Simple solid colors without gradients or depth
 ❌ Pockets floating inside the felt (they must be at CORNERS and SIDES)
@@ -1446,7 +1521,7 @@ ${railList}
 ❌ Numbers, letters, or markings of any kind on the playing surface
 ❌ Company logos or watermarks anywhere on the table
 ✅ The felt should be a plain, unmarked cloth surface
-✅ Match the reference image quality if one is provided
+✅ Output EXACTLY ${fullW}x${fullH} pixels
 `;
   }
 
@@ -1674,6 +1749,210 @@ ${railList}
     }
   }
 
+  private getActiveSkin(): TableSkin | null {
+    if (!this.activeSkinId) return null;
+    return this.skinStore.get(this.activeSkinId) ?? null;
+  }
+
+  private async applyActiveSkinPreview(): Promise<void> {
+    const skin = this.getActiveSkin();
+    if (!skin || !this.preview) return;
+
+    if (this.skinSource === 'modular') {
+      const composite = skin.composedOverlay ?? (await this.composeModularOverlay(skin, false));
+      if (composite) {
+        await this.preview.loadSkinFromBase64(composite);
+        this.setModularStatus('Previewing modular composite.');
+        return;
+      }
+      this.setModularStatus('Missing modular assets or composition failed.');
+      return;
+    }
+
+    if (skin.images.full) {
+      await this.preview.loadSkinFromBase64(skin.images.full);
+      this.setModularStatus('');
+    }
+  }
+
+  private async composeModularOverlay(skin: TableSkin, persist: boolean): Promise<string | null> {
+    if (!this.activeTable || !skin.railPocketSet) return null;
+    const result = await composeRailPocketOverlay({
+      physicsJson: this.activeTable.physicsJson,
+      railPocketSet: skin.railPocketSet,
+    });
+
+    if (!result) return null;
+    if (persist) {
+      skin.composedOverlay = result.dataUrl;
+      await this.skinStore.save(skin);
+    }
+    return result.dataUrl;
+  }
+
+  private setModularStatus(message: string): void {
+    const status = document.getElementById('modular-status');
+    if (!status) return;
+    status.textContent = message;
+  }
+
+  private setupModularSkinControls(): void {
+    const sourceFull = document.getElementById('skin-source-full') as HTMLInputElement | null;
+    const sourceModular = document.getElementById('skin-source-modular') as HTMLInputElement | null;
+
+    if (sourceFull && sourceModular) {
+      sourceFull.checked = this.skinSource === 'full';
+      sourceModular.checked = this.skinSource === 'modular';
+      sourceFull.addEventListener('change', () => {
+        if (sourceFull.checked) this.setSkinSource('full');
+      });
+      sourceModular.addEventListener('change', () => {
+        if (sourceModular.checked) this.setSkinSource('modular');
+      });
+    }
+
+    const assetInputs: Array<{ key: keyof RailPocketSet['assets']; id: string }> = [
+      { key: 'railMiddleTile', id: 'modular-rail-middle' },
+      { key: 'railEndcapLeft', id: 'modular-rail-endcap-left' },
+      { key: 'railEndcapRight', id: 'modular-rail-endcap-right' },
+      { key: 'cornerPocket', id: 'modular-pocket-corner' },
+      { key: 'sidePocket', id: 'modular-pocket-side' },
+    ];
+
+    for (const input of assetInputs) {
+      const el = document.getElementById(input.id) as HTMLInputElement | null;
+      if (!el) continue;
+      el.addEventListener('change', async () => {
+        const file = el.files?.[0];
+        if (!file) return;
+        const skin = this.getActiveSkin();
+        if (!skin) {
+          alert('Select a skin before adding modular assets.');
+          return;
+        }
+        const base64 = await this.readFileAsBase64(file);
+        const set = this.ensureRailPocketSet(skin);
+        set.assets[input.key] = base64;
+        skin.composedOverlay = undefined;
+        await this.skinStore.save(skin);
+        this.refreshModularSkinControls();
+      });
+    }
+
+    const thicknessInput = document.getElementById('modular-rail-thickness') as HTMLInputElement | null;
+    thicknessInput?.addEventListener('change', async () => {
+      const skin = this.getActiveSkin();
+      if (!skin) return;
+      const value = Number.parseFloat(thicknessInput.value);
+      if (!Number.isFinite(value) || value <= 0) return;
+      const set = this.ensureRailPocketSet(skin);
+      set.railThicknessPx = value;
+      skin.composedOverlay = undefined;
+      await this.skinStore.save(skin);
+    });
+
+    const overlapInput = document.getElementById('modular-seam-overlap') as HTMLInputElement | null;
+    overlapInput?.addEventListener('change', async () => {
+      const skin = this.getActiveSkin();
+      if (!skin) return;
+      const value = Number.parseFloat(overlapInput.value);
+      if (!Number.isFinite(value) || value < 0) return;
+      const set = this.ensureRailPocketSet(skin);
+      set.seamOverlapPx = value;
+      skin.composedOverlay = undefined;
+      await this.skinStore.save(skin);
+    });
+
+    const ppiInput = document.getElementById('modular-ppi') as HTMLInputElement | null;
+    ppiInput?.addEventListener('change', async () => {
+      const skin = this.getActiveSkin();
+      if (!skin) return;
+      const raw = ppiInput.value.trim();
+      const set = this.ensureRailPocketSet(skin);
+      if (!raw) {
+        delete set.ppi;
+      } else {
+        const value = Number.parseFloat(raw);
+        if (Number.isFinite(value) && value > 0) set.ppi = value;
+      }
+      skin.composedOverlay = undefined;
+      await this.skinStore.save(skin);
+    });
+
+    const previewBtn = document.getElementById('btn-modular-preview');
+    previewBtn?.addEventListener('click', async () => {
+      const skin = this.getActiveSkin();
+      if (!skin) return;
+      const composite = await this.composeModularOverlay(skin, false);
+      if (composite) {
+        await this.preview?.loadSkinFromBase64(composite);
+        this.setModularStatus('Previewing modular composite.');
+      } else {
+        this.setModularStatus('Missing modular assets or composition failed.');
+      }
+    });
+
+    const bakeBtn = document.getElementById('btn-modular-bake');
+    bakeBtn?.addEventListener('click', async () => {
+      const skin = this.getActiveSkin();
+      if (!skin) return;
+      const composite = await this.composeModularOverlay(skin, true);
+      if (composite) {
+        this.setSkinSource('modular');
+        await this.preview?.loadSkinFromBase64(composite);
+        this.setModularStatus('Baked modular composite to cache.');
+      } else {
+        this.setModularStatus('Missing modular assets or composition failed.');
+      }
+    });
+  }
+
+  private refreshModularSkinControls(): void {
+    const skin = this.getActiveSkin();
+    const thicknessInput = document.getElementById('modular-rail-thickness') as HTMLInputElement | null;
+    const overlapInput = document.getElementById('modular-seam-overlap') as HTMLInputElement | null;
+    const ppiInput = document.getElementById('modular-ppi') as HTMLInputElement | null;
+    const sourceFull = document.getElementById('skin-source-full') as HTMLInputElement | null;
+    const sourceModular = document.getElementById('skin-source-modular') as HTMLInputElement | null;
+
+    if (sourceFull && sourceModular) {
+      sourceFull.checked = this.skinSource === 'full';
+      sourceModular.checked = this.skinSource === 'modular';
+    }
+
+    if (!skin || !skin.railPocketSet) {
+      if (thicknessInput) thicknessInput.value = '256';
+      if (overlapInput) overlapInput.value = '2';
+      if (ppiInput) ppiInput.value = '';
+      return;
+    }
+
+    const set = skin.railPocketSet;
+    if (thicknessInput) thicknessInput.value = String(set.railThicknessPx ?? 140);
+    if (overlapInput) overlapInput.value = String(set.seamOverlapPx ?? 2);
+    if (ppiInput) ppiInput.value = set.ppi ? String(set.ppi) : '';
+  }
+
+  private ensureRailPocketSet(skin: TableSkin): RailPocketSet {
+    if (skin.railPocketSet) return skin.railPocketSet;
+    const set: RailPocketSet = {
+      assets: {},
+      railThicknessPx: 140,
+      seamOverlapPx: 2,
+    };
+    skin.railPocketSet = set;
+    return set;
+  }
+
+  private readFileAsBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
   private async loadActiveSkin(): Promise<void> {
     const storedId = this.skinStore.getActiveSkinId();
     const skins = this.skinStore.getAll();
@@ -1681,7 +1960,8 @@ ${railList}
     const chosen = storedId && this.skinStore.get(storedId) ? this.skinStore.get(storedId)! : skins[0];
     this.activeSkinId = chosen.id;
     this.skinStore.setActiveSkinId(chosen.id);
-    if (chosen.images.full) await this.preview?.loadSkinFromBase64(chosen.images.full);
+    await this.applyActiveSkinPreview();
+    this.refreshModularSkinControls();
   }
 
   private async createNewSkin(): Promise<void> {
@@ -1695,7 +1975,8 @@ ${railList}
       this.activeSkinId = skin.id;
       this.skinStore.setActiveSkinId(skin.id);
       this.renderSkinGrid();
-      if (skin.images.full) await this.preview?.loadSkinFromBase64(skin.images.full);
+      await this.applyActiveSkinPreview();
+      this.refreshModularSkinControls();
     };
     input.click();
   }
@@ -1758,6 +2039,7 @@ ${railList}
     }
 
     this.renderSkinGrid();
+    this.refreshModularSkinControls();
   }
 
   private async selectSkin(id: string): Promise<void> {
@@ -1770,7 +2052,8 @@ ${railList}
       void this.tableLibrary.save(this.activeTable);
     }
     this.renderSkinGrid();
-    if (skin.images.full) await this.preview?.loadSkinFromBase64(skin.images.full);
+    await this.applyActiveSkinPreview();
+    this.refreshModularSkinControls();
   }
 
   private setupDragDrop(): void {
@@ -1801,7 +2084,8 @@ ${railList}
           this.activeSkinId = skin.id;
           this.skinStore.setActiveSkinId(skin.id);
           this.renderSkinGrid();
-          if (skin.images.full) await this.preview?.loadSkinFromBase64(skin.images.full);
+          await this.applyActiveSkinPreview();
+          this.refreshModularSkinControls();
           continue;
         }
 
@@ -1859,13 +2143,18 @@ ${railList}
     this.wsBridge.sendGeometryPatch(patch);
   }
 
-  private pushToGame(mode: 'live' | 'persist'): void {
+  private async pushToGame(mode: 'live' | 'persist'): Promise<void> {
     if (!this.activeTable) return;
     const skin = this.activeSkinId ? this.skinStore.get(this.activeSkinId) : null;
+    let skinImage = skin?.images?.full;
+
+    if (this.skinSource === 'modular' && skin?.railPocketSet) {
+      skinImage = skin.composedOverlay ?? (await this.composeModularOverlay(skin, false)) ?? skinImage;
+    }
 
     this.wsBridge.pushToGame(mode, {
       physicsJson: this.activeTable.physicsJson,
-      skin: skin?.images?.full ? { name: skin.name, image: skin.images.full } : null,
+      skin: skinImage ? { name: skin?.name ?? 'Skin', image: skinImage } : null,
     });
   }
 

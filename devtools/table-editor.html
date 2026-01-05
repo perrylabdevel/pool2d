@@ -243,6 +243,90 @@
       color: var(--accent);
     }
 
+    .skin-modular-panel {
+      border-top: 1px solid var(--panel-border);
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .skin-modular-title {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    .skin-modular-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+
+    .skin-modular-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .skin-modular-row input[type="file"] {
+      font-size: 11px;
+    }
+
+    .skin-modular-inputs {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .skin-modular-inputs label {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .skin-modular-inputs input {
+      width: 90px;
+      background: #12121a;
+      border: 1px solid var(--panel-border);
+      border-radius: 6px;
+      color: var(--text);
+      padding: 4px 6px;
+      font-size: 11px;
+    }
+
+    .skin-modular-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .skin-modular-status {
+      font-size: 11px;
+      color: var(--text-muted);
+      min-height: 14px;
+    }
+
+    .skin-source-toggle {
+      display: flex;
+      gap: 10px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .skin-source-toggle label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
     .table-item {
       border: 1px solid var(--panel-border);
       border-radius: 8px;
@@ -607,6 +691,54 @@
             <button class="btn" style="padding: 4px 8px; font-size: 11px;" id="btn-new-skin">+ New</button>
           </div>
           <div class="skin-grid" id="skin-grid"></div>
+          <div class="skin-modular-panel">
+            <div class="skin-modular-title">Modular Rails + Pockets</div>
+            <div class="skin-source-toggle">
+              <label><input type="radio" name="skin-source" id="skin-source-full" value="full" checked /> Full</label>
+              <label><input type="radio" name="skin-source" id="skin-source-modular" value="modular" /> Modular</label>
+            </div>
+            <div class="skin-modular-grid">
+              <div class="skin-modular-row">
+                <span>Rail Middle</span>
+                <input type="file" id="modular-rail-middle" accept="image/*" />
+              </div>
+              <div class="skin-modular-row">
+                <span>Rail Endcap Left</span>
+                <input type="file" id="modular-rail-endcap-left" accept="image/*" />
+              </div>
+              <div class="skin-modular-row">
+                <span>Rail Endcap Right</span>
+                <input type="file" id="modular-rail-endcap-right" accept="image/*" />
+              </div>
+              <div class="skin-modular-row">
+                <span>Corner Pocket</span>
+                <input type="file" id="modular-pocket-corner" accept="image/*" />
+              </div>
+              <div class="skin-modular-row">
+                <span>Side Pocket</span>
+                <input type="file" id="modular-pocket-side" accept="image/*" />
+              </div>
+            </div>
+            <div class="skin-modular-inputs">
+              <label>
+                Rail Thickness (px)
+                <input type="number" id="modular-rail-thickness" min="1" step="1" value="256" />
+              </label>
+              <label>
+                Seam Overlap (px)
+                <input type="number" id="modular-seam-overlap" min="0" step="1" value="2" />
+              </label>
+              <label>
+                PPI Override
+                <input type="number" id="modular-ppi" min="1" step="0.01" placeholder="(auto)" />
+              </label>
+            </div>
+            <div class="skin-modular-actions">
+              <button class="btn" id="btn-modular-preview">Preview Composite</button>
+              <button class="btn btn-primary" id="btn-modular-bake">Bake Composite</button>
+            </div>
+            <div class="skin-modular-status" id="modular-status"></div>
+          </div>
         </div>
       </aside>
 
