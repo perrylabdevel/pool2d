@@ -35,8 +35,21 @@ export async function composeRailPocketOverlay(params: {
   const halfWpx = halfW * ppi;
   const halfHpx = halfH * ppi;
 
-  const width = Math.round(physicsJson.playArea.width * ppi + railThicknessPx * 2);
-  const height = Math.round(physicsJson.playArea.height * ppi + railThicknessPx * 2);
+  const railImage = await loadImage(assets.railMiddleTile);
+  const cornerImage = await loadImage(assets.cornerPocket);
+  const sideImage = await loadImage(assets.sidePocket);
+
+  const railTile = createScaledTile(railImage, railThicknessPx);
+  const railTileVertical = rotateTile90(railTile);
+  const pocketScale = railThicknessPx / railImage.height;
+  const seamAnchorPx = railImage.height;
+
+  const cornerHalfPx = Math.max(cornerImage.width, cornerImage.height) * pocketScale * 0.5;
+  const sideHalfPx = Math.max(sideImage.width, sideImage.height) * pocketScale * 0.5;
+  const margin = Math.ceil(Math.max(railThicknessPx, cornerHalfPx, sideHalfPx));
+
+  const width = Math.round(physicsJson.playArea.width * ppi + margin * 2);
+  const height = Math.round(physicsJson.playArea.height * ppi + margin * 2);
 
   const canvas = document.createElement('canvas');
   canvas.width = width;
@@ -46,16 +59,8 @@ export async function composeRailPocketOverlay(params: {
   if (!ctx) return null;
   ctx.imageSmoothingEnabled = true;
 
-  const centerX = width / 2;
-  const centerY = height / 2;
-
-  const railImage = await loadImage(assets.railMiddleTile);
-  const cornerImage = await loadImage(assets.cornerPocket);
-  const sideImage = await loadImage(assets.sidePocket);
-
-  const railTile = createScaledTile(railImage, railThicknessPx);
-  const railTileVertical = rotateTile90(railTile);
-  const pocketScale = railThicknessPx / railImage.height;
+  const centerX = margin + halfWpx;
+  const centerY = margin + halfHpx;
 
   const pocketIndex = classifyPockets(physicsJson.pockets, halfW, halfH);
   const cornerHalfInX = (cornerImage.width * pocketScale) / (2 * ppi);
@@ -82,6 +87,7 @@ export async function composeRailPocketOverlay(params: {
   drawPockets(ctx, physicsJson.pockets, {
     cornerImage,
     sideImage,
+    seamAnchorPx,
     centerX,
     centerY,
     halfW,
@@ -224,6 +230,7 @@ function drawPockets(
   params: {
     cornerImage: HTMLImageElement;
     sideImage: HTMLImageElement;
+    seamAnchorPx: number;
     centerX: number;
     centerY: number;
     halfW: number;
@@ -232,7 +239,7 @@ function drawPockets(
     pocketScale: number;
   }
 ): void {
-  const { cornerImage, sideImage, centerX, centerY, halfW, halfH, ppi, pocketScale } = params;
+  const { cornerImage, sideImage, seamAnchorPx, centerX, centerY, halfW, halfH, ppi, pocketScale } = params;
 
   for (const pocket of pockets) {
     const x = pocket.center.x;
@@ -240,28 +247,17 @@ function drawPockets(
     const isCorner = Math.abs(x) > halfW * 0.4 && Math.abs(y) > halfH * 0.4;
     const edgeX = x >= 0 ? halfW : -halfW;
     const edgeY = y >= 0 ? halfH : -halfH;
-    const signX = x >= 0 ? 1 : -1;
-    const signY = y >= 0 ? 1 : -1;
-    const cornerHalfPxX = (cornerImage.width * pocketScale) / 2;
-    const cornerHalfPxY = (cornerImage.height * pocketScale) / 2;
-    const sideHalfPx = (sideImage.width * pocketScale) / 2;
     const px = centerX + (isCorner || Math.abs(y) < Math.abs(x) ? edgeX : x) * ppi;
     const py = centerY - (isCorner || Math.abs(y) >= Math.abs(x) ? edgeY : y) * ppi;
 
     if (isCorner) {
       const rotation = getCornerRotationDeg(x, y);
-      const offsetX = signX * cornerHalfPxX;
-      const offsetY = -signY * cornerHalfPxY;
-      drawRotatedImage(ctx, cornerImage, px + offsetX, py + offsetY, rotation, pocketScale);
+      drawAnchoredRotatedImage(ctx, cornerImage, seamAnchorPx, seamAnchorPx, px, py, rotation, pocketScale);
       continue;
     }
 
     const rotation = getSideRotationDeg(x, y);
-    if (Math.abs(y) >= Math.abs(x)) {
-      drawRotatedImage(ctx, sideImage, px, py - signY * sideHalfPx, rotation, pocketScale);
-    } else {
-      drawRotatedImage(ctx, sideImage, px + signX * sideHalfPx, py, rotation, pocketScale);
-    }
+    drawAnchoredRotatedImage(ctx, sideImage, sideImage.width / 2, seamAnchorPx, px, py, rotation, pocketScale);
   }
 }
 
@@ -293,6 +289,25 @@ function drawRotatedImage(
   ctx.rotate(rad);
   ctx.scale(scale, scale);
   ctx.drawImage(image, -image.width / 2, -image.height / 2);
+  ctx.restore();
+}
+
+function drawAnchoredRotatedImage(
+  ctx: CanvasRenderingContext2D,
+  image: HTMLImageElement,
+  anchorX: number,
+  anchorY: number,
+  cx: number,
+  cy: number,
+  deg: number,
+  scale: number
+): void {
+  const rad = (deg * Math.PI) / 180;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(rad);
+  ctx.scale(scale, scale);
+  ctx.drawImage(image, -anchorX, -anchorY);
   ctx.restore();
 }
 
