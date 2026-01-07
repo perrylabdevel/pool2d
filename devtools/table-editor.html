@@ -698,28 +698,42 @@
               <label><input type="radio" name="skin-source" id="skin-source-modular" value="modular" /> Modular</label>
             </div>
             <div class="skin-modular-grid">
+              <!-- Straight rail tiles -->
               <div class="skin-modular-row">
                 <span>Rail Middle</span>
                 <input type="file" id="modular-rail-middle" accept="image/*" />
               </div>
+              <!-- Pocket hole overlays -->
               <div class="skin-modular-row">
-                <span>Rail Endcap Left</span>
-                <input type="file" id="modular-rail-endcap-left" accept="image/*" />
+                <span>Pocket Corner Hole</span>
+                <input type="file" id="modular-pocket-corner-hole" accept="image/*" />
               </div>
               <div class="skin-modular-row">
-                <span>Rail Endcap Right</span>
-                <input type="file" id="modular-rail-endcap-right" accept="image/*" />
+                <span>Pocket Side Hole</span>
+                <input type="file" id="modular-pocket-side-hole" accept="image/*" />
               </div>
               <div class="skin-modular-row">
-                <span>Corner Pocket</span>
-                <input type="file" id="modular-pocket-corner" accept="image/*" />
+                <span>Pocket Corner Rim</span>
+                <input type="file" id="modular-pocket-corner-rim" accept="image/*" />
               </div>
               <div class="skin-modular-row">
-                <span>Side Pocket</span>
-                <input type="file" id="modular-pocket-side" accept="image/*" />
+                <span>Pocket Side Rim</span>
+                <input type="file" id="modular-pocket-side-rim" accept="image/*" />
+              </div>
+              <div class="skin-modular-row">
+                <span>Rail Cushion</span>
+                <input type="file" id="modular-rail-cushion" accept="image/*" />
+              </div>
+              <div class="skin-modular-row">
+                <span>Play Area Felt</span>
+                <input type="file" id="modular-play-area-felt" accept="image/*" />
               </div>
             </div>
             <div class="skin-modular-inputs">
+              <label>
+                Cushion Width (px)
+                <input type="number" id="modular-cushion-width" min="1" step="1" value="12" />
+              </label>
               <label>
                 Rail Thickness (px)
                 <input type="number" id="modular-rail-thickness" min="1" step="1" value="256" />
@@ -731,6 +745,11 @@
               <label>
                 PPI Override
                 <input type="number" id="modular-ppi" min="1" step="0.01" placeholder="(auto)" />
+              </label>
+              <!-- NEW: Pocket hole reference radius -->
+              <label>
+                Pocket Hole Ref Radius (in)
+                <input type="number" id="modular-pocket-ref-radius" min="0.1" step="0.1" placeholder="2.4" />
               </label>
             </div>
             <div class="skin-modular-actions">

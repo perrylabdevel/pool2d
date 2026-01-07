@@ -10,7 +10,7 @@ export interface TableSkin {
   name: string;
   createdAt: Date;
   updatedAt: Date;
-  
+
   // Actual image data (base64 or blob URLs)
   images: {
     full?: string;        // Full table skin image (primary)
@@ -18,17 +18,17 @@ export interface TableSkin {
     frame?: string;       // Separate frame texture
     rails?: string;       // Separate rails texture
   };
-  
+
   // Thumbnail for skin library grid
   thumbnail?: string;
-  
+
   // Source file info
   sourceFile?: {
     name: string;
     size: number;
     lastModified: number;
   };
-  
+
   // Geometry offsets stored per skin
   geometry?: {
     cornerOffsetX?: number;
@@ -48,15 +48,30 @@ export type SkinCreateInput = Omit<TableSkin, 'id' | 'createdAt' | 'updatedAt'>;
 
 export interface RailPocketSet {
   assets: {
+    // Tiled straight rail
     railMiddleTile?: string;
-    railEndcapLeft?: string;
-    railEndcapRight?: string;
-    cornerPocket?: string;
-    sidePocket?: string;
+    // Pocket hole overlays
+    pocketCornerHole?: string;
+    pocketSideHole?: string;
+
+    // Cushion & Felt
+    railCushion?: string;
+    playAreaFelt?: string;
+
+    // Pocket Rims (Liners) - separate from holes
+    pocketCornerRim?: string;
+    pocketSideRim?: string;
   };
   railThicknessPx: number;
+  cushionWidthPx?: number; // Width of the rubber cushion
   seamOverlapPx?: number;
   ppi?: number;
+
+
+  // NEW: Reference radius (inches) for pocket hole assets
+  // Hole assets are designed at this radius; actual holes scale by pocket.radius / pocketHoleRefRadius
+  pocketHoleRefRadius?: number;
+
   metadata?: {
     version?: number;
     notes?: string;
@@ -86,7 +101,7 @@ export class SkinStore {
         for (const skin of request.result) {
           this.skins.set(skin.id, skin);
         }
-        
+
         // Clean up old boilerplate skins (those without real images)
         const boilerplateSkins = Array.from(this.skins.values()).filter((s) => {
           const hasFull = !!s.images?.full;
@@ -101,7 +116,7 @@ export class SkinStore {
         if (Array.from(this.skins.values()).filter(s => s.images?.full).length === 0) {
           await this.addDefaultSkins();
         }
-        
+
         resolve();
       };
 
@@ -117,7 +132,7 @@ export class SkinStore {
         const blob = await response.blob();
         const base64 = await this.blobToBase64(blob);
         const thumbnail = await this.generateThumbnail(base64);
-        
+
         const skin = await this.create({
           name: 'Active Skin',
           images: { full: base64 },
@@ -130,7 +145,7 @@ export class SkinStore {
             sideOffsetY: 0,
           },
         });
-        
+
         // Set as active skin
         this.setActiveSkinId(skin.id);
       }
@@ -186,7 +201,7 @@ export class SkinStore {
         const scale = Math.min(maxSize / img.width, maxSize / img.height);
         canvas.width = img.width * scale;
         canvas.height = img.height * scale;
-        
+
         const ctx = canvas.getContext('2d')!;
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         resolve(canvas.toDataURL('image/jpeg', 0.7));
@@ -336,9 +351,9 @@ export class SkinStore {
   async createFromFile(file: File): Promise<TableSkin> {
     const base64 = await this.blobToBase64(file);
     const thumbnail = await this.generateThumbnail(base64);
-    
+
     const name = file.name.replace(/\.[^/.]+$/, ''); // Remove extension
-    
+
     return this.create({
       name,
       images: { full: base64 },
@@ -359,14 +374,14 @@ export class SkinStore {
     if (!skin) return;
 
     const base64 = await this.blobToBase64(file);
-    
+
     skin.images[imageType] = base64;
-    
+
     // Regenerate thumbnail if updating full image
     if (imageType === 'full') {
       skin.thumbnail = await this.generateThumbnail(base64);
     }
-    
+
     await this.save(skin);
   }
 }

@@ -1812,11 +1812,18 @@ ${railList}
     }
 
     const assetInputs: Array<{ key: keyof RailPocketSet['assets']; id: string }> = [
+      // Straight rail tile
       { key: 'railMiddleTile', id: 'modular-rail-middle' },
-      { key: 'railEndcapLeft', id: 'modular-rail-endcap-left' },
-      { key: 'railEndcapRight', id: 'modular-rail-endcap-right' },
-      { key: 'cornerPocket', id: 'modular-pocket-corner' },
-      { key: 'sidePocket', id: 'modular-pocket-side' },
+      // NEW: Rubber cushion
+      { key: 'railCushion', id: 'modular-rail-cushion' },
+      // NEW: Play Area Felt
+      { key: 'playAreaFelt', id: 'modular-play-area-felt' },
+      // Pocket hole overlays
+      { key: 'pocketCornerHole', id: 'modular-pocket-corner-hole' },
+      { key: 'pocketSideHole', id: 'modular-pocket-side-hole' },
+      // NEW: Pocket Rims
+      { key: 'pocketCornerRim', id: 'modular-pocket-corner-rim' },
+      { key: 'pocketSideRim', id: 'modular-pocket-side-rim' },
     ];
 
     for (const input of assetInputs) {
@@ -1851,6 +1858,20 @@ ${railList}
       await this.skinStore.save(skin);
     });
 
+    const cushionWidthInput = document.getElementById('modular-cushion-width') as HTMLInputElement | null;
+    cushionWidthInput?.addEventListener('change', async () => {
+      const skin = this.getActiveSkin();
+      if (!skin) return;
+      const value = Number.parseFloat(cushionWidthInput.value);
+      if (!Number.isFinite(value) || value <= 0) return;
+      const set = this.ensureRailPocketSet(skin);
+      set.cushionWidthPx = value;
+      skin.composedOverlay = undefined;
+      await this.skinStore.save(skin);
+    });
+
+
+
     const overlapInput = document.getElementById('modular-seam-overlap') as HTMLInputElement | null;
     overlapInput?.addEventListener('change', async () => {
       const skin = this.getActiveSkin();
@@ -1874,6 +1895,23 @@ ${railList}
       } else {
         const value = Number.parseFloat(raw);
         if (Number.isFinite(value) && value > 0) set.ppi = value;
+      }
+      skin.composedOverlay = undefined;
+      await this.skinStore.save(skin);
+    });
+
+    // NEW: Pocket hole reference radius input
+    const refRadiusInput = document.getElementById('modular-pocket-ref-radius') as HTMLInputElement | null;
+    refRadiusInput?.addEventListener('change', async () => {
+      const skin = this.getActiveSkin();
+      if (!skin) return;
+      const raw = refRadiusInput.value.trim();
+      const set = this.ensureRailPocketSet(skin);
+      if (!raw) {
+        delete set.pocketHoleRefRadius;
+      } else {
+        const value = Number.parseFloat(raw);
+        if (Number.isFinite(value) && value > 0) set.pocketHoleRefRadius = value;
       }
       skin.composedOverlay = undefined;
       await this.skinStore.save(skin);
