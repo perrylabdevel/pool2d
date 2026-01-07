@@ -83,6 +83,11 @@ export async function composeRailPocketOverlay(params: {
   if (!ctx) return null;
   ctx.imageSmoothingEnabled = true;
 
+  const debugJawMask =
+    typeof window !== 'undefined' &&
+    typeof window.location?.search === 'string' &&
+    window.location.search.includes('debugJawMask=1');
+
   const centerX = margin + halfWpx;
   const centerY = margin + halfHpx;
 
@@ -128,9 +133,26 @@ export async function composeRailPocketOverlay(params: {
 
   // 3. Draw Cushions (Physics Geometry)
   if (cushionImage) {
-    drawRailCushionOutlines(ctx, physicsJson.rails, cushionImage, centerX, centerY, ppi);
+    const cushionCanvas = drawRailCushionLayer(
+      canvas.width,
+      canvas.height,
+      cushionImage,
+      physicsJson.rails,
+      physicsJson.pockets,
+      centerX,
+      centerY,
+      ppi
+    );
+    ctx.drawImage(cushionCanvas, 0, 0);
   }
 
+  if (debugJawMask) {
+    drawJawMask(ctx, physicsJson.rails, physicsJson.pockets, centerX, centerY, ppi, {
+      mode: 'overlay',
+      color: 'magenta',
+      alpha: 0.35,
+    });
+  }
 
 
   // 4. Draw pocket features (Holes + Rims)
@@ -175,28 +197,26 @@ function buildSeamLines(
   };
 }
 
-function maskRailPockets(
+function drawJawMask(
   ctx: CanvasRenderingContext2D,
   rails: PhysicsJsonRail[],
+  pockets: PhysicsJsonPocket[],
   centerX: number,
   centerY: number,
-  ppi: number
+  ppi: number,
+  options: { mode: 'cut' | 'overlay'; color?: string; alpha?: number }
 ) {
   ctx.save();
-  ctx.globalCompositeOperation = 'destination-out';
-  ctx.fillStyle = 'black'; // Color irrelevant for destination-out
+  if (options.mode === 'cut') {
+    ctx.globalCompositeOperation = 'destination-out';
+  }
+  if (typeof options.alpha === 'number') {
+    ctx.globalAlpha = options.alpha;
+  }
+  ctx.fillStyle = options.color ?? 'black';
 
   for (const rail of rails) {
     if (!rail.outline || rail.outline.length < 3) continue;
-
-    // Calculate Centroid
-    let cx = 0, cy = 0;
-    for (const pt of rail.outline) {
-      cx += pt.x;
-      cy += pt.y;
-    }
-    cx /= rail.outline.length;
-    cy /= rail.outline.length;
 
     // Find Nose (Longest Edge)
     let maxLen = 0;
@@ -235,30 +255,17 @@ function maskRailPockets(
       const midX = (jaw.p1.x + jaw.p2.x) / 2;
       const midY = (jaw.p1.y + jaw.p2.y) / 2;
 
-      // Vector from Centroid to Jaw Midpoint (Radially Outwards)
-      const Vcx = midX - cx;
-      const Vcy = midY - cy;
+      const nearestPocket = findNearestPocket(pockets, midX, midY);
+      if (!nearestPocket) continue;
 
-      // Jaw Vector
-      const Vx = jaw.p2.x - jaw.p1.x;
-      const Vy = jaw.p2.y - jaw.p1.y;
+      const dirX = nearestPocket.center.x - midX;
+      const dirY = nearestPocket.center.y - midY;
+      const lenDir = Math.sqrt(dirX * dirX + dirY * dirY);
+      if (lenDir < 0.001) continue;
 
-      // Normal
-      const Nx = -Vy;
-      const Ny = Vx;
-
-      // Align Normal with Vc (Outward)
-      const dot = Nx * Vcx + Ny * Vcy;
-      const finalNx = dot > 0 ? Nx : -Nx;
-      const finalNy = dot > 0 ? Ny : -Ny;
-
-      // Normalize
-      const lenN = Math.sqrt(finalNx * finalNx + finalNy * finalNy);
-      if (lenN < 0.001) continue;
-
-      const scale = 5 * ppi; // Extrude 5 inches
-      const ExtX = (finalNx / lenN) * scale;
-      const ExtY = (finalNy / lenN) * scale;
+      const depthIn = Math.max(2, nearestPocket.radius * 2.5);
+      const ExtX = (dirX / lenDir) * depthIn * ppi;
+      const ExtY = (dirY / lenDir) * depthIn * ppi;
 
       // Draw Eraser Wedge
       // Logic: Jaw P1 -> Jaw P2 -> Extend Out -> Close
@@ -384,6 +391,19 @@ function distSq(p1: { x: number, y: number }, p2: { x: number, y: number }) {
   return dx * dx + dy * dy;
 }
 
+function findNearestPocket(pockets: PhysicsJsonPocket[], x: number, y: number): PhysicsJsonPocket | null {
+  let best: PhysicsJsonPocket | null = null;
+  let bestDist = Infinity;
+  for (const pocket of pockets) {
+    const d = distSq(pocket.center, { x, y });
+    if (d < bestDist) {
+      bestDist = d;
+      best = pocket;
+    }
+  }
+  return best;
+}
+
 function drawPlayAreaFelt(
   ctx: CanvasRenderingContext2D,
   image: HTMLImageElement,
@@ -431,6 +451,28 @@ function drawRailCushionOutlines(
     ctx.fill();
   }
   ctx.restore();
+}
+
+function drawRailCushionLayer(
+  width: number,
+  height: number,
+  image: HTMLImageElement,
+  rails: PhysicsJsonRail[],
+  pockets: PhysicsJsonPocket[],
+  centerX: number,
+  centerY: number,
+  ppi: number
+): HTMLCanvasElement {
+  const cushionCanvas = document.createElement('canvas');
+  cushionCanvas.width = width;
+  cushionCanvas.height = height;
+  const cushionCtx = cushionCanvas.getContext('2d');
+  if (!cushionCtx) return cushionCanvas;
+
+  drawRailCushionOutlines(cushionCtx, rails, image, centerX, centerY, ppi);
+  drawJawMask(cushionCtx, rails, pockets, centerX, centerY, ppi, { mode: 'cut' });
+
+  return cushionCanvas;
 }
 
 function drawTiledSpans(
