@@ -24,7 +24,7 @@ export interface PhysicsEvent {
   time: number;
   type: 'collision' | 'pocket' | 'shot' | 'marker';
   description: string;
-  data?: any;
+  data?: unknown;
 }
 
 export class PhysicsRecorder {
@@ -86,7 +86,7 @@ export class PhysicsRecorder {
     this.snapshots.push(snapshot);
   }
   
-  recordEvent(type: PhysicsEvent['type'], description: string, data?: any) {
+  recordEvent(type: PhysicsEvent['type'], description: string, data?: unknown) {
     if (!this.recording) return;
     
     const time = (performance.now() - this.startTime) / 1000;
@@ -218,10 +218,11 @@ export const physicsRecorder = new PhysicsRecorder();
 
 // Global helper functions for easy access from console
 if (typeof window !== 'undefined') {
-  (window as any).startRecording = () => physicsRecorder.start();
-  (window as any).stopRecording = () => physicsRecorder.stop();
-  (window as any).exportRecording = () => physicsRecorder.copyToClipboard();
-  (window as any).marker = (label: string) => physicsRecorder.addMarker(label);
+  const w = window as unknown as Record<string, unknown>;
+  w.startRecording = () => physicsRecorder.start();
+  w.stopRecording = () => physicsRecorder.stop();
+  w.exportRecording = () => physicsRecorder.copyToClipboard();
+  w.marker = (label: string) => physicsRecorder.addMarker(label);
   
   console.log('📹 Physics Recorder ready! Use these commands:');
   console.log('  startRecording()  - Begin recording');

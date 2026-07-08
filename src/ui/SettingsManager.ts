@@ -15,6 +15,7 @@ export interface UIColors {
 }
 
 export interface PhysicsSettings {
+  BALL_ROTATION_MULTIPLIER_3D: number;
   BALL_RESTITUTION: number;
   BALL_BALL_FRICTION: number;
   CUSHION_RESTITUTION: number;
@@ -46,6 +47,7 @@ const DEFAULT_UI_COLORS: UIColors = {
 };
 
 const DEFAULT_PHYSICS_SETTINGS: PhysicsSettings = {
+  BALL_ROTATION_MULTIPLIER_3D: 1.0,
   BALL_RESTITUTION: 0.93,
   BALL_BALL_FRICTION: 0.05,
   CUSHION_RESTITUTION: 0.88,
@@ -201,7 +203,7 @@ export class SettingsManager {
   private applyPhysicsSettings() {
     // Update CONFIG with loaded physics settings
     Object.entries(this.physicsSettings).forEach(([key, value]) => {
-      (CONFIG as any)[key] = value;
+      (CONFIG as unknown as Record<string, number>)[key] = value;
     });
   }
 

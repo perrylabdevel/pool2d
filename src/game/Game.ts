@@ -74,10 +74,11 @@ export class Game {
     }
     
     // Expose debug functions globally
-    (window as any).debugRotation = () => this.renderer.debugRotation();
-    (window as any).testRotation = (ballId: number, angle: number = 1.0) => this.renderer.testRotation(ballId, angle);
-    (window as any).testRotationX = (ballId: number, angle: number = 1.0) => this.renderer.testRotationX(ballId, angle);
-    (window as any).replaceWithTestBall = (ballId: number) => this.renderer.replaceWithTestBall(ballId);
+    const w = window as unknown as Record<string, unknown>;
+    w.debugRotation = () => this.renderer.debugRotation();
+    w.testRotation = (ballId: number, angle: number = 1.0) => this.renderer.testRotation(ballId, angle);
+    w.testRotationX = (ballId: number, angle: number = 1.0) => this.renderer.testRotationX(ballId, angle);
+    w.replaceWithTestBall = (ballId: number) => this.renderer.replaceWithTestBall(ballId);
   }
   
   setupCallbacks() {
@@ -105,6 +106,23 @@ export class Game {
         this.isAimMode = !this.isAimMode;
       }
     });
+    
+    // Wire physics events into the rules engine
+    this.world.onBallPocketed = (ballId) => {
+      if (this.mode === GameMode.EIGHT_BALL) {
+        this.rules.recordBallPocketed(ballId);
+      }
+    };
+    
+    this.world.onBallBallContact = (idA, idB) => {
+      if (this.mode !== GameMode.EIGHT_BALL) return;
+      const cueId = this.cueBall ? this.cueBall.id : 0;
+      if (idA === cueId) {
+        this.rules.recordFirstContact(idB);
+      } else if (idB === cueId) {
+        this.rules.recordFirstContact(idA);
+      }
+    };
     
     this.rules.onFoul = (message) => {
       this.hud.showFoul(message);
@@ -261,6 +279,16 @@ export class Game {
       if (this.mode === GameMode.EIGHT_BALL) {
         this.rules.endShot(this.world.balls);
       }
+      
+      // Respot the cue ball after a scratch (simplified ball-in-hand)
+      if (this.cueBall && this.cueBall.pocketed) {
+        this.cueBall.pocketed = false;
+        this.cueBall.sleeping = true;
+        this.cueBall.setVelocity(0, 0);
+        this.cueBall.x = CUE_BALL_POSITION.x;
+        this.cueBall.y = CUE_BALL_POSITION.y;
+        this.cueBall.saveState();
+      }
     }
   }
   
@@ -354,6 +382,11 @@ export class Game {
       mouseY <= bounds.y + bounds.height
     ) {
       this.isDraggingPower = true;
+      // If still aiming, lock in the current aim so the shot fires where the player is pointing
+      if (this.isAimMode && this.cueBall) {
+        this.lockedAngle = this.input.getAimAngle(this.cueBall);
+        this.isAimMode = false;
+      }
       // Reverse: pulling down increases power (mouseY closer to bottom = higher power)
       this.currentPower = ((mouseY - bounds.y) / bounds.height) * CONFIG.CUE_POWER_MAX;
       this.currentPower = Math.max(CONFIG.CUE_POWER_MIN, Math.min(CONFIG.CUE_POWER_MAX, this.currentPower));

@@ -1,6 +1,6 @@
 // Settings panel for live physics tuning
 import { CONFIG } from '../config';
-import { SettingsManager } from './SettingsManager';
+import { SettingsManager, PhysicsSettings } from './SettingsManager';
 
 export class SettingsPanel {
   private panel: HTMLElement;
@@ -48,7 +48,7 @@ export class SettingsPanel {
         ${this.createSlider('BALL_RESTITUTION', 'Ball-Ball Restitution', 0.5, 1.0, 0.01, CONFIG.BALL_RESTITUTION)}
         ${this.createSlider('BALL_BALL_FRICTION', 'Ball-Ball Friction', 0.0, 0.3, 0.01, CONFIG.BALL_BALL_FRICTION)}
         ${this.createSlider('CUSHION_RESTITUTION', 'Cushion Restitution', 0.5, 1.0, 0.01, CONFIG.CUSHION_RESTITUTION)}
-        ${this.createSlider('BALL_ROTATION_MULTIPLIER', 'Rotation Speed', 0.0, 1.0, 0.01, CONFIG.BALL_ROTATION_MULTIPLIER)}
+        ${this.createSlider('BALL_ROTATION_MULTIPLIER_3D', 'Rotation Speed (3D)', 0.0, 2.0, 0.05, CONFIG.BALL_ROTATION_MULTIPLIER_3D)}
       </div>
 
       <div style="margin-bottom: 20px;">
@@ -121,7 +121,7 @@ export class SettingsPanel {
         const value = parseFloat(input.value);
         
         // Update CONFIG
-        (CONFIG as any)[key] = value;
+        (CONFIG as unknown as Record<string, number>)[key] = value;
         
         // Update display value with appropriate precision
         const valueDisplay = this.panel.querySelector(`#${key}-value`);
@@ -132,7 +132,7 @@ export class SettingsPanel {
         }
         
         // Save to local storage
-        this.settingsManager.savePhysicsSettings({ [key]: value } as any);
+        this.settingsManager.savePhysicsSettings({ [key]: value } as Partial<PhysicsSettings>);
         
         console.log(`⚙️ ${key} = ${value}`);
       });
@@ -166,7 +166,7 @@ export class SettingsPanel {
     const config = {
       BALL_RESTITUTION: CONFIG.BALL_RESTITUTION,
       BALL_BALL_FRICTION: CONFIG.BALL_BALL_FRICTION,
-      BALL_ROTATION_MULTIPLIER: CONFIG.BALL_ROTATION_MULTIPLIER,
+      BALL_ROTATION_MULTIPLIER_3D: CONFIG.BALL_ROTATION_MULTIPLIER_3D,
       CUSHION_RESTITUTION: CONFIG.CUSHION_RESTITUTION,
       CUE_POWER_MAX: CONFIG.CUE_POWER_MAX,
       CUE_POWER_MULTIPLIER: CONFIG.CUE_POWER_MULTIPLIER,

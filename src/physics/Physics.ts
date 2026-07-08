@@ -12,6 +12,10 @@ export class PhysicsWorld {
   rails: Rail[] = [];
   pockets: Pocket[] = [];
   
+  // Event callbacks (wired by Game)
+  onBallPocketed?: (ballId: number) => void;
+  onBallBallContact?: (idA: number, idB: number) => void;
+  
   constructor() {
     this.initializeRails();
     this.initializePockets();
@@ -143,6 +147,9 @@ export class PhysicsWorld {
         contacts.forEach((contact) => {
           if (contact.ballB) {
             resolveBallBall(contact);
+            if (this.onBallBallContact) {
+              this.onBallBallContact(contact.ballA.id, contact.ballB.id);
+            }
           } else if (contact.rail) {
             resolveBallRail(contact);
           }
@@ -190,7 +197,9 @@ export class PhysicsWorld {
           ball.vx = 0;
           ball.vy = 0;
           physicsRecorder.recordPocket(ball);
-          // Notify game logic (will be handled by Game class)
+          if (this.onBallPocketed) {
+            this.onBallPocketed(ball.id);
+          }
           break;
         }
       }

@@ -12,7 +12,11 @@ describe('Physics - Ball Collision', () => {
     const contact = detectBallBall(ball1, ball2);
     
     expect(contact).not.toBeNull();
-    expect(contact?.depth).toBeGreaterThan(0);
+    // detectBallBall separates overlapping balls in place, so post-contact
+    // depth is ~0 and the balls should sit exactly at touching distance.
+    const dist = Math.hypot(ball2.x - ball1.x, ball2.y - ball1.y);
+    expect(dist).toBeCloseTo(ball1.radius + ball2.radius, 5);
+    expect(contact?.depth).toBeGreaterThanOrEqual(0);
   });
   
   it('should not detect collision between separated balls', () => {

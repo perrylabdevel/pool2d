@@ -84,7 +84,7 @@ export class AssetLoader {
           return { ballId: parseInt(ballId), texture };
         } catch (error) {
           console.error(`❌ Failed to load texture for ball ${ballId} at ${path}:`, error);
-          return { ballId: parseInt(ballId), texture: null as any };
+          return { ballId: parseInt(ballId), texture: null as unknown as THREE.Texture };
         }
       });
 

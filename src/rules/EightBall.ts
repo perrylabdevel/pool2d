@@ -93,7 +93,7 @@ export class EightBallRules {
     
     // Handle 8-ball pocketed
     if (this.ballsPocketed.includes(BALL_8)) {
-      this.handle8BallPocketed(foul);
+      this.handle8BallPocketed(foul, balls);
       return;
     }
     
@@ -157,9 +157,9 @@ export class EightBallRules {
     }
   }
   
-  handle8BallPocketed(foul: boolean) {
+  handle8BallPocketed(foul: boolean, balls: Ball[]) {
     // Check if player has cleared their group
-    const hasCleared = this.hasPlayerClearedGroup(this.currentPlayer);
+    const hasCleared = this.hasPlayerClearedGroup(this.currentPlayer, balls);
     
     if (foul || !hasCleared) {
       // Lose if 8-ball pocketed early or with foul
@@ -219,16 +219,19 @@ export class EightBallRules {
     return false;
   }
   
-  hasPlayerClearedGroup(player: number): boolean {
-    // Check if all balls of player's group are pocketed
+  hasPlayerClearedGroup(player: number, balls: Ball[]): boolean {
+    // Player has cleared their group when every ball in it was pocketed
+    // BEFORE this shot. Potting the last group ball and the 8 on the same
+    // stroke still counts as an early 8 (loss).
     const group = player === 1 ? this.player1Group : this.player2Group;
     
     if (group === PlayerGroup.NONE) return false;
     
-    // In a real implementation, we'd check the actual ball states
-    // For now, simplified - will be properly implemented when integrated with game state
-    // const targetBalls = group === PlayerGroup.SOLIDS ? BALLS_SOLID : BALLS_STRIPE;
-    return false;
+    const targetBalls = group === PlayerGroup.SOLIDS ? BALLS_SOLID : BALLS_STRIPE;
+    return targetBalls.every((id) => {
+      const ball = balls.find((b) => b.id === id);
+      return !!ball?.pocketed && !this.ballsPocketed.includes(id);
+    });
   }
   
   switchPlayer() {

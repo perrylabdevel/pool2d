@@ -434,6 +434,9 @@ class ShotCaptureSystem {
 
 export const shotCapture = new ShotCaptureSystem();
 
-// Global helpers
-(window as any).captureShot = () => shotCapture.startCapture();
-(window as any).cancelCapture = () => shotCapture.cancelCapture();
+// Global helpers (browser only; guarded so tests can import this module in Node)
+if (typeof window !== 'undefined') {
+  const w = window as unknown as Record<string, unknown>;
+  w.captureShot = () => shotCapture.startCapture();
+  w.cancelCapture = () => shotCapture.cancelCapture();
+}
