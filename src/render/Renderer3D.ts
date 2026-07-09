@@ -24,6 +24,7 @@ export class Renderer3D {
   tableMesh: THREE.Mesh | null = null;
   railMeshes: THREE.Mesh[] = [];
   pocketMeshes: THREE.Mesh[] = [];
+  frameMeshes: THREE.Mesh[] = [];
   showMeasurementOverlay = false;
   
   // UI elements
@@ -154,7 +155,7 @@ export class Renderer3D {
         
         // Clone the original material and upgrade to StandardMaterial
         const originalMaterial = Array.isArray(child.material) ? child.material[0] : child.material;
-        const originalMap = (originalMaterial as any).map; // Get original texture if it exists
+        const originalMap = (originalMaterial as THREE.Material & { map?: THREE.Texture | null }).map; // Get original texture if it exists
         
         console.log(`   Original has embedded texture:`, originalMap !== null && originalMap !== undefined);
         
@@ -277,6 +278,14 @@ export class Renderer3D {
   }
   
   initializeTable() {
+    // Remove previous table/frame meshes so restart doesn't duplicate scene objects
+    if (this.tableMesh) {
+      this.scene.remove(this.tableMesh);
+      this.tableMesh = null;
+    }
+    this.frameMeshes.forEach((m) => this.scene.remove(m));
+    this.frameMeshes = [];
+    
     // Create table felt
     const tableGeometry = new THREE.PlaneGeometry(
       TABLE_GEOMETRY.playWidthIn,
@@ -310,6 +319,7 @@ export class Renderer3D {
     );
     topFrame.position.set(0, halfH + frameWidth / 2, frameHeight / 2);
     this.scene.add(topFrame);
+    this.frameMeshes.push(topFrame);
     
     // Bottom frame
     const bottomFrame = new THREE.Mesh(
@@ -318,6 +328,7 @@ export class Renderer3D {
     );
     bottomFrame.position.set(0, -halfH - frameWidth / 2, frameHeight / 2);
     this.scene.add(bottomFrame);
+    this.frameMeshes.push(bottomFrame);
     
     // Left frame
     const leftFrame = new THREE.Mesh(
@@ -326,6 +337,7 @@ export class Renderer3D {
     );
     leftFrame.position.set(-halfW - frameWidth / 2, 0, frameHeight / 2);
     this.scene.add(leftFrame);
+    this.frameMeshes.push(leftFrame);
     
     // Right frame
     const rightFrame = new THREE.Mesh(
@@ -334,9 +346,13 @@ export class Renderer3D {
     );
     rightFrame.position.set(halfW + frameWidth / 2, 0, frameHeight / 2);
     this.scene.add(rightFrame);
+    this.frameMeshes.push(rightFrame);
   }
   
   initializeRails(rails: Rail[]) {
+    this.railMeshes.forEach((m) => this.scene.remove(m));
+    this.railMeshes = [];
+    
     const railMaterial = new THREE.MeshStandardMaterial({
       color: new THREE.Color(CONFIG.RAIL_COLOR),
       roughness: 0.5,
@@ -365,6 +381,9 @@ export class Renderer3D {
   }
   
   initializePockets(pockets: Pocket[]) {
+    this.pocketMeshes.forEach((m) => this.scene.remove(m));
+    this.pocketMeshes = [];
+    
     const pocketMaterial = new THREE.MeshBasicMaterial({
       color: 0x000000,
       depthTest: false // This forces it to render on top

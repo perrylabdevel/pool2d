@@ -6,7 +6,7 @@ import { Ball, Rail, Pocket } from '../physics/Shapes';
 import { PhysicsWorld } from '../physics/Physics';
 import { CONFIG, BALL_CUE } from '../config';
 import { TABLE_GEOMETRY } from '../geometry/Geometry';
-import { PredictionResult } from '../physics/Prediction';
+import { PredictionResult, Predictor } from '../physics/Prediction';
 
 export class Renderer {
   canvas: HTMLCanvasElement;
@@ -321,7 +321,7 @@ export class Renderer {
     this.ctx.restore();
   }
   
-  drawTrajectoryLines(prediction: PredictionResult, cueBallPos: { x: number; y: number }, shotDirection: { x: number; y: number }, predictor: any) {
+  drawTrajectoryLines(prediction: PredictionResult, cueBallPos: { x: number; y: number }, shotDirection: { x: number; y: number }, predictor: Predictor) {
     if (prediction.type === 'none') return;
     
     this.ctx.save();
