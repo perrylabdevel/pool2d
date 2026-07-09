@@ -1,4 +1,3 @@
-import { ColorTokens } from '../theme/ColorTokens';
 
 export type BackgroundTheme = 'blue' | 'red' | 'yellow' | 'purple' | 'green';
 

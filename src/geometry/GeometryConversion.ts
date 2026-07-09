@@ -162,7 +162,6 @@ function modernPocketToLegacyCorner(corner: PocketConfig): {
   const targetY = PLAY_HALF_H_IN - corner.railDepth;
 
   const throatHalf = Math.max(0.75, corner.throatWidth / 2);
-  const mouthHalf = corner.mouthWidth / 2;
 
   // Calculate taper: how much pocket widens from throat to mouth
   // Example: (5.0 - 4.0) / 2 = 0.5" per side

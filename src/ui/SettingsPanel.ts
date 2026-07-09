@@ -235,7 +235,8 @@ export class SettingsPanel {
       { sliderId: 'BALL_SCALE', labelId: 'BALL_SCALE-value', onChange: (v) => this.updateRenderSetting('BALL_SCALE', v!) },
     ];
 
-    bindSliders([...physicsSliderConfigs, ...renderSliderConfigs]);
+    bindSliders(physicsSliderConfigs);
+    bindSliders(renderSliderConfigs);
   }
 
   private updateRenderSetting(key: 'CANVAS_SCALE_MULTIPLIER' | 'BALL_SCALE', value: number) {
@@ -261,7 +262,7 @@ export class SettingsPanel {
       return;
     }
 
-    this.physicsConfig[key] = value;
+    (this.physicsConfig as unknown as Record<string, number>)[key] = value;
     const physicsUpdate: Partial<PhysicsSettings> = { [key]: value } as Partial<PhysicsSettings>;
     this.settingsManager.savePhysicsSettings(physicsUpdate);
     console.log(`⚙ ${key} = ${value}`);

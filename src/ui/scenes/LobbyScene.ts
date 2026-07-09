@@ -8,7 +8,7 @@ import {
 import { ColorTokens, SemanticColors } from '../theme/ColorTokens';
 import { LayoutConstants, getDeviceType } from '../theme/LayoutConstants';
 import { NavigationBar } from '../components/NavigationBar';
-import { ChestSlotsBar, CHEST_BAR_HEIGHT } from '../components/ChestSlotsBar';
+import { ChestSlotsBar } from '../components/ChestSlotsBar';
 import { Game, GameMode } from '../../game/Game';
 import { GameState } from '../../game/GameStateMachine';
 import { ConfirmScene } from './ConfirmScene';
@@ -203,7 +203,7 @@ export class LobbyScene implements UIScene {
         }
     }
 
-    private setupLandscapeLayout(width: number, _height: number, padding: number, gap: number, topSpacing: number, availableHeight: number, cardDefs: Array<{ id: string; text: string; subtitle: string; icon: string; color: string; action: () => void }>) {
+    private setupLandscapeLayout(width: number, _height: number, _padding: number, _gap: number, topSpacing: number, availableHeight: number, cardDefs: Array<{ id: string; text: string; subtitle: string; icon: string; color: string; action: () => void }>) {
         // In landscape, spread cards across full width and height
         const sidePadding = 16;
         const contentWidth = width - sidePadding * 2;

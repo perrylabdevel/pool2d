@@ -10,8 +10,6 @@ import { TableTextureManager } from '../../textures/TableTextureManager';
 import skinUrl from '../../assets/tmp/skin.png';
 import type { TableAppearance } from '../../textures/TableAppearance';
 
-type FrameClipInfo = { outerX: number; outerY: number; radius: number };
-
 export class TableRenderer {
     // Mesh references
     tableMesh: THREE.Mesh | null = null;
@@ -28,8 +26,6 @@ export class TableRenderer {
     private pocketRimMeshes: THREE.Mesh[] = [];
     pocketCapMeshes: THREE.Mesh[] = [];
     railFillMesh: THREE.Mesh | null = null;
-    private tableHighlightMesh: THREE.Mesh | null = null;
-    private tableShadowMesh: THREE.Mesh | null = null;
     private railHighlightMeshes: THREE.Mesh[] = [];
     private railShadowMeshes: THREE.Mesh[] = [];
     private railShadowRibbonMesh: THREE.Mesh | null = null;
@@ -39,8 +35,6 @@ export class TableRenderer {
 
     // Data
     private railLines: Array<{ start: Vec2; end: Vec2; nx: number; ny: number }> = [];
-    private debugRailSegments: Array<{ id: string; inner: Vec2; trimmed: Vec2; startOuter: Vec2 }> = [];
-    private frameClipInfo: FrameClipInfo | null = null;
     private lastPocketDefs: PocketDef[] = [];
     private playBoundaryPoints: Vec2[] = [];
     private playBounds: BoundaryBounds = { minX: 0, maxX: 0, minY: 0, maxY: 0, width: 0, height: 0 };
@@ -53,9 +47,7 @@ export class TableRenderer {
     private pocketShadowMaterial: THREE.MeshBasicMaterial | null = null;
     private railHighlightTexture: THREE.CanvasTexture | null = null;
     private pocketHighlightTexture: THREE.CanvasTexture | null = null;
-    private pocketShadowTexture: THREE.CanvasTexture | null = null;
     private pocketGradientTexture: THREE.CanvasTexture | null = null;
-    private pocketCapMaterial: THREE.MeshBasicMaterial | null = null;
     private pocketSideMaterial: THREE.MeshBasicMaterial | null = null;
     private feltMaterial: THREE.MeshStandardMaterial | null = null;
     private frameMaterial: THREE.MeshStandardMaterial | null = null;
@@ -97,7 +89,6 @@ export class TableRenderer {
     private gradientEdgeColor = '#141414';
     private pocketGradientStrength = 1.0;
 
-    private stencilAppliedOnce: boolean = false;
     private debugMode: boolean = false;
 
     constructor(
@@ -390,31 +381,6 @@ export class TableRenderer {
             recommendedImagePxForCurrentPpi: `${recommendedPxForCurrentPpiW}x${recommendedPxForCurrentPpiH}`,
             recommendedImagePxKeepWidth: `${imageWidthPx}x${recommendedPxKeepWidthH}`,
         });
-    }
-
-    private applyNormalizedUVs(geometry: THREE.BufferGeometry, bounds: BoundaryBounds) {
-        const { minX, maxX, minY, maxY } = bounds;
-        const width = maxX - minX;
-        const height = maxY - minY;
-
-        if (width <= 0 || height <= 0) return;
-
-        const posAttribute = geometry.attributes.position;
-        const uvAttribute = geometry.attributes.uv || new THREE.BufferAttribute(new Float32Array(posAttribute.count * 2), 2);
-
-        for (let i = 0; i < posAttribute.count; i++) {
-            const x = posAttribute.getX(i);
-            const y = posAttribute.getY(i);
-
-            // Map x from [minX, maxX] to [0, 1]
-            const u = (x - minX) / width;
-            // Map y from [minY, maxY] to [0, 1]
-            const v = (y - minY) / height;
-
-            uvAttribute.setXY(i, u, v);
-        }
-        geometry.setAttribute('uv', uvAttribute);
-        uvAttribute.needsUpdate = true;
     }
 
 
@@ -716,7 +682,6 @@ export class TableRenderer {
     }
 
     initializeRails(rails: Rail[]) {
-        this.debugRailSegments = [];
         this.railLines = [];
 
         // Clear existing rail meshes to prevent duplicates
@@ -1424,45 +1389,6 @@ export class TableRenderer {
             (this.railFillMesh.material as THREE.Material).dispose();
             this.railFillMesh = null;
         }
-    }
-
-    private intersectLineWithCornerArc3D(
-        start: Vec2,
-        dir: Vec2,
-        signX: number,
-        signY: number,
-        clip: FrameClipInfo
-    ): { t: number; point: Vec2 } | null {
-        const a = dir.x * dir.x + dir.y * dir.y;
-        if (a < 1e-8) return null;
-
-        const centerX = (signX >= 0 ? 1 : -1) * (clip.outerX - clip.radius);
-        const centerY = (signY >= 0 ? 1 : -1) * (clip.outerY - clip.radius);
-
-        const ox = start.x - centerX;
-        const oy = start.y - centerY;
-
-        const b = 2 * (dir.x * ox + dir.y * oy);
-        const c = ox * ox + oy * oy - clip.radius * clip.radius;
-        const discriminant = b * b - 4 * a * c;
-        if (discriminant < 0) return null;
-        const sqrt = Math.sqrt(discriminant);
-
-        const tCandidates = [
-            (-b - sqrt) / (2 * a),
-            (-b + sqrt) / (2 * a),
-        ];
-
-        const valid = tCandidates.filter((candidate) => candidate > 1e-4 && candidate <= 1.5);
-        if (!valid.length) return null;
-        const t = Math.min(...valid);
-        return {
-            t,
-            point: {
-                x: start.x + dir.x * t,
-                y: start.y + dir.y * t,
-            },
-        };
     }
 
     private enforceRenderOrderControl(object: THREE.Object3D, options?: { disableDepth?: boolean }) {

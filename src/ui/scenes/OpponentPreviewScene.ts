@@ -16,7 +16,6 @@ import { OpponentDef } from '../../data/models';
 import { db } from '../../data/db';
 import { getLeagueById } from '../../game/leagues/LeagueSystem';
 import { getTierFromLeagueId } from '../../game/leagues/LeagueIdentity';
-import { Game } from '../../game/Game';
 
 interface PreviewButton {
     id: 'play' | 'change';
@@ -143,9 +142,9 @@ export class OpponentPreviewScene implements UIScene {
                 consistency: 0.5,
                 aggression: 0.3,
                 speed: 0.5,
-                spinControl: 0.2
-            },
-            difficulty: 0.3
+                spinPreference: 0.2,
+                errorRate: 0.1
+            }
         };
     }
 
@@ -158,7 +157,6 @@ export class OpponentPreviewScene implements UIScene {
 
         const buttonWidth = 180;
         const buttonHeight = 56;
-        const gap = 20;
         const centerX = width / 2;
         const buttonY = height * 0.82;
 

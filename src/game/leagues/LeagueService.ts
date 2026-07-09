@@ -198,7 +198,7 @@ export class LeagueService {
         if (rank <= 3) {
             const nextLeague = this.getNextLeague(leagueId);
             if (nextLeague) {
-                newLeagueId = nextLeague.id;
+                newLeagueId = nextLeague.id as typeof leagueId;
                 promoted = true;
             }
             // Rewards
@@ -210,7 +210,7 @@ export class LeagueService {
         else if (rank >= 18) {
             const prevLeague = this.getPreviousLeague(leagueId);
             if (prevLeague) {
-                newLeagueId = prevLeague.id;
+                newLeagueId = prevLeague.id as typeof leagueId;
                 relegated = true;
             }
         }

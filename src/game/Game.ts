@@ -51,7 +51,6 @@ import {
   getMicroAimOffsetDegrees,
   isSpotOpen,
   placeCueBall,
-  awardChestForWin,
   processMatchEnd,
   getPocketLabel as getPocketLabelFromController,
   getPocketChoices as getPocketChoicesFromController,
@@ -63,7 +62,6 @@ import {
   // AIController
   updateAITurn,
   type AIState,
-  createInitialAIState,
   // BallInHandController - drag handling
   isClickOnCueBall,
   processDragPosition,
@@ -2482,10 +2480,6 @@ export class Game {
     return getMicroAimOffsetDegrees(this.microAimDialValue);
   }
 
-  private getMicroAimOffsetRadians(): number {
-    return this.getMicroAimOffsetDegrees() * Math.PI / 180;
-  }
-
   /**
    * Apply micro aim offset to angle
    * Delegates to ShootingController.applyMicroAimOffset
@@ -3435,14 +3429,6 @@ export class Game {
       return `${message} Place the cue ball behind the head string.`;
     }
     return message;
-  }
-
-  /**
-   * Award a chest for winning a match (Miniclip style)
-   * Delegates to MatchManager.awardChestForWin
-   */
-  private async awardChestForWinInternal(clubId: string): Promise<string | null> {
-    return awardChestForWin(clubId);
   }
 
   private updateBallInHandAssistState(): void {

@@ -1,13 +1,9 @@
 
-import { UIScene, sceneController, TransitionType } from '../SceneController';
+import { UIScene } from '../SceneController';
 import { uiStateMachine, UIState } from '../UIStateMachine';
 import {
-    drawGlossyButton,
-    drawPanel,
-    drawCurrencyPill,
-    drawRoundedRect,
-    UIColors,
-    Rect
+          drawRoundedRect,
+      Rect
 } from '../components/UIComponents';
 import { ColorTokens } from '../theme/ColorTokens';
 import { LayoutConstants } from '../theme/LayoutConstants';
@@ -239,7 +235,6 @@ export class PlayModesScene implements UIScene {
             this.scrollOffset = Math.min(this.scrollOffset, this.maxScroll);
         } else {
             // Horizontal layout for landscape/desktop - cards positioned relative to 0
-            const columns = Math.min(4, modes.length || 3);
             const startX = padding;
 
             modes.forEach((mode, index) => {
@@ -344,7 +339,7 @@ export class PlayModesScene implements UIScene {
         }
     }
 
-    update(dt: number): void {
+    update(_dt: number): void {
     }
 
     render(ctx: CanvasRenderingContext2D): void {
@@ -634,7 +629,6 @@ export class PlayModesScene implements UIScene {
 
         // Accent underline
         const titleWidth = ctx.measureText(card.title).width;
-        const underlineY = textStartY - titleFontSize + 4;
         ctx.fillStyle = card.color;
         ctx.fillRect(textStartX, textStartY + 4, Math.min(titleWidth, innerWidth - textPadding * 2), 4);
 

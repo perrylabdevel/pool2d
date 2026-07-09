@@ -39,7 +39,6 @@ export class WoodGrainPattern extends BasePattern {
                 const knotInfluence = this.getKnotInfluence(x, y, knots);
 
                 // Growth rings (circular around knots)
-                const angle = Math.atan2(y - height / 2, x - width / 2);
                 const distance = Math.sqrt(
                     ((x - width / 2) ** 2) + ((y - height / 2) ** 2)
                 );

@@ -7,13 +7,10 @@ import { notificationService } from '../ui/NotificationService';
 export class RemoteBridge {
     private ws!: WebSocket;
     private settingsManager: SettingsManager;
-    private renderer: Renderer3D;
     private reconnectInterval: number = 1000;
-    private isProcessingRemoteCommand: boolean = false;
 
-    constructor(settingsManager: SettingsManager, renderer: Renderer3D) {
+    constructor(settingsManager: SettingsManager, _renderer: Renderer3D) {
         this.settingsManager = settingsManager;
-        this.renderer = renderer;
         this.loadPendingSkinFromStorage();
         this.connect();
         this.setupListeners();
@@ -400,6 +397,11 @@ export class RemoteBridge {
         } catch (e) {
             console.warn('[RemoteBridge] Failed to send notification config', e);
         }
+    }
+
+    private handleCommand(command: string, payload?: unknown) {
+        console.log('[RemoteBridge] Received command', command, payload);
+        window.dispatchEvent(new CustomEvent('remote:command', { detail: { command, payload } }));
     }
 
     private handleTableEditorPush(config: any) {

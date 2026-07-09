@@ -786,7 +786,7 @@ export class BallRenderer {
         }
     }
 
-    setDebugMode(enabled: boolean) {
+    setDebugMode(_enabled: boolean) {
         // Placeholder for future debug visualization on balls
     }
 

@@ -162,11 +162,11 @@ export class HUD {
     if (this.upsElement) this.upsElement.textContent = `UPS: ${Math.round(ups)}`;
   }
 
-  setPlaybackMode(active: boolean) {
+  setPlaybackMode(_active: boolean) {
     // Overlay removed. Status is now handled by the panels themselves.
   }
 
-  updatePlaybackTime(currentTime: number, totalDuration: number, timestamp?: number) {
+  updatePlaybackTime(_currentTime: number, _totalDuration: number, _timestamp?: number) {
     // Moved to PlaybackPanel
   }
 

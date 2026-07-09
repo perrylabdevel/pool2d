@@ -2,8 +2,8 @@ import { TextureConfig, TEXTURE_PRESETS } from '../TextureConfig';
 import { TextureGenerator } from '../TextureGenerator';
 
 export class TextureEditor {
-    private container: HTMLDivElement;
-    private preview: HTMLCanvasElement;
+    private container!: HTMLDivElement;
+    private preview!: HTMLCanvasElement;
     private currentConfig: TextureConfig;
     private onApply: (config: TextureConfig) => void;
 

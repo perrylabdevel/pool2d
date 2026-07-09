@@ -16,7 +16,6 @@ export class PlaybackController {
 
     // Navigation state
     currentShotIndex: number = -1;
-    private lastEventTime: number = 0;
 
     // Events
     onTimeUpdate?: (time: number) => void;
@@ -35,7 +34,6 @@ export class PlaybackController {
         this.currentTime = 0;
         this.currentShotIndex = -1;
         this.playbackSpeed = 1.0;
-        this.lastEventTime = 0;
 
         // Reset world to initial state
         this.seek(0);
@@ -57,7 +55,6 @@ export class PlaybackController {
         if (!this.matchData) return;
         this.isPlaying = true;
         this.onStateChange?.(true);
-        this.lastEventTime = this.currentTime;
     }
 
     pause() {
@@ -161,7 +158,6 @@ export class PlaybackController {
         this.currentTime = Math.max(0, Math.min(time, this.duration));
 
         // Reset event tracking on seek (don't play sounds during scrub)
-        this.lastEventTime = this.currentTime;
 
         // Use global snapshots for interpolation
         if (this.matchData.snapshots && this.matchData.snapshots.length > 0) {
@@ -191,12 +187,6 @@ export class PlaybackController {
                 }));
             }
         });
-    }
-
-    private updateWorldState(time: number) {
-        // Deprecated in favor of direct seek logic using global snapshots
-        // But kept if needed for specific shot logic later
-        this.seek(time);
     }
 
     private applySnapshotInterpolation(snapshots: PhysicsSnapshot[], time: number) {

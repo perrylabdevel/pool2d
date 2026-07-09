@@ -9,8 +9,7 @@
  */
 
 import { Ball } from '../../physics/Shapes';
-import { getTableGeometry } from '../../geometry/Geometry';
-import { BALL_8 } from '../../config';
+import { getTableGeometry, type Vec2 } from '../../geometry/Geometry';
 
 // Pocket labels for display (legacy IDs)
 const POCKET_LABELS: Record<string, string> = {

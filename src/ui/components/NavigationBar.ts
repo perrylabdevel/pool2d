@@ -32,7 +32,6 @@ export class NavigationBar {
     private buttons: NavButton[] = [];
     private hoveredButton: NavButton | null = null;
     private height = 104; // Match HUD header: 12px header padding + (8px player padding + 64px avatar + 8px player padding) + 12px header padding
-    private logoImage: HTMLImageElement;
     private profileAvatarUrl: string | null = null;
     private profileFrameUrl: string | null = null;
     private profileLoadStarted = false;
@@ -49,7 +48,7 @@ export class NavigationBar {
         };
 
         // Load logo image
-        this.logoImage = AssetLoader.loadImageSync(AssetRegistry.branding.logo());
+        AssetLoader.loadImageSync(AssetRegistry.branding.logo()); // preload logo
         this.ensureProfileVisualsLoaded();
     }
 

@@ -127,11 +127,9 @@ export class CueRenderer {
         const ballY = ball.prevY + (ball.y - ball.prevY) * alpha;
 
         // Raw endpoints in world space (behind the ball opposite shot direction)
-        const rawNear = { x: ballX - Math.cos(angle) * cueDistance, y: ballY - Math.sin(angle) * cueDistance };
         const rawFar = { x: ballX - Math.cos(angle) * (cueDistance + cueLength), y: ballY - Math.sin(angle) * (cueDistance + cueLength) };
 
         // Do NOT clamp to rails — allow cue to extend into padded world area without clipping
-        const cueStart = this.worldToScreen(rawNear.x, rawNear.y);
         const cueEnd = this.worldToScreen(rawFar.x, rawFar.y);
 
         // Scale cue thickness with world scale (about 1 inch diameter in world units)
@@ -791,7 +789,7 @@ export class CueRenderer {
         ctx.restore();
     }
 
-    drawAimInfo(ball: Ball, angle: number, power: number, prediction?: PredictionResult) {
+    drawAimInfo(ball: Ball, angle: number, _power: number, prediction?: PredictionResult) {
         const ctx = this.uiCtx;
         const drawRoundedRect = (x: number, y: number, w: number, h: number, r: number) => {
             const radius = Math.min(r, w / 2, h / 2);
@@ -812,7 +810,6 @@ export class CueRenderer {
         let angleDeg = (angle * 180 / Math.PI) % 360;
         if (angleDeg < 0) angleDeg += 360;
 
-        const velocity = power * CONFIG.CUE_POWER_MULTIPLIER;
         const distanceText = prediction && prediction.type !== 'none' ? `${prediction.distance.toFixed(1)}"` : '';
 
         let cutAngleText = '';
@@ -1031,7 +1028,7 @@ export class CueRenderer {
         }
     }
 
-    drawPhysicsTrajectoryLines(shotPaths: ShotPreviewPaths, cueBallPos: { x: number; y: number }, debugMode: boolean = false) {
+    drawPhysicsTrajectoryLines(shotPaths: ShotPreviewPaths, _cueBallPos: { x: number; y: number }, debugMode: boolean = false) {
         this.trajectoryLines.forEach(line => this.scene.remove(line));
         this.trajectoryLines = [];
 
@@ -1115,7 +1112,7 @@ export class CueRenderer {
 
         let pathLengthMultiplier = 1.0;
         if (!debugMode && shotPaths.firstContact?.type === 'ball') {
-            const contactIdx = shotPaths.cuePath.findIndex((p, i) => {
+            const contactIdx = shotPaths.cuePath.findIndex((_p, i) => {
                 if (i === 0) return false;
                 const prev = shotPaths.cuePath[i - 1];
                 const dist = Math.hypot(
@@ -1209,7 +1206,7 @@ export class CueRenderer {
         });
 
         if (shotPaths.firstContact && shotPaths.cuePath.length > 2) {
-            const contactIdx = shotPaths.cuePath.findIndex((p, i) => {
+            const contactIdx = shotPaths.cuePath.findIndex((_p, i) => {
                 if (i === 0) return false;
                 const prev = shotPaths.cuePath[i - 1];
                 const dist = Math.hypot(

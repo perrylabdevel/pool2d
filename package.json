@@ -8,6 +8,7 @@
     "dev:relay": "node scripts/relay-server.js",
     "dev:table-save": "node scripts/table-editor-save-server.js",
     "build": "vite build",
+    "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "test": "vitest run",
     "lint": "eslint src --ext .ts,.js",

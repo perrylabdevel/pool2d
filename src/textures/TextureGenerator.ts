@@ -1,4 +1,4 @@
-import { TextureConfig, PatternType } from './TextureConfig';
+import { TextureConfig } from './TextureConfig';
 import { WeavePattern } from './patterns/WeavePattern';
 import { WoodGrainPattern } from './patterns/WoodGrainPattern';
 import { MarblePattern } from './patterns/MarblePattern';

@@ -84,6 +84,7 @@ export interface PocketDef {
   visualRadius: number;
   shelfDepth: number;
   radius: number; // Legacy alias for visualRadius (renderers still reference this)
+  outline?: Vec2[]; // Optional pocket outline polygon (skin/editor generated)
 }
 
 export interface TableGeometry {
@@ -1198,12 +1199,9 @@ export function getTableGeometry(): TableGeometry {
 
   const {
     JAW_X_OUTER,
-    JAW_X_INNER,
     CORNER_JAW_Y,
     CORNER_JAW_X,
     sideStraight,
-    sideInner,
-    cornerStraight,
     cornerFrameOffset,
   } = jawPositions;
 
@@ -1211,12 +1209,9 @@ export function getTableGeometry(): TableGeometry {
   const {
     Y_N_STRAIGHT,
     Y_S_STRAIGHT,
-    Y_N_INNER,
-    Y_S_INNER,
     X_E_STRAIGHT,
     X_W_STRAIGHT,
     SIDE_POCKET_OFFSET,
-    curveBlend,
     mouthYNorth,
     mouthYSouth,
     throatJoinX,

@@ -56,7 +56,7 @@ export function createInitialMatchState(): MatchState {
  * Start a new match
  */
 export function startMatch(
-  state: MatchState,
+  _state: MatchState,
   clubId: string,
   entryFee: number = 0,
   ruleset: string = 'TOURNAMENT'

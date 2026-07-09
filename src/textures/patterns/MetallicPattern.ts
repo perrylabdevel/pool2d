@@ -12,7 +12,7 @@ export class MetallicPattern extends BasePattern {
         const {
             baseColor = '#888888',
             roughness = 0.5,
-            metalness = 0.8,
+            metalness: _metalness = 0.8,
             brushDirection = 0, // Angle in degrees
             noiseScale = 50
         } = this.config;

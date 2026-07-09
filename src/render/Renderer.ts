@@ -11,8 +11,6 @@ import {
   darkenHexColor,
   classifyAxisAlignmentFromVector,
   getAxisPalette,
-  type AxisAlignment,
-  type AxisColorPalette,
 } from './RenderUtils';
 import { BaseRenderer } from './BaseRenderer';
 import { ColorTokens } from '../ui/theme/ColorTokens';
@@ -1170,7 +1168,7 @@ export class Renderer extends BaseRenderer {
     this.ctx.restore();
   }
 
-  drawAimInfo(ball: Ball, angle: number, power: number, prediction?: PredictionResult) {
+  drawAimInfo(ball: Ball, angle: number, _power: number, prediction?: PredictionResult) {
     // Draw in screen space (no transform)
     this.ctx.save();
 
@@ -1335,7 +1333,7 @@ export class Renderer extends BaseRenderer {
     return { x, y };
   }
 
-  private getSidebarSides() {
+  private getSidebarSides(): { dialSide: 'left' | 'right'; powerSide: 'left' | 'right' } {
     const dialSide = CONFIG.SIDEBAR_DIAL_SIDE === 'right' ? 'right' : 'left';
     const powerSide = dialSide === 'left' ? 'right' : 'left';
     return { dialSide, powerSide };
@@ -1350,7 +1348,6 @@ export class Renderer extends BaseRenderer {
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     const value = Math.max(-1, Math.min(1, state?.value ?? 0));
-    const degrees = state?.degrees ?? 0;
     const isActive = state?.isActive ?? false;
     const handlePercent = 0.5 - (value * 0.5);
     const handleY = barY + handlePercent * barHeight;

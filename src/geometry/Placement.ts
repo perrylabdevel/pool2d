@@ -1,7 +1,7 @@
 // Ball-in-hand placement helper: clamps a target point inside the play area
 // using rail half-spaces, endpoint caps, and pocket exclusion disks.
 
-import type { Ball, Rail, Pocket } from '../physics/Shapes';
+import type { Rail, Pocket } from '../physics/Shapes';
 import { getTableGeometry } from './Geometry';
 import { CONFIG } from '../config';
 
@@ -72,9 +72,7 @@ export function clampBallInHand(
       // Candidate normal (rotate 90deg CCW)
       let nx = -dy / len, ny = dx / len;
       // Ensure normal points inward by testing midpoint against origin (0,0)
-      const mx = (ax + bx) * 0.5, my = (ay + by) * 0.5;
       const sCenter = (0 - ax) * nx + (0 - ay) * ny; // signed distance of origin
-      const sMid = (mx - ax) * nx + (my - ay) * ny;
       // We want the origin (0,0) to be on the positive side (inward)
       if (sCenter < 0) { nx = -nx; ny = -ny; }
       return { ax, ay, bx, by, nx, ny };

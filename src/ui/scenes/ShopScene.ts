@@ -354,7 +354,6 @@ export class ShopScene implements UIScene {
         this.navigationBar.setupLayout(canvasWidth, canvasHeight);
         const navHeight = this.navigationBar.getHeight();
 
-        const horizontalPadding = Math.max(LayoutConstants.Spacing.HorizontalPaddingMin, canvasWidth * 0.05);
 
         // No footer buttons needed - cards are directly clickable
         this.buttons = [];

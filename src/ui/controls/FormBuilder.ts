@@ -10,10 +10,8 @@ import { SliderControl, type SliderConfig } from './SliderControl';
  */
 export class FormBuilder<T = any> {
   private controls: Map<string, SliderControl<T>> = new Map();
-  private container: HTMLElement;
 
-  constructor(container: HTMLElement) {
-    this.container = container;
+  constructor(_container: HTMLElement) {
   }
 
   /**

@@ -283,7 +283,7 @@ export function listenForLegacyEvents(): void {
     window.addEventListener(event, ((e: CustomEvent) => {
       // Avoid infinite loop - don't re-emit if already from EventBus
       if (e.detail?.__fromEventBus) return;
-      eventBus.emit(event, e.detail as EventPayloads[T] extends void ? never : EventPayloads[T]);
+      (eventBus.emit as (event: EventName, payload?: unknown) => void)(event, e.detail);
     }) as EventListener);
   };
   

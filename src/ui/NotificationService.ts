@@ -258,7 +258,7 @@ export class NotificationService {
     });
   }
 
-  show(message: string, type: NotificationType = 'info', duration?: number): string | null;
+  show(message: string, type?: NotificationType, duration?: number): string | null;
   show(options: NotificationRequest): string | null;
   show(messageOrOptions: string | NotificationRequest, type: NotificationType = 'info', duration?: number): string | null {
     const request = typeof messageOrOptions === 'string'

@@ -31,7 +31,6 @@ export class ChestSlotsBar {
     private updateInterval: number = 1000; // Update every second for timers
 
     private isMobile: boolean = false;
-    private currentCanvasWidth: number = 0;
 
     constructor() {
         // Preloading handled by ChestRenderer
@@ -95,7 +94,6 @@ export class ChestSlotsBar {
     }
 
     setupLayout(canvasWidth: number, canvasHeight: number): void {
-        this.currentCanvasWidth = canvasWidth;
         this.isMobile = canvasWidth < 600 || canvasHeight < 500;
         this.isLandscapeMode = canvasWidth > canvasHeight && canvasHeight < 500;
 

@@ -18,7 +18,7 @@ export abstract class BaseRenderer {
   protected playBoundaryPoints: Vec2[] = [];
 
   /** Cached axis-aligned bounding box of play area */
-  protected playBounds: BoundaryBounds = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+  protected playBounds: BoundaryBounds = { minX: 0, maxX: 0, minY: 0, maxY: 0, width: 0, height: 0 };
 
   /** Debug visualization of rail segments */
   debugRailSegments: Array<{ id: string; inner: Vec2; trimmed: Vec2; startOuter: Vec2 }> = [];
