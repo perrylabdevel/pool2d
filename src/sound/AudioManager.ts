@@ -3,16 +3,16 @@ import { physicsRecorder } from '../debug/PhysicsRecorder';
 
 // Audio file paths - will be loaded dynamically
 const AUDIO_PATHS = {
-  backgroundLoop: new URL('../assets/audio/background-loop.wav', import.meta.url).href,
-  musicTrack: new URL('../assets/audio/music-track.wav', import.meta.url).href,
-  ballCollisionLight: new URL('../assets/audio/ball-collision-light.wav', import.meta.url).href,
-  ballCollisionMedium: new URL('../assets/audio/ball-collision-medium.wav', import.meta.url).href,
-  ballCollisionHard: new URL('../assets/audio/ball-collision-hard.wav', import.meta.url).href,
-  cueHit1: new URL('../assets/audio/cue-hit-1.wav', import.meta.url).href,
-  cueHit2: new URL('../assets/audio/cue-hit-2.wav', import.meta.url).href,
-  railHit1: new URL('../assets/audio/rail-hit-1.wav', import.meta.url).href,
-  railHit2: new URL('../assets/audio/rail-hit-2.wav', import.meta.url).href,
-  pocketDrop: new URL('../assets/audio/pocket-drop.wav', import.meta.url).href,
+  backgroundLoop: new URL('../assets/audio/background-loop.m4a', import.meta.url).href,
+  musicTrack: new URL('../assets/audio/music-track.m4a', import.meta.url).href,
+  ballCollisionLight: new URL('../assets/audio/ball-collision-light.m4a', import.meta.url).href,
+  ballCollisionMedium: new URL('../assets/audio/ball-collision-medium.m4a', import.meta.url).href,
+  ballCollisionHard: new URL('../assets/audio/ball-collision-hard.m4a', import.meta.url).href,
+  cueHit1: new URL('../assets/audio/cue-hit-1.m4a', import.meta.url).href,
+  cueHit2: new URL('../assets/audio/cue-hit-2.m4a', import.meta.url).href,
+  railHit1: new URL('../assets/audio/rail-hit-1.m4a', import.meta.url).href,
+  railHit2: new URL('../assets/audio/rail-hit-2.m4a', import.meta.url).href,
+  pocketDrop: new URL('../assets/audio/pocket-drop.m4a', import.meta.url).href,
 };
 
 type AudioSample = {
