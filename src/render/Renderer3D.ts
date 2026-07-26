@@ -33,6 +33,7 @@ export class Renderer3D {
 
   /** Built once and reused — never regenerated per frame. */
   private feltTexture: THREE.CanvasTexture | null = null;
+  private woodTexture: THREE.CanvasTexture | null = null;
   private scratchVec = new THREE.Vector3();
 
   // 3D objects
@@ -58,6 +59,7 @@ export class Renderer3D {
   ambientLight: THREE.AmbientLight;
   directionalLight: THREE.DirectionalLight;
   fillLight: THREE.HemisphereLight;
+  lamps: THREE.PointLight[] = [];
   
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -96,29 +98,56 @@ export class Renderer3D {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // Filmic rolloff instead of clipping to white — without it the lit areas
+    // flatten into solid colour, which is most of the "blocks of paint" look.
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.0;
 
-    // Lighting: warm key from above-left, cool fill, so the felt reads "lit pool
-    // hall" rather than "flat green rectangle".
-    this.ambientLight = new THREE.AmbientLight(0xffffff, 0.62);
+    // Lighting notes, because the camera constrains this heavily:
+    //
+    // The view is orthographic and straight down. Under a *directional* light a
+    // flat surface has a constant N·L, so the cloth is mathematically uniform
+    // no matter how bright the light is — a directional key can never put a
+    // pool of light on the table. Falloff has to come from point lights.
+    //
+    // Ambient and hemisphere terms are directionless, so every unit of them
+    // erases normal contrast between the rail facets. They have to stay low.
+
+    this.ambientLight = new THREE.AmbientLight(0xffffff, 0.13);
     this.scene.add(this.ambientLight);
 
-    this.directionalLight = new THREE.DirectionalLight(0xfff1d8, 1.45);
-    this.directionalLight.position.set(-35, -45, 80);
+    // Raking key at ~25 degrees elevation. Shallow on purpose: it is what
+    // separates the cushion chamfer from the rail cap tonally.
+    this.directionalLight = new THREE.DirectionalLight(0xfff1d8, 0.85);
+    this.directionalLight.position.set(-52, -68, 34);
     this.directionalLight.castShadow = true;
     this.directionalLight.shadow.mapSize.width = 2048;
     this.directionalLight.shadow.mapSize.height = 2048;
     this.directionalLight.shadow.camera.near = 0.5;
-    this.directionalLight.shadow.camera.far = 100;
-    this.directionalLight.shadow.camera.left = -60;
-    this.directionalLight.shadow.camera.right = 60;
-    this.directionalLight.shadow.camera.top = 60;
-    this.directionalLight.shadow.camera.bottom = -60;
-    this.directionalLight.shadow.bias = -0.0001; // Reduce shadow acne
+    this.directionalLight.shadow.camera.far = 220;
+    this.directionalLight.shadow.camera.left = -80;
+    this.directionalLight.shadow.camera.right = 80;
+    this.directionalLight.shadow.camera.top = 80;
+    this.directionalLight.shadow.camera.bottom = -80;
+    this.directionalLight.shadow.bias = -0.0005;
+    this.directionalLight.shadow.normalBias = 0.03;
     this.scene.add(this.directionalLight);
     this.directionalLight.target.position.set(0, 0, 0);
     this.scene.add(this.directionalLight.target);
 
-    this.fillLight = new THREE.HemisphereLight(0xdbeafe, 0x0b0e14, 0.5);
+    // The hanging lamp: a pair of warm sources over the cloth. Inverse-square
+    // decay is what actually produces the pool of light and the falloff into
+    // the corners.
+    for (const x of [-24, 24]) {
+      // Hung low so the inverse-square falloff has real contrast between the
+      // centre of the cloth and the corners.
+      const lamp = new THREE.PointLight(0xffd2a0, 1250, 140, 2);
+      lamp.position.set(x, 0, 24);
+      this.scene.add(lamp);
+      this.lamps.push(lamp);
+    }
+
+    this.fillLight = new THREE.HemisphereLight(0xbfd4ff, 0x05070b, 0.16);
     this.scene.add(this.fillLight);
   }
 
@@ -189,11 +218,82 @@ export class Renderer3D {
       size * 0.74
     );
     vig.addColorStop(0, 'rgba(0,0,0,0)');
-    vig.addColorStop(1, 'rgba(0,0,0,0.42)');
+    vig.addColorStop(0.62, 'rgba(0,0,0,0.12)');
+    vig.addColorStop(1, 'rgba(0,0,0,0.58)');
     ctx.fillStyle = vig;
     ctx.fillRect(0, 0, size, size);
 
     const texture = new THREE.CanvasTexture(c);
+    texture.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+  }
+
+  /**
+   * Procedural wood: grain running along the rail, with darker streaks and
+   * subtle pore speckle. A uniform albedo is what makes untextured wood read as
+   * a block of paint no matter how good the geometry is.
+   *
+   * Built once and reused. `--rail` tints it, so the settings picker still
+   * drives the colour.
+   */
+  private buildWoodTexture(): THREE.CanvasTexture {
+    const w = 512;
+    const h = 256;
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    const ctx = c.getContext('2d')!;
+
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, w, h);
+
+    // Grain lines run along texture-U, which maps to the rail's length.
+    for (let i = 0; i < 240; i++) {
+      const y = Math.random() * h;
+      const value = 0.55 + Math.random() * 0.45;
+      const alpha = 0.05 + Math.random() * 0.16;
+      ctx.strokeStyle = `rgba(${Math.round(value * 120)}, ${Math.round(value * 82)}, ${Math.round(
+        value * 48
+      )}, ${alpha})`;
+      ctx.lineWidth = 0.5 + Math.random() * 2.2;
+
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      // Gentle waver so the grain is not a set of straight rules.
+      for (let x = 0; x <= w; x += 32) {
+        ctx.lineTo(x, y + Math.sin((x / w) * Math.PI * 2 + i) * (1 + Math.random() * 2.5));
+      }
+      ctx.stroke();
+    }
+
+    // A few heavier cathedral streaks.
+    for (let i = 0; i < 14; i++) {
+      const y = Math.random() * h;
+      ctx.strokeStyle = `rgba(46, 26, 12, ${0.1 + Math.random() * 0.16})`;
+      ctx.lineWidth = 3 + Math.random() * 7;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      for (let x = 0; x <= w; x += 24) {
+        ctx.lineTo(x, y + Math.sin((x / w) * Math.PI * 3 + i * 1.7) * (3 + Math.random() * 4));
+      }
+      ctx.stroke();
+    }
+
+    // Pore speckle.
+    const img = ctx.getImageData(0, 0, w, h);
+    const data = img.data;
+    for (let i = 0; i < data.length; i += 4) {
+      const n = (Math.random() - 0.5) * 22;
+      data[i] = Math.max(0, Math.min(255, data[i] + n));
+      data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + n));
+      data[i + 2] = Math.max(0, Math.min(255, data[i + 2] + n));
+    }
+    ctx.putImageData(img, 0, 0);
+
+    const texture = new THREE.CanvasTexture(c);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
     texture.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
     texture.colorSpace = THREE.SRGBColorSpace;
     return texture;
@@ -395,15 +495,36 @@ export class Renderer3D {
     const halfW = TABLE_GEOMETRY.playWidthIn / 2;
     const halfH = TABLE_GEOMETRY.playHeightIn / 2;
 
+    if (!this.woodTexture) {
+      this.woodTexture = this.buildWoodTexture();
+    }
+
+    // Rails control their own UVs, so the grain tiles along the rail length.
+    const railGrain = this.woodTexture;
+
+    // The apron is a ShapeGeometry whose UVs are raw world inches, so it needs
+    // its own repeat. clone() shares the image but not the transform.
+    const apronGrain = this.woodTexture.clone();
+    apronGrain.needsUpdate = true;
+    apronGrain.repeat.set(1 / 16, 1 / 16);
+
     const railBase = new THREE.MeshStandardMaterial({
+      map: railGrain,
       color: new THREE.Color(token('--rail', CONFIG.RAIL_COLOR || PALETTE.rail)),
-      roughness: 0.62,
-      metalness: 0.14,
+      roughness: 0.52,
+      metalness: 0.06,
     });
     const railBevel = new THREE.MeshStandardMaterial({
+      map: railGrain,
       color: new THREE.Color(token('--rail-hi', PALETTE.railHi)),
-      roughness: 0.46,
-      metalness: 0.2,
+      roughness: 0.44,
+      metalness: 0.06,
+    });
+    const apronMaterial = new THREE.MeshStandardMaterial({
+      map: apronGrain,
+      color: new THREE.Color(token('--rail', CONFIG.RAIL_COLOR || PALETTE.rail)),
+      roughness: 0.6,
+      metalness: 0.05,
     });
     const shadowLip = new THREE.MeshBasicMaterial({
       color: new THREE.Color(PALETTE.bg900),
@@ -451,7 +572,7 @@ export class Renderer3D {
     clothHole.closePath();
     apronShape.holes.push(clothHole);
 
-    const apron = new THREE.Mesh(new THREE.ShapeGeometry(apronShape), railBase);
+    const apron = new THREE.Mesh(new THREE.ShapeGeometry(apronShape), apronMaterial);
     apron.position.set(0, 0, 0.01);
     apron.receiveShadow = true;
     add(apron);
@@ -502,6 +623,16 @@ export class Renderer3D {
       []
     );
 
+    // Cumulative distance around the profile, used as the texture V coordinate.
+    const GRAIN_REPEAT_IN = 26;
+    const profilePerimeter: number[] = [0];
+    for (let i = 1; i < PROFILE.length; i++) {
+      const [u0, z0] = PROFILE[i - 1];
+      const [u1, z1] = PROFILE[i];
+      profilePerimeter.push(profilePerimeter[i - 1] + Math.hypot(u1 - u0, z1 - z0));
+    }
+    const profileLength = profilePerimeter[profilePerimeter.length - 1] || 1;
+
     /**
      * Loft the cushion profile along a segment, recessing the cushion side at
      * both ends so the rail tapers into the pocket mouth instead of stopping at
@@ -522,10 +653,15 @@ export class Renderer3D {
       ].filter((s, i, arr) => i === 0 || s.x - arr[i - 1].x > 1e-6);
 
       const positions: number[] = [];
+      const uvs: number[] = [];
+
+      // Texture U follows the rail's length and V walks the profile perimeter,
+      // so the grain runs lengthwise the way milled stock does.
       const push = (si: number, pi: number) => {
         const st = stations[si];
         const [u, z] = PROFILE[pi];
         positions.push(st.x, u + (pi < TAPERED_POINTS ? st.recess : 0), z);
+        uvs.push(st.x / GRAIN_REPEAT_IN, profilePerimeter[pi] / profileLength);
       };
 
       // Walls: one quad per profile edge per station gap. A clockwise profile
@@ -561,6 +697,7 @@ export class Renderer3D {
 
       const geometry = new THREE.BufferGeometry();
       geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
       // Non-indexed, so computeVertexNormals yields flat per-face normals and
       // the facets stay crisp instead of smoothing into each other.
       geometry.computeVertexNormals();
@@ -576,6 +713,7 @@ export class Renderer3D {
 
       // Material 0 is the sawn end cap, material 1 the milled faces.
       const rail = new THREE.Mesh(buildRailGeometry(length), [railBevel, railBase]);
+      rail.castShadow = true;
       rail.receiveShadow = true;
 
       if (horizontal) {
