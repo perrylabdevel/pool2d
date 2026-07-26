@@ -59,6 +59,7 @@ export class Renderer3D {
   ambientLight: THREE.AmbientLight;
   directionalLight: THREE.DirectionalLight;
   fillLight: THREE.HemisphereLight;
+  railFill: THREE.DirectionalLight;
   lamps: THREE.PointLight[] = [];
   
   constructor(canvas: HTMLCanvasElement) {
@@ -147,8 +148,69 @@ export class Renderer3D {
       this.lamps.push(lamp);
     }
 
+    // Counter-rake from the opposite quadrant. A single rake lights only two of
+    // the four cushions: with the key above, the bottom and left chamfers come
+    // out at N.L of -0.08 and +0.01, i.e. black. This fill is aimed to
+    // complement exactly those two, at a lower intensity so the table still
+    // reads as directionally lit rather than flat.
+    this.railFill = new THREE.DirectionalLight(0xa8c4ff, 0.5);
+    this.railFill.position.set(52, 68, 34);
+    this.scene.add(this.railFill);
+    this.railFill.target.position.set(0, 0, 0);
+    this.scene.add(this.railFill.target);
+
     this.fillLight = new THREE.HemisphereLight(0xbfd4ff, 0x05070b, 0.16);
     this.scene.add(this.fillLight);
+
+    // Image-based lighting so every facet picks up something even when it
+    // faces away from both rakes. This is what gives the rail cap its sheen.
+    this.scene.environment = this.buildEnvironment();
+  }
+
+  /**
+   * Procedural environment for IBL: a warm overhead lamp and a dim bounce from
+   * below, painted straight into an equirectangular map.
+   *
+   * Note the orientation. Equirectangular sampling assumes Y-up, but this scene
+   * is Z-up, so world +Z lands at u = 0.75 on the map rather than at the top
+   * edge. The lamp is painted there, and the bounce at u = 0.25 for -Z.
+   */
+  private buildEnvironment(): THREE.Texture {
+    const w = 512;
+    const h = 256;
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    const ctx = c.getContext('2d')!;
+
+    ctx.fillStyle = PALETTE.bg900;
+    ctx.fillRect(0, 0, w, h);
+
+    // Warm lamp over the table (world +Z).
+    const lamp = ctx.createRadialGradient(w * 0.75, h * 0.5, 0, w * 0.75, h * 0.5, h * 0.95);
+    lamp.addColorStop(0, '#fff2d8');
+    lamp.addColorStop(0.32, '#8a7048');
+    lamp.addColorStop(1, PALETTE.bg900);
+    ctx.fillStyle = lamp;
+    ctx.fillRect(0, 0, w, h);
+
+    // Cool bounce from beneath (world -Z), so downward-facing bevels are not
+    // pure black.
+    const bounce = ctx.createRadialGradient(w * 0.25, h * 0.5, 0, w * 0.25, h * 0.5, h * 0.6);
+    bounce.addColorStop(0, '#1b2436');
+    bounce.addColorStop(1, 'rgba(11, 14, 20, 0)');
+    ctx.fillStyle = bounce;
+    ctx.fillRect(0, 0, w, h);
+
+    const equirect = new THREE.CanvasTexture(c);
+    equirect.mapping = THREE.EquirectangularReflectionMapping;
+    equirect.colorSpace = THREE.SRGBColorSpace;
+
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    const env = pmrem.fromEquirectangular(equirect).texture;
+    pmrem.dispose();
+    equirect.dispose();
+    return env;
   }
 
   /**
@@ -478,6 +540,7 @@ export class Renderer3D {
       map: this.feltTexture,
       roughness: 0.94,
       metalness: 0.0,
+      envMapIntensity: 0.12,
     });
     this.tableMesh = new THREE.Mesh(tableGeometry, tableMaterial);
     this.tableMesh.receiveShadow = true;
@@ -511,20 +574,23 @@ export class Renderer3D {
     const railBase = new THREE.MeshStandardMaterial({
       map: railGrain,
       color: new THREE.Color(token('--rail', CONFIG.RAIL_COLOR || PALETTE.rail)),
-      roughness: 0.52,
+      roughness: 0.42,
       metalness: 0.06,
+      envMapIntensity: 0.85,
     });
     const railBevel = new THREE.MeshStandardMaterial({
       map: railGrain,
       color: new THREE.Color(token('--rail-hi', PALETTE.railHi)),
-      roughness: 0.44,
+      roughness: 0.4,
       metalness: 0.06,
+      envMapIntensity: 0.85,
     });
     const apronMaterial = new THREE.MeshStandardMaterial({
       map: apronGrain,
       color: new THREE.Color(token('--rail', CONFIG.RAIL_COLOR || PALETTE.rail)),
       roughness: 0.6,
       metalness: 0.05,
+      envMapIntensity: 0.6,
     });
     const shadowLip = new THREE.MeshBasicMaterial({
       color: new THREE.Color(PALETTE.bg900),
