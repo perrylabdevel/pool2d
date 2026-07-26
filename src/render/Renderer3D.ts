@@ -412,8 +412,12 @@ export class Renderer3D {
     });
 
     const bandWidth = 7;
-    const bevelWidth = 2.2;
-    const bandZ = 1.9;
+    const capZ = 2.6; // rail cap height
+    const shelfZ = 2.1; // outer shelf, one step below the cap
+    const noseZ = 1.35; // cushion nose, just above ball centre (1.125)
+    const chamferWidth = 2.0; // cushion face, ~32 deg — steep enough to shade
+    const capWidth = 4.6; // where the cap steps down to the outer shelf
+    const stepWidth = 5.0;
     const lipWidth = 0.5;
 
     // How far each raised rail stops short of a pocket centre. Must clear the
@@ -451,46 +455,80 @@ export class Renderer3D {
     add(apron);
 
     /**
-     * Emit one raised rail segment: base band, lighter inner bevel, and the
-     * dark hairline where cloth meets cushion.
+     * Cushion cross-section, in (outward from the cloth edge, height).
+     *
+     * The camera is a straight top-down orthographic view, so there is no
+     * parallax and no silhouette to read: a "bevel" built from a second box
+     * sitting proud of the first projects as a flat lighter stripe. The only
+     * cue that survives is shading, so the chamfer has to be a genuine angled
+     * face whose normal differs from the cap. The four rails then catch the
+     * key light at different angles, which is what reads as depth.
+     *
+     * Three facets sit at different angles to the light, which is what makes
+     * milled wood read as milled wood from directly above.
+     *
+     *          cap ________
+     *             /        \_____ shelf
+     *   chamfer  /          step  |
+     *     nose  |                 |  outer wall
+     *    cloth  |_________________|
+     */
+    const profile = new THREE.Shape();
+    profile.moveTo(0, 0); // cloth line
+    profile.lineTo(0, noseZ); // vertical cushion nose
+    profile.lineTo(chamferWidth, capZ); // angled cushion face
+    profile.lineTo(capWidth, capZ); // flat rail cap
+    profile.lineTo(stepWidth, shelfZ); // step down to the outer shelf
+    profile.lineTo(bandWidth, shelfZ); // outer shelf
+    profile.lineTo(bandWidth, 0); // outer wall
+    profile.closePath();
+
+    /**
+     * One raised rail segment, extruded from the cushion profile.
+     *
+     * The profile is built in the canonical orientation (segment along +X,
+     * outward along +Y, up along +Z, centred on X with the cloth edge at y=0),
+     * then placed with a single Z rotation per side.
      */
     const segment = (horizontal: boolean, sign: number, from: number, to: number) => {
       const length = to - from;
       if (length <= 0) return;
       const mid = (from + to) / 2;
 
-      const edge = horizontal ? halfH : halfW;
-      const bandOffset = sign * (edge + bandWidth / 2);
-      const bevelOffset = sign * (edge + bevelWidth / 2 + 0.05);
-      const lipOffset = sign * (edge - lipWidth / 2);
+      const geometry = new THREE.ExtrudeGeometry(profile, {
+        depth: length,
+        bevelEnabled: false,
+        curveSegments: 1,
+      });
 
-      const base = new THREE.Mesh(
-        new THREE.BoxGeometry(
-          horizontal ? length : bandWidth,
-          horizontal ? bandWidth : length,
-          bandZ
-        ),
-        railBase
-      );
-      base.position.set(horizontal ? mid : bandOffset, horizontal ? bandOffset : mid, bandZ / 2);
-      base.receiveShadow = true;
-      add(base);
+      // ExtrudeGeometry lays the shape in XY and extrudes along Z. Cycle the
+      // axes so shape-X becomes outward, shape-Y becomes height, and the
+      // extrusion becomes the segment's length.
+      geometry.rotateX(Math.PI / 2);
+      geometry.rotateZ(Math.PI / 2);
+      geometry.translate(-length / 2, 0, 0);
+      geometry.computeVertexNormals();
 
-      const bevel = new THREE.Mesh(
-        new THREE.BoxGeometry(
-          horizontal ? length : bevelWidth,
-          horizontal ? bevelWidth : length,
-          bandZ + 0.35
-        ),
-        railBevel
-      );
-      bevel.position.set(
-        horizontal ? mid : bevelOffset,
-        horizontal ? bevelOffset : mid,
-        (bandZ + 0.35) / 2
-      );
-      add(bevel);
+      // ExtrudeGeometry groups the cross-section caps as material 0 and the
+      // extruded faces as material 1. The caps are the sawn ends at each pocket
+      // mouth, so give them the lighter stock.
+      const rail = new THREE.Mesh(geometry, [railBevel, railBase]);
+      rail.receiveShadow = true;
 
+      if (horizontal) {
+        // +Y rail keeps the canonical orientation; -Y rail turns to face back.
+        rail.rotation.z = sign > 0 ? 0 : Math.PI;
+        rail.position.set(sign > 0 ? mid : -mid, sign * halfH, 0);
+      } else {
+        // Rotate the outward axis onto ±X.
+        rail.rotation.z = sign > 0 ? -Math.PI / 2 : Math.PI / 2;
+        rail.position.set(sign * halfW, sign > 0 ? -mid : mid, 0);
+      }
+      add(rail);
+
+      // Dark hairline where cloth meets cushion. The nose face itself is
+      // edge-on to a top-down camera, so it needs to be drawn explicitly.
+      const lipOffset = sign * (horizontal ? halfH : halfW) - sign * lipWidth * 0.5;
       const lip = new THREE.Mesh(
         new THREE.PlaneGeometry(horizontal ? length : lipWidth, horizontal ? lipWidth : length),
         shadowLip
@@ -524,7 +562,7 @@ export class Renderer3D {
 
     const place = (x: number, y: number) => {
       const d = new THREE.Mesh(diamondGeometry, diamondMaterial);
-      d.position.set(x, y, 2.05);
+      d.position.set(x, y, 2.66); // just above the rail cap
       d.rotation.z = Math.PI / 4;
       this.scene.add(d);
       this.frameMeshes.push(d);
