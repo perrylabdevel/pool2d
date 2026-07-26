@@ -769,7 +769,11 @@ export class Renderer3D {
         ball.rotationX = updatedEuler.x;
         ball.rotationY = updatedEuler.y;
         ball.rotationZ = updatedEuler.z;
-        this.ballRotations.set(ball.id, mesh.quaternion.clone());
+        // Copy into the stored quaternion rather than cloning: this runs for
+        // every moving ball every frame and must not allocate.
+        const stored = this.ballRotations.get(ball.id);
+        if (stored) stored.copy(mesh.quaternion);
+        else this.ballRotations.set(ball.id, mesh.quaternion.clone());
       } else {
         // Ball at rest - stored orientation already applied above
       }

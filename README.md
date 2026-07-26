@@ -32,10 +32,33 @@ A production-quality 2D top-down pool game built with vanilla TypeScript and HTM
 - **Practice Mode**: Free play with all debugging tools
 - **8-Ball Mode**: Full rules implementation with break, fouls, ball-in-hand, win conditions
 
+### Presentation
+- **Design tokens**: `styles/theme.css` is the single source of truth for every
+  color, radius, shadow, duration and easing curve. `src/ui/palette.ts` mirrors
+  them for canvas and WebGL consumers.
+- **Full-bleed table**: the canvas fills the viewport and the table is
+  letterboxed inside the camera frustum, so the felt vignette reaches the
+  screen edges. HUD chrome floats over it as translucent blurred panels.
+- **Procedural table art**: felt (radial highlight, cloth fiber noise, baked
+  vignette) is generated once to an offscreen canvas and reused; beveled wood
+  rails with inlaid diamond sights; pockets with a soft lip.
+- **Guideline**: cue-ball path, ghost ball at the contact point, object-ball
+  departure line, and a dimmer cue tangent line.
+- **Feedback**: animated toasts, foul flash, pocket-to-pod ball animation, and
+  an end-of-match card. Turn state is carried by pod glow and an SVG shot-clock
+  ring that reddens in its final quarter.
+- **Sound**: Web Audio, synthesized at runtime — no bundled samples. Mute is
+  persisted to `localStorage`.
+- **Accessibility**: `prefers-reduced-motion` collapses every duration token to
+  zero. Portrait phones get a rotate prompt rather than a second layout.
+
 ### Performance
 - **60 FPS Rendering**: Smooth visuals with state interpolation
 - **120 UPS Physics**: Rock-solid simulation independent of frame rate
-- **Responsive Canvas**: Scales to any screen while preserving 2:1 aspect ratio
+- **Responsive Canvas**: fills the viewport at any size; `devicePixelRatio` is
+  applied to the backing store of all three canvases, not the CSS size
+- **Static layers built once**: the felt texture, rails, diamonds and pockets
+  are persistent scene objects; only balls, cue and guideline change per frame
 
 ## Quick Start
 
@@ -55,22 +78,32 @@ npm run test
 
 ## Controls
 
+All interactions use Pointer Events, so mouse, pen and touch behave identically.
+Hit targets are at least 44px.
+
 ### Aiming & Shooting
-- **Aim Mode (default)**: Move mouse to aim, press **A** to lock angle and switch to power mode
-- **Power Mode**: Drag power bar (right side) up/down to set power, release to shoot
-- **Quick Shoot**: In aim mode, click near cue ball to shoot at low power
+- **Aim**: move or drag the pointer anywhere on the table
+- **Fine aim**: hold **Shift** — angular sensitivity drops 5x for thin cuts
+- **Power**: grab the vertical slider on the right edge and pull *down* to
+  charge; release to shoot. The cue draws back as power rises.
+- **Power (keyboard)**: hold **Space** to charge, release to fire
 
-### Practice Mode Tools
-- **SHIFT + Drag**: Reposition cue ball (practice mode only)
-- **S**: Toggle Physics Settings panel (live parameter tuning)
-- **D**: Toggle Debug overlay (velocities, normals, contact points)
-- **R**: Restart/Reset table
+### Ball in hand
+After a foul the cue ball becomes draggable. A translucent preview follows the
+pointer and turns red over an illegal spot (overlapping a ball, off the cloth,
+or ahead of the head string on a break scratch). Release to confirm.
 
-### UI Buttons
-- **📸 Capture Shot**: Record next shot for prediction accuracy analysis
-- **⚙️ Physics**: Open settings panel for real-time physics tuning
-- **Debug**: Toggle debug visualization overlay
-- **Restart**: Reset table to initial rack
+### Keyboard
+- **Shift**: fine aim
+- **Space**: charge / fire
+- **M**: mute toggle (persisted to localStorage)
+- **S**: physics settings panel
+- **D**: debug overlay (velocities, normals, contact points)
+- **R**: restart / reset the rack
+
+### Toolbar (bottom left)
+- **♪** Mute  ·  **↻** Restart  ·  **⚙** Settings  ·  **⚗** Physics panel
+- **⌗** Debug overlay  ·  **◎** Capture next shot for prediction analysis
 
 ## Architecture
 
@@ -92,7 +125,16 @@ src/
 ├── rules/
 │   └── EightBall.ts           # 8-ball rules engine (break, fouls, scoring)
 ├── ui/
-│   ├── HUD.ts                 # Game UI, turn indicator, stats (FPS/UPS)
+│   ├── HUD.ts                 # In-match HUD orchestration, shot clock
+│   ├── PlayerPods.ts          # Player pods: avatar, timer ring, group balls
+│   ├── Avatar.ts              # Procedural identicon avatars (seeded SVG)
+│   ├── PowerSlider.ts         # Vertical power slider (pointer + keyboard)
+│   ├── Toasts.ts              # Toasts, foul flash, pocket-to-pod animation
+│   ├── EndOverlay.ts          # End-of-match card with counting stats
+│   ├── Sound.ts               # Web Audio synthesis + persisted mute
+│   ├── palette.ts             # Design tokens mirrored for canvas/WebGL
+│   ├── LoadingScreen.ts       # Themed loading screen
+│   ├── SettingsManager.ts     # localStorage persistence, token application
 │   └── SettingsPanel.ts       # Live physics parameter tuning panel
 └── debug/
     ├── DebugDraw.ts           # Visual overlay for velocities, normals

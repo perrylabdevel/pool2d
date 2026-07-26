@@ -351,9 +351,10 @@
   background: var(--line);
 }
 
+/* Sits on the stats row, clear of the toolbar, which shares the bottom edge. */
 .hint-bar {
   position: absolute;
-  bottom: max(16px, env(safe-area-inset-bottom));
+  bottom: calc(max(16px, env(safe-area-inset-bottom)) + var(--hit-target) + 10px);
   left: 50%;
   transform: translateX(-50%);
   font-size: 13px;
@@ -1065,12 +1066,15 @@ kbd {
   }
 }
 
+/* Below this the hint text would crowd the stats readout, so drop it. */
+@media (max-width: 900px) {
+  .hint-bar {
+    display: none;
+  }
+}
+
 @media (max-width: 720px) {
   .pod-body {
     min-width: 84px;
-  }
-
-  .hint-bar {
-    display: none;
   }
 }
