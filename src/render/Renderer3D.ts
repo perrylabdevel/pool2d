@@ -10,6 +10,9 @@ import { PALETTE, token } from '../ui/palette';
 /** Extra world-space margin around the play area, so the rails have room. */
 const TABLE_MARGIN_IN = 9;
 
+/** Width of the raised rail band, measured outward from the cloth edge. */
+const RAIL_BAND_IN = 7;
+
 /** Pockets read larger than their capture radius so balls look like they fall in. */
 const POCKET_VISUAL_SCALE = 1.35;
 
@@ -236,10 +239,10 @@ export class Renderer3D {
     const grad = ctx.createRadialGradient(
       size / 2,
       size / 2,
-      size * 0.04,
+      size * 0.03,
       size / 2,
       size / 2,
-      size * 0.62
+      size * 0.5
     );
     grad.addColorStop(0, feltHi);
     grad.addColorStop(0.5, felt);
@@ -274,14 +277,14 @@ export class Renderer3D {
     const vig = ctx.createRadialGradient(
       size / 2,
       size / 2,
-      size * 0.28,
+      size * 0.1,
       size / 2,
       size / 2,
-      size * 0.74
+      size * 0.52
     );
     vig.addColorStop(0, 'rgba(0,0,0,0)');
-    vig.addColorStop(0.62, 'rgba(0,0,0,0.12)');
-    vig.addColorStop(1, 'rgba(0,0,0,0.58)');
+    vig.addColorStop(0.55, 'rgba(0,0,0,0.14)');
+    vig.addColorStop(1, 'rgba(0,0,0,0.55)');
     ctx.fillStyle = vig;
     ctx.fillRect(0, 0, size, size);
 
@@ -532,9 +535,12 @@ export class Renderer3D {
       this.feltTexture = this.buildFeltTexture();
     }
 
+    // The bed runs *under* the rails, the way cloth-covered slate does on a
+    // real table — the rails bolt on top of it. Stopping the cloth at the play
+    // boundary meant every pocket cut-out exposed bare frame instead of cloth.
     const tableGeometry = new THREE.PlaneGeometry(
-      TABLE_GEOMETRY.playWidthIn,
-      TABLE_GEOMETRY.playHeightIn
+      TABLE_GEOMETRY.playWidthIn + RAIL_BAND_IN * 2,
+      TABLE_GEOMETRY.playHeightIn + RAIL_BAND_IN * 2
     );
     const tableMaterial = new THREE.MeshStandardMaterial({
       map: this.feltTexture,
@@ -543,6 +549,8 @@ export class Renderer3D {
       envMapIntensity: 0.12,
     });
     this.tableMesh = new THREE.Mesh(tableGeometry, tableMaterial);
+    // Just below the rails' base plane so the two never z-fight.
+    this.tableMesh.position.set(0, 0, -0.02);
     this.tableMesh.receiveShadow = true;
     this.scene.add(this.tableMesh);
 
@@ -565,12 +573,6 @@ export class Renderer3D {
     // Rails control their own UVs, so the grain tiles along the rail length.
     const railGrain = this.woodTexture;
 
-    // The apron is a ShapeGeometry whose UVs are raw world inches, so it needs
-    // its own repeat. clone() shares the image but not the transform.
-    const apronGrain = this.woodTexture.clone();
-    apronGrain.needsUpdate = true;
-    apronGrain.repeat.set(1 / 16, 1 / 16);
-
     const railBase = new THREE.MeshStandardMaterial({
       map: railGrain,
       color: new THREE.Color(token('--rail', CONFIG.RAIL_COLOR || PALETTE.rail)),
@@ -585,20 +587,13 @@ export class Renderer3D {
       metalness: 0.06,
       envMapIntensity: 0.85,
     });
-    const apronMaterial = new THREE.MeshStandardMaterial({
-      map: apronGrain,
-      color: new THREE.Color(token('--rail', CONFIG.RAIL_COLOR || PALETTE.rail)),
-      roughness: 0.6,
-      metalness: 0.05,
-      envMapIntensity: 0.6,
-    });
     const shadowLip = new THREE.MeshBasicMaterial({
       color: new THREE.Color(PALETTE.bg900),
       transparent: true,
       opacity: 0.55,
     });
 
-    const bandWidth = 7;
+    const bandWidth = RAIL_BAND_IN;
     const capZ = 2.6; // rail cap height
     const shelfZ = 2.1; // outer shelf, one step below the cap
     const noseZ = 1.35; // cushion nose, just above ball centre (1.125)
@@ -617,31 +612,6 @@ export class Renderer3D {
       this.scene.add(mesh);
       this.frameMeshes.push(mesh);
     };
-
-    // Flat apron: keeps the outer silhouette rectangular. It sits *below* the
-    // pocket meshes in z, so the pockets punch cleanly through it at the
-    // corners and side pockets.
-    const outerW = halfW + bandWidth;
-    const outerH = halfH + bandWidth;
-    const apronShape = new THREE.Shape();
-    apronShape.moveTo(-outerW, -outerH);
-    apronShape.lineTo(outerW, -outerH);
-    apronShape.lineTo(outerW, outerH);
-    apronShape.lineTo(-outerW, outerH);
-    apronShape.closePath();
-
-    const clothHole = new THREE.Path();
-    clothHole.moveTo(-halfW, -halfH);
-    clothHole.lineTo(-halfW, halfH);
-    clothHole.lineTo(halfW, halfH);
-    clothHole.lineTo(halfW, -halfH);
-    clothHole.closePath();
-    apronShape.holes.push(clothHole);
-
-    const apron = new THREE.Mesh(new THREE.ShapeGeometry(apronShape), apronMaterial);
-    apron.position.set(0, 0, 0.01);
-    apron.receiveShadow = true;
-    add(apron);
 
     /**
      * Cushion cross-section, in (outward from the cloth edge, height).
