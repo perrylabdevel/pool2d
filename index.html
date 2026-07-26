@@ -2,94 +2,179 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Pool 2D - Tournament Grade Billiards</title>
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no"
+    />
+    <meta name="theme-color" content="#0B0E14" />
+    <title>Midnight Pool Hall</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles/theme.css" />
     <link rel="stylesheet" href="/styles/main.css" />
   </head>
   <body>
     <div id="app">
-      <div id="hud">
-        <div id="top-bar">
-          <div id="game-info">
-            <div id="mode-indicator">Practice Mode</div>
-            <div id="turn-indicator"></div>
-            <div id="player-info">
-              <div id="player1-info" class="player-panel">
-                <span class="player-icon">👤</span>
-                <span class="player-label">P1</span>
-                <span class="balls-remaining"></span>
-              </div>
-              <div id="player2-info" class="player-panel">
-                <span class="player-icon">👤</span>
-                <span class="player-label">P2</span>
-                <span class="balls-remaining"></span>
-              </div>
-            </div>
-          </div>
-          <div id="controls">
-            <button id="pause-btn" class="icon-btn" title="Pause">⏸</button>
-            <button id="restart-btn" class="icon-btn" title="Restart">↻</button>
-            <button id="settings-btn" class="icon-btn" title="Settings">⚙</button>
-            <button id="physics-settings-btn" class="icon-btn" title="Physics Settings">⚗</button>
-            <button id="debug-toggle" class="icon-btn" title="Debug Mode">🐛</button>
-            <button id="capture-shot-btn" class="icon-btn" title="Capture Shot">📸</button>
-          </div>
-        </div>
-        <div id="foul-banner" class="hidden"></div>
-        <div id="stats">
-          <span id="fps">FPS: 0</span>
-          <span id="ups">UPS: 0</span>
-        </div>
-      </div>
-      <div id="canvas-container">
+      <!-- The table is the hero: the stage fills the viewport, chrome floats over it. -->
+      <div id="stage">
         <canvas id="game-canvas"></canvas>
         <canvas id="ui-canvas"></canvas>
         <canvas id="debug-canvas"></canvas>
       </div>
-      <div id="settings-modal" class="modal hidden">
-        <div class="modal-content">
-          <h2>Settings</h2>
-          
-          <div class="settings-section">
-            <h3>Game Options</h3>
-            <label>
-              <input type="checkbox" id="aim-assist-toggle" checked />
-              Aim Assist
-            </label>
-            <label>
-              <input type="checkbox" id="call-8-toggle" />
-              Call 8-Ball
-            </label>
-            <label>
-              <input type="checkbox" id="show-fps-toggle" checked />
-              Show FPS/UPS
-            </label>
-          </div>
 
-          <div class="settings-section">
-            <h3>UI Colors</h3>
-            <div class="color-setting">
-              <label for="table-color">Table Color</label>
-              <input type="color" id="table-color" value="#0a5f0a" />
+      <!-- Floating HUD. Pointer-events are opt-in per child. -->
+      <div id="hud">
+        <div id="pod-left" class="pod-slot"></div>
+        <div id="pod-right" class="pod-slot"></div>
+
+        <div id="toolbar">
+          <button id="mute-btn" class="icon-btn" title="Mute (M)" aria-label="Mute">
+            <span class="icon-glyph">♪</span>
+          </button>
+          <button id="restart-btn" class="icon-btn" title="Restart (R)" aria-label="Restart">
+            <span class="icon-glyph">↻</span>
+          </button>
+          <button id="settings-btn" class="icon-btn" title="Settings" aria-label="Settings">
+            <span class="icon-glyph">⚙</span>
+          </button>
+          <button
+            id="physics-settings-btn"
+            class="icon-btn"
+            title="Physics (S)"
+            aria-label="Physics settings"
+          >
+            <span class="icon-glyph">⚗</span>
+          </button>
+          <button id="debug-toggle" class="icon-btn" title="Debug (D)" aria-label="Debug overlay">
+            <span class="icon-glyph">⌗</span>
+          </button>
+          <button
+            id="capture-shot-btn"
+            class="icon-btn"
+            title="Capture shot"
+            aria-label="Capture shot"
+          >
+            <span class="icon-glyph">◎</span>
+          </button>
+        </div>
+
+        <div id="mode-indicator" class="chip display">Practice</div>
+
+        <div id="stats" class="tabular">
+          <span id="fps">60 FPS</span>
+          <span class="stats-sep"></span>
+          <span id="ups">120 UPS</span>
+        </div>
+
+        <!-- Vertical power slider, docked right. Built up by PowerSlider.ts. -->
+        <div id="power-slider" class="power-slider" role="slider" aria-label="Shot power"
+             aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0">
+          <div class="power-track">
+            <div class="power-fill"></div>
+            <div class="power-ticks"></div>
+          </div>
+          <div class="power-handle"></div>
+          <div class="power-readout tabular">0</div>
+        </div>
+
+        <div id="hint-bar" class="hint-bar">
+          Drag to aim &middot; hold <kbd>Shift</kbd> for fine aim &middot; drag the power bar or hold
+          <kbd>Space</kbd> to shoot
+        </div>
+
+        <div id="toast-layer"></div>
+      </div>
+
+      <!-- Full-bleed foul flash: a red pulse bleeding in from the screen edges. -->
+      <div id="foul-flash"></div>
+
+      <!-- End of match -->
+      <div id="end-overlay" class="overlay hidden">
+        <div class="end-card">
+          <div id="end-eyebrow" class="end-eyebrow display">Match complete</div>
+          <h1 id="end-headline" class="end-headline">You Win</h1>
+          <div class="end-stats">
+            <div class="end-stat">
+              <span class="end-stat-label">Balls cleared</span>
+              <span id="end-cleared" class="end-stat-value tabular">0</span>
             </div>
-            <div class="color-setting">
-              <label for="rail-color">Rail Color</label>
-              <input type="color" id="rail-color" value="#2d1810" />
+            <div class="end-stat">
+              <span class="end-stat-label">Shots taken</span>
+              <span id="end-shots" class="end-stat-value tabular">0</span>
             </div>
-            <div class="color-setting">
-              <label for="active-player-color">Active Player Color</label>
-              <input type="color" id="active-player-color" value="#4CAF50" />
-            </div>
-            <div class="color-setting">
-              <label for="turn-indicator-color">Turn Indicator Color</label>
-              <input type="color" id="turn-indicator-color" value="#FFC107" />
+            <div class="end-stat">
+              <span class="end-stat-label">Best run</span>
+              <span id="end-run" class="end-stat-value tabular">0</span>
             </div>
           </div>
+          <div class="end-actions">
+            <button id="end-rematch" class="btn btn-primary display">Rematch</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Settings -->
+      <div id="settings-modal" class="overlay modal hidden">
+        <div class="modal-card">
+          <h2>Settings</h2>
+
+          <section class="settings-section">
+            <h3>Game</h3>
+            <label class="switch-row">
+              <input type="checkbox" id="aim-assist-toggle" checked />
+              <span>Aim assist</span>
+            </label>
+            <label class="switch-row">
+              <input type="checkbox" id="call-8-toggle" />
+              <span>Call the 8-ball</span>
+            </label>
+            <label class="switch-row">
+              <input type="checkbox" id="show-fps-toggle" checked />
+              <span>Show FPS / UPS</span>
+            </label>
+            <label class="switch-row">
+              <input type="checkbox" id="sound-toggle" checked />
+              <span>Sound</span>
+            </label>
+          </section>
+
+          <section class="settings-section">
+            <h3>Table</h3>
+            <div class="color-row">
+              <label for="table-color">Cloth</label>
+              <input type="color" id="table-color" value="#146B4A" />
+            </div>
+            <div class="color-row">
+              <label for="rail-color">Rail</label>
+              <input type="color" id="rail-color" value="#4A2C17" />
+            </div>
+            <div class="color-row">
+              <label for="active-player-color">Active player</label>
+              <input type="color" id="active-player-color" value="#38BDF8" />
+            </div>
+            <div class="color-row">
+              <label for="turn-indicator-color">Accent</label>
+              <input type="color" id="turn-indicator-color" value="#F0B429" />
+            </div>
+          </section>
 
           <div class="modal-actions">
-            <button id="settings-reset-ui">Reset Colors</button>
-            <button id="settings-close">Close</button>
+            <button id="settings-reset-ui" class="btn btn-ghost display">Reset</button>
+            <button id="settings-close" class="btn btn-primary display">Done</button>
           </div>
+        </div>
+      </div>
+
+      <!-- Portrait phones get a prompt, not a second layout. -->
+      <div id="rotate-prompt">
+        <div class="rotate-inner">
+          <div class="rotate-icon">▭</div>
+          <h2>Rotate your device</h2>
+          <p>This table wants landscape.</p>
         </div>
       </div>
     </div>

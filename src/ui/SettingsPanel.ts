@@ -17,61 +17,31 @@ export class SettingsPanel {
 
   private createPanel(): HTMLElement {
     const panel = document.createElement('div');
-    panel.id = 'settings-panel';
-    panel.style.cssText = `
-      position: fixed;
-      top: 60px;
-      right: 20px;
-      width: 320px;
-      max-height: 80vh;
-      overflow-y: auto;
-      background: rgba(20, 20, 20, 0.95);
-      border: 2px solid #4a4a4a;
-      border-radius: 8px;
-      padding: 15px;
-      font-family: 'Courier New', monospace;
-      font-size: 13px;
-      color: #e0e0e0;
-      z-index: 1000;
-      display: none;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-    `;
+    panel.id = 'physics-panel';
+    panel.classList.add('hidden');
 
     panel.innerHTML = `
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid #4a4a4a; padding-bottom: 10px;">
-        <h3 style="margin: 0; color: #4CAF50; font-size: 16px;">⚙️ Physics Settings</h3>
-        <button id="settings-close" style="background: #d32f2f; color: white; border: none; border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 12px;">✕</button>
+      <div class="modal-actions" style="justify-content: space-between; margin: 0 0 16px;">
+        <h3>Physics</h3>
+        <button id="physics-panel-close" class="btn btn-ghost display" style="padding: 0 14px;">Close</button>
       </div>
 
-      <div style="margin-bottom: 20px;">
-        <h4 style="margin: 0 0 10px 0; color: #64B5F6; font-size: 14px;">🎱 Ball Physics</h4>
-        ${this.createSlider('BALL_RESTITUTION', 'Ball-Ball Restitution', 0.5, 1.0, 0.01, CONFIG.BALL_RESTITUTION)}
-        ${this.createSlider('BALL_BALL_FRICTION', 'Ball-Ball Friction', 0.0, 0.3, 0.01, CONFIG.BALL_BALL_FRICTION)}
-        ${this.createSlider('CUSHION_RESTITUTION', 'Cushion Restitution', 0.5, 1.0, 0.01, CONFIG.CUSHION_RESTITUTION)}
-        ${this.createSlider('BALL_ROTATION_MULTIPLIER_3D', 'Rotation Speed (3D)', 0.0, 2.0, 0.05, CONFIG.BALL_ROTATION_MULTIPLIER_3D)}
+      <div class="physics-group">
+        ${this.createSlider('BALL_RESTITUTION', 'Ball-ball restitution', 0.5, 1.0, 0.01, CONFIG.BALL_RESTITUTION)}
+        ${this.createSlider('BALL_BALL_FRICTION', 'Ball-ball friction', 0.0, 0.3, 0.01, CONFIG.BALL_BALL_FRICTION)}
+        ${this.createSlider('CUSHION_RESTITUTION', 'Cushion restitution', 0.5, 1.0, 0.01, CONFIG.CUSHION_RESTITUTION)}
+        ${this.createSlider('BALL_ROTATION_MULTIPLIER_3D', 'Roll rate', 0.0, 2.0, 0.05, CONFIG.BALL_ROTATION_MULTIPLIER_3D)}
+        ${this.createSlider('CUE_POWER_MAX', 'Max power', 10, 50, 1, CONFIG.CUE_POWER_MAX)}
+        ${this.createSlider('CUE_POWER_MULTIPLIER', 'Power multiplier', 5, 20, 0.5, CONFIG.CUE_POWER_MULTIPLIER)}
+        ${this.createSlider('ROLLING_FRICTION', 'Rolling friction', 0.1, 2.0, 0.05, CONFIG.ROLLING_FRICTION)}
+        ${this.createSlider('SLIDING_FRICTION', 'Sliding friction', 0.1, 2.0, 0.05, CONFIG.SLIDING_FRICTION)}
+        ${this.createSlider('SOLVER_ITERATIONS', 'Solver iterations', 1, 30, 1, CONFIG.SOLVER_ITERATIONS)}
+        ${this.createSlider('VELOCITY_EPSILON', 'Sleep threshold', 0.05, 1.0, 0.05, CONFIG.VELOCITY_EPSILON)}
       </div>
 
-      <div style="margin-bottom: 20px;">
-        <h4 style="margin: 0 0 10px 0; color: #FFB74D; font-size: 14px;">🎯 Shot Power</h4>
-        ${this.createSlider('CUE_POWER_MAX', 'Max Power', 10, 50, 1, CONFIG.CUE_POWER_MAX)}
-        ${this.createSlider('CUE_POWER_MULTIPLIER', 'Power Multiplier', 5, 20, 0.5, CONFIG.CUE_POWER_MULTIPLIER)}
-      </div>
-
-      <div style="margin-bottom: 20px;">
-        <h4 style="margin: 0 0 10px 0; color: #81C784; font-size: 14px;">🌪️ Friction</h4>
-        ${this.createSlider('ROLLING_FRICTION', 'Rolling Friction', 0.1, 2.0, 0.05, CONFIG.ROLLING_FRICTION)}
-        ${this.createSlider('SLIDING_FRICTION', 'Sliding Friction', 0.1, 2.0, 0.05, CONFIG.SLIDING_FRICTION)}
-      </div>
-
-      <div style="margin-bottom: 20px;">
-        <h4 style="margin: 0 0 10px 0; color: #BA68C8; font-size: 14px;">⚡ Physics Engine</h4>
-        ${this.createSlider('SOLVER_ITERATIONS', 'Solver Iterations', 1, 30, 1, CONFIG.SOLVER_ITERATIONS)}
-        ${this.createSlider('VELOCITY_EPSILON', 'Sleep Threshold', 0.05, 1.0, 0.05, CONFIG.VELOCITY_EPSILON)}
-      </div>
-
-      <div style="display: flex; gap: 10px; margin-top: 15px;">
-        <button id="settings-reset" style="flex: 1; background: #FF9800; color: white; border: none; border-radius: 4px; padding: 8px; cursor: pointer; font-weight: bold;">Reset Defaults</button>
-        <button id="settings-export" style="flex: 1; background: #2196F3; color: white; border: none; border-radius: 4px; padding: 8px; cursor: pointer; font-weight: bold;">Copy Config</button>
+      <div class="modal-actions">
+        <button id="settings-reset" class="btn btn-ghost display">Reset</button>
+        <button id="settings-export" class="btn btn-primary display">Copy</button>
       </div>
     `;
 
@@ -81,27 +51,19 @@ export class SettingsPanel {
   private createSlider(key: string, label: string, min: number, max: number, step: number, value: number): string {
     const displayValue = value < 0.01 ? value.toFixed(4) : value.toString();
     return `
-      <div style="margin-bottom: 12px;">
-        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-          <label style="font-size: 12px; color: #b0b0b0;">${label}</label>
-          <span id="${key}-value" style="font-weight: bold; color: #4CAF50;">${displayValue}</span>
-        </div>
-        <input 
-          type="range" 
-          id="${key}" 
-          min="${min}" 
-          max="${max}" 
-          step="${step}" 
-          value="${value}"
-          style="width: 100%; cursor: pointer;"
-        />
+      <div class="physics-row">
+        <label for="${key}">
+          <span>${label}</span>
+          <span id="${key}-value" class="physics-value">${displayValue}</span>
+        </label>
+        <input type="range" id="${key}" min="${min}" max="${max}" step="${step}" value="${value}" />
       </div>
     `;
   }
 
   private setupEventListeners() {
     // Close button
-    const closeBtn = this.panel.querySelector('#settings-close');
+    const closeBtn = this.panel.querySelector('#physics-panel-close');
     closeBtn?.addEventListener('click', () => this.hide());
 
     // Reset button
@@ -198,12 +160,12 @@ export class SettingsPanel {
   }
 
   show() {
-    this.panel.style.display = 'block';
+    this.panel.classList.remove('hidden');
     this.isVisible = true;
   }
 
   hide() {
-    this.panel.style.display = 'none';
+    this.panel.classList.add('hidden');
     this.isVisible = false;
   }
 }

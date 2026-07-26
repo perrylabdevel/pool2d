@@ -40,10 +40,10 @@ const DEFAULT_GAME_SETTINGS: GameSettings = {
 };
 
 const DEFAULT_UI_COLORS: UIColors = {
-  tableColor: '#0a5f0a',
-  railColor: '#2d1810',
-  activePlayerColor: '#4CAF50',
-  turnIndicatorColor: '#FFC107',
+  tableColor: '#146B4A', // --felt
+  railColor: '#4A2C17', // --rail
+  activePlayerColor: '#38BDF8', // --cyan-400
+  turnIndicatorColor: '#F0B429', // --gold-500
 };
 
 const DEFAULT_PHYSICS_SETTINGS: PhysicsSettings = {
@@ -142,22 +142,13 @@ export class SettingsManager {
     CONFIG.TABLE_COLOR = this.uiColors.tableColor;
     CONFIG.RAIL_COLOR = this.uiColors.railColor;
 
-    // Update CSS variables for UI elements
+    // Re-point the design tokens themselves rather than styling elements
+    // inline, so every consumer downstream keeps resolving through a token.
     const root = document.documentElement;
-    root.style.setProperty('--active-player-color', this.uiColors.activePlayerColor);
-    root.style.setProperty('--turn-indicator-color', this.uiColors.turnIndicatorColor);
-
-    // Update mode indicator color
-    const modeIndicator = document.getElementById('mode-indicator');
-    if (modeIndicator) {
-      modeIndicator.style.color = this.uiColors.activePlayerColor;
-    }
-
-    // Update turn indicator color
-    const turnIndicator = document.getElementById('turn-indicator');
-    if (turnIndicator) {
-      turnIndicator.style.color = this.uiColors.turnIndicatorColor;
-    }
+    root.style.setProperty('--felt', this.uiColors.tableColor);
+    root.style.setProperty('--rail', this.uiColors.railColor);
+    root.style.setProperty('--cyan-400', this.uiColors.activePlayerColor);
+    root.style.setProperty('--gold-500', this.uiColors.turnIndicatorColor);
 
     // Trigger re-render event
     window.dispatchEvent(new CustomEvent('settings:colors-changed'));

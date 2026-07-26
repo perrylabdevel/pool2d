@@ -1,0 +1,175 @@
+/* ==========================================================================
+   Design tokens — "midnight pool hall"
+   Single source of truth. Nothing downstream hardcodes a color, radius,
+   duration or easing curve.
+   ========================================================================== */
+
+:root {
+  /* Surfaces */
+  --bg-900: #0b0e14;
+  --bg-800: #131824;
+  --bg-700: #1c2333;
+  --line: #2a3346;
+
+  /* Table */
+  --felt: #146b4a;
+  --felt-hi: #1a8659;
+  --felt-lo: #0c4531;
+  --rail: #4a2c17;
+  --rail-hi: #6b4223;
+
+  /* Accents */
+  --gold-500: #f0b429;
+  --gold-600: #d69a16;
+  --cyan-400: #38bdf8;
+  --red-500: #ef4444;
+  --green-400: #34d399;
+
+  /* Text */
+  --text-hi: #f1f5f9;
+  --text-mid: #94a3b8;
+  --text-lo: #64748b;
+
+  /* Radii */
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 22px;
+  --radius-full: 999px;
+
+  /* Elevation */
+  --shadow-panel: 0 8px 32px rgba(0, 0, 0, 0.45);
+  --shadow-glow: 0 0 24px rgba(240, 180, 41, 0.35);
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 140ms;
+  --dur-mid: 260ms;
+  --dur-slow: 420ms;
+
+  /* Glass panels */
+  --glass-bg: rgba(19, 24, 36, 0.7);
+  --glass-bg-strong: rgba(11, 14, 20, 0.82);
+  --glass-blur: blur(12px);
+
+  /* Type */
+  --font-display: 'Barlow Condensed', 'Arial Narrow', system-ui, sans-serif;
+  --font-body: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  /* Layout */
+  --pod-avatar: 48px;
+  --hit-target: 44px;
+
+  /* Ball identity palette — deepened from the primaries so the balls read as
+     lacquered phenolic under warm light rather than as flat swatches. */
+  --ball-1: #e8b923;
+  --ball-2: #1e4fd8;
+  --ball-3: #d32f2f;
+  --ball-4: #7b2d8e;
+  --ball-5: #ef6c1a;
+  --ball-6: #1a8659;
+  --ball-7: #8c2f24;
+  --ball-8: #14181f;
+  --ball-9: #e8b923;
+  --ball-10: #1e4fd8;
+  --ball-11: #d32f2f;
+  --ball-12: #7b2d8e;
+  --ball-13: #ef6c1a;
+  --ball-14: #1a8659;
+  --ball-15: #8c2f24;
+  --ball-cue: #f5f3ec;
+}
+
+/* Motion rule: collapse every duration when the user asks for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0ms;
+    --dur-mid: 0ms;
+    --dur-slow: 0ms;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* ==========================================================================
+   Reset
+   ========================================================================== */
+
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body {
+  background: var(--bg-900);
+  color: var(--text-hi);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  touch-action: none;
+}
+
+/* Numerals never jitter: coin counters, timers, FPS. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+h1,
+h2,
+h3,
+.display {
+  font-family: var(--font-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  line-height: 1.05;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+:focus-visible {
+  outline: 2px solid var(--cyan-400);
+  outline-offset: 2px;
+}
+
+/* ==========================================================================
+   Shared primitives
+   ========================================================================== */
+
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-panel);
+}
+
+.hidden {
+  display: none !important;
+}

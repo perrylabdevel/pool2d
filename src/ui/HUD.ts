@@ -1,191 +1,329 @@
-// HUD and UI management
+// In-match HUD orchestration. Owns the floating chrome: player pods, the shot
+// clock, the feedback layer, the end-of-match overlay, and the settings modal.
+//
+// The HUD is DOM, never canvas, and it is driven by explicit pushes from Game.
+// It does not poll the physics world and it never writes to it.
+
 import { SettingsManager } from './SettingsManager';
+import { PlayerPod } from './PlayerPods';
+import { FeedbackLayer } from './Toasts';
+import { EndOverlay, MatchSummary } from './EndOverlay';
+import { sound } from './Sound';
+import { BALLS_SOLID, BALLS_STRIPE } from '../config';
+
+/** Seconds a player gets to take their shot. */
+export const SHOT_CLOCK_SECONDS = 45;
+
+export type Group = 'none' | 'solids' | 'stripes';
 
 export class HUD {
-  fpsElement: HTMLElement;
-  upsElement: HTMLElement;
-  modeElement: HTMLElement;
-  turnElement: HTMLElement;
-  foulBanner: HTMLElement;
-  player1Panel: HTMLElement;
-  player2Panel: HTMLElement;
-  statsElement: HTMLElement;
   settingsManager: SettingsManager;
-  
-  showStats: boolean = true;
-  
-  constructor() {
+  feedback: FeedbackLayer;
+  endOverlay: EndOverlay;
+
+  readonly pods: [PlayerPod, PlayerPod];
+
+  private fpsElement: HTMLElement;
+  private upsElement: HTMLElement;
+  private modeElement: HTMLElement;
+  private statsElement: HTMLElement;
+  private hintBar: HTMLElement;
+  private muteBtn: HTMLButtonElement;
+
+  private currentPlayer = 1;
+  private clockRemaining = SHOT_CLOCK_SECONDS;
+  private clockRunning = false;
+
+  showStats = true;
+
+  /** Fired when the shot clock runs out for the active player. */
+  onShotClockExpired?: () => void;
+
+  constructor(playerNames: [string, string] = ['You', 'Rival']) {
     this.fpsElement = document.getElementById('fps')!;
     this.upsElement = document.getElementById('ups')!;
     this.modeElement = document.getElementById('mode-indicator')!;
-    this.turnElement = document.getElementById('turn-indicator')!;
-    this.foulBanner = document.getElementById('foul-banner')!;
-    this.player1Panel = document.getElementById('player1-info')!;
-    this.player2Panel = document.getElementById('player2-info')!;
     this.statsElement = document.getElementById('stats')!;
-    
+    this.hintBar = document.getElementById('hint-bar')!;
+    this.muteBtn = document.getElementById('mute-btn') as HTMLButtonElement;
+
+    this.pods = [
+      new PlayerPod(document.getElementById('pod-left')!, playerNames[0], false),
+      new PlayerPod(document.getElementById('pod-right')!, playerNames[1], true),
+    ];
+
+    this.feedback = new FeedbackLayer();
+    this.endOverlay = new EndOverlay();
+
     this.settingsManager = new SettingsManager();
     this.setupControls();
     this.loadSettings();
+    this.setTurn(1);
   }
-  
-  setupControls() {
-    const pauseBtn = document.getElementById('pause-btn')!;
-    const restartBtn = document.getElementById('restart-btn')!;
-    const settingsBtn = document.getElementById('settings-btn')!;
-    const debugToggle = document.getElementById('debug-toggle')!;
+
+  // -- controls --------------------------------------------------------------
+
+  private setupControls() {
     const settingsModal = document.getElementById('settings-modal')!;
-    const settingsClose = document.getElementById('settings-close')!;
-    
-    pauseBtn.addEventListener('click', () => {
-      // Will be handled by Game class
-      window.dispatchEvent(new CustomEvent('game:pause'));
-    });
-    
-    restartBtn.addEventListener('click', () => {
-      window.dispatchEvent(new CustomEvent('game:restart'));
-    });
-    
-    settingsBtn.addEventListener('click', () => {
+
+    document.getElementById('settings-btn')!.addEventListener('click', () => {
       settingsModal.classList.remove('hidden');
     });
-    
-    settingsClose.addEventListener('click', () => {
+
+    document.getElementById('settings-close')!.addEventListener('click', () => {
       settingsModal.classList.add('hidden');
     });
-    
-    debugToggle.addEventListener('click', () => {
-      window.dispatchEvent(new CustomEvent('game:debug-toggle'));
-    });
-    
-    // Game settings toggles
-    const aimAssistToggle = document.getElementById('aim-assist-toggle') as HTMLInputElement;
-    aimAssistToggle.addEventListener('change', (e) => {
-      const checked = (e.target as HTMLInputElement).checked;
-      this.settingsManager.saveGameSettings({ aimAssist: checked });
-      window.dispatchEvent(new CustomEvent('game:aim-assist-toggle', { detail: { enabled: checked } }));
+
+    settingsModal.addEventListener('click', (e) => {
+      if (e.target === settingsModal) settingsModal.classList.add('hidden');
     });
 
-    const call8Toggle = document.getElementById('call-8-toggle') as HTMLInputElement;
-    call8Toggle.addEventListener('change', (e) => {
-      const checked = (e.target as HTMLInputElement).checked;
+    document.getElementById('restart-btn')!.addEventListener('click', () => {
+      window.dispatchEvent(new CustomEvent('game:restart'));
+    });
+
+    document.getElementById('debug-toggle')!.addEventListener('click', () => {
+      window.dispatchEvent(new CustomEvent('game:debug-toggle'));
+    });
+
+    this.muteBtn.addEventListener('click', () => {
+      sound.resume();
+      this.setMuted(sound.toggleMute());
+    });
+
+    const bind = (id: string, apply: (checked: boolean) => void) => {
+      const input = document.getElementById(id) as HTMLInputElement | null;
+      input?.addEventListener('change', (e) => apply((e.target as HTMLInputElement).checked));
+    };
+
+    bind('aim-assist-toggle', (checked) => {
+      this.settingsManager.saveGameSettings({ aimAssist: checked });
+      window.dispatchEvent(
+        new CustomEvent('game:aim-assist-toggle', { detail: { enabled: checked } })
+      );
+    });
+
+    bind('call-8-toggle', (checked) => {
       this.settingsManager.saveGameSettings({ call8Ball: checked });
     });
 
-    const showFpsToggle = document.getElementById('show-fps-toggle') as HTMLInputElement;
-    showFpsToggle.addEventListener('change', (e) => {
-      const checked = (e.target as HTMLInputElement).checked;
+    bind('show-fps-toggle', (checked) => {
       this.showStats = checked;
-      this.statsElement.style.display = this.showStats ? 'flex' : 'none';
+      this.statsElement.classList.toggle('hidden', !checked);
       this.settingsManager.saveGameSettings({ showFPS: checked });
     });
 
-    // UI Color inputs
-    const tableColorInput = document.getElementById('table-color') as HTMLInputElement;
-    tableColorInput.addEventListener('input', (e) => {
-      const color = (e.target as HTMLInputElement).value;
-      this.settingsManager.saveUIColors({ tableColor: color });
+    bind('sound-toggle', (checked) => {
+      sound.resume();
+      this.setMuted(!checked);
     });
 
-    const railColorInput = document.getElementById('rail-color') as HTMLInputElement;
-    railColorInput.addEventListener('input', (e) => {
-      const color = (e.target as HTMLInputElement).value;
-      this.settingsManager.saveUIColors({ railColor: color });
-    });
+    const colorBindings: Array<[string, keyof import('./SettingsManager').UIColors]> = [
+      ['table-color', 'tableColor'],
+      ['rail-color', 'railColor'],
+      ['active-player-color', 'activePlayerColor'],
+      ['turn-indicator-color', 'turnIndicatorColor'],
+    ];
 
-    const activePlayerColorInput = document.getElementById('active-player-color') as HTMLInputElement;
-    activePlayerColorInput.addEventListener('input', (e) => {
-      const color = (e.target as HTMLInputElement).value;
-      this.settingsManager.saveUIColors({ activePlayerColor: color });
-    });
-
-    const turnIndicatorColorInput = document.getElementById('turn-indicator-color') as HTMLInputElement;
-    turnIndicatorColorInput.addEventListener('input', (e) => {
-      const color = (e.target as HTMLInputElement).value;
-      this.settingsManager.saveUIColors({ turnIndicatorColor: color });
-    });
-
-    // Reset UI colors button
-    const resetUIBtn = document.getElementById('settings-reset-ui')!;
-    resetUIBtn.addEventListener('click', () => {
-      this.settingsManager.resetUIColors();
-      this.loadSettings(); // Reload UI to reflect reset
-    });
-  }
-
-  loadSettings() {
-    const gameSettings = this.settingsManager.getGameSettings();
-    const uiColors = this.settingsManager.getUIColors();
-
-    // Apply game settings to UI
-    const aimAssistToggle = document.getElementById('aim-assist-toggle') as HTMLInputElement;
-    if (aimAssistToggle) aimAssistToggle.checked = gameSettings.aimAssist;
-
-    const call8Toggle = document.getElementById('call-8-toggle') as HTMLInputElement;
-    if (call8Toggle) call8Toggle.checked = gameSettings.call8Ball;
-
-    const showFpsToggle = document.getElementById('show-fps-toggle') as HTMLInputElement;
-    if (showFpsToggle) {
-      showFpsToggle.checked = gameSettings.showFPS;
-      this.showStats = gameSettings.showFPS;
-      this.statsElement.style.display = this.showStats ? 'flex' : 'none';
+    for (const [id, key] of colorBindings) {
+      const input = document.getElementById(id) as HTMLInputElement | null;
+      input?.addEventListener('input', (e) => {
+        this.settingsManager.saveUIColors({ [key]: (e.target as HTMLInputElement).value });
+      });
     }
 
-    // Apply UI colors to inputs
-    const tableColorInput = document.getElementById('table-color') as HTMLInputElement;
-    if (tableColorInput) tableColorInput.value = uiColors.tableColor;
-
-    const railColorInput = document.getElementById('rail-color') as HTMLInputElement;
-    if (railColorInput) railColorInput.value = uiColors.railColor;
-
-    const activePlayerColorInput = document.getElementById('active-player-color') as HTMLInputElement;
-    if (activePlayerColorInput) activePlayerColorInput.value = uiColors.activePlayerColor;
-
-    const turnIndicatorColorInput = document.getElementById('turn-indicator-color') as HTMLInputElement;
-    if (turnIndicatorColorInput) turnIndicatorColorInput.value = uiColors.turnIndicatorColor;
+    document.getElementById('settings-reset-ui')!.addEventListener('click', () => {
+      this.settingsManager.resetUIColors();
+      this.loadSettings();
+    });
   }
-  
+
+  private loadSettings() {
+    const game = this.settingsManager.getGameSettings();
+    const colors = this.settingsManager.getUIColors();
+
+    const setChecked = (id: string, value: boolean) => {
+      const input = document.getElementById(id) as HTMLInputElement | null;
+      if (input) input.checked = value;
+    };
+
+    setChecked('aim-assist-toggle', game.aimAssist);
+    setChecked('call-8-toggle', game.call8Ball);
+    setChecked('show-fps-toggle', game.showFPS);
+    setChecked('sound-toggle', !sound.isMuted());
+
+    this.showStats = game.showFPS;
+    this.statsElement.classList.toggle('hidden', !game.showFPS);
+    this.setMuted(sound.isMuted());
+
+    const setColor = (id: string, value: string) => {
+      const input = document.getElementById(id) as HTMLInputElement | null;
+      if (input) input.value = value;
+    };
+
+    setColor('table-color', colors.tableColor);
+    setColor('rail-color', colors.railColor);
+    setColor('active-player-color', colors.activePlayerColor);
+    setColor('turn-indicator-color', colors.turnIndicatorColor);
+  }
+
+  private setMuted(muted: boolean) {
+    sound.setMuted(muted);
+    this.muteBtn.classList.toggle('off', muted);
+    this.muteBtn.setAttribute('aria-label', muted ? 'Unmute' : 'Mute');
+    const toggle = document.getElementById('sound-toggle') as HTMLInputElement | null;
+    if (toggle) toggle.checked = !muted;
+  }
+
+  // -- stats -----------------------------------------------------------------
+
   updateFPS(fps: number) {
-    this.fpsElement.textContent = `FPS: ${Math.round(fps)}`;
+    this.fpsElement.textContent = `${Math.round(fps)} FPS`;
   }
-  
+
   updateUPS(ups: number) {
-    this.upsElement.textContent = `UPS: ${Math.round(ups)}`;
+    this.upsElement.textContent = `${Math.round(ups)} UPS`;
   }
-  
+
   setMode(mode: string) {
     this.modeElement.textContent = mode;
   }
-  
-  setTurn(player: number) {
-    this.turnElement.textContent = `Player ${player}'s Turn`;
-    
-    if (player === 1) {
-      this.player1Panel.classList.add('active');
-      this.player2Panel.classList.remove('active');
-    } else {
-      this.player1Panel.classList.remove('active');
-      this.player2Panel.classList.add('active');
+
+  setHintVisible(visible: boolean) {
+    this.hintBar.classList.toggle('faded', !visible);
+  }
+
+  // -- turn state ------------------------------------------------------------
+
+  setTurn(player: number, options: { announce?: boolean; name?: string } = {}) {
+    this.currentPlayer = player;
+    this.pods[0].setActive(player === 1);
+    this.pods[1].setActive(player === 2);
+    this.resetShotClock();
+
+    if (options.announce) {
+      const incoming = this.pods[player - 1];
+      this.feedback.show(options.name ?? `Player ${player}`, {
+        sub: 'to shoot',
+        variant: 'info',
+        from: incoming.isMirrored ? 'right' : 'left',
+        hold: 900,
+      });
+      sound.blip();
     }
   }
-  
+
+  getCurrentPlayer(): number {
+    return this.currentPlayer;
+  }
+
+  /** Push group assignment into both pods. */
+  setGroups(player1Group: Group, player2Group: Group) {
+    const label: Record<Group, string> = {
+      none: 'Table open',
+      solids: 'Solids',
+      stripes: 'Stripes',
+    };
+
+    const ids: Record<Group, number[]> = {
+      none: [],
+      solids: [...BALLS_SOLID],
+      stripes: [...BALLS_STRIPE],
+    };
+
+    this.pods[0].setGroupLabel(label[player1Group]);
+    this.pods[0].setGroupBalls(ids[player1Group]);
+    this.pods[1].setGroupLabel(label[player2Group]);
+    this.pods[1].setGroupBalls(ids[player2Group]);
+  }
+
+  /** Dim the icons for balls already off the table. */
+  setPotted(potted: ReadonlySet<number>) {
+    this.pods[0].setPotted(potted);
+    this.pods[1].setPotted(potted);
+  }
+
+  // -- shot clock ------------------------------------------------------------
+
+  resetShotClock() {
+    this.clockRemaining = SHOT_CLOCK_SECONDS;
+    this.pods[this.currentPlayer - 1].setTimer(1);
+  }
+
+  setShotClockRunning(running: boolean) {
+    this.clockRunning = running;
+  }
+
+  /** Called once per frame from the game loop. Presentation only. */
+  tickShotClock(dt: number) {
+    if (!this.clockRunning) return;
+
+    const wasPositive = this.clockRemaining > 0;
+    this.clockRemaining = Math.max(0, this.clockRemaining - dt);
+    this.pods[this.currentPlayer - 1].setTimer(this.clockRemaining / SHOT_CLOCK_SECONDS);
+
+    if (wasPositive && this.clockRemaining <= 0) {
+      this.clockRunning = false;
+      this.onShotClockExpired?.();
+    }
+  }
+
+  // -- feedback --------------------------------------------------------------
+
   showFoul(message: string) {
-    this.foulBanner.textContent = message;
-    this.foulBanner.classList.remove('hidden');
-    
-    setTimeout(() => {
-      this.foulBanner.classList.add('hidden');
-    }, 3000);
+    this.feedback.show('Foul', { sub: message, variant: 'foul', hold: 1600 });
+    this.feedback.foulFlash();
+    sound.foul();
   }
-  
-  updatePlayerBalls(player: number, balls: number[]) {
-    const panel = player === 1 ? this.player1Panel : this.player2Panel;
-    const ballsContainer = panel.querySelector('.balls-remaining')!;
-    
-    if (balls.length === 0) {
-      ballsContainer.textContent = 'No balls assigned';
-    } else {
-      ballsContainer.textContent = `Balls: ${balls.join(', ')}`;
-    }
+
+  showBallInHand() {
+    this.feedback.show('Ball in hand', {
+      sub: 'Drag the cue ball to place it',
+      variant: 'info',
+      hold: 1800,
+    });
+  }
+
+  showBreak() {
+    this.feedback.show('Break', { sub: 'Rack them up', variant: 'info', hold: 1100 });
+  }
+
+  showTableOpen() {
+    this.feedback.show('Table open', { sub: 'Groups not yet assigned', variant: 'info' });
+  }
+
+  showGroupAssigned(player: number, group: Group) {
+    if (group === 'none') return;
+    this.feedback.show(group === 'solids' ? 'Solids' : 'Stripes', {
+      sub: `Player ${player}`,
+      variant: 'pot',
+      hold: 1200,
+    });
+  }
+
+  showCallPocket() {
+    this.feedback.show('Call your pocket', { variant: 'info', hold: 1400 });
+  }
+
+  showPot(ballId: number, pocketScreen: { x: number; y: number }, player: number) {
+    this.feedback.flyPottedBall(ballId, pocketScreen, this.pods[player - 1].getAvatarCenter());
+  }
+
+  showMatchEnd(summary: MatchSummary) {
+    this.feedback.show(summary.headline, {
+      variant: summary.won ? 'win' : 'neutral',
+      hold: 1200,
+    });
+    if (summary.won) sound.fanfare();
+    window.setTimeout(() => this.endOverlay.show(summary), 1500);
+  }
+
+  reset() {
+    this.feedback.clear();
+    this.endOverlay.hide();
+    this.setGroups('none', 'none');
+    this.setPotted(new Set());
+    this.setTurn(1);
+    this.resetShotClock();
   }
 }

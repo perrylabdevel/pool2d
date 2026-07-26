@@ -9,7 +9,9 @@ export class DebugDraw {
   ctx: CanvasRenderingContext2D;
   scale: number;
   enabled: boolean = false;
-  
+  viewWidth: number = 0;
+  viewHeight: number = 0;
+
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d')!;
@@ -21,16 +23,19 @@ export class DebugDraw {
     this.canvas.classList.toggle('visible', this.enabled);
   }
   
+  /** width/height are CSS pixels; the backing store is scaled by the DPR. */
   resize(width: number, height: number, scale: number) {
-    this.canvas.width = width;
-    this.canvas.height = height;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this.canvas.width = Math.round(width * dpr);
+    this.canvas.height = Math.round(height * dpr);
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.viewWidth = width;
+    this.viewHeight = height;
     this.scale = scale;
-    this.canvas.style.width = `${width}px`;
-    this.canvas.style.height = `${height}px`;
   }
-  
+
   clear() {
-    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    this.ctx.clearRect(0, 0, this.viewWidth, this.viewHeight);
   }
   
   draw(world: PhysicsWorld) {
@@ -41,8 +46,8 @@ export class DebugDraw {
     this.ctx.save();
     
     // Use same transform as renderer: center origin, Y-up
-    const canvasCenterX = this.canvas.width / 2;
-    const canvasCenterY = this.canvas.height / 2;
+    const canvasCenterX = this.viewWidth / 2;
+    const canvasCenterY = this.viewHeight / 2;
     this.ctx.translate(canvasCenterX, canvasCenterY);
     this.ctx.scale(this.scale, -this.scale); // Y-up for world coords
     

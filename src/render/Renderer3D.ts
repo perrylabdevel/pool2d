@@ -5,6 +5,13 @@ import { PhysicsWorld } from '../physics/Physics';
 import { CONFIG, BALL_CUE } from '../config';
 import { TABLE_GEOMETRY } from '../geometry/Geometry';
 import { PredictionResult, Predictor } from '../physics/Prediction';
+import { PALETTE, token } from '../ui/palette';
+
+/** Extra world-space margin around the play area, so the rails have room. */
+const TABLE_MARGIN_IN = 9;
+
+/** Pockets read larger than their capture radius so balls look like they fall in. */
+const POCKET_VISUAL_SCALE = 1.35;
 
 export class Renderer3D {
   canvas: HTMLCanvasElement;
@@ -14,7 +21,20 @@ export class Renderer3D {
   camera: THREE.OrthographicCamera;
   renderer: THREE.WebGLRenderer;
   scale: number;
-  
+
+  /** CSS-pixel size of the viewport. worldToScreen returns coordinates in these. */
+  viewWidth = 0;
+  viewHeight = 0;
+
+  /** Aim overlay state, pushed in by Game. The renderer never derives it. */
+  cueDrawBack = 0; // 0..1, how far the cue is pulled back
+  cueVisible = true;
+  guidelineFraction = 1; // tier gate: 0..1 of the full guideline length
+
+  /** Built once and reused — never regenerated per frame. */
+  private feltTexture: THREE.CanvasTexture | null = null;
+  private scratchVec = new THREE.Vector3();
+
   // 3D objects
   ballMeshes: Map<number, THREE.Object3D> = new Map();
   ballRotations: Map<number, THREE.Quaternion> = new Map();
@@ -49,8 +69,8 @@ export class Renderer3D {
     
     // Create Three.js scene
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x0a0a0a);
-    
+    this.scene.background = new THREE.Color(PALETTE.bg900);
+
     // Create orthographic camera (top-down view)
     const aspect = 1;
     const frustumSize = 100;
@@ -67,19 +87,22 @@ export class Renderer3D {
     this.camera.position.set(0, 0, 50);
     this.camera.lookAt(0, 0, 0);
     
-    // Create WebGL renderer
-    this.renderer = new THREE.WebGLRenderer({ 
+    // Create WebGL renderer. Cap the pixel ratio at 2 — beyond that the cost
+    // outruns the visible gain on the shot-replay frame budget.
+    this.renderer = new THREE.WebGLRenderer({
       canvas,
       antialias: true,
     });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    
-    // Lighting
-    this.ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
+
+    // Lighting: warm key from above-left, cool fill, so the felt reads "lit pool
+    // hall" rather than "flat green rectangle".
+    this.ambientLight = new THREE.AmbientLight(0xffffff, 0.62);
     this.scene.add(this.ambientLight);
 
-    this.directionalLight = new THREE.DirectionalLight(0xffffff, 1.35);
+    this.directionalLight = new THREE.DirectionalLight(0xfff1d8, 1.45);
     this.directionalLight.position.set(-35, -45, 80);
     this.directionalLight.castShadow = true;
     this.directionalLight.shadow.mapSize.width = 2048;
@@ -95,8 +118,95 @@ export class Renderer3D {
     this.directionalLight.target.position.set(0, 0, 0);
     this.scene.add(this.directionalLight.target);
 
-    this.fillLight = new THREE.HemisphereLight(0xffffff, 0x1a1a1a, 0.55);
+    this.fillLight = new THREE.HemisphereLight(0xdbeafe, 0x0b0e14, 0.5);
     this.scene.add(this.fillLight);
+  }
+
+  /**
+   * Procedural felt: radial highlight from --felt-hi at centre out to --felt-lo
+   * at the edges, plus a cloth-fiber noise pass and an edge vignette so the play
+   * area sits in a pool of light.
+   *
+   * Generated once into an offscreen canvas and reused as a texture. This is the
+   * WebGL equivalent of blitting a pre-rendered static layer — the felt never
+   * costs anything per frame.
+   */
+  private buildFeltTexture(): THREE.CanvasTexture {
+    const size = 1024;
+    const c = document.createElement('canvas');
+    c.width = size;
+    c.height = size;
+    const ctx = c.getContext('2d')!;
+
+    const feltHi = token('--felt-hi', PALETTE.feltHi);
+    const felt = token('--felt', CONFIG.TABLE_COLOR || PALETTE.felt);
+    const feltLo = token('--felt-lo', PALETTE.feltLo);
+
+    const grad = ctx.createRadialGradient(
+      size / 2,
+      size / 2,
+      size * 0.04,
+      size / 2,
+      size / 2,
+      size * 0.62
+    );
+    grad.addColorStop(0, feltHi);
+    grad.addColorStop(0.5, felt);
+    grad.addColorStop(1, feltLo);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, size, size);
+
+    // Cloth fibers: fine directional noise, deliberately low contrast.
+    const img = ctx.getImageData(0, 0, size, size);
+    const data = img.data;
+    for (let i = 0; i < data.length; i += 4) {
+      const n = (Math.random() - 0.5) * 15;
+      data[i] = Math.max(0, Math.min(255, data[i] + n));
+      data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + n));
+      data[i + 2] = Math.max(0, Math.min(255, data[i + 2] + n));
+    }
+    ctx.putImageData(img, 0, 0);
+
+    // Weave: faint crosshatch to catch the light.
+    ctx.globalAlpha = 0.05;
+    ctx.strokeStyle = feltHi;
+    ctx.lineWidth = 1;
+    for (let i = 0; i < size; i += 4) {
+      ctx.beginPath();
+      ctx.moveTo(i, 0);
+      ctx.lineTo(i, size);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // Vignette baked in, so the cloth darkens toward the cushions.
+    const vig = ctx.createRadialGradient(
+      size / 2,
+      size / 2,
+      size * 0.28,
+      size / 2,
+      size / 2,
+      size * 0.74
+    );
+    vig.addColorStop(0, 'rgba(0,0,0,0)');
+    vig.addColorStop(1, 'rgba(0,0,0,0.42)');
+    ctx.fillStyle = vig;
+    ctx.fillRect(0, 0, size, size);
+
+    const texture = new THREE.CanvasTexture(c);
+    texture.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+  }
+
+  /** Convert a viewport (client) point into table world coordinates. */
+  screenToWorld(clientX: number, clientY: number): { x: number; y: number } {
+    const rect = this.canvas.getBoundingClientRect();
+    const ndcX = ((clientX - rect.left) / rect.width) * 2 - 1;
+    const ndcY = -((clientY - rect.top) / rect.height) * 2 + 1;
+
+    this.scratchVec.set(ndcX, ndcY, 0).unproject(this.camera);
+    return { x: this.scratchVec.x, y: this.scratchVec.y };
   }
 
   setBallAssets(fbx: THREE.Group, textures: Map<number, THREE.Texture>) {
@@ -123,13 +233,9 @@ export class Renderer3D {
       const source = fbx.getObjectByName('pooballl_grp') ?? fbx;
       const handled = new Set<number>();
       
-      console.log('🔍 FBX Structure:');
-      console.log('  Root children:', fbx.children.length);
-      fbx.children.forEach((c, i) => console.log(`    ${i}: ${c.name} (${c.type}), children: ${c.children.length}`));
       
       source.traverse((child: THREE.Object3D) => {
         if (!(child instanceof THREE.Mesh)) {
-          console.log(`  Skipping non-mesh: ${child.name} (${child.type})`);
           return;
         }
         if (!child.name.startsWith('poolball')) return;
@@ -137,7 +243,6 @@ export class Renderer3D {
         if (ballId === undefined || handled.has(ballId)) return;
         handled.add(ballId);
         
-        console.log(`📦 Processing mesh: ${child.name}, children: ${child.children.length}`);
         
         // Use the ORIGINAL mesh with its material, just clone and scale it
         const geometry = child.geometry.clone();
@@ -157,7 +262,6 @@ export class Renderer3D {
         const originalMaterial = Array.isArray(child.material) ? child.material[0] : child.material;
         const originalMap = (originalMaterial as THREE.Material & { map?: THREE.Texture | null }).map; // Get original texture if it exists
         
-        console.log(`   Original has embedded texture:`, originalMap !== null && originalMap !== undefined);
         
         // Get our loaded texture
         let texture: THREE.Texture | undefined;
@@ -169,17 +273,11 @@ export class Renderer3D {
             texture.mapping = THREE.UVMapping;
             texture.wrapS = THREE.RepeatWrapping;
             texture.wrapT = THREE.RepeatWrapping;
-            console.log(`   Texture mapping mode: ${texture.mapping} (should be ${THREE.UVMapping})`);
           }
         }
         
         // Use our texture if we have it, otherwise use original
         const finalTexture = texture || originalMap;
-        
-        if (finalTexture) {
-          console.log(`   Final texture mapping: ${finalTexture.mapping}`);
-          console.log(`   Final texture wrap: ${finalTexture.wrapS}, ${finalTexture.wrapT}`);
-        }
         
         // Create upgraded material
         const material = new THREE.MeshStandardMaterial({
@@ -189,7 +287,6 @@ export class Renderer3D {
           metalness: 0.12
         });
         
-        console.log(`   Using texture:`, finalTexture !== null && finalTexture !== undefined);
         
         const templateMesh = new THREE.Mesh(geometry, material);
         templateMesh.castShadow = true;
@@ -199,23 +296,9 @@ export class Renderer3D {
         this.ballModels.set(ballId, templateMesh);
         
         // Debug: Check mesh structure
-        console.log(`🔍 Ball ${ballId} mesh structure:`);
-        console.log(`   Geometry type: ${geometry.type}`);
-        console.log(`   Has UVs: ${geometry.attributes.uv !== undefined}`);
-        console.log(`   Material type: ${material.type}`);
-        console.log(`   Texture: ${texture ? 'yes' : 'no'}`);
-        if (texture) {
-          console.log(`   Texture size: ${texture.image?.width}x${texture.image?.height}`);
-        }
-        
-        // Test manual rotation
-        const testMesh = templateMesh.clone();
-        testMesh.rotation.y = Math.PI / 4; // 45 degrees
-        console.log(`   Test rotation applied: ${testMesh.rotation.y} rad`);
       });
       
       this.ballModelsLoaded = this.ballModels.size > 0;
-      console.log(`🎱 Ball models loaded: ${this.ballModels.size} templates created`);
       
       if (this.ballModelsLoaded) {
         this.replaceBallsWithModels();
@@ -233,48 +316,44 @@ export class Renderer3D {
     this.ballMeshes.clear();
   }
   
+  /**
+   * The canvas fills the viewport; the table is letterboxed inside the camera
+   * frustum instead of inside a smaller canvas. The felt vignette therefore
+   * bleeds all the way to the screen edges.
+   */
   resize() {
-    const container = this.canvas.parentElement!;
-    const containerWidth = container.clientWidth;
-    const containerHeight = container.clientHeight;
-    
-    // External margin around canvas
-    const externalMargin = 40;
-    
-    // Internal padding within canvas (around table)
-    const internalPadding = 40;
-    
-    // Calculate available space for canvas after external margins
-    const availableWidth = containerWidth - externalMargin * 2;
-    const availableHeight = containerHeight - externalMargin * 2;
-    
-    // Calculate scale to fit table with internal padding
-    const scaleX = (availableWidth - internalPadding * 2) / CONFIG.TABLE_WIDTH;
-    const scaleY = (availableHeight - internalPadding * 2) / CONFIG.TABLE_HEIGHT;
-    this.scale = Math.min(scaleX, scaleY);
-    
-    // Set canvas size
-    const width = CONFIG.TABLE_WIDTH * this.scale + internalPadding * 2;
-    const height = CONFIG.TABLE_HEIGHT * this.scale + internalPadding * 2;
-    
-    this.renderer.setSize(width, height);
-    this.canvas.style.width = `${width}px`;
-    this.canvas.style.height = `${height}px`;
-    
-    // Resize UI canvas to match
-    this.uiCanvas.width = width;
-    this.uiCanvas.height = height;
-    this.uiCanvas.style.width = `${width}px`;
-    this.uiCanvas.style.height = `${height}px`;
-    
-    // Update camera aspect ratio
+    const width = Math.max(1, window.innerWidth);
+    const height = Math.max(1, window.innerHeight);
+
+    this.viewWidth = width;
+    this.viewHeight = height;
+
+    // setSize scales the backing store by the pixel ratio; CSS keeps the element
+    // at 100%/100%, so nothing looks soft on retina.
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this.renderer.setPixelRatio(dpr);
+    this.renderer.setSize(width, height, false);
+
+    // The 2D overlay needs the same treatment: scale the backing store, draw in
+    // CSS pixels.
+    this.uiCanvas.width = Math.round(width * dpr);
+    this.uiCanvas.height = Math.round(height * dpr);
+    this.uiCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    // Fit the whole table plus its rail margin, whichever axis is tighter.
     const aspect = width / height;
-    const frustumSize = CONFIG.TABLE_HEIGHT * 1.2;
-    this.camera.left = -frustumSize * aspect / 2;
-    this.camera.right = frustumSize * aspect / 2;
-    this.camera.top = frustumSize / 2;
-    this.camera.bottom = -frustumSize / 2;
+    const contentWidth = TABLE_GEOMETRY.playWidthIn + TABLE_MARGIN_IN * 2;
+    const contentHeight = TABLE_GEOMETRY.playHeightIn + TABLE_MARGIN_IN * 2;
+    const frustumHeight = Math.max(contentHeight, contentWidth / aspect);
+
+    this.camera.left = (-frustumHeight * aspect) / 2;
+    this.camera.right = (frustumHeight * aspect) / 2;
+    this.camera.top = frustumHeight / 2;
+    this.camera.bottom = -frustumHeight / 2;
     this.camera.updateProjectionMatrix();
+
+    // Screen pixels per table inch — used for overlay stroke widths.
+    this.scale = height / frustumHeight;
   }
   
   initializeTable() {
@@ -285,129 +364,203 @@ export class Renderer3D {
     }
     this.frameMeshes.forEach((m) => this.scene.remove(m));
     this.frameMeshes = [];
-    
-    // Create table felt
+
+    // Felt texture is built once for the lifetime of the renderer.
+    if (!this.feltTexture) {
+      this.feltTexture = this.buildFeltTexture();
+    }
+
     const tableGeometry = new THREE.PlaneGeometry(
       TABLE_GEOMETRY.playWidthIn,
       TABLE_GEOMETRY.playHeightIn
     );
     const tableMaterial = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(CONFIG.TABLE_COLOR),
-      roughness: 0.8,
-      metalness: 0.1
+      map: this.feltTexture,
+      roughness: 0.94,
+      metalness: 0.0,
     });
     this.tableMesh = new THREE.Mesh(tableGeometry, tableMaterial);
     this.tableMesh.receiveShadow = true;
     this.scene.add(this.tableMesh);
-    
-    // Create wooden frame
-    const frameWidth = 4;
-    const frameHeight = 2;
-    const frameMaterial = new THREE.MeshStandardMaterial({
-      color: 0x3d2413,
-      roughness: 0.6,
-      metalness: 0.2
-    });
-    
+
+    this.buildWoodFrame();
+  }
+
+  /**
+   * Beveled wood band around the cloth: a dark base, a lighter top bevel, and a
+   * near-black shadow lip where the cloth meets the rail. Diamond sight markers
+   * are inlaid along the top face.
+   */
+  private buildWoodFrame() {
     const halfW = TABLE_GEOMETRY.playWidthIn / 2;
     const halfH = TABLE_GEOMETRY.playHeightIn / 2;
-    
-    // Top frame
-    const topFrame = new THREE.Mesh(
-      new THREE.BoxGeometry(TABLE_GEOMETRY.playWidthIn + frameWidth * 2, frameWidth, frameHeight),
-      frameMaterial
-    );
-    topFrame.position.set(0, halfH + frameWidth / 2, frameHeight / 2);
-    this.scene.add(topFrame);
-    this.frameMeshes.push(topFrame);
-    
-    // Bottom frame
-    const bottomFrame = new THREE.Mesh(
-      new THREE.BoxGeometry(TABLE_GEOMETRY.playWidthIn + frameWidth * 2, frameWidth, frameHeight),
-      frameMaterial
-    );
-    bottomFrame.position.set(0, -halfH - frameWidth / 2, frameHeight / 2);
-    this.scene.add(bottomFrame);
-    this.frameMeshes.push(bottomFrame);
-    
-    // Left frame
-    const leftFrame = new THREE.Mesh(
-      new THREE.BoxGeometry(frameWidth, TABLE_GEOMETRY.playHeightIn, frameHeight),
-      frameMaterial
-    );
-    leftFrame.position.set(-halfW - frameWidth / 2, 0, frameHeight / 2);
-    this.scene.add(leftFrame);
-    this.frameMeshes.push(leftFrame);
-    
-    // Right frame
-    const rightFrame = new THREE.Mesh(
-      new THREE.BoxGeometry(frameWidth, TABLE_GEOMETRY.playHeightIn, frameHeight),
-      frameMaterial
-    );
-    rightFrame.position.set(halfW + frameWidth / 2, 0, frameHeight / 2);
-    this.scene.add(rightFrame);
-    this.frameMeshes.push(rightFrame);
-  }
-  
-  initializeRails(rails: Rail[]) {
-    this.railMeshes.forEach((m) => this.scene.remove(m));
-    this.railMeshes = [];
-    
-    const railMaterial = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(CONFIG.RAIL_COLOR),
-      roughness: 0.5,
-      metalness: 0.3
+
+    const railBase = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(token('--rail', CONFIG.RAIL_COLOR || PALETTE.rail)),
+      roughness: 0.62,
+      metalness: 0.14,
     });
-    
-    rails.forEach((rail) => {
-      const dx = rail.x2 - rail.x1;
-      const dy = rail.y2 - rail.y1;
-      const length = Math.sqrt(dx * dx + dy * dy);
-      const angle = Math.atan2(dy, dx);
-      
-      const railGeometry = new THREE.BoxGeometry(length, CONFIG.RAIL_THICKNESS * 2, 1.5);
-      const railMesh = new THREE.Mesh(railGeometry, railMaterial);
-      
-      railMesh.position.set(
-        (rail.x1 + rail.x2) / 2,
-        (rail.y1 + rail.y2) / 2,
-        0.75
+    const railBevel = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(token('--rail-hi', PALETTE.railHi)),
+      roughness: 0.46,
+      metalness: 0.2,
+    });
+    const shadowLip = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(PALETTE.bg900),
+      transparent: true,
+      opacity: 0.55,
+    });
+
+    const bandWidth = 7;
+    const bevelWidth = 2.2;
+    const bandZ = 1.9;
+    const lipWidth = 0.5;
+
+    const add = (mesh: THREE.Mesh) => {
+      this.scene.add(mesh);
+      this.frameMeshes.push(mesh);
+    };
+
+    // Each side: base band, lighter inner bevel strip, dark contact lip.
+    const sides: Array<{
+      horizontal: boolean;
+      sign: number;
+    }> = [
+      { horizontal: true, sign: 1 },
+      { horizontal: true, sign: -1 },
+      { horizontal: false, sign: 1 },
+      { horizontal: false, sign: -1 },
+    ];
+
+    for (const { horizontal, sign } of sides) {
+      const along = horizontal ? TABLE_GEOMETRY.playWidthIn + bandWidth * 2 : bandWidth;
+      const across = horizontal ? bandWidth : TABLE_GEOMETRY.playHeightIn + bandWidth * 2;
+      const edge = horizontal ? halfH : halfW;
+
+      const cx = horizontal ? 0 : sign * (edge + bandWidth / 2);
+      const cy = horizontal ? sign * (edge + bandWidth / 2) : 0;
+
+      const base = new THREE.Mesh(new THREE.BoxGeometry(along, across, bandZ), railBase);
+      base.position.set(cx, cy, bandZ / 2);
+      base.receiveShadow = true;
+      add(base);
+
+      // Bevel sits proud on the inner lip of the band and catches the key light.
+      // It spans only the play dimension — extending it into the corners like
+      // the base band does would draw the four bevels crossing over each other.
+      const bevelAlong = horizontal ? TABLE_GEOMETRY.playWidthIn : bevelWidth;
+      const bevelAcross = horizontal ? bevelWidth : TABLE_GEOMETRY.playHeightIn;
+      const bevelX = horizontal ? 0 : sign * (edge + bevelWidth / 2 + 0.05);
+      const bevelY = horizontal ? sign * (edge + bevelWidth / 2 + 0.05) : 0;
+
+      const bevel = new THREE.Mesh(
+        new THREE.BoxGeometry(bevelAlong, bevelAcross, bandZ + 0.35),
+        railBevel
       );
-      railMesh.rotation.z = angle;
-      
-      this.scene.add(railMesh);
-      this.railMeshes.push(railMesh);
-    });
+      bevel.position.set(bevelX, bevelY, (bandZ + 0.35) / 2);
+      add(bevel);
+
+      // Dark hairline where cloth meets cushion.
+      const lipAlong = horizontal ? TABLE_GEOMETRY.playWidthIn : lipWidth;
+      const lipAcross = horizontal ? lipWidth : TABLE_GEOMETRY.playHeightIn;
+      const lip = new THREE.Mesh(
+        new THREE.PlaneGeometry(lipAlong, lipAcross),
+        shadowLip
+      );
+      lip.position.set(
+        horizontal ? 0 : sign * (halfW - lipWidth / 2),
+        horizontal ? sign * (halfH - lipWidth / 2) : 0,
+        0.02
+      );
+      add(lip);
+    }
+
+    this.buildDiamonds(halfW, halfH, bandWidth);
   }
-  
+
+  /** Inlaid diamond sights: 3 per short rail, 6 per long rail (quarter points). */
+  private buildDiamonds(halfW: number, halfH: number, bandWidth: number) {
+    const diamondMaterial = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(PALETTE.textHi),
+      roughness: 0.3,
+      metalness: 0.35,
+    });
+
+    // A square rotated 45 degrees reads as a diamond from straight above.
+    const diamondGeometry = new THREE.PlaneGeometry(1.05, 1.05);
+    const offset = bandWidth * 0.52;
+
+    const place = (x: number, y: number) => {
+      const d = new THREE.Mesh(diamondGeometry, diamondMaterial);
+      d.position.set(x, y, 2.05);
+      d.rotation.z = Math.PI / 4;
+      this.scene.add(d);
+      this.frameMeshes.push(d);
+    };
+
+    // Long rails: eighth-points, skipping the side pockets at x = 0.
+    for (let i = 1; i <= 7; i++) {
+      if (i === 4) continue;
+      const x = -halfW + (TABLE_GEOMETRY.playWidthIn * i) / 8;
+      place(x, halfH + offset);
+      place(x, -halfH - offset);
+    }
+
+    // Short rails: quarter-points.
+    for (let i = 1; i <= 3; i++) {
+      const y = -halfH + (TABLE_GEOMETRY.playHeightIn * i) / 4;
+      place(halfW + offset, y);
+      place(-halfW - offset, y);
+    }
+  }
+
+  /**
+   * Pockets: a dark hole with a soft inner shadow lip, drawn slightly larger
+   * than the physics capture radius so balls read as falling in rather than
+   * vanishing at an invisible boundary.
+   */
   initializePockets(pockets: Pocket[]) {
     this.pocketMeshes.forEach((m) => this.scene.remove(m));
     this.pocketMeshes = [];
-    
-    const pocketMaterial = new THREE.MeshBasicMaterial({
-      color: 0x000000,
-      depthTest: false // This forces it to render on top
+
+    const holeMaterial = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(0x05070b),
     });
-    
+    const lipMaterial = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(0x05070b),
+      transparent: true,
+      opacity: 0.45,
+    });
+
     pockets.forEach((pocket) => {
-      const pocketGeometry = new THREE.CylinderGeometry(
-        pocket.radius,
-        pocket.radius * 0.8,
-        2,
-        32
+      const visual = pocket.radius * POCKET_VISUAL_SCALE;
+
+      // Soft outer lip: a ring feathering the hole into the cloth.
+      const lip = new THREE.Mesh(
+        new THREE.RingGeometry(visual, visual * 1.42, 40),
+        lipMaterial
       );
-      const pocketMesh = new THREE.Mesh(pocketGeometry, pocketMaterial);
-      
-      // Position pockets at table level
-      pocketMesh.position.set(pocket.x, pocket.y, 0);
-      pocketMesh.rotation.x = Math.PI / 2;
-      
-      // Set high render order to ensure pockets draw last
-      pocketMesh.renderOrder = 999;
-      
-      this.scene.add(pocketMesh);
-      this.pocketMeshes.push(pocketMesh);
+      lip.position.set(pocket.x, pocket.y, 0.03);
+      lip.renderOrder = 998;
+      this.scene.add(lip);
+      this.pocketMeshes.push(lip);
+
+      const hole = new THREE.Mesh(new THREE.CircleGeometry(visual, 40), holeMaterial);
+      hole.position.set(pocket.x, pocket.y, 0.05);
+      hole.renderOrder = 999;
+      this.scene.add(hole);
+      this.pocketMeshes.push(hole);
     });
+  }
+
+  /**
+   * Rails are drawn as part of the wood frame; the physics rail list is kept
+   * only so a geometry change upstream still lines the visuals up.
+   */
+  initializeRails(rails: Rail[]) {
+    this.railMeshes.forEach((m) => this.scene.remove(m));
+    this.railMeshes = [];
+    void rails;
   }
   
   rotationAxis = new THREE.Vector3();
@@ -544,8 +697,8 @@ export class Renderer3D {
   }
   
   render(world: PhysicsWorld, alpha: number) {
-    // Clear UI canvas
-    this.uiCtx.clearRect(0, 0, this.uiCanvas.width, this.uiCanvas.height);
+    // Clear UI canvas (in CSS pixels — the context carries the DPR transform)
+    this.uiCtx.clearRect(0, 0, this.viewWidth, this.viewHeight);
 
     if (this.showMeasurementOverlay) {
       this.drawMeasurementOverlay();
@@ -617,15 +770,6 @@ export class Renderer3D {
         ball.rotationY = updatedEuler.y;
         ball.rotationZ = updatedEuler.z;
         this.ballRotations.set(ball.id, mesh.quaternion.clone());
-        
-        // Debug occasionally
-        if (ball.id === 0 && Math.random() < 0.01) {
-          console.log(`🔄 Ball ${ball.id} rolling:`);
-          console.log(`  Travel: (${dx.toFixed(3)}, ${dy.toFixed(3)}) = ${distanceTraveled.toFixed(3)}`);
-          console.log(`  Rotation amount: ${rotationAmount.toFixed(4)} rad`);
-          console.log(`  Axis: (${this.rotationAxis.x.toFixed(3)}, ${this.rotationAxis.y.toFixed(3)}, ${this.rotationAxis.z.toFixed(3)})`);
-          console.log(`  Updated Euler: (${ball.rotationX.toFixed(3)}, ${ball.rotationY.toFixed(3)}, ${ball.rotationZ.toFixed(3)})`);
-        }
       } else {
         // Ball at rest - stored orientation already applied above
       }
@@ -633,6 +777,28 @@ export class Renderer3D {
     
     // Render the scene
     this.renderer.render(this.scene, this.camera);
+
+    // The cue ball gets a ring so it is instantly identifiable among 16 spheres.
+    const cue = world.balls.find((b) => b.id === BALL_CUE);
+    if (cue && !cue.pocketed) {
+      const x = cue.prevX + (cue.x - cue.prevX) * alpha;
+      const y = cue.prevY + (cue.y - cue.prevY) * alpha;
+      this.drawCueBallRing(x, y, cue.radius);
+    }
+  }
+
+  private drawCueBallRing(x: number, y: number, radius: number) {
+    const p = this.worldToScreen(x, y);
+    const r = radius * this.scale;
+    const ctx = this.uiCtx;
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.55)'; // --cyan-400 at low alpha
+    ctx.lineWidth = Math.max(1.25, r * 0.09);
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r * 1.28, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
   }
 
   toggleMeasurementOverlay(force?: boolean) {
@@ -847,7 +1013,7 @@ export class Renderer3D {
 
     // Ball size reference (top-right corner)
     const ballRadiusPx = CONFIG.BALL_RADIUS * this.scale;
-    const sampleX = this.uiCanvas.width - ballRadiusPx * 3;
+    const sampleX = this.viewWidth - ballRadiusPx * 3;
     const sampleY = ballRadiusPx * 3;
     ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
@@ -862,17 +1028,16 @@ export class Renderer3D {
     ctx.restore();
   }
   
-  // Helper to convert world coordinates to screen coordinates
+  /**
+   * World -> CSS pixels. Reuses one scratch vector: this runs several times per
+   * frame for the guideline and must not allocate.
+   */
   worldToScreen(worldX: number, worldY: number): { x: number; y: number } {
-    // Project world coordinates through the camera
-    const vector = new THREE.Vector3(worldX, worldY, 0);
-    vector.project(this.camera);
-    
-    // Convert from NDC (-1 to 1) to screen coordinates
-    const screenX = (vector.x + 1) * this.uiCanvas.width / 2;
-    const screenY = (-vector.y + 1) * this.uiCanvas.height / 2;
-    
-    return { x: screenX, y: screenY };
+    this.scratchVec.set(worldX, worldY, 0).project(this.camera);
+    return {
+      x: ((this.scratchVec.x + 1) * this.viewWidth) / 2,
+      y: ((-this.scratchVec.y + 1) * this.viewHeight) / 2,
+    };
   }
   
   // Helper to clip a line at table boundaries (inside the rails)
@@ -925,234 +1090,238 @@ export class Renderer3D {
     };
   }
   
-  // Compatibility methods for existing code
-  drawCueAndPowerBar(ball: Ball, angle: number, power: number, showGhost: boolean, showPowerBar: boolean, _isAimMode: boolean, prediction?: PredictionResult) {
-    // Remove old 3D elements if they exist
-    if (this.cueStick) {
-      this.scene.remove(this.cueStick);
-      this.cueStick = null;
-    }
-    if (this.aimLine) {
-      this.scene.remove(this.aimLine);
-      this.aimLine = null;
-    }
-    if (this.ghostBall) {
-      this.scene.remove(this.ghostBall);
-      this.ghostBall = null;
-    }
-    
-    // Draw cue stick in 2D
-    const cueLength = 20;
-    const cueDistance = ball.radius + 2 + (1 - power / CONFIG.CUE_POWER_MAX) * 3;
-    
-    const ballScreen = this.worldToScreen(ball.x, ball.y);
-    const cueStartX = ball.x - Math.cos(angle) * cueDistance;
-    const cueStartY = ball.y - Math.sin(angle) * cueDistance;
-    const cueEndX = ball.x - Math.cos(angle) * (cueDistance + cueLength);
-    const cueEndY = ball.y - Math.sin(angle) * (cueDistance + cueLength);
-    
-    const cueStart = this.worldToScreen(cueStartX, cueStartY);
-    const cueEnd = this.worldToScreen(cueEndX, cueEndY);
-    
-    this.uiCtx.strokeStyle = '#8B4513';
-    this.uiCtx.lineWidth = 4;
-    this.uiCtx.lineCap = 'round';
-    this.uiCtx.beginPath();
-    this.uiCtx.moveTo(cueStart.x, cueStart.y);
-    this.uiCtx.lineTo(cueEnd.x, cueEnd.y);
-    this.uiCtx.stroke();
-    
-    // Draw aim line in 2D
-    const aimLineLength = CONFIG.AIM_LINE_LENGTH;
-    const aimEndX = ball.x + Math.cos(angle) * aimLineLength;
-    const aimEndY = ball.y + Math.sin(angle) * aimLineLength;
-    const aimEnd = this.worldToScreen(aimEndX, aimEndY);
-    
-    this.uiCtx.strokeStyle = 'rgba(255, 255, 0, 0.6)';
-    this.uiCtx.lineWidth = 2;
-    this.uiCtx.setLineDash([5, 5]);
-    this.uiCtx.beginPath();
-    this.uiCtx.moveTo(ballScreen.x, ballScreen.y);
-    this.uiCtx.lineTo(aimEnd.x, aimEnd.y);
-    this.uiCtx.stroke();
-    this.uiCtx.setLineDash([]);
-    
-    // Draw ghost ball in 2D if prediction exists
+  /**
+   * Draw the cue and the ghost ball onto the 2D overlay.
+   *
+   * `power` is 0..1. The cue draws back proportionally along the aim vector, so
+   * charging the slider is visible on the table itself.
+   */
+  drawAimAndCue(
+    ball: Ball,
+    angle: number,
+    power: number,
+    showGhost: boolean,
+    prediction?: PredictionResult
+  ) {
+    const ctx = this.uiCtx;
+
+    // Ghost ball at the contact position — the single most useful aiming aid.
     if (showGhost && prediction && prediction.type === 'ball' && prediction.hitBall) {
-      // Ghost ball should be positioned where the cue ball will be at contact
-      // That's one ball radius away from the contact point, in the opposite direction of the normal
       const ghostX = prediction.contactPoint.x - prediction.contactNormal.x * ball.radius;
       const ghostY = prediction.contactPoint.y - prediction.contactNormal.y * ball.radius;
-      const ghostScreen = this.worldToScreen(ghostX, ghostY);
-      
-      this.uiCtx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-      this.uiCtx.lineWidth = 2;
-      this.uiCtx.beginPath();
-      this.uiCtx.arc(ghostScreen.x, ghostScreen.y, ball.radius * this.scale, 0, Math.PI * 2);
-      this.uiCtx.stroke();
+      const ghost = this.worldToScreen(ghostX, ghostY);
+      const r = ball.radius * this.scale;
+
+      ctx.save();
+      ctx.strokeStyle = 'rgba(241, 245, 249, 0.75)'; // --text-hi
+      ctx.lineWidth = Math.max(1.25, r * 0.11);
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.arc(ghost.x, ghost.y, r, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.fillStyle = 'rgba(241, 245, 249, 0.09)';
+      ctx.fill();
+      ctx.restore();
     }
-    
-    // Draw power bar in 2D
-    if (showPowerBar) {
-      this.drawPowerBar2D(power);
-    }
+
+    if (!this.cueVisible) return;
+
+    // Cue geometry, in table inches.
+    const cueLength = 34;
+    const tipGap = ball.radius + 0.9;
+    const maxDraw = 9;
+    const drawBack = tipGap + power * maxDraw;
+
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+
+    const tip = this.worldToScreen(ball.x - cos * drawBack, ball.y - sin * drawBack);
+    const joint = this.worldToScreen(
+      ball.x - cos * (drawBack + cueLength * 0.42),
+      ball.y - sin * (drawBack + cueLength * 0.42)
+    );
+    const butt = this.worldToScreen(
+      ball.x - cos * (drawBack + cueLength),
+      ball.y - sin * (drawBack + cueLength)
+    );
+
+    const shaftWidth = Math.max(2.5, ball.radius * this.scale * 0.42);
+
+    ctx.save();
+    ctx.lineCap = 'butt';
+
+    // Butt: dark stained wood, tapering into a pale maple shaft.
+    const grad = ctx.createLinearGradient(butt.x, butt.y, tip.x, tip.y);
+    grad.addColorStop(0, '#241408');
+    grad.addColorStop(0.34, '#3d2413');
+    grad.addColorStop(0.36, '#c9a227'); // inlay ring
+    grad.addColorStop(0.4, '#d9c39a');
+    grad.addColorStop(1, '#f0dfba');
+
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = shaftWidth;
+    ctx.beginPath();
+    ctx.moveTo(butt.x, butt.y);
+    ctx.lineTo(tip.x, tip.y);
+    ctx.stroke();
+
+    // Ferrule + tip.
+    ctx.strokeStyle = '#f8fafc';
+    ctx.lineWidth = shaftWidth * 0.92;
+    ctx.beginPath();
+    ctx.moveTo(joint.x + (tip.x - joint.x) * 0.86, joint.y + (tip.y - joint.y) * 0.86);
+    ctx.lineTo(tip.x, tip.y);
+    ctx.stroke();
+
+    ctx.strokeStyle = '#38BDF8'; // --cyan-400 tip
+    ctx.lineWidth = shaftWidth * 0.92;
+    ctx.beginPath();
+    ctx.moveTo(tip.x - cos * 1.5, tip.y + sin * 1.5);
+    ctx.lineTo(tip.x, tip.y);
+    ctx.stroke();
+
+    ctx.restore();
   }
   
-  drawPowerBar2D(power: number) {
-    const barWidth = 30;
-    const barHeight = 200;
-    const barX = this.uiCanvas.width - 60;
-    const barY = (this.uiCanvas.height - barHeight) / 2;
-    
-    // Background
-    this.uiCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-    this.uiCtx.fillRect(barX, barY, barWidth, barHeight);
-    
-    // Power fill with gradient (bottom to top)
-    const fillHeight = (power / CONFIG.CUE_POWER_MAX) * barHeight;
-    const gradient = this.uiCtx.createLinearGradient(barX, barY + barHeight - fillHeight, barX, barY + barHeight);
-    gradient.addColorStop(0, '#ff0000');
-    gradient.addColorStop(0.5, '#ffff00');
-    gradient.addColorStop(1, '#00ff00');
-    
-    this.uiCtx.fillStyle = gradient;
-    this.uiCtx.fillRect(barX, barY + barHeight - fillHeight, barWidth, fillHeight);
-    
-    // Border
-    this.uiCtx.strokeStyle = '#ffffff';
-    this.uiCtx.lineWidth = 2;
-    this.uiCtx.strokeRect(barX, barY, barWidth, barHeight);
-  }
-  
-  drawPrediction(_prediction: PredictionResult) {
-    // Prediction is drawn as part of drawTrajectoryLines
-  }
-  
-  drawTrajectoryLines(prediction: PredictionResult, cueBallPos: { x: number; y: number }, shotDirection: { x: number; y: number }, predictor: Predictor) {
+  /**
+   * The guideline: cue-ball path to first contact, the object ball's predicted
+   * departure line, and the cue ball's tangent/deflection line in a dimmer
+   * stroke.
+   *
+   * `guidelineFraction` gates how far the aids project — full at low tiers,
+   * shortened at high ones.
+   */
+  drawTrajectoryLines(
+    prediction: PredictionResult,
+    cueBallPos: { x: number; y: number },
+    shotDirection: { x: number; y: number },
+    predictor: Predictor
+  ) {
     // Clear old 3D trajectory lines
-    this.trajectoryLines.forEach(line => this.scene.remove(line));
+    this.trajectoryLines.forEach((line) => this.scene.remove(line));
     this.trajectoryLines = [];
-    
+
     if (prediction.type === 'none') return;
-    
-    // Draw line from cue ball to contact point (for all collision types)
+
+    const gate = Math.max(0, Math.min(1, this.guidelineFraction));
+    if (gate <= 0) return;
+
+    const ctx = this.uiCtx;
     const cueBallScreen = this.worldToScreen(cueBallPos.x, cueBallPos.y);
-    const contactScreen = this.worldToScreen(prediction.contactPoint.x, prediction.contactPoint.y);
-    
-    this.uiCtx.strokeStyle = 'rgba(0, 255, 255, 0.4)';
-    this.uiCtx.lineWidth = 1;
-    this.uiCtx.setLineDash([5, 5]);
-    this.uiCtx.beginPath();
-    this.uiCtx.moveTo(cueBallScreen.x, cueBallScreen.y);
-    this.uiCtx.lineTo(contactScreen.x, contactScreen.y);
-    this.uiCtx.stroke();
-    this.uiCtx.setLineDash([]);
-    
-    // Get trajectory predictions
+
+    // Primary aim line, gated by tier: it stops short when the gate is tight.
+    const gatedContact = {
+      x: cueBallPos.x + (prediction.contactPoint.x - cueBallPos.x) * gate,
+      y: cueBallPos.y + (prediction.contactPoint.y - cueBallPos.y) * gate,
+    };
+    const contactScreen = this.worldToScreen(gatedContact.x, gatedContact.y);
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.7)'; // --cyan-400
+    ctx.lineWidth = 2;
+    ctx.setLineDash([7, 7]);
+    ctx.beginPath();
+    ctx.moveTo(cueBallScreen.x, cueBallScreen.y);
+    ctx.lineTo(contactScreen.x, contactScreen.y);
+    ctx.stroke();
+    ctx.restore();
+
+    // Post-contact aids only make sense when the full line reached the object.
+    if (gate < 1) return;
+
     const trajectories = predictor.predictTrajectories(
       prediction,
       cueBallPos,
       shotDirection,
-      50 // Line length in inches (much longer for visibility)
+      50
     );
-    
-    // Draw object ball trajectory (yellow dashed line with arrowhead)
+
+    // Object ball departure — the important one, so it gets the accent color.
     if (trajectories.objectBallPath) {
-      const start = trajectories.objectBallPath.start;
-      const endRaw = trajectories.objectBallPath.end;
-      
-      // Clip the line at table boundaries
-      const end = this.clipLineAtRails(start, endRaw);
-      
-      const startScreen = this.worldToScreen(start.x, start.y);
-      const endScreen = this.worldToScreen(end.x, end.y);
-      
-      // Draw line
-      this.uiCtx.strokeStyle = 'rgba(255, 255, 0, 0.6)';
-      this.uiCtx.lineWidth = 2;
-      this.uiCtx.setLineDash([10, 10]);
-      this.uiCtx.beginPath();
-      this.uiCtx.moveTo(startScreen.x, startScreen.y);
-      this.uiCtx.lineTo(endScreen.x, endScreen.y);
-      this.uiCtx.stroke();
-      this.uiCtx.setLineDash([]);
-      
-      // Draw arrowhead at end
-      const dx = endScreen.x - startScreen.x;
-      const dy = endScreen.y - startScreen.y;
-      const len = Math.sqrt(dx * dx + dy * dy);
-      if (len > 0) {
-        const arrowSize = 10;
-        const angle = Math.atan2(dy, dx);
-        
-        this.uiCtx.fillStyle = 'rgba(255, 255, 0, 0.8)';
-        this.uiCtx.beginPath();
-        this.uiCtx.moveTo(endScreen.x, endScreen.y);
-        this.uiCtx.lineTo(
-          endScreen.x - arrowSize * Math.cos(angle - Math.PI / 6),
-          endScreen.y - arrowSize * Math.sin(angle - Math.PI / 6)
-        );
-        this.uiCtx.lineTo(
-          endScreen.x - arrowSize * Math.cos(angle + Math.PI / 6),
-          endScreen.y - arrowSize * Math.sin(angle + Math.PI / 6)
-        );
-        this.uiCtx.closePath();
-        this.uiCtx.fill();
-      }
+      this.drawPathLine(
+        trajectories.objectBallPath.start,
+        trajectories.objectBallPath.end,
+        'rgba(240, 180, 41, 0.85)', // --gold-500
+        2.2,
+        true
+      );
     }
-    
-    // Draw cue ball trajectory (white dashed line with arrowhead)
+
+    // Cue ball tangent / deflection — deliberately dimmer.
     if (trajectories.cueBallPath) {
-      const start = trajectories.cueBallPath.start;
-      const endRaw = trajectories.cueBallPath.end;
-      
-      // Clip the line at table boundaries
-      const end = this.clipLineAtRails(start, endRaw);
-      
-      const startScreen = this.worldToScreen(start.x, start.y);
-      const endScreen = this.worldToScreen(end.x, end.y);
-      
-      // Draw line
-      this.uiCtx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-      this.uiCtx.lineWidth = 2;
-      this.uiCtx.setLineDash([10, 10]);
-      this.uiCtx.beginPath();
-      this.uiCtx.moveTo(startScreen.x, startScreen.y);
-      this.uiCtx.lineTo(endScreen.x, endScreen.y);
-      this.uiCtx.stroke();
-      this.uiCtx.setLineDash([]);
-      
-      // Draw arrowhead at end
-      const dx = endScreen.x - startScreen.x;
-      const dy = endScreen.y - startScreen.y;
-      const len = Math.sqrt(dx * dx + dy * dy);
-      if (len > 0) {
-        const arrowSize = 10;
-        const angle = Math.atan2(dy, dx);
-        
-        this.uiCtx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-        this.uiCtx.beginPath();
-        this.uiCtx.moveTo(endScreen.x, endScreen.y);
-        this.uiCtx.lineTo(
-          endScreen.x - arrowSize * Math.cos(angle - Math.PI / 6),
-          endScreen.y - arrowSize * Math.sin(angle - Math.PI / 6)
-        );
-        this.uiCtx.lineTo(
-          endScreen.x - arrowSize * Math.cos(angle + Math.PI / 6),
-          endScreen.y - arrowSize * Math.sin(angle + Math.PI / 6)
-        );
-        this.uiCtx.closePath();
-        this.uiCtx.fill();
-      }
+      this.drawPathLine(
+        trajectories.cueBallPath.start,
+        trajectories.cueBallPath.end,
+        'rgba(241, 245, 249, 0.34)', // --text-hi, low alpha
+        1.6,
+        false
+      );
     }
   }
-  
-  getPowerBarBounds() {
-    const canvas = this.renderer.domElement;
-    const barWidth = 30;
-    const barHeight = 200;
-    const barX = canvas.width - 60;
-    const barY = (canvas.height - barHeight) / 2;
-    return { x: barX, y: barY, width: barWidth, height: barHeight };
+
+  private drawPathLine(
+    start: { x: number; y: number },
+    endRaw: { x: number; y: number },
+    color: string,
+    width: number,
+    arrowHead: boolean
+  ) {
+    const end = this.clipLineAtRails(start, endRaw);
+    const a = this.worldToScreen(start.x, start.y);
+    const b = this.worldToScreen(end.x, end.y);
+    const ctx = this.uiCtx;
+
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.setLineDash([10, 9]);
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    if (arrowHead) {
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      if (Math.hypot(dx, dy) > 1) {
+        const angle = Math.atan2(dy, dx);
+        const size = 9;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(b.x, b.y);
+        ctx.lineTo(
+          b.x - size * Math.cos(angle - Math.PI / 6),
+          b.y - size * Math.sin(angle - Math.PI / 6)
+        );
+        ctx.lineTo(
+          b.x - size * Math.cos(angle + Math.PI / 6),
+          b.y - size * Math.sin(angle + Math.PI / 6)
+        );
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+
+    ctx.restore();
+  }
+
+  /** Translucent preview of where the cue ball would be placed (ball in hand). */
+  drawPlacementPreview(x: number, y: number, radius: number, valid: boolean) {
+    const p = this.worldToScreen(x, y);
+    const r = radius * this.scale;
+    const ctx = this.uiCtx;
+
+    ctx.save();
+    ctx.fillStyle = valid ? 'rgba(52, 211, 153, 0.22)' : 'rgba(239, 68, 68, 0.28)';
+    ctx.strokeStyle = valid ? 'rgba(52, 211, 153, 0.9)' : 'rgba(239, 68, 68, 0.95)';
+    ctx.lineWidth = Math.max(1.5, r * 0.14);
+    ctx.setLineDash(valid ? [] : [5, 4]);
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r * 1.15, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
   }
 }

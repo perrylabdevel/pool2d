@@ -1,110 +1,38 @@
-// Loading screen with progress bar
+// Loading screen. Markup only — every color, radius and duration comes from
+// styles/theme.css so this matches the rest of the product.
+
 export class LoadingScreen {
   private container: HTMLElement;
-  private progressBar!: HTMLElement;
-  private progressText!: HTMLElement;
-  private statusText!: HTMLElement;
+  private fill: HTMLElement;
+  private status: HTMLElement;
 
   constructor() {
-    this.container = this.createLoadingScreen();
+    this.container = document.createElement('div');
+    this.container.id = 'loading-screen';
+    this.container.innerHTML = `
+      <div class="loading-inner">
+        <div class="loading-title">Midnight</div>
+        <div class="loading-sub">Pool Hall</div>
+        <div class="loading-track"><div class="loading-fill"></div></div>
+        <div class="loading-status">Racking up…</div>
+      </div>
+    `;
+
+    this.fill = this.container.querySelector('.loading-fill')!;
+    this.status = this.container.querySelector('.loading-status')!;
+
     document.body.appendChild(this.container);
   }
 
-  private createLoadingScreen(): HTMLElement {
-    const container = document.createElement('div');
-    container.id = 'loading-screen';
-    container.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      z-index: 10000;
-      font-family: 'Courier New', monospace;
-      color: #e0e0e0;
-    `;
-
-    // Title
-    const title = document.createElement('h1');
-    title.textContent = '🎱 Pool 2D';
-    title.style.cssText = `
-      font-size: 48px;
-      margin-bottom: 20px;
-      color: #4CAF50;
-      text-shadow: 0 0 20px rgba(76, 175, 80, 0.5);
-    `;
-    container.appendChild(title);
-
-    // Status text
-    this.statusText = document.createElement('div');
-    this.statusText.textContent = 'Loading assets...';
-    this.statusText.style.cssText = `
-      font-size: 16px;
-      margin-bottom: 20px;
-      color: #b0b0b0;
-    `;
-    container.appendChild(this.statusText);
-
-    // Progress bar container
-    const progressContainer = document.createElement('div');
-    progressContainer.style.cssText = `
-      width: 400px;
-      height: 30px;
-      background: #2a2a2a;
-      border: 2px solid #4a4a4a;
-      border-radius: 15px;
-      overflow: hidden;
-      position: relative;
-      margin-bottom: 10px;
-    `;
-
-    // Progress bar fill
-    this.progressBar = document.createElement('div');
-    this.progressBar.style.cssText = `
-      width: 0%;
-      height: 100%;
-      background: linear-gradient(90deg, #4CAF50 0%, #66BB6A 100%);
-      transition: width 0.3s ease;
-      box-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
-    `;
-    progressContainer.appendChild(this.progressBar);
-
-    container.appendChild(progressContainer);
-
-    // Progress text
-    this.progressText = document.createElement('div');
-    this.progressText.textContent = '0%';
-    this.progressText.style.cssText = `
-      font-size: 14px;
-      color: #4CAF50;
-      font-weight: bold;
-    `;
-    container.appendChild(this.progressText);
-
-    return container;
-  }
-
   updateProgress(loaded: number, total: number, status?: string) {
-    const percent = Math.round((loaded / total) * 100);
-    this.progressBar.style.width = `${percent}%`;
-    this.progressText.textContent = `${percent}%`;
-    
-    if (status) {
-      this.statusText.textContent = status;
-    }
+    const percent = total > 0 ? Math.round((loaded / total) * 100) : 0;
+    this.fill.style.width = `${percent}%`;
+    if (status) this.status.textContent = status;
   }
 
   hide() {
-    this.container.style.opacity = '0';
-    this.container.style.transition = 'opacity 0.5s ease';
-    
-    setTimeout(() => {
-      this.container.remove();
-    }, 500);
+    this.container.classList.add('fade-out');
+    // Matches --dur-slow; harmless if motion is reduced, the node just leaves late.
+    setTimeout(() => this.container.remove(), 420);
   }
 }
