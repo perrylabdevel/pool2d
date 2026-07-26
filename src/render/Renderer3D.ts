@@ -419,6 +419,8 @@ export class Renderer3D {
     const capWidth = 4.6; // where the cap steps down to the outer shelf
     const stepWidth = 5.0;
     const lipWidth = 0.5;
+    const jawTaper = 4.5; // how far back along the rail the pocket taper runs
+    const jawRecess = 2.2; // how far the cushion nose pulls back at the mouth
 
     // How far each raised rail stops short of a pocket centre. Must clear the
     // pocket's outer lip ring, or the wood buries the mouth.
@@ -473,46 +475,107 @@ export class Renderer3D {
      *     nose  |                 |  outer wall
      *    cloth  |_________________|
      */
-    const profile = new THREE.Shape();
-    profile.moveTo(0, 0); // cloth line
-    profile.lineTo(0, noseZ); // vertical cushion nose
-    profile.lineTo(chamferWidth, capZ); // angled cushion face
-    profile.lineTo(capWidth, capZ); // flat rail cap
-    profile.lineTo(stepWidth, shelfZ); // step down to the outer shelf
-    profile.lineTo(bandWidth, shelfZ); // outer shelf
-    profile.lineTo(bandWidth, 0); // outer wall
-    profile.closePath();
+    const PROFILE: ReadonlyArray<readonly [number, number]> = [
+      [0, 0], // cloth line
+      [0, noseZ], // vertical cushion nose
+      [chamferWidth, capZ], // angled cushion face
+      [capWidth, capZ], // flat rail cap
+      [stepWidth, shelfZ], // step down to the outer shelf
+      [bandWidth, shelfZ], // outer shelf
+      [bandWidth, 0], // outer wall
+    ];
+
+    // Only the cushion side of the profile recedes into a pocket; the cap and
+    // outer shelf hold their line, exactly as on a real table.
+    const TAPERED_POINTS = 3;
+
+    // Signed area gives the profile's winding, which decides the triangle
+    // order for the walls and each end cap.
+    const profileArea = PROFILE.reduce((sum, [u, z], i) => {
+      const [u2, z2] = PROFILE[(i + 1) % PROFILE.length];
+      return sum + (u * z2 - u2 * z);
+    }, 0);
+    const profileCCW = profileArea > 0;
+
+    const capTriangles = THREE.ShapeUtils.triangulateShape(
+      PROFILE.map(([u, z]) => new THREE.Vector2(u, z)),
+      []
+    );
 
     /**
-     * One raised rail segment, extruded from the cushion profile.
+     * Loft the cushion profile along a segment, recessing the cushion side at
+     * both ends so the rail tapers into the pocket mouth instead of stopping at
+     * a blunt square cut. Four stations: recessed at each mouth, full section
+     * across the middle.
      *
-     * The profile is built in the canonical orientation (segment along +X,
-     * outward along +Y, up along +Z, centred on X with the cloth edge at y=0),
-     * then placed with a single Z rotation per side.
+     * Built in the canonical orientation — segment along +X, outward along +Y,
+     * up along +Z, centred on X with the cloth edge at y = 0 — then placed with
+     * a single Z rotation per side.
      */
+    const buildRailGeometry = (length: number): THREE.BufferGeometry => {
+      const taper = Math.min(jawTaper, length / 2);
+      const stations = [
+        { x: -length / 2, recess: jawRecess },
+        { x: -length / 2 + taper, recess: 0 },
+        { x: length / 2 - taper, recess: 0 },
+        { x: length / 2, recess: jawRecess },
+      ].filter((s, i, arr) => i === 0 || s.x - arr[i - 1].x > 1e-6);
+
+      const positions: number[] = [];
+      const push = (si: number, pi: number) => {
+        const st = stations[si];
+        const [u, z] = PROFILE[pi];
+        positions.push(st.x, u + (pi < TAPERED_POINTS ? st.recess : 0), z);
+      };
+
+      // Walls: one quad per profile edge per station gap. A clockwise profile
+      // would face them inward, so flip the winding in that case.
+      const flipWalls = !profileCCW;
+      const tri = (a: [number, number], b: [number, number], c: [number, number]) => {
+        const [p, q, r] = flipWalls ? [a, c, b] : [a, b, c];
+        push(p[0], p[1]);
+        push(q[0], q[1]);
+        push(r[0], r[1]);
+      };
+
+      for (let si = 0; si < stations.length - 1; si++) {
+        for (let pi = 0; pi < PROFILE.length; pi++) {
+          const pj = (pi + 1) % PROFILE.length;
+          tri([si, pi], [si, pj], [si + 1, pj]);
+          tri([si, pi], [si + 1, pj], [si + 1, pi]);
+        }
+      }
+      const wallVertices = positions.length / 3;
+
+      // End caps, wound so each faces away from the segment.
+      const last = stations.length - 1;
+      for (const [si, flip] of [
+        [0, profileCCW],
+        [last, !profileCCW],
+      ] as const) {
+        for (const t of capTriangles) {
+          const order = flip ? [t[0], t[2], t[1]] : [t[0], t[1], t[2]];
+          for (const pi of order) push(si, pi);
+        }
+      }
+
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      // Non-indexed, so computeVertexNormals yields flat per-face normals and
+      // the facets stay crisp instead of smoothing into each other.
+      geometry.computeVertexNormals();
+      geometry.addGroup(0, wallVertices, 1);
+      geometry.addGroup(wallVertices, positions.length / 3 - wallVertices, 0);
+      return geometry;
+    };
+
     const segment = (horizontal: boolean, sign: number, from: number, to: number) => {
       const length = to - from;
       if (length <= 0) return;
       const mid = (from + to) / 2;
 
-      const geometry = new THREE.ExtrudeGeometry(profile, {
-        depth: length,
-        bevelEnabled: false,
-        curveSegments: 1,
-      });
-
-      // ExtrudeGeometry lays the shape in XY and extrudes along Z. Cycle the
-      // axes so shape-X becomes outward, shape-Y becomes height, and the
-      // extrusion becomes the segment's length.
-      geometry.rotateX(Math.PI / 2);
-      geometry.rotateZ(Math.PI / 2);
-      geometry.translate(-length / 2, 0, 0);
-      geometry.computeVertexNormals();
-
-      // ExtrudeGeometry groups the cross-section caps as material 0 and the
-      // extruded faces as material 1. The caps are the sawn ends at each pocket
-      // mouth, so give them the lighter stock.
-      const rail = new THREE.Mesh(geometry, [railBevel, railBase]);
+      // Material 0 is the sawn end cap, material 1 the milled faces.
+      const rail = new THREE.Mesh(buildRailGeometry(length), [railBevel, railBase]);
       rail.receiveShadow = true;
 
       if (horizontal) {
@@ -527,10 +590,16 @@ export class Renderer3D {
       add(rail);
 
       // Dark hairline where cloth meets cushion. The nose face itself is
-      // edge-on to a top-down camera, so it needs to be drawn explicitly.
+      // edge-on to a top-down camera, so it needs to be drawn explicitly. It
+      // only spans the untapered middle — past that the cushion has pulled
+      // away from the cloth into the jaw.
+      const lipLength = Math.max(0, length - 2 * Math.min(jawTaper, length / 2));
       const lipOffset = sign * (horizontal ? halfH : halfW) - sign * lipWidth * 0.5;
       const lip = new THREE.Mesh(
-        new THREE.PlaneGeometry(horizontal ? length : lipWidth, horizontal ? lipWidth : length),
+        new THREE.PlaneGeometry(
+          horizontal ? lipLength : lipWidth,
+          horizontal ? lipWidth : lipLength
+        ),
         shadowLip
       );
       lip.position.set(horizontal ? mid : lipOffset, horizontal ? lipOffset : mid, 0.02);
