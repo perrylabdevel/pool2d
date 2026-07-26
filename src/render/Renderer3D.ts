@@ -416,63 +416,95 @@ export class Renderer3D {
     const bandZ = 1.9;
     const lipWidth = 0.5;
 
+    // How far each raised rail stops short of a pocket centre. Must clear the
+    // pocket's outer lip ring, or the wood buries the mouth.
+    const jawCut = TABLE_GEOMETRY.pocketCaptureRadiusIn * POCKET_VISUAL_SCALE * 1.42 + 0.4;
+
     const add = (mesh: THREE.Mesh) => {
       this.scene.add(mesh);
       this.frameMeshes.push(mesh);
     };
 
-    // Each side: base band, lighter inner bevel strip, dark contact lip.
-    const sides: Array<{
-      horizontal: boolean;
-      sign: number;
-    }> = [
-      { horizontal: true, sign: 1 },
-      { horizontal: true, sign: -1 },
-      { horizontal: false, sign: 1 },
-      { horizontal: false, sign: -1 },
-    ];
+    // Flat apron: keeps the outer silhouette rectangular. It sits *below* the
+    // pocket meshes in z, so the pockets punch cleanly through it at the
+    // corners and side pockets.
+    const outerW = halfW + bandWidth;
+    const outerH = halfH + bandWidth;
+    const apronShape = new THREE.Shape();
+    apronShape.moveTo(-outerW, -outerH);
+    apronShape.lineTo(outerW, -outerH);
+    apronShape.lineTo(outerW, outerH);
+    apronShape.lineTo(-outerW, outerH);
+    apronShape.closePath();
 
-    for (const { horizontal, sign } of sides) {
-      const along = horizontal ? TABLE_GEOMETRY.playWidthIn + bandWidth * 2 : bandWidth;
-      const across = horizontal ? bandWidth : TABLE_GEOMETRY.playHeightIn + bandWidth * 2;
+    const clothHole = new THREE.Path();
+    clothHole.moveTo(-halfW, -halfH);
+    clothHole.lineTo(-halfW, halfH);
+    clothHole.lineTo(halfW, halfH);
+    clothHole.lineTo(halfW, -halfH);
+    clothHole.closePath();
+    apronShape.holes.push(clothHole);
+
+    const apron = new THREE.Mesh(new THREE.ShapeGeometry(apronShape), railBase);
+    apron.position.set(0, 0, 0.01);
+    apron.receiveShadow = true;
+    add(apron);
+
+    /**
+     * Emit one raised rail segment: base band, lighter inner bevel, and the
+     * dark hairline where cloth meets cushion.
+     */
+    const segment = (horizontal: boolean, sign: number, from: number, to: number) => {
+      const length = to - from;
+      if (length <= 0) return;
+      const mid = (from + to) / 2;
+
       const edge = horizontal ? halfH : halfW;
+      const bandOffset = sign * (edge + bandWidth / 2);
+      const bevelOffset = sign * (edge + bevelWidth / 2 + 0.05);
+      const lipOffset = sign * (edge - lipWidth / 2);
 
-      const cx = horizontal ? 0 : sign * (edge + bandWidth / 2);
-      const cy = horizontal ? sign * (edge + bandWidth / 2) : 0;
-
-      const base = new THREE.Mesh(new THREE.BoxGeometry(along, across, bandZ), railBase);
-      base.position.set(cx, cy, bandZ / 2);
+      const base = new THREE.Mesh(
+        new THREE.BoxGeometry(
+          horizontal ? length : bandWidth,
+          horizontal ? bandWidth : length,
+          bandZ
+        ),
+        railBase
+      );
+      base.position.set(horizontal ? mid : bandOffset, horizontal ? bandOffset : mid, bandZ / 2);
       base.receiveShadow = true;
       add(base);
 
-      // Bevel sits proud on the inner lip of the band and catches the key light.
-      // It spans only the play dimension — extending it into the corners like
-      // the base band does would draw the four bevels crossing over each other.
-      const bevelAlong = horizontal ? TABLE_GEOMETRY.playWidthIn : bevelWidth;
-      const bevelAcross = horizontal ? bevelWidth : TABLE_GEOMETRY.playHeightIn;
-      const bevelX = horizontal ? 0 : sign * (edge + bevelWidth / 2 + 0.05);
-      const bevelY = horizontal ? sign * (edge + bevelWidth / 2 + 0.05) : 0;
-
       const bevel = new THREE.Mesh(
-        new THREE.BoxGeometry(bevelAlong, bevelAcross, bandZ + 0.35),
+        new THREE.BoxGeometry(
+          horizontal ? length : bevelWidth,
+          horizontal ? bevelWidth : length,
+          bandZ + 0.35
+        ),
         railBevel
       );
-      bevel.position.set(bevelX, bevelY, (bandZ + 0.35) / 2);
+      bevel.position.set(
+        horizontal ? mid : bevelOffset,
+        horizontal ? bevelOffset : mid,
+        (bandZ + 0.35) / 2
+      );
       add(bevel);
 
-      // Dark hairline where cloth meets cushion.
-      const lipAlong = horizontal ? TABLE_GEOMETRY.playWidthIn : lipWidth;
-      const lipAcross = horizontal ? lipWidth : TABLE_GEOMETRY.playHeightIn;
       const lip = new THREE.Mesh(
-        new THREE.PlaneGeometry(lipAlong, lipAcross),
+        new THREE.PlaneGeometry(horizontal ? length : lipWidth, horizontal ? lipWidth : length),
         shadowLip
       );
-      lip.position.set(
-        horizontal ? 0 : sign * (halfW - lipWidth / 2),
-        horizontal ? sign * (halfH - lipWidth / 2) : 0,
-        0.02
-      );
+      lip.position.set(horizontal ? mid : lipOffset, horizontal ? lipOffset : mid, 0.02);
       add(lip);
+    };
+
+    // Long rails carry three pockets each (two corners plus a side pocket at
+    // x = 0), so they break into two segments. Short rails have corners only.
+    for (const sign of [1, -1]) {
+      segment(true, sign, -halfW + jawCut, -jawCut);
+      segment(true, sign, jawCut, halfW - jawCut);
+      segment(false, sign, -halfH + jawCut, halfH - jawCut);
     }
 
     this.buildDiamonds(halfW, halfH, bandWidth);
